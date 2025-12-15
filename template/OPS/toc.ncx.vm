@@ -41,11 +41,16 @@
 #end
 #if (!$hasChapter && (!${bookInfo.InsertCoverPage} || !${bookInfo.InsertCoverPageToc}))
 #set($idx=$idx+1)
-	<navPoint id="toc1" playOrder="${idx}">
+	<navPoint id="toc${idx}" playOrder="${idx}">
 		<navLabel>
 			<text>コンテンツ</text>
 		</navLabel>
-		<content src="xhtml/contents.xhtml"/>
+#if (${sections.size()} > 0)
+#set($firstSection = ${sections.get(0)})
+		<content src="xhtml/${firstSection.SectionId}.xhtml"/>
+#else
+		<content src="xhtml/text00001.xhtml"/>
+#end
 	</navPoint>
 #end
 </navMap>

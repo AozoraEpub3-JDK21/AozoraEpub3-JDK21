@@ -74,6 +74,10 @@ nav#landmarks { display:none; }
 			<li class="chapter" id="toccover"><a href="cover.xhtml">${cover_name}</a></li>
 #end
 #set($hasChapter = false)
+#set($idx = 0)
+#if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
+#set($idx = 1)
+#end
 #foreach(${chapter} in ${chapters})
 #if ($chapter.ChapterName)
 #set($hasChapter = true)
@@ -96,7 +100,13 @@ nav#landmarks { display:none; }
 #end
 #end
 #if (!$hasChapter && (!${bookInfo.InsertCoverPage} || !${bookInfo.InsertCoverPageToc}))
-			<li class="chapter" id="toc1"><a href="contents.xhtml">コンテンツ</a></li>
+#set($idx = $idx + 1)
+#if (${sections.size()} > 0)
+#set($firstSection = ${sections.get(0)})
+			<li class="chapter" id="toc${idx}"><a href="${firstSection.SectionId}.xhtml">コンテンツ</a></li>
+#else
+			<li class="chapter" id="toc${idx}"><a href="text00001.xhtml">コンテンツ</a></li>
+#end
 #end
 		</ol>
 	</nav>
