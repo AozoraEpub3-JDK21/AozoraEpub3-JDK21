@@ -38,6 +38,13 @@ jobs:
     - name: Build jar
       run: ./gradlew jar
     
+    - name: Check test results
+      if: always()
+      run: |
+        echo "Checking for test result files..."
+        find build/test-results -type f -name "*.xml" 2>/dev/null || echo "No XML files found"
+        ls -la build/test-results/test/ 2>/dev/null || echo "test-results directory not found"
+    
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
@@ -51,3 +58,4 @@ jobs:
       with:
         files: build/test-results/test/TEST-*.xml
         check_name: Test Results
+        compare_to_earlier_commit: false
