@@ -3,7 +3,6 @@ package com.github.hmdev.epub;
 import static org.junit.Assert.*;
 
 import java.io.*;
-import java.nio.file.*;
 import java.util.regex.*;
 import org.junit.Before;
 import org.junit.Test;

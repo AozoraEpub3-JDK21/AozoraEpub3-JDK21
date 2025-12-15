@@ -113,7 +113,6 @@ public class SyntaxValidatorTest {
     @Test
     public void testHtmlSpecialCharacterHandling() throws IOException {
         // Test proper handling of HTML special characters in XHTML
-        String testContent = "Test & special < > chars \" '";
         assertTrue("Special characters should be handled", true);
     }
     

@@ -15,7 +15,7 @@ public class Epub3ValidatorTest {
     @Before
     public void setUp() throws IOException {
         // Create a test EPUB file path
-        Path testEpubPath = Files.createTempFile("test", ".epub");
+        Files.createTempFile("test", ".epub");
     }
     
     @Test
