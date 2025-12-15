@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -214,7 +214,7 @@ public class WebAozoraConverter
 		if (!urlString.endsWith("/") && !urlString.endsWith(".html") && !urlString.endsWith(".htm") && urlString.indexOf("?") == -1 ) {
 			HttpURLConnection connection = null;
 			try {
-				connection = (HttpURLConnection) new URL(urlString+"/").openConnection();
+				connection = (HttpURLConnection) new URI(urlString+"/").toURL().openConnection();
 				if (connection.getResponseCode() == 200) {
 					urlString += "/";
 					LogAppender.println("URL修正 : "+urlString);
@@ -1145,16 +1145,28 @@ public class WebAozoraConverter
 		}
 		cacheFile.getParentFile().mkdirs();
 		//ダウンロード
-		URLConnection conn = new URL(urlString).openConnection();
+		URLConnection conn;
+		try {
+			conn = new java.net.URI(urlString).toURL().openConnection();
+		} catch (java.net.URISyntaxException e) {
+			throw new IOException(e);
+		}
 		ExtractInfo[] cookie = this.queryMap.get(ExtractId.COOKIE);
 		if (cookie != null && cookie.length > 0) conn.setRequestProperty("Cookie", cookie[0].query);
 		if (referer != null) conn.setRequestProperty("Referer", referer);
 		conn.setConnectTimeout(10000);//10秒
 		BufferedInputStream bis = new BufferedInputStream(conn.getInputStream(), 8192);
 		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(cacheFile));
-		IOUtils.copy(bis, bos);
-		bos.close();
-		bis.close();
+		try {
+			byte[] buf = new byte[8192];
+			int len;
+			while ((len = bis.read(buf)) > 0) {
+				bos.write(buf, 0, len);
+			}
+		} finally {
+			bos.close();
+			bis.close();
+		}
 		return true;
 	}
 }

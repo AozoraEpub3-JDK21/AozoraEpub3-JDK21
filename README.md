@@ -1,6 +1,32 @@
 AozoraEpub3
 ============
 
+**Java 21対応版 / Gradle対応版**
+
+このバージョンは、オリジナルの[AozoraEpub3](https://github.com/hmdev/AozoraEpub3)をJava 21およびGradleに対応させた改良版です。
+
+## 主な変更点
+
+### Java 21対応
+- Java 21の最新機能を活用
+- 非推奨APIの更新
+- パフォーマンスの向上
+
+### Gradle対応
+- ビルドツールをGradleに移行
+- 依存ライブラリの自動管理
+- 最新ライブラリへの更新
+
+### ライブラリ更新
+- Apache Commons系ライブラリを最新版に更新
+- JSoup 1.17.2
+- Junrar 7.5.5
+- Apache Velocity 2.3
+- Apache Batik（JAIの代替）
+- SLF4J 2.0.9（ロギング）
+
+---
+
 説明
 ------------
 青空文庫の注記入りテキストファイルをePub3ファイルに変換するツールです。  
@@ -33,9 +59,11 @@ AozoraEpub3
 
 動作環境
 ------------
-Java 7 / Java 8 の動作環境 ( http://www.java.com/ja/ )  
+**Java 21以降** の動作環境
 
-WindowsXP以降 Ubuntu MacOSX で動作確認済  
+Java 21のインストール: https://adoptium.net/
+
+Windows10以降、Ubuntu、macOS で動作確認済  
 
 
 使い方
@@ -43,11 +71,24 @@ WindowsXP以降 Ubuntu MacOSX で動作確認済
 #### インストール
 　AozoraEpub3-*.zip を任意のフォルダに解凍します。  
 
+#### ビルド（開発者向け）
+　Gradleを使用してビルドします：
+```bash
+# jarファイルのビルド
+./gradlew jar
+
+# 配布パッケージ（zip/tar.gz）の作成
+./gradlew dist
+
+# テストの実行
+./gradlew test
+```
+
 #### 起動
 　AozoraEpub3.jar をダブルクリックして実行します。  
 　またはコンソールから "java -jar AozoraEpub3.jar" でも実行可。  
-　※javaが見えなければフルパスで指定  
-　　例: "C:\Program Files (x86)\Java\jre7\bin\java.exe" -jar AozoraEpub3.jar  
+　※Java 21以降が必要です  
+　　例: "java -jar AozoraEpub3.jar"  
 
 #### 変換
 　表示されたアプレットに、変換したい青空文庫テキストファイル（拡張子txtまたはzip)  
@@ -256,8 +297,23 @@ WindowsXP以降 Ubuntu MacOSX で動作確認済
     ダブルクリックまたは"java -jar AozoraEpub3.jar"で実行  
 * AozoraEpub3.ico
     ショートカットを作成時にこのアイコンを指定してください（jarなので設定できない）  
-* lib/以下の *.jar ファイル
-    利用ライブラリ (commons-cli, commons-compress, Velocity, JAI)  
+* build.gradle
+    Gradleビルド設定ファイル
+* gradlew / gradlew.bat
+    Gradle Wrapperスクリプト（ビルド用）
+
+#### 利用ライブラリ（Gradleで自動管理）
+* commons-cli 1.6.0
+* commons-collections4 4.4
+* commons-compress 1.26.0
+* commons-lang3 3.14.0
+* jsoup 1.17.2
+* junrar 7.5.5
+* velocity-engine-core 2.3
+* batik-transcoder 1.17（JAIの代替）
+* slf4j 2.0.9
+
+ライセンス情報は lib/LICENSE/ ディレクトリを参照してください。  
 
 #### ePub3テンプレート  
 * template/*  

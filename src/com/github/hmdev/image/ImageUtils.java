@@ -9,7 +9,6 @@ import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.IndexColorModel;
 import java.awt.image.LookupOp;
-import java.awt.image.RenderedImage;
 import java.awt.image.WritableRaster;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -18,7 +17,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
+import java.net.URI;
 import java.util.Iterator;
 
 import javax.imageio.IIOImage;
@@ -31,8 +30,6 @@ import org.apache.commons.compress.utils.IOUtils;
 
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.LogAppender;
-import com.sun.media.jai.codec.ImageCodec;
-import com.sun.media.jai.codec.ImageDecoder;
 
 public class ImageUtils
 {
@@ -86,7 +83,7 @@ public class ImageUtils
 		try {
 			InputStream is;
 			if (path.startsWith("http")) {
-				is = new BufferedInputStream(new URL(path).openStream(), 8192);
+				is = new BufferedInputStream(new URI(path).toURL().openStream(), 8192);
 			} else {
 				File file = new File(path);
 				if (!file.exists()) return null;
@@ -101,18 +98,8 @@ public class ImageUtils
 	static public BufferedImage readImage(String ext, InputStream is) throws IOException
 	{
 		BufferedImage image;
-		if (ext.equals("jpg") || ext.equals("jpeg")) {
-			try {
-				ImageDecoder dec = ImageCodec.createImageDecoder("jpeg", is, null);
-				RenderedImage ri = dec.decodeAsRenderedImage();
-				image = new BufferedImage(ri.getWidth(), ri.getHeight(), BufferedImage.TYPE_INT_RGB);
-				image.createGraphics().drawRenderedImage(ri, NO_TRANSFORM);
-			} catch (Exception e) {
-				image = ImageIO.read(is);
-			}
-		} else {
-			image = ImageIO.read(is);
-		}
+		// Java標準のImageIOを使用（JAI不要）
+		image = ImageIO.read(is);
 		is.close();
 		return image;
 	}
@@ -160,7 +147,11 @@ public class ImageUtils
 			//画像がなければ読み込み 変更なしの時にそのまま出力できるように一旦バッファに読み込む
 			if (srcImage == null) {
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				IOUtils.copy(is, baos);
+				byte[] buf = new byte[8192];
+				int len;
+				while ((len = is.read(buf)) > 0) {
+					baos.write(buf, 0, len);
+				}
 				imgBuf = baos.toByteArray();
 				ByteArrayInputStream bais = new ByteArrayInputStream(imgBuf);
 				try { srcImage = readImage(ext, bais); } finally { bais.close(); }
@@ -201,12 +192,22 @@ public class ImageUtils
 		if (scale >= 1 && (gammaOp == null || srcImage.getType() == BufferedImage.TYPE_INT_RGB)) {
 			if (srcImage == null) {
 				//変更なしならそのままファイル出力
-				IOUtils.copy(is, zos);
+				byte[] buf = new byte[8192];
+				int len;
+				while ((len = is.read(buf)) > 0) {
+					zos.write(buf, 0, len);
+				}
 			} else {
 				if (margin == null && imgBuf != null && imageInfo.rotateAngle==0) {
 					//余白除去が無く画像も編集されていなければバッファからそのまま出力
 					ByteArrayInputStream bais = new ByteArrayInputStream(imgBuf);
-					try { IOUtils.copy(bais, zos); } finally { bais.close(); }
+				try { 
+					byte[] buf = new byte[8192];
+					int len;
+					while ((len = bais.read(buf)) > 0) {
+						zos.write(buf, 0, len);
+					}
+				} finally { bais.close(); }
 				} else {
 					//編集済の画像なら同じ画像形式で書き出し 余白があれば切り取る
 					if (imageInfo.rotateAngle != 0) {

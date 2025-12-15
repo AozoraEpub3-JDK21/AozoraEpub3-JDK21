@@ -15,7 +15,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
-import java.net.URL;
+import java.net.URI;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.HashSet;
@@ -29,7 +29,6 @@ import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.commons.compress.utils.IOUtils;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.Velocity;
 
@@ -379,9 +378,13 @@ public class Epub3Writer
 			File customFile = new File(templatePath+fileName.substring(0, idx)+"_custom/"+fileName.substring(idx+1));
 			if (customFile.exists()) file = customFile;
 		}
-		FileInputStream fis = new FileInputStream(file);
-		IOUtils.copy(fis, zos);
-		fis.close();
+		try (FileInputStream fis = new FileInputStream(file)) {
+			byte[] buf = new byte[8192];
+			int len;
+			while ((len = fis.read(buf)) > 0) {
+				zos.write(buf, 0, len);
+			}
+		}
 		zos.closeArchiveEntry();
 	}
 	
@@ -462,10 +465,11 @@ public class Epub3Writer
 		//mimetypeは非圧縮
 		//STOREDで格納しCRCとsizeを指定する必要がある
 		ZipArchiveEntry mimeTypeEntry = new ZipArchiveEntry(MIMETYPE_PATH);
-		FileInputStream fis = new FileInputStream(new File(templatePath+MIMETYPE_PATH));
 		byte[] b = new byte[256];
-		int len = fis.read(b);
-		fis.close();
+		int len;
+		try (FileInputStream fis = new FileInputStream(new File(templatePath+MIMETYPE_PATH))) {
+			len = fis.read(b);
+		}
 		CRC32 crc32 = new CRC32();
 		crc32.update(b, 0, len);
 		mimeTypeEntry.setMethod(ZipArchiveEntry.STORED);
@@ -567,18 +571,27 @@ public class Epub3Writer
 				}
 				BufferedInputStream bis;
 				if (bookInfo.coverFileName.startsWith("http")) {
-					bis = new BufferedInputStream(new URL(bookInfo.coverFileName).openStream(), 8192);
+					bis = new BufferedInputStream(new URI(bookInfo.coverFileName).toURL().openStream(), 8192);
 				} else {
 					bis = new BufferedInputStream(new FileInputStream(new File(bookInfo.coverFileName)), 8192);
 				}
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				IOUtils.copy(bis, baos);
-				coverImageBytes = baos.toByteArray();
-				bis.close();
-				baos.close();
+				try {
+					byte[] buf = new byte[8192];
+					while ((len = bis.read(buf)) > 0) {
+						baos.write(buf, 0, len);
+					}
+					coverImageBytes = baos.toByteArray();
+				} finally {
+					bis.close();
+					baos.close();
+				}
 				ByteArrayInputStream bais = new ByteArrayInputStream(coverImageBytes);
-				coverImageInfo = ImageInfo.getImageInfo(bais);
-				bais.close();
+				try {
+					coverImageInfo = ImageInfo.getImageInfo(bais);
+				} finally {
+					bais.close();
+				}
 				String ext = coverImageInfo.getExt();
 				if (isKindle || ext.equals("jpeg")) ext = "jpg";
 				coverImageInfo.setId("0000");
@@ -828,9 +841,12 @@ public class Epub3Writer
 				for (File fontFile : fontsPath.listFiles()) {
 					String outFileName = OPS_PATH+FONTS_PATH+fontFile.getName();
 					zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
-					fis = new FileInputStream(new File(templatePath+outFileName));
-					IOUtils.copy(fis, zos);
-					fis.close();
+					try (FileInputStream fis = new FileInputStream(new File(templatePath+outFileName))) {
+						byte[] buf = new byte[8192];
+						while ((len = fis.read(buf)) > 0) {
+							zos.write(buf, 0, len);
+						}
+					}
 					zos.closeArchiveEntry();
 				}
 			}
@@ -842,9 +858,12 @@ public class Epub3Writer
 			if (gaijiFile.exists()) {
 				String outFileName = OPS_PATH+GAIJI_PATH+gaijiFile.getName();
 				zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
-				fis = new FileInputStream(gaijiFile);
-				IOUtils.copy(fis, zos);
-				fis.close();
+				try (FileInputStream fis = new FileInputStream(gaijiFile)) {
+					byte[] buf = new byte[8192];
+					while ((len = fis.read(buf)) > 0) {
+						zos.write(buf, 0, len);
+					}
+				}
 				zos.closeArchiveEntry();
 			}
 		}
@@ -904,11 +923,11 @@ public class Epub3Writer
 					} else {
 						File imageFile = imageInfoReader.getImageFile(srcImageFileName);
 						if (imageFile.exists()) {
-							fis = new FileInputStream(imageFile);
-							zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
-							this.writeImage(new BufferedInputStream(fis, 8192), zos, imageInfo);
-							zos.closeArchiveEntry();
-							fis.close();
+							try (FileInputStream fis = new FileInputStream(imageFile)) {
+								zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
+								this.writeImage(new BufferedInputStream(fis, 8192), zos, imageInfo);
+								zos.closeArchiveEntry();
+							}
 							outImageFileNames.remove(srcImageFileName);
 						}
 					}
@@ -924,8 +943,8 @@ public class Epub3Writer
 				try {
 				for (FileHeader fileHeader : archive.getFileHeaders()) {
 					if (!fileHeader.isDirectory()) {
-						String entryName = fileHeader.getFileNameW();
-						if (entryName.length() == 0) entryName = fileHeader.getFileNameString();
+						String entryName = fileHeader.getFileName();
+						if (entryName.length() == 0) entryName = "";
 						entryName = entryName.replace('\\', '/');
 						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
 						String srcImageFileName = entryName.substring(archivePathLength);
@@ -946,11 +965,18 @@ public class Epub3Writer
 				ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false);
 				try {
 				ArchiveEntry entry;
-				while( (entry = zis.getNextZipEntry()) != null ) {
-					//アーカイブ内のサブフォルダは除外してテキストからのパスにする
-					String srcImageFileName = entry.getName().substring(archivePathLength);
-					if (outImageFileNames.contains(srcImageFileName)) {
-						this.writeArchiveImage(srcImageFileName, zis);
+				while( (entry = zis.getNextEntry()) != null ) {
+					try {
+						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
+						String entryName = sanitizeArchiveEntryName(entry.getName());
+						String srcImageFileName = entryName.substring(archivePathLength);
+						if (outImageFileNames.contains(srcImageFileName)) {
+							this.writeArchiveImage(srcImageFileName, zis);
+						}
+					} catch (IllegalArgumentException e) {
+						System.err.println("Skipping suspicious archive entry: " + e.getMessage());
+						// 疑わしいエントリはスキップ
+						continue;
 					}
 				}
 				} finally { zis.close(); }
@@ -997,7 +1023,11 @@ public class Epub3Writer
 				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 				//Zip,Rarからの直接読み込みは失敗するので一旦バイト配列にする
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				IOUtils.copy(new BufferedInputStream(is, 16384), baos);
+				byte[] buf = new byte[16384];
+				int len;
+				while ((len = is.read(buf)) > 0) {
+					baos.write(buf, 0, len);
+				}
 				byte[] bytes = baos.toByteArray();
 				baos.close();
 				ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
@@ -1340,6 +1370,40 @@ public class Epub3Writer
 	public String getGaijiFontPath()
 	{
 		return GAIJI_PATH;
+	}
+	
+	/**
+	 * Path Traversal 脆弱性対策
+	 * ZipEntry のパス名から安全なファイル名を抽出する
+	 * @param entryName ZipEntry の名前
+	 * @return 正規化されたファイル名
+	 * @throws IllegalArgumentException パストラバーサル攻撃が検出された場合
+	 */
+	static String sanitizeArchiveEntryName(String entryName) throws IllegalArgumentException
+	{
+		if (entryName == null || entryName.isEmpty()) {
+			throw new IllegalArgumentException("Entry name cannot be null or empty");
+		}
+		
+		// 絶対パスの検出
+		if (entryName.startsWith("/") || entryName.startsWith("\\")) {
+			throw new IllegalArgumentException("Absolute path detected in archive entry: " + entryName);
+		}
+		
+		// パストラバーサル攻撃の検出
+		if (entryName.contains("..") || entryName.contains("~") || entryName.contains("$")) {
+			throw new IllegalArgumentException("Path traversal attempt detected: " + entryName);
+		}
+		
+		// バックスラッシュをスラッシュに統一
+		String normalized = entryName.replace("\\", "/");
+		
+		// ダブルスラッシュを単一スラッシュに
+		while (normalized.contains("//")) {
+			normalized = normalized.replace("//", "/");
+		}
+		
+		return normalized;
 	}
 	
 }

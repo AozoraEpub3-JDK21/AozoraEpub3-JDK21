@@ -42,6 +42,27 @@
 		<!--<meta name="original-resolution" content="844x1200"/>-->
 #end
 #end
+#if (${bookInfo.ImageOnly})
+    <meta property="rendition:layout">pre-paginated</meta>
+    <meta property="rendition:spread">landscape</meta>
+    <meta name="original-resolution" content="${coverImage.Width}x${coverImage.Height}"/>
+
+    #if (${bookInfo.Vertical})
+        <meta name="primary-writing-mode" content="horizontal-rl"/>
+    #else
+        <meta name="primary-writing-mode" content="horizontal-lr"/>
+    #end
+
+#elseif (!${bookInfo.ImageOnly})
+    <meta property="rendition:layout">reflowable</meta>
+
+    #if (${bookInfo.Vertical})
+        <meta name="primary-writing-mode" content="horizontal-rl"/>
+		<meta name="writing-mode" content="vertical-rl"/>
+    #else
+        <meta name="primary-writing-mode" content="horizontal-lr"/>
+    #end
+#end
 	</metadata>
 
 	<manifest>
