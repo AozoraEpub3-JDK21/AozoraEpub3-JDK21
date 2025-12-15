@@ -64,11 +64,28 @@ jobs:
         run: |
           set -e
           mkdir -p build/epub_out
-          # Use the JAR_FILE from previous step
-          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_title.txt || true
-          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_ruby.txt || true
-          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
-          ls -la build/epub_out || true
+          # Verify JAR_FILE is set and accessible
+          if [ -z "$JAR_FILE" ]; then
+            echo "ERROR: JAR_FILE environment variable not set"
+            exit 1
+          fi
+          if [ ! -f "$JAR_FILE" ]; then
+            echo "ERROR: JAR file not found: $JAR_FILE"
+            exit 1
+          fi
+          echo "Using JAR: $JAR_FILE"
+          ls -lh "$JAR_FILE"
+          
+          # Generate EPUB with verbose output
+          echo "Generating EPUB from test_data/test_title.txt..."
+          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_title.txt 2>&1 || echo "Warning: test_title.txt conversion failed"
+          echo "Generating EPUB from test_data/test_ruby.txt..."
+          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_ruby.txt 2>&1 || echo "Warning: test_ruby.txt conversion failed"
+          echo "Generating EPUB from test_data/test_yoko.txt..."
+          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_yoko.txt 2>&1 || echo "Warning: test_yoko.txt conversion failed"
+          
+          echo "Generated files:"
+          ls -la build/epub_out || echo "build/epub_out is empty"
 
       - name: Generate INI-mapped sample and check CSS (vertical & horizontal)
         run: |
