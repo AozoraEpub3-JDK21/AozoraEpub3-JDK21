@@ -134,6 +134,7 @@ task zipDistribution(type: Zip, dependsOn: build) {
     }
     from('.') {
         include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'THIRD-PARTY-NOTICES.txt'
         include 'chuki_*.txt'
         include 'AozoraEpub3.ico'
     }
@@ -166,6 +167,7 @@ task tarDistribution(type: Tar, dependsOn: build) {
     }
     from('.') {
         include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'THIRD-PARTY-NOTICES.txt'
         include 'chuki_*.txt'
         include 'AozoraEpub3.ico'
     }
@@ -389,6 +391,9 @@ distributions {
         contents {
             from('lib/LICENSE') {
                 into 'LICENSE'
+            }
+            from('.') {
+                include 'THIRD-PARTY-NOTICES.txt'
             }
         }
     }
