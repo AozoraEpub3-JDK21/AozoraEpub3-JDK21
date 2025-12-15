@@ -24,6 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure gradlew is executable
+        run: chmod +x ./gradlew
+
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -115,13 +118,18 @@ jobs:
           echo "::endgroup::"
 
       - name: Run epubcheck on generated EPUBs
-        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        if: success()
         run: |
           set -e
           EC_VERSION="5.2.6"
           shopt -s nullglob
           FAILED=0
-          for f in build/epub_out/*.epub; do
+          EPUBS=(build/epub_out/*.epub)
+          if [ "${#EPUBS[@]}" -eq 0 ]; then
+            echo "No EPUB files generated"
+            exit 0
+          fi
+          for f in "${EPUBS[@]}"; do
             echo "Validating $f"
             set +e
             java -jar build/tools/epubcheck-${EC_VERSION}/epubcheck.jar "$f" > "$f.epubcheck.txt" 2>&1
@@ -139,14 +147,20 @@ jobs:
           fi
 
       - name: Validate OPF essentials (XPath)
-        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        if: success()
         run: |
           set -e
           sudo apt-get update -y >/dev/null 2>&1 || true
           sudo apt-get install -y libxml2-utils >/dev/null 2>&1 || true
           TMPDIR=$(mktemp -d)
           OK=1
-          for f in build/epub_out/*.epub; do
+          shopt -s nullglob
+          EPUBS=(build/epub_out/*.epub)
+          if [ "${#EPUBS[@]}" -eq 0 ]; then
+            echo "No EPUB files to validate"
+            exit 0
+          fi
+          for f in "${EPUBS[@]}"; do
             WORK="$TMPDIR/$(basename "$f" .epub)"
             mkdir -p "$WORK"
             unzip -q "$f" -d "$WORK"
@@ -191,48 +205,68 @@ jobs:
           fi
 
       - name: Summarize epubcheck results
-        if: ${{ hashFiles('build/epub_out/*.epubcheck.txt') != '' }}
+        if: success()
         run: |
           set -e
+          shopt -s nullglob
+          FILES=(build/epub_out/*.epubcheck.txt)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No epubcheck results found"
+            exit 0
+          fi
           echo "# EPUBCheck Summary" >> $GITHUB_STEP_SUMMARY
           total=0; errs=0; warns=0
-          for t in build/epub_out/*.epubcheck.txt; do
+          for t in "${FILES[@]}"; do
             name=$(basename "$t")
             ce=$(grep -ic "\bERROR\b" "$t" || true)
             cw=$(grep -ic "\bWARNING\b" "$t" || true)
             total=$((total+1)); errs=$((errs+ce)); warns=$((warns+cw))
             echo "- $name: ${ce} errors, ${cw} warnings" >> $GITHUB_STEP_SUMMARY
           done
-          echo "\nTotal EPUBs: ${total}, Errors: ${errs}, Warnings: ${warns}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Total EPUBs: ${total}, Errors: ${errs}, Warnings: ${warns}" >> $GITHUB_STEP_SUMMARY
 
       - name: Accessibility summary (non-failing)
-        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        if: success()
         run: |
           set -e
           TMPDIR=$(mktemp -d)
+          shopt -s nullglob
+          EPUBS=(build/epub_out/*.epub)
+          if [ "${#EPUBS[@]}" -eq 0 ]; then
+            echo "No EPUB files to check accessibility"
+            exit 0
+          fi
           echo "# Accessibility (non-failing)" >> $GITHUB_STEP_SUMMARY
-          for f in build/epub_out/*.epub; do
+          for f in "${EPUBS[@]}"; do
             WORK="$TMPDIR/$(basename "$f" .epub)"
             mkdir -p "$WORK"
             unzip -q "$f" -d "$WORK"
-            MISSING=$(grep -RIl "<img[^>]*>" "$WORK/OPS/xhtml" 2>/dev/null | xargs -r grep -IL "alt=\"" | wc -l | tr -d ' ')
-            echo "- $(basename "$f"): images without alt across XHTML files: ${MISSING}" >> $GITHUB_STEP_SUMMARY
+            MISSING=$(find "$WORK/OPS/xhtml" -name "*.xhtml" 2>/dev/null -exec grep -l "<img[^>]*>" {} \; | xargs -r grep -L 'alt="' | wc -l | tr -d ' ')
+            echo "- $(basename "$f"): XHTML files with untagged images: ${MISSING}" >> $GITHUB_STEP_SUMMARY
           done
 
       - name: Upload EPUBs
-        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: generated-epubs
           path: build/epub_out/*.epub
+          if-no-files-found: ignore
 
       - name: Basic 電書連ガイドライン checks
-        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        if: success()
         run: |
           set -e
           TMPDIR=$(mktemp -d)
           OK=1
-          for f in build/epub_out/*.epub; do
+          shopt -s nullglob
+          EPUBS=(build/epub_out/*.epub)
+          if [ "${#EPUBS[@]}" -eq 0 ]; then
+            echo "No EPUB files to check 電書連 compliance"
+            exit 0
+          fi
+          for f in "${EPUBS[@]}"; do
             WORK="$TMPDIR/$(basename "$f" .epub)"
             mkdir -p "$WORK"
             unzip -q "$f" -d "$WORK"
@@ -266,6 +300,7 @@ jobs:
         with:
           name: junit-reports
           path: |
-            build/test-results/test
-            build/reports/tests/test
+            build/test-results/test/
+            build/reports/tests/test/
             build/epub_out/*.epubcheck.txt
+          if-no-files-found: ignore
