@@ -44,8 +44,18 @@ jobs:
         run: |
           set -e
           ./gradlew --no-daemon jar
-          [ -f build/libs/AozoraEpub3.jar ] || (echo "JAR build failed"; exit 1)
-          ls -la build/libs
+          echo "=== Checking JAR output ==="
+          ls -la build/libs || echo "build/libs not found"
+          echo "=== Searching for .jar files ==="
+          find build -name "*.jar" -type f 2>/dev/null || echo "No .jar files found"
+          # Verify specific JAR exists
+          if [ ! -f build/libs/AozoraEpub3.jar ]; then
+            echo "ERROR: build/libs/AozoraEpub3.jar not found"
+            echo "Contents of build directory:"
+            find build -type f | head -20
+            exit 1
+          fi
+          echo "JAR file found and verified: build/libs/AozoraEpub3.jar"
 
       - name: Generate sample EPUBs
         run: |
