@@ -11,7 +11,6 @@ import org.apache.velocity.VelocityContext;
 import org.apache.velocity.Template;
 import org.apache.velocity.app.VelocityEngine;
 import org.junit.Test;
-import org.junit.Ignore;
 
 /**
  * Velocityテンプレート vertical_text.vm / horizontal_text.vm に渡した値が

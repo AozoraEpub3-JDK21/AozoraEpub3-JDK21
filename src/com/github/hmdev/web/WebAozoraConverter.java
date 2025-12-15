@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Vector;
 import java.util.regex.Pattern;
 
-import org.apache.commons.compress.utils.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
