@@ -208,10 +208,10 @@ jobs:
               echo "OPF missing in $f"; OK=0; continue
             fi
             # unique-identifier exists
-            UID=$(xmllint --xpath "string(/*[local-name()='package']/@unique-identifier)" "$OPF" 2>/dev/null || true)
-            if [ -z "$UID" ]; then echo "unique-identifier missing in $f"; OK=0; fi
+            UNIQUE_ID=$(xmllint --xpath "string(/*[local-name()='package']/@unique-identifier)" "$OPF" 2>/dev/null || true)
+            if [ -z "$UNIQUE_ID" ]; then echo "unique-identifier missing in $f"; OK=0; fi
             # dc:identifier with that id and urn:uuid: value (RFC4122 canonical form)
-            IDTXT=$(xmllint --xpath "string(//*[local-name()='identifier' and @id='$UID'])" "$OPF" 2>/dev/null || true)
+            IDTXT=$(xmllint --xpath "string(//*[local-name()='identifier' and @id='$UNIQUE_ID'])" "$OPF" 2>/dev/null || true)
             if ! echo "$IDTXT" | grep -Eq '^urn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
               echo "identifier not canonical urn:uuid in $f: '$IDTXT'"; OK=0;
             fi
