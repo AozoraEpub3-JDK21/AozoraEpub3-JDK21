@@ -1,0 +1,169 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+version = '1.1.0b46'
+
+// Gradle Wrapper を生成するためのタスク
+wrapper {
+    gradleVersion = '8.11.1'
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+// ソースコードの文字コードをUTF-8に指定（文字化け対策）
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+    // 警告を抑止するオプション
+    options.compilerArgs = [
+        '-Xlint:unchecked',
+        '-Xlint:deprecation',
+        '-Xdoclint:none'
+    ]
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Commons ライブラリを最新版に
+    implementation 'commons-cli:commons-cli:1.6.0'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    implementation 'org.apache.commons:commons-compress:1.26.0'
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    
+    // JSoup を最新版に
+    implementation 'org.jsoup:jsoup:1.17.2'
+    
+    // Junrar を最新版に
+    implementation 'com.github.junrar:junrar:7.5.5'
+    
+    // Velocity を最新版に
+    implementation 'org.apache.velocity:velocity-engine-core:2.3'
+    
+    // JAI（Java Advanced Imaging）- 代替ライブラリを使用
+    implementation 'org.apache.xmlgraphics:batik-transcoder:1.17'
+    
+    // ログの実装（SLF4J）
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+    
+    // テストフレームワーク
+    testImplementation 'junit:junit:4.13.2'
+}
+
+sourceSets {
+    main {
+        java {
+            // 古いEclipse形式に合わせて、ソースフォルダを 'src' に指定
+            srcDir 'src'
+        }
+        resources {
+            srcDir 'src'
+        }
+    }
+    test {
+        java {
+            srcDir 'test'
+        }
+        resources {
+            srcDir 'test_data'
+        }
+    }
+}
+
+application {
+    // 【重要】ここを後で確認します
+    // メインクラス（プログラムの開始地点）を指定します
+    mainClass = 'AozoraEpub3' 
+}
+
+java {
+    toolchain {
+        // インストールしたJDK 21を使用
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// jar ファイルを生成するタスク
+jar {
+    archiveVersion = ''
+    manifest {
+        attributes(
+            'Implementation-Title': 'AozoraEpub3',
+            'Implementation-Version': project.version,
+            'Main-Class': 'AozoraEpub3'
+        )
+    }
+    
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+// 配布用の ZIP アーカイブを生成
+task zipDistribution(type: Zip, dependsOn: build) {
+    archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
+    destinationDirectory = file('build/distributions')
+    
+    from('build/libs') {
+        include '*.jar'
+    }
+    from('.') {
+        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'chuki_*.txt'
+        include 'AozoraEpub3.ico'
+    }
+    from('gaiji') {
+        into 'gaiji'
+    }
+    from('presets') {
+        into 'presets'
+    }
+    from('web') {
+        into 'web'
+    }
+    from('template') {
+        into 'template'
+    }
+}
+
+// 配布用の TAR アーカイブを生成
+task tarDistribution(type: Tar, dependsOn: build) {
+    archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
+    destinationDirectory = file('build/distributions')
+    compression = Compression.GZIP
+    
+    from('build/libs') {
+        include '*.jar'
+    }
+    from('.') {
+        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'chuki_*.txt'
+        include 'AozoraEpub3.ico'
+    }
+    from('gaiji') {
+        into 'gaiji'
+    }
+    from('presets') {
+        into 'presets'
+    }
+    from('web') {
+        into 'web'
+    }
+    from('template') {
+        into 'template'
+    }
+}
+
+// 配布用パッケージを生成するタスク
+task dist(dependsOn: [zipDistribution, tarDistribution]) {
+    doLast {
+        println "配布パッケージを生成しました:"
+        println "  - build/distributions/AozoraEpub3-${project.version ?: 'dist'}.zip"
+        println "  - build/distributions/AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
+    }
+}

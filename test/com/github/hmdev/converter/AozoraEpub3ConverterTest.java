@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.StringWriter;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.github.hmdev.info.BookInfo;
@@ -14,8 +15,8 @@ public class AozoraEpub3ConverterTest
 {
 	static AozoraEpub3Converter converter;
 	
-	@Test
-	public void test()
+	@Before
+	public void setUp()
 	{
 		Epub3Writer writer = new Epub3Writer("");
 		try {
