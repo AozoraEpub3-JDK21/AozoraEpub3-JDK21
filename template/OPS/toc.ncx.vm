@@ -9,19 +9,6 @@
 <docTitle>
 	<text>${title}</text>
 </docTitle>
-#set($hasTocItems = false)
-#if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
-#set($hasTocItems = true)
-#end
-#if (!$hasTocItems)
-#foreach(${chapter} in ${chapters})
-#if ($chapter.ChapterName)
-#set($hasTocItems = true)
-#break
-#end
-#end
-#end
-#if ($hasTocItems)
 <navMap>
 #set($idx=0)
 #if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
@@ -51,5 +38,4 @@
 #end
 #end
 </navMap>
-#end
 </ncx>
