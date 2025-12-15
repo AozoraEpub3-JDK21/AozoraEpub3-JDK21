@@ -108,6 +108,16 @@ jar {
         include 'chuki_*.txt'
     }
     
+    // template/ ディレクトリを JAR に含める
+    from('template') {
+        into 'template'
+    }
+    
+    // gaiji/ ディレクトリを JAR に含める（オプション）
+    from('gaiji') {
+        into 'gaiji'
+    }
+    
     // 依存ライブラリを含める
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
