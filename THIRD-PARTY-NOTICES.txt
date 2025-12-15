@@ -1,0 +1,85 @@
+================================================================================
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+================================================================================
+
+This project incorporates components from the projects listed below. The
+original copyright notices and licenses under which these components were
+received are detailed below.
+
+All licenses can be found in the LICENSE/ directory included with this
+distribution.
+
+================================================================================
+
+1. Apache Commons Libraries
+   - commons-cli 1.6.0
+   - commons-collections4 4.4
+   - commons-compress 1.26.0
+   - commons-lang3 3.14.0
+   
+   Copyright: The Apache Software Foundation
+   License: Apache License 2.0
+   URL: https://commons.apache.org/
+   License File: LICENSE/commons.txt
+
+--------------------------------------------------------------------------------
+
+2. Apache Velocity
+   - velocity-engine-core 2.3
+   
+   Copyright: 2000-2007 The Apache Software Foundation
+   License: Apache License 2.0
+   URL: https://velocity.apache.org/
+   License File: LICENSE/velocity.txt
+
+--------------------------------------------------------------------------------
+
+3. Apache Batik
+   - batik-transcoder 1.17 (and dependencies)
+   
+   Copyright: 2025 The Apache Software Foundation
+   License: Apache License 2.0
+   URL: https://xmlgraphics.apache.org/batik/
+   License File: LICENSE/batik.txt
+
+--------------------------------------------------------------------------------
+
+4. jsoup
+   - jsoup 1.17.2
+   
+   Copyright: 2009-2025 Jonathan Hedley
+   License: MIT License
+   URL: https://jsoup.org/
+   License File: LICENSE/jsoup.txt
+
+--------------------------------------------------------------------------------
+
+5. SLF4J (Simple Logging Facade for Java)
+   - slf4j-api 2.0.9
+   - slf4j-simple 2.0.9
+   
+   Copyright: 2004-2025 QOS.ch
+   License: MIT License
+   URL: https://www.slf4j.org/
+   License File: LICENSE/slf4j.txt
+
+--------------------------------------------------------------------------------
+
+6. Junrar
+   - junrar 7.5.5
+   
+   Copyright: Alexander Roshal (UnRAR)
+   License: UnRAR Free License
+   URL: https://github.com/junrar/junrar
+   License File: LICENSE/junrar.txt
+   
+   Note: This library uses UnRAR sources which may be freely used in any
+   software to handle RAR archives without limitations free of charge, but
+   cannot be used to re-create the RAR compression algorithm.
+
+================================================================================
+
+For complete license texts, please refer to the LICENSE/ directory or visit
+the URLs listed above.
+
+================================================================================
