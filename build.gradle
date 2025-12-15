@@ -103,6 +103,12 @@ jar {
     
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     
+    // JAR ルートにリソースファイルを含める
+    from('.') {
+        include 'chuki_*.txt'
+    }
+    
+    // 依存ライブラリを含める
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
