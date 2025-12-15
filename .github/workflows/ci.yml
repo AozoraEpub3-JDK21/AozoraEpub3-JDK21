@@ -48,24 +48,26 @@ jobs:
           ls -la build/libs || echo "build/libs not found"
           echo "=== Searching for .jar files ==="
           find build -name "*.jar" -type f 2>/dev/null || echo "No .jar files found"
-          # Verify specific JAR exists
-          if [ ! -f build/libs/AozoraEpub3.jar ]; then
-            echo "ERROR: build/libs/AozoraEpub3.jar not found"
+          # Find the actual JAR file generated (may be AozoraEpub3.jar or AozoraEpub3-*.jar)
+          JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "ERROR: No AozoraEpub3*.jar found in build/libs"
             echo "Contents of build directory:"
             find build -type f | head -20
             exit 1
           fi
-          echo "JAR file found and verified: build/libs/AozoraEpub3.jar"
+          echo "JAR file found: $JAR_FILE"
+          # Make it available for subsequent steps
+          echo "JAR_FILE=$JAR_FILE" >> $GITHUB_ENV
 
       - name: Generate sample EPUBs
         run: |
           set -e
-          [ -f build/libs/AozoraEpub3.jar ] || (echo "JAR file not found"; exit 1)
           mkdir -p build/epub_out
-          # Convert a subset of fixtures to keep runtime short
-          java -jar build/libs/AozoraEpub3.jar -of -ext .epub -d build/epub_out test_data/test_title.txt || true
-          java -jar build/libs/AozoraEpub3.jar -of -ext .epub -d build/epub_out test_data/test_ruby.txt || true
-          java -jar build/libs/AozoraEpub3.jar -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
+          # Use the JAR_FILE from previous step
+          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_title.txt || true
+          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_ruby.txt || true
+          java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
           ls -la build/epub_out || true
 
       - name: Generate INI-mapped sample and check CSS (vertical & horizontal)
@@ -84,8 +86,8 @@ jobs:
           FontSize=${FZ}
           EOF
           # Generate EPUBs with INI-applied styles (vertical-ish and horizontal sample)
-          java -jar build/libs/AozoraEpub3.jar -i build/epub_out/sample.ini -of -ext .epub -d build/epub_out test_data/test_title.txt || true
-          java -jar build/libs/AozoraEpub3.jar -i build/epub_out/sample.ini -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
+          java -jar "$JAR_FILE" -i build/epub_out/sample.ini -of -ext .epub -d build/epub_out test_data/test_title.txt || true
+          java -jar "$JAR_FILE" -i build/epub_out/sample.ini -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
           # Validate CSS reflects INI values in both vertical_text.css and horizontal_text.css when present
           TMPDIR=$(mktemp -d)
           CSS_OK=0
