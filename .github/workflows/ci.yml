@@ -126,9 +126,10 @@ jobs:
       - name: Download epubcheck
         run: |
           set -e
-          EC_VERSION="5.2.6"
+          EC_VERSION="5.2.0"
           EC_URL="https://github.com/w3c/epubcheck/releases/download/v${EC_VERSION}/epubcheck-${EC_VERSION}.zip"
           mkdir -p build/tools
+          echo "Downloading epubcheck from: $EC_URL"
           curl -sSLf "$EC_URL" -o build/tools/epubcheck.zip
           unzip -q build/tools/epubcheck.zip -d build/tools
           echo "::group::epubcheck version"
@@ -139,7 +140,7 @@ jobs:
         if: success()
         run: |
           set -e
-          EC_VERSION="5.2.6"
+          EC_VERSION="5.2.0"
           shopt -s nullglob
           FAILED=0
           EPUBS=(build/epub_out/*.epub)
