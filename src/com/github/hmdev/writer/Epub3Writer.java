@@ -19,6 +19,7 @@ import java.net.URI;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.Vector;
 import java.util.zip.CRC32;
@@ -282,14 +283,35 @@ public class Epub3Writer
 	public Epub3Writer(String templatePath)
 	{
 		this.templatePath = templatePath;
-		//初回実行時のみ有効
-		Velocity.init();
+		//Velocity初期化: ファイルシステム優先、JAR内リソース代替
+		initVelocity();
 		this.sectionInfos = new Vector<SectionInfo>();
 		this.chapterInfos = new Vector<ChapterInfo>();
 		this.vecGaijiInfo = new Vector<GaijiInfo>();
 		this.gaijiNameSet = new HashSet<String>();
 		this.imageInfos = new Vector<ImageInfo>();
 		this.outImageFileNames = new HashSet<String>();
+	}
+	
+	/** Velocity初期化（ファイルシステム優先、JAR内リソース代替） */
+	private void initVelocity() {
+		File templateDir = new File(templatePath);
+		if (templateDir.exists() && templateDir.isDirectory()) {
+			// ファイルシステムにテンプレートがある場合
+			Properties p = new Properties();
+			p.setProperty("resource.loaders", "file");
+			p.setProperty("resource.loader.file.class", "org.apache.velocity.runtime.resource.loader.FileResourceLoader");
+			p.setProperty("resource.loader.file.path", templatePath);
+			p.setProperty("resource.loader.file.cache", "false");
+			Velocity.init(p);
+		} else {
+			// JAR内リソースから読み込み
+			Properties p = new Properties();
+			p.setProperty("resource.loaders", "class");
+			p.setProperty("resource.loader.class.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
+			p.setProperty("resource.loader.class.cache", "false");
+			Velocity.init(p);
+		}
 	}
 
 	/** コンストラクタ（Velocityエンジン注入版）
@@ -324,7 +346,18 @@ public class Epub3Writer
 				Template t = this.velocityEngine.getTemplate(resourceName, "UTF-8");
 				t.merge(this.velocityContext, bw);
 			} else {
-				Velocity.mergeTemplate(templateFilePath, "UTF-8", this.velocityContext, bw);
+				// パスを調整: ファイルシステムにない場合は "template/" から始まるリソースパスに変換
+				String resourcePath = templateFilePath;
+				File templateDir = new File(templatePath);
+				if (!templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+					// JAR内リソース用のパスに変換（ClasspathResourceLoaderは"/"から始まらないパスを期待）
+					resourcePath = "template/" + templateFilePath.substring(templatePath.length());
+					// Velocity.mergeTemplate は内部でgetTemplateを呼ぶが、ここでは直接テンプレートを取得
+					Template t = Velocity.getTemplate(resourcePath, "UTF-8");
+					t.merge(this.velocityContext, bw);
+					return;
+				}
+				Velocity.mergeTemplate(resourcePath, "UTF-8", this.velocityContext, bw);
 			}
 		} catch (Exception e) {
 			throw new IOException("Failed to merge template: " + templateFilePath, e);
