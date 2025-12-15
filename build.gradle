@@ -402,18 +402,11 @@ distributions {
                 include 'chuki_*.txt'
                 include 'AozoraEpub3.ico'
             }
-            from('gaiji') {
-                into 'gaiji'
-            }
             from('presets') {
                 into 'presets'
             }
-            from('web') {
-                into 'web'
-            }
-            from('template') {
-                into 'template'
-            }
+            // Note: gaiji, web, template are included in the fat JAR
+            // and should not be distributed separately to avoid conflicts
         }
     }
 }
