@@ -309,8 +309,9 @@ jobs:
             WORK="$TMPDIR/$(basename "$f" .epub)"
             mkdir -p "$WORK"
             unzip -q "$f" -d "$WORK"
-            # nav.xhtml is required in EPUB3
-            if [ ! -f "$WORK/OPS/nav.xhtml" ] && [ ! -f "$WORK/OEBPS/nav.xhtml" ]; then
+            # nav.xhtml is required in EPUB3 (allow any subfolder under OPS or OEBPS)
+            if ! (find "$WORK/OPS" -type f -name "nav.xhtml" -print -quit 2>/dev/null | grep -q .) \
+               && ! (find "$WORK/OEBPS" -type f -name "nav.xhtml" -print -quit 2>/dev/null | grep -q .); then
               echo "nav.xhtml missing in $f"
               OK=0
             fi
