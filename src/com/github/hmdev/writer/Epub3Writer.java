@@ -351,11 +351,26 @@ public class Epub3Writer
 				File templateDir = new File(templatePath);
 				if (!templateDir.exists() && templateFilePath.startsWith(templatePath)) {
 					// JAR内リソース用のパスに変換（ClasspathResourceLoaderは"/"から始まらないパスを期待）
-					resourcePath = "template/" + templateFilePath.substring(templatePath.length());
-					// Velocity.mergeTemplate は内部でgetTemplateを呼ぶが、ここでは直接テンプレートを取得
-					Template t = Velocity.getTemplate(resourcePath, "UTF-8");
-					t.merge(this.velocityContext, bw);
-					return;
+					// パスから余分なスラッシュを削除
+					String relativePath = templateFilePath.substring(templatePath.length());
+					while (relativePath.startsWith("/")) {
+						relativePath = relativePath.substring(1);
+					}
+					resourcePath = "template/" + relativePath;
+					try {
+						Template t = Velocity.getTemplate(resourcePath, "UTF-8");
+						t.merge(this.velocityContext, bw);
+						return;
+					} catch (Exception e) {
+						// フォールバック: template プレフィックスなしで試す
+						try {
+							Template t = Velocity.getTemplate("OPS/" + relativePath, "UTF-8");
+							t.merge(this.velocityContext, bw);
+							return;
+						} catch (Exception e2) {
+							throw e;
+						}
+					}
 				}
 				Velocity.mergeTemplate(resourcePath, "UTF-8", this.velocityContext, bw);
 			}
