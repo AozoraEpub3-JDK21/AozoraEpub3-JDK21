@@ -2814,7 +2814,10 @@ public class AozoraEpub3Applet extends JApplet
 				try {
 				for (File file : fileChooser.getSelectedFiles()) {
 					if (file.getName().toLowerCase().endsWith(".url")) {
-						if (vecUrlString == null) vecUrlString = new Vector<String>();
+						if (vecUrlString == null) {
+							vecUrlString = new Vector<String>();
+							vecUrlSrcFile = new Vector<File>();
+						}
 						vecUrlString.add(readInternetShortCut(file));
 						vecUrlSrcFile.add(file);
 						dstPath = file.getParentFile();

@@ -3,9 +3,7 @@ package com.github.hmdev.epub;
 import static org.junit.Assert.*;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.util.*;
 import java.util.regex.*;
 import org.junit.Before;
 import org.junit.Test;
@@ -16,11 +14,9 @@ import org.junit.Test;
  */
 public class DensoBookenGuidelineTest {
     
-    private Path testDir;
-    
     @Before
     public void setUp() throws IOException {
-        testDir = Files.createTempDirectory("guideline_test");
+        // Test setup for guideline validation
     }
     
     @Test
@@ -105,44 +101,36 @@ public class DensoBookenGuidelineTest {
     @Test
     public void testCssMediaQuery() throws IOException {
         // CSS メディアクエリは妥当な値を使用していること
-        String cssContent = "@media screen and (color) {\n" +
-                           "  body { color: #000000; }\n" +
-                           "}";
         assertTrue("CSS media queries should be valid", true);
     }
     
     @Test
     public void testCssVerticalWriting() throws IOException {
         // 縦書き指定が正しく行われていること（writing-mode: vertical-rl）
-        String cssContent = ".vertical { writing-mode: vertical-rl; }";
         assertTrue("Vertical writing should be properly specified", true);
     }
     
     @Test
     public void testCssHorizontalWriting() throws IOException {
         // 横書き指定が正しく行われていること（writing-mode: horizontal-tb）
-        String cssContent = ".horizontal { writing-mode: horizontal-tb; }";
         assertTrue("Horizontal writing should be properly specified", true);
     }
     
     @Test
     public void testRubyMarkupCompliance() throws IOException {
         // ルビは <ruby> タグで実装されていること
-        String xhtmlContent = "<ruby>漢字<rp>（</rp><rt>かんじ</rt><rp>）</rp></ruby>";
         assertTrue("Ruby markup should use proper XHTML tags", true);
     }
     
     @Test
     public void testTocyCompliance() throws IOException {
         // 縦中横（tcy）指定が正しく行われていること
-        String xhtmlContent = "<span style=\"text-combine-upright: all;\">2020</span>";
         assertTrue("Tcy specification should be correct", true);
     }
     
     @Test
     public void testPageBreakHandling() throws IOException {
         // ページブレークが適切に処理されていること
-        String xhtmlContent = "<div style=\"page-break-after: always;\"></div>";
         assertTrue("Page breaks should be handled properly", true);
     }
     

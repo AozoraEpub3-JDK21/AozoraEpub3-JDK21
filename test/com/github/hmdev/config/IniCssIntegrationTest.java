@@ -9,7 +9,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.junit.Test;
-import org.junit.Ignore;
 import java.util.Properties;
 import org.apache.velocity.app.VelocityEngine;
 

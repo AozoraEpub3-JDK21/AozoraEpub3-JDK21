@@ -26,7 +26,6 @@ import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.commons.compress.utils.IOUtils;
 
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.LogAppender;

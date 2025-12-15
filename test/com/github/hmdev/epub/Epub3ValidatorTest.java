@@ -3,29 +3,19 @@ package com.github.hmdev.epub;
 import static org.junit.Assert.*;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.util.*;
-import java.util.zip.*;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.Ignore;
 
 /**
  * EPUB 3.2 and 電書連制作ガイド ver.1.1.4 compatibility tests
  */
 public class Epub3ValidatorTest {
     
-    private static final String MIMETYPE_EPUB = "application/epub+zip";
-    private static final String CONTAINER_XML_PATH = "META-INF/container.xml";
-    private static final String PACKAGE_XML_PATTERN = "OEBPS/package.opf";
-    
-    private Path testEpubPath;
-    
     @Before
     public void setUp() throws IOException {
         // Create a test EPUB file path
-        testEpubPath = Files.createTempFile("test", ".epub");
+        Path testEpubPath = Files.createTempFile("test", ".epub");
     }
     
     @Test

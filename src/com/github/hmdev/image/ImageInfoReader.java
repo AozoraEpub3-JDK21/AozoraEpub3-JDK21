@@ -17,7 +17,7 @@ import java.util.Vector;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
-import org.apache.commons.compress.archivers.zip.ZipFile;
+
 
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.FileNameComparator;

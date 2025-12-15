@@ -92,7 +92,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("bookInfo", new VerticalBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);
-        ctx.put("coverImage", new Object() { public int getWidth() { return 800; } public int getHeight() { return 600; } });
+        ctx.put("coverImage", new Object() {});
         ctx.put("title_page", Boolean.FALSE);
         ctx.put("sections", new ArrayList<>());
         ctx.put("images", new ArrayList<>());
@@ -125,7 +125,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("bookInfo", new HorizontalBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);
-        ctx.put("coverImage", new Object() { public int getWidth() { return 800; } public int getHeight() { return 600; } });
+        ctx.put("coverImage", new Object() {});
         ctx.put("title_page", Boolean.FALSE);
         ctx.put("sections", new ArrayList<>());
         ctx.put("images", new ArrayList<>());
