@@ -222,3 +222,155 @@ task validate(dependsOn: [test, codeQualityCheck]) {
 
 // デフォルトタスク
 defaultTasks 'validate'
+
+// ============================
+// Local epubcheck integration
+// ============================
+ext {
+    epubcheckVersion = '5.2.0'
+    epubcheckBaseUrl = "https://github.com/w3c/epubcheck/releases/download/v${epubcheckVersion}/epubcheck-${epubcheckVersion}.zip"
+    epubcheckToolsDir = file('build/tools')
+    epubcheckDir = file("${epubcheckToolsDir}/epubcheck-${epubcheckVersion}")
+    epubcheckZip = file("${epubcheckToolsDir}/epubcheck-${epubcheckVersion}.zip")
+}
+
+// Download and prepare epubcheck unless user provides -PepubcheckJar=<path>
+tasks.register('setupEpubcheck') {
+    outputs.dir(epubcheckDir)
+    doLast {
+        if (project.hasProperty('epubcheckJar')) {
+            println "Using user-provided epubcheck JAR: ${project.property('epubcheckJar')}"
+            return
+        }
+        if (!epubcheckDir.exists()) {
+            epubcheckToolsDir.mkdirs()
+            println "Downloading epubcheck ${epubcheckVersion} from ${epubcheckBaseUrl}"
+            try {
+                ant.get(src: epubcheckBaseUrl, dest: epubcheckZip, skipexisting: 'true')
+                ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
+            } catch(Exception e) {
+                println "WARNING: Failed to download epubcheck automatically."
+                println "You can manually download the ZIP and set -PepubcheckJar=/path/to/epubcheck.jar"
+            }
+        }
+        def jar = file("${epubcheckDir}/epubcheck.jar")
+        if (jar.exists()) {
+            println "epubcheck is ready: ${jar}"
+            // Show version (best-effort)
+            try {
+                def p = ["java","-jar", jar.absolutePath, "-version"].execute()
+                p.in.eachLine { println it }
+                p.waitFor()
+            } catch(Exception ignore) {}
+        } else {
+            println "epubcheck JAR not found. Provide -PepubcheckJar or check network access."
+        }
+    }
+}
+
+// Run epubcheck for a single file (-Pepub=path.epub) or a directory (-PepubDir=dir)
+tasks.register('epubcheck') {
+    dependsOn 'setupEpubcheck'
+    doLast {
+        def targetFile = project.findProperty('epub')
+        def targetDir = project.findProperty('epubDir')
+        def files = [] as List<File>
+
+        if (targetFile) files << file(targetFile)
+        if (targetDir) files.addAll(fileTree(targetDir).matching { include '**/*.epub' }.files as List)
+        if (!targetFile && !targetDir) {
+            println 'Usage:'
+            println '  gradlew epubcheck -Pepub=build/epub_out/sample.epub'
+            println '  gradlew epubcheck -PepubDir=build/epub_out'
+            println 'Optional:'
+            println '  -PepubcheckJar=C:/path/to/epubcheck.jar (to skip download)'
+            return
+        }
+        if (files.isEmpty()) {
+            println "No EPUB files found to validate"
+            return
+        }
+
+        // Resolve epubcheck jar path
+        File jarFile
+        if (project.hasProperty('epubcheckJar')) {
+            jarFile = file(project.property('epubcheckJar'))
+        } else {
+            jarFile = file("${epubcheckDir}/epubcheck.jar")
+        }
+        if (!jarFile.exists()) {
+            throw new GradleException("epubcheck jar not found: ${jarFile}. Provide -PepubcheckJar or check setupEpubcheck output.")
+        }
+
+        int failures = 0
+        files.each { f ->
+            println "Validating ${f}"
+            try {
+                def p = ["java","-jar", jarFile.absolutePath, f.absolutePath].execute()
+                p.in.eachLine { println it }
+                p.err.eachLine { System.err.println(it) }
+                int code = p.waitFor()
+                if (code != 0) {
+                    failures++
+                    println "epubcheck failed (exit ${code}) for ${f}"
+                }
+            } catch(Exception e) {
+                failures++
+                println "Exception while running epubcheck for ${f}: ${e.message}"
+            }
+        }
+
+        if (failures > 0) {
+            throw new GradleException("epubcheck failed for ${failures} file(s)")
+        }
+        println "epubcheck completed successfully for ${files.size()} file(s)"
+    }
+}
+
+// =====================================
+// Regenerate local sample EPUBs for test
+// =====================================
+ext.localSamples = [
+    // source                , target file name under build/epub_local
+    [src: 'test_data/test_ruby.txt' , name: '[テスト] ルビ※※《》.epub'],
+    [src: 'test_data/test_yoko.txt' , name: '[テスト] 横書き横組み.epub'],
+    [src: 'test_data/test_title.txt', name: '[テスト&] 出版社 ――副題――.epub']
+]
+
+tasks.register('cleanLocalSamples') {
+    doLast {
+        def outDir = file('build/epub_local')
+        if (outDir.exists()) {
+            println "Deleting ${outDir}"
+            outDir.deleteDir()
+        }
+    }
+}
+
+tasks.register('generateLocalSamples') {
+    dependsOn 'jar', 'cleanLocalSamples'
+    doLast {
+        def jarPath = file("${buildDir}/libs/AozoraEpub3.jar")
+        if (!jarPath.exists()) throw new GradleException("Jar not found: ${jarPath}")
+
+        def genDir = file('build/epub_local_gen')
+        def outDir = file('build/epub_local')
+        genDir.mkdirs()
+        outDir.mkdirs()
+
+        localSamples.each { m ->
+            def src = file(m.src)
+            if (!src.exists()) throw new GradleException("Source not found: ${src}")
+            println "Generating from ${src}"
+            exec {
+                commandLine 'java', '-jar', jarPath.absolutePath, '-of', '-d', genDir.absolutePath, src.absolutePath
+            }
+            def produced = new File(genDir, src.name.replaceAll(/\.[^.]+$/, '') + '.epub')
+            if (!produced.exists()) throw new GradleException("Expected output not found: ${produced}")
+            def target = new File(outDir, m.name)
+            println "Copying ${produced.name} -> ${target.name}"
+            target.bytes = produced.bytes
+        }
+        println "Local samples generated under ${outDir}"
+    }
+}
