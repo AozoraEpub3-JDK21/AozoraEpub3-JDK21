@@ -149,6 +149,10 @@ task zipDistribution(type: Zip, dependsOn: build) {
     from('template') {
         into 'template'
     }
+    // Include third-party licenses
+    from('lib/LICENSE') {
+        into 'LICENSE'
+    }
 }
 
 // 配布用の TAR アーカイブを生成
@@ -176,6 +180,10 @@ task tarDistribution(type: Tar, dependsOn: build) {
     }
     from('template') {
         into 'template'
+    }
+    // Include third-party licenses
+    from('lib/LICENSE') {
+        into 'LICENSE'
     }
 }
 
@@ -372,5 +380,16 @@ tasks.register('generateLocalSamples') {
             target.bytes = produced.bytes
         }
         println "Local samples generated under ${outDir}"
+    }
+}
+
+// Include third-party licenses into Application plugin distributions
+distributions {
+    main {
+        contents {
+            from('lib/LICENSE') {
+                into 'LICENSE'
+            }
+        }
     }
 }
