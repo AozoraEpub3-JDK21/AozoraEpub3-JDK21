@@ -63,17 +63,6 @@ nav#landmarks { display:none; }
 		</ol>
 	</nav>
 ## epub3 toc nav ================================
-#set($hasTocItems = false)
-#foreach(${chapter} in ${chapters})
-#if ($chapter.ChapterName)
-#set($hasTocItems = true)
-#break
-#end
-#end
-#if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
-#set($hasTocItems = true)
-#end
-#if ($hasTocItems)
 #if (${kindle})
 	<nav id="toc">
 #else
@@ -107,6 +96,5 @@ nav#landmarks { display:none; }
 #end
 		</ol>
 	</nav>
-#end
 </body>
 </html>
