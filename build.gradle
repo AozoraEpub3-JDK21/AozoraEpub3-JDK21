@@ -91,6 +91,7 @@ java {
 
 // jar ファイルを生成するタスク
 jar {
+    archiveBaseName = 'AozoraEpub3'
     archiveVersion = ''
     manifest {
         attributes(
