@@ -64,9 +64,10 @@ jobs:
         run: |
           set -e
           mkdir -p build/epub_out
-          # Verify JAR_FILE is set and accessible
+          # Find JAR file dynamically (avoid relying on environment variable)
+          JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
           if [ -z "$JAR_FILE" ]; then
-            echo "ERROR: JAR_FILE environment variable not set"
+            echo "ERROR: JAR_FILE environment variable not set and no JAR found"
             exit 1
           fi
           if [ ! -f "$JAR_FILE" ]; then
@@ -90,7 +91,9 @@ jobs:
       - name: Generate INI-mapped sample and check CSS (vertical & horizontal)
         run: |
           set -e
-          [ -f build/libs/AozoraEpub3.jar ] || (echo "JAR file not found"; exit 1)
+          JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
+          [ -z "$JAR_FILE" ] && (echo "JAR not found"; exit 1)
+          [ -f "$JAR_FILE" ] || (echo "JAR not accessible"; exit 1)
           # Prepare INI for CSS mapping
           FZ="${{ inputs.ini_font_size }}"; FZ=${FZ:-115}
           LH="${{ inputs.ini_line_height }}"; LH=${LH:-1.7}
