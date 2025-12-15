@@ -63,17 +63,6 @@ nav#landmarks { display:none; }
 		</ol>
 	</nav>
 ## epub3 toc nav ================================
-#set($hasTocItems = false)
-#foreach(${chapter} in ${chapters})
-#if ($chapter.ChapterName)
-#set($hasTocItems = true)
-#break
-#end
-#end
-#if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
-#set($hasTocItems = true)
-#end
-#if ($hasTocItems)
 #if (${kindle})
 	<nav id="toc">
 #else
@@ -84,9 +73,10 @@ nav#landmarks { display:none; }
 #if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
 			<li class="chapter" id="toccover"><a href="cover.xhtml">${cover_name}</a></li>
 #end
-#set($idx=0)
+#set($hasChapter = false)
 #foreach(${chapter} in ${chapters})
 #if ($chapter.ChapterName)
+#set($hasChapter = true)
 #set($idx=$idx+1)
 #if (${navNest})
 #foreach(${start} in ${chapter.LevelStart})
@@ -105,8 +95,10 @@ nav#landmarks { display:none; }
 #end
 #end
 #end
+#if (!$hasChapter && (!${bookInfo.InsertCoverPage} || !${bookInfo.InsertCoverPageToc}))
+			<li class="chapter" id="toc1"><a href="contents.xhtml">コンテンツ</a></li>
+#end
 		</ol>
 	</nav>
-#end
 </body>
 </html>
