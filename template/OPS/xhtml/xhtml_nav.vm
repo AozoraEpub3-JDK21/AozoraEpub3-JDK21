@@ -69,6 +69,17 @@ nav#landmarks { display:none; }
 	<nav epub:type="toc" id="toc">
 #end
 		<h1>目　次</h1>
+#set($hasTocItems = false)
+#foreach(${chapter} in ${chapters})
+#if ($chapter.ChapterName)
+#set($hasTocItems = true)
+#break
+#end
+#end
+#if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
+#set($hasTocItems = true)
+#end
+#if ($hasTocItems)
 		<ol>
 #if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
 			<li class="chapter" id="toccover"><a href="cover.xhtml">${cover_name}</a></li>
@@ -95,6 +106,7 @@ nav#landmarks { display:none; }
 #end
 #end
 		</ol>
+#end
 	</nav>
 </body>
 </html>
