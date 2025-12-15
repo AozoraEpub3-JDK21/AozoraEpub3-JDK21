@@ -389,6 +389,10 @@ tasks.register('generateLocalSamples') {
 distributions {
     main {
         contents {
+            // Copy fat JAR to root for easy access
+            from('build/libs') {
+                include 'AozoraEpub3.jar'
+            }
             from('lib/LICENSE') {
                 into 'LICENSE'
             }
