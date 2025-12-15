@@ -1,10 +1,37 @@
-/AozoraEpub3.ini
-/bin
-/.settings
-/AozoraEpub3.jar
+# Build outputs
+/bin/
+/build/
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Gradle
+.gradle/
 /.cache
-/_kindlegen.exe
+
+# IDE
+/.settings/
+/.classpath
+/.project
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Application config
+/AozoraEpub3.ini
 /replace.txt
-/パッケージ作成*
-/profiles
+/profiles/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tools
+/_kindlegen.exe
 /kindlegen.exe
+
+# Temporary
+/パッケージ作成*
+*.log
+*.tmp
