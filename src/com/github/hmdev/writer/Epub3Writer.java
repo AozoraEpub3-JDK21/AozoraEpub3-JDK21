@@ -411,20 +411,33 @@ public class Epub3Writer
 		this.canceled = true;
 	}
 	
-	private void writeFile(ZipArchiveOutputStream zos, String fileName) throws IOException
+	/** テンプレートファイルまたはJAR内リソースからInputStreamを取得 */
+	private InputStream getTemplateInputStream(String fileName) throws IOException
 	{
-		zos.putArchiveEntry(new ZipArchiveEntry(fileName));
-		//customファイル優先
+		// まずファイルシステムをチェック（カスタムファイル優先）
 		File file = new File(templatePath+fileName);
 		int idx = fileName.lastIndexOf('/');
 		if (idx > 0) { 
 			File customFile = new File(templatePath+fileName.substring(0, idx)+"_custom/"+fileName.substring(idx+1));
-			if (customFile.exists()) file = customFile;
+			if (customFile.exists()) return new FileInputStream(customFile);
 		}
-		try (FileInputStream fis = new FileInputStream(file)) {
+		if (file.exists()) return new FileInputStream(file);
+		
+		// JAR内リソースから読み込み
+		InputStream stream = Epub3Writer.class.getResourceAsStream("/template/"+fileName);
+		if (stream == null) {
+			throw new IOException("Template not found: "+fileName);
+		}
+		return stream;
+	}
+	
+	private void writeFile(ZipArchiveOutputStream zos, String fileName) throws IOException
+	{
+		zos.putArchiveEntry(new ZipArchiveEntry(fileName));
+		try (InputStream is = getTemplateInputStream(fileName)) {
 			byte[] buf = new byte[8192];
 			int len;
-			while ((len = fis.read(buf)) > 0) {
+			while ((len = is.read(buf)) > 0) {
 				zos.write(buf, 0, len);
 			}
 		}
@@ -510,8 +523,8 @@ public class Epub3Writer
 		ZipArchiveEntry mimeTypeEntry = new ZipArchiveEntry(MIMETYPE_PATH);
 		byte[] b = new byte[256];
 		int len;
-		try (FileInputStream fis = new FileInputStream(new File(templatePath+MIMETYPE_PATH))) {
-			len = fis.read(b);
+		try (InputStream is = getTemplateInputStream(MIMETYPE_PATH)) {
+			len = is.read(b);
 		}
 		CRC32 crc32 = new CRC32();
 		crc32.update(b, 0, len);
@@ -884,10 +897,11 @@ public class Epub3Writer
 				for (File fontFile : fontsPath.listFiles()) {
 					String outFileName = OPS_PATH+FONTS_PATH+fontFile.getName();
 					zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
-					try (FileInputStream fis = new FileInputStream(new File(templatePath+outFileName))) {
+					try (InputStream is = getTemplateInputStream(outFileName)) {
 						byte[] buf = new byte[8192];
-						while ((len = fis.read(buf)) > 0) {
-							zos.write(buf, 0, len);
+						int fontLen;
+						while ((fontLen = is.read(buf)) > 0) {
+							zos.write(buf, 0, fontLen);
 						}
 					}
 					zos.closeArchiveEntry();
