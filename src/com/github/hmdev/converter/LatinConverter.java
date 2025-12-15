@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 
@@ -23,8 +24,13 @@ public class LatinConverter
 	
 	public LatinConverter(File file) throws IOException
 	{
+		this(new FileInputStream(file), file.getName());
+	}
+	
+	public LatinConverter(InputStream inputStream, String fileName) throws IOException
+	{
 		//String srcFileName = "chuki_latin.txt";
-		BufferedReader src = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
+		BufferedReader src = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
 		String line;
 		int lineNum = 0;
 		try {
@@ -37,7 +43,7 @@ public class LatinConverter
 						if (values[0].length() > 0) latinMap.put(values[0], ch);
 						if (values.length > 3) latinCidMap.put(ch, new String[]{values[2], values[3]});
 					} catch (Exception e) {
-						LogAppender.error(lineNum, file.getName(), line);
+						LogAppender.error(lineNum, fileName, line);
 					}
 				}
 			}
