@@ -394,6 +394,21 @@ distributions {
             }
             from('.') {
                 include 'THIRD-PARTY-NOTICES.txt'
+                include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+                include 'chuki_*.txt'
+                include 'AozoraEpub3.ico'
+            }
+            from('gaiji') {
+                into 'gaiji'
+            }
+            from('presets') {
+                into 'presets'
+            }
+            from('web') {
+                into 'web'
+            }
+            from('template') {
+                into 'template'
             }
         }
     }
