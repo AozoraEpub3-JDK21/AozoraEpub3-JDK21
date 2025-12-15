@@ -9,12 +9,21 @@
 <docTitle>
 	<text>${title}</text>
 </docTitle>
-<navMap>
-#set($idx=0)
 #set($hasNavPoint = false)
 #if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
-#set($idx=$idx+1)
 #set($hasNavPoint = true)
+#end
+#foreach(${chapter} in ${chapters})
+#if ($chapter.ChapterName)
+#set($hasNavPoint = true)
+#break
+#end
+#end
+#if ($hasNavPoint)
+<navMap>
+#set($idx=0)
+#if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})
+#set($idx=$idx+1)
 	<navPoint id="toccover" playOrder="${idx}">
 		<navLabel>
 			<text>${cover_name}</text>
@@ -25,7 +34,6 @@
 #foreach(${chapter} in ${chapters})
 #if ($chapter.ChapterName)
 #set($idx=$idx+1)
-#set($hasNavPoint = true)
 	<navPoint id="toc${idx}" playOrder="${idx}">
 		<navLabel>
 			<text>${chapter.NoTagChapterName}</text>
@@ -40,13 +48,6 @@
 #end
 #end
 #end
-#if (!$hasNavPoint)
-	<navPoint id="toc1" playOrder="1">
-		<navLabel>
-			<text>コンテンツ</text>
-		</navLabel>
-		<content src="xhtml/contents.xhtml"/>
-	</navPoint>
-#end
 </navMap>
+#end
 </ncx>
