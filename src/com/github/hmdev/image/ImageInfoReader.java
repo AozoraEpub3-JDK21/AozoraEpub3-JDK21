@@ -8,6 +8,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Vector;
@@ -356,25 +358,41 @@ public class ImageInfoReader
 				}
 				
 			} else {
-				ZipFile zf = new ZipFile(this.srcFile, "MS932", false);
-				try {
-					ZipArchiveEntry entry = zf.getEntry(srcImageFileName);
-					if (entry == null) {
-						srcImageFileName = this.correctExt(srcImageFileName);
-						entry = zf.getEntry(srcImageFileName);
-						if (entry == null) return null;
+				// ZipFileの非推奨使用を避けるため、ZipArchiveInputStreamを使用
+				try (InputStream fis = Files.newInputStream(this.srcFile.toPath(), StandardOpenOption.READ);
+				     ZipArchiveInputStream zais = new ZipArchiveInputStream(fis, "MS932")) {
+					
+					ArchiveEntry entry = null;
+					while ((entry = zais.getNextEntry()) != null) {
+						if (entry.getName().equalsIgnoreCase(srcImageFileName)) {
+							try {
+								return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais);
+							} catch (Exception e) {
+								e.printStackTrace();
+								return null;
+							}
+						}
 					}
-					InputStream is = zf.getInputStream(entry);
-					try {
-						return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), is);
-					} catch (Exception e) {
-						e.printStackTrace();
-					} finally {
-						is.close();
+					
+					// 拡張子が異なる場合は正しい拡張子を探す
+					srcImageFileName = this.correctExt(srcImageFileName);
+					try (InputStream fis2 = Files.newInputStream(this.srcFile.toPath(), StandardOpenOption.READ);
+					     ZipArchiveInputStream zais2 = new ZipArchiveInputStream(fis2, "MS932")) {
+						
+						ArchiveEntry entry2 = null;
+						while ((entry2 = zais2.getNextEntry()) != null) {
+							if (entry2.getName().equalsIgnoreCase(srcImageFileName)) {
+								try {
+									return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais2);
+								} catch (Exception e) {
+									e.printStackTrace();
+									return null;
+								}
+							}
+						}
 					}
-				} finally {
-					zf.close();
 				}
+				return null;
 			}
 		}
 		return null;

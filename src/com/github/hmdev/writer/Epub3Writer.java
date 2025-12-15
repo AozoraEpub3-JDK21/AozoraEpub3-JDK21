@@ -30,7 +30,9 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.apache.velocity.VelocityContext;
+import org.apache.velocity.Template;
 import org.apache.velocity.app.Velocity;
+import org.apache.velocity.app.VelocityEngine;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.converter.PageBreakType;
@@ -257,6 +259,8 @@ public class Epub3Writer
 	
 	/** Velocity変数格納コンテキスト */
 	VelocityContext velocityContext;
+	/** 注入可能な VelocityEngine。未設定時は静的 Velocity を使用 */
+	private VelocityEngine velocityEngine;
 	
 	/** テンプレートパス */
 	String templatePath;
@@ -286,6 +290,45 @@ public class Epub3Writer
 		this.gaijiNameSet = new HashSet<String>();
 		this.imageInfos = new Vector<ImageInfo>();
 		this.outImageFileNames = new HashSet<String>();
+	}
+
+	/** コンストラクタ（Velocityエンジン注入版）
+	 * @param templatePath テンプレート格納パス（最後は"/")
+	 * @param velocityEngine 事前設定済みの VelocityEngine（ファイルローダ等を外部設定可能）
+	 */
+	public Epub3Writer(String templatePath, VelocityEngine velocityEngine)
+	{
+		this.templatePath = templatePath;
+		this.velocityEngine = velocityEngine;
+		this.sectionInfos = new Vector<SectionInfo>();
+		this.chapterInfos = new Vector<ChapterInfo>();
+		this.vecGaijiInfo = new Vector<GaijiInfo>();
+		this.gaijiNameSet = new HashSet<String>();
+		this.imageInfos = new Vector<ImageInfo>();
+		this.outImageFileNames = new HashSet<String>();
+	}
+
+	/** VelocityEngine を後から設定（テスト等で使用） */
+	public void setVelocityEngine(VelocityEngine velocityEngine) {
+		this.velocityEngine = velocityEngine;
+	}
+
+	/** テンプレートをマージして Writer に出力 */
+	private void mergeTemplate(String templateFilePath, BufferedWriter bw) throws IOException {
+		try {
+			if (this.velocityEngine != null) {
+				String resourceName = templateFilePath;
+				if (this.templatePath != null && templateFilePath.startsWith(this.templatePath)) {
+					resourceName = templateFilePath.substring(this.templatePath.length());
+				}
+				Template t = this.velocityEngine.getTemplate(resourceName, "UTF-8");
+				t.merge(this.velocityContext, bw);
+			} else {
+				Velocity.mergeTemplate(templateFilePath, "UTF-8", this.velocityContext, bw);
+			}
+		} catch (Exception e) {
+			throw new IOException("Failed to merge template: " + templateFilePath, e);
+		}
 	}
 	/** プログレスバー設定 */
 	public void setProgressBar(JProgressBar jProgressBar)
@@ -504,13 +547,13 @@ public class Epub3Writer
 		if (bookInfo.vertical) {
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+CSS_PATH+VERTICAL_TEXT_CSS));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-			Velocity.mergeTemplate(templatePath+OPS_PATH+CSS_PATH+VERTICAL_TEXT_CSS_VM, "UTF-8", velocityContext, bw);
+			mergeTemplate(templatePath+OPS_PATH+CSS_PATH+VERTICAL_TEXT_CSS_VM, bw);
 			bw.flush();
 			zos.closeArchiveEntry();
 		} else {
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+CSS_PATH+HORIZONTAL_TEXT_CSS));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-			Velocity.mergeTemplate(templatePath+OPS_PATH+CSS_PATH+HORIZONTAL_TEXT_CSS_VM, "UTF-8", velocityContext, bw);
+			mergeTemplate(templatePath+OPS_PATH+CSS_PATH+HORIZONTAL_TEXT_CSS_VM, bw);
 			bw.flush();
 			zos.closeArchiveEntry();
 		}
@@ -543,7 +586,7 @@ public class Epub3Writer
 			//package.opf内で目次前に出力
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+TITLE_FILE));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-			Velocity.mergeTemplate(vmFilePath, "UTF-8", velocityContext, bw);
+			mergeTemplate(vmFilePath, bw);
 			bw.flush();
 			zos.closeArchiveEntry();
 			
@@ -680,7 +723,7 @@ public class Epub3Writer
 				this.velocityContext.put("coverImage", insertCoverInfo);
 				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+COVER_FILE));
 				bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-				Velocity.mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+COVER_VM, "UTF-8", velocityContext, bw);
+				mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+COVER_VM, bw);
 				bw.flush();
 				zos.closeArchiveEntry();
 			} else {
@@ -694,7 +737,7 @@ public class Epub3Writer
 		velocityContext.put("images", imageInfos);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+PACKAGE_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, bw);
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -816,7 +859,7 @@ public class Epub3Writer
 		velocityContext.put("chapters", chapterInfos);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+XHTML_NAV_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+XHTML_NAV_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+XHTML_NAV_VM, bw);
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -824,7 +867,7 @@ public class Epub3Writer
 		velocityContext.put("chapters", chapterInfos);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+TOC_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(templatePath+OPS_PATH+TOC_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(templatePath+OPS_PATH+TOC_VM, bw);
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -1133,7 +1176,7 @@ public class Epub3Writer
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
-		Velocity.mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, bw);
 		bw.flush();
 	}
 	/** セクション終了. 
@@ -1142,7 +1185,7 @@ public class Epub3Writer
 	{
 		//フッタ出力
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_FOOTER_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_FOOTER_VM, bw);
 		bw.flush();
 		
 		this.zos.closeArchiveEntry();

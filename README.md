@@ -27,6 +27,26 @@ AozoraEpub3
 
 ---
 
+開発者向けメモ（Velocity注入とテスト）
+------------
+- `Epub3Writer` は Velocity のグローバル初期化に依存しないよう、`VelocityEngine` の注入に対応しています。
+  - コンストラクタ: `new Epub3Writer(templatePath, velocityEngine)` を利用すると、FileResourceLoader などを外部で自由に設定できます。
+  - 既存の `new Epub3Writer(templatePath)` も後方互換で動作します。
+- テストでの Velocity 構成例:
+  ```java
+  Properties p = new Properties();
+  p.setProperty("resource.loaders", "file");
+  p.setProperty("resource.loader.file.class", "org.apache.velocity.runtime.resource.loader.FileResourceLoader");
+  p.setProperty("resource.loader.file.path", projectRoot.resolve("template").resolve("OPS").resolve("css").toString());
+  VelocityEngine ve = new VelocityEngine(p);
+  // horizontal_text.vm / vertical_text.vm などを描画
+  Template t = ve.getTemplate("vertical_text.vm", "UTF-8");
+  ```
+- EPUB 仕様の要点（ユニットテストで担保）
+  - `mimetype` は ZIP の先頭エントリ・非圧縮（STORED）で格納。
+  - `nav.xhtml` の存在、縦横書きCSSの基本値はCIで自動検証。
+
+
 説明
 ------------
 青空文庫の注記入りテキストファイルをePub3ファイルに変換するツールです。  
@@ -83,6 +103,16 @@ Windows10以降、Ubuntu、macOS で動作確認済
 # テストの実行
 ./gradlew test
 ```
+
+#### GitHub Actions の手動実行（開発者向け）
+- CI（ビルド/テスト/EPUB検証）
+  - GitHub → Actions → CI → Run workflow から起動できます。
+  - オプション入力:
+    - `ini_font_size` (既定: 115)
+    - `ini_line_height` (既定: 1.7)
+  - EPUB生成物とepubcheckログはArtifactsとしてダウンロード可能です。
+- Tests（ユニットテストのみ）
+  - GitHub → Actions → Tests → Run workflow から起動できます。
 
 #### 起動
 　AozoraEpub3.jar をダブルクリックして実行します。  

@@ -1,0 +1,271 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      ini_font_size:
+        description: "INI FontSize (percent)"
+        required: false
+        default: "115"
+      ini_line_height:
+        description: "INI LineHeight"
+        required: false
+        default: "1.7"
+
+jobs:
+  build-test-validate:
+    name: Build, Test, Validate (EPUB 3.2 / 電書連)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and Test
+        run: |
+          ./gradlew --no-daemon clean test -x dist -x distZip -x tarDistribution
+
+      - name: Package fat-jar
+        run: |
+          ./gradlew --no-daemon jar
+          ls -la build/libs
+
+      - name: Generate sample EPUBs
+        run: |
+          mkdir -p build/epub_out
+          # Convert a subset of fixtures to keep runtime short
+          java -jar build/libs/AozoraEpub3.jar -of -ext .epub -d build/epub_out test_data/test_title.txt || true
+          java -jar build/libs/AozoraEpub3.jar -of -ext .epub -d build/epub_out test_data/test_ruby.txt || true
+          java -jar build/libs/AozoraEpub3.jar -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
+          ls -la build/epub_out || true
+
+      - name: Generate INI-mapped sample and check CSS (vertical & horizontal)
+        run: |
+          set -e
+          # Prepare INI for CSS mapping
+          FZ="${{ inputs.ini_font_size }}"; FZ=${FZ:-115}
+          LH="${{ inputs.ini_line_height }}"; LH=${LH:-1.7}
+          cat > build/epub_out/sample.ini << EOF
+          PageMargin=1,1,2,3
+          PageMarginUnit=cm
+          BodyMargin=4,5,6,7
+          BodyMarginUnit=px
+          LineHeight=${LH}
+          FontSize=${FZ}
+          EOF
+          # Generate EPUBs with INI-applied styles (vertical-ish and horizontal sample)
+          java -jar build/libs/AozoraEpub3.jar -i build/epub_out/sample.ini -of -ext .epub -d build/epub_out test_data/test_title.txt || true
+          java -jar build/libs/AozoraEpub3.jar -i build/epub_out/sample.ini -of -ext .epub -d build/epub_out test_data/test_yoko.txt || true
+          # Validate CSS reflects INI values in both vertical_text.css and horizontal_text.css when present
+          TMPDIR=$(mktemp -d)
+          OK_V=0
+          OK_H=0
+          for f in build/epub_out/*.epub; do
+            WORK="$TMPDIR/$(basename "$f" .epub)"
+            mkdir -p "$WORK"
+            unzip -q "$f" -d "$WORK" || continue
+            if [ -f "$WORK/OPS/css/vertical_text.css" ]; then
+              CSS="$WORK/OPS/css/vertical_text.css"
+              if grep -q "font-size: ${FZ}%" "$CSS" && \
+                 grep -q "line-height: ${LH}" "$CSS" && \
+                 grep -q "1cm 1cm 2cm 3cm" "$CSS" && \
+                 grep -q "4px 5px 6px 7px" "$CSS"; then
+                 echo "INI->CSS mapping OK (vertical) in $f"
+                 OK_V=1
+              fi
+            fi
+            if [ -f "$WORK/OPS/css/horizontal_text.css" ]; then
+              CSS="$WORK/OPS/css/horizontal_text.css"
+              if grep -q "font-size: ${FZ}%" "$CSS" && \
+                 grep -q "line-height: ${LH}" "$CSS" && \
+                 grep -q "1cm 1cm 2cm 3cm" "$CSS" && \
+                 grep -q "4px 5px 6px 7px" "$CSS"; then
+                 echo "INI->CSS mapping OK (horizontal) in $f"
+                 OK_H=1
+              fi
+            fi
+          done
+          if [ "$OK_V" = "0" ] || [ "$OK_H" = "0" ]; then
+            echo "INI->CSS reflection check failed (vertical:$OK_V horizontal:$OK_H)"
+            exit 1
+          fi
+
+      - name: Download epubcheck
+        run: |
+          set -e
+          EC_VERSION="5.2.6"
+          EC_URL="https://github.com/w3c/epubcheck/releases/download/v${EC_VERSION}/epubcheck-${EC_VERSION}.zip"
+          mkdir -p build/tools
+          curl -sSLf "$EC_URL" -o build/tools/epubcheck.zip
+          unzip -q build/tools/epubcheck.zip -d build/tools
+          echo "::group::epubcheck version"
+          java -jar build/tools/epubcheck-${EC_VERSION}/epubcheck.jar -version || true
+          echo "::endgroup::"
+
+      - name: Run epubcheck on generated EPUBs
+        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        run: |
+          set -e
+          EC_VERSION="5.2.6"
+          shopt -s nullglob
+          FAILED=0
+          for f in build/epub_out/*.epub; do
+            echo "Validating $f"
+            set +e
+            java -jar build/tools/epubcheck-${EC_VERSION}/epubcheck.jar "$f" > "$f.epubcheck.txt" 2>&1
+            STATUS=$?
+            set -e
+            cat "$f.epubcheck.txt"
+            if grep -E "\bERROR\b" -i "$f.epubcheck.txt" >/dev/null; then
+              echo "Found errors in $f"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" = "1" ]; then
+            echo "EPUBCheck found errors"
+            exit 1
+          fi
+
+      - name: Validate OPF essentials (XPath)
+        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        run: |
+          set -e
+          sudo apt-get update -y >/dev/null 2>&1 || true
+          sudo apt-get install -y libxml2-utils >/dev/null 2>&1 || true
+          TMPDIR=$(mktemp -d)
+          OK=1
+          for f in build/epub_out/*.epub; do
+            WORK="$TMPDIR/$(basename "$f" .epub)"
+            mkdir -p "$WORK"
+            unzip -q "$f" -d "$WORK"
+            OPF="$WORK/OPS/package.opf"
+            if [ ! -f "$OPF" ]; then
+              echo "OPF missing in $f"; OK=0; continue
+            fi
+            # unique-identifier exists
+            UID=$(xmllint --xpath "string(/*[local-name()='package']/@unique-identifier)" "$OPF" 2>/dev/null || true)
+            if [ -z "$UID" ]; then echo "unique-identifier missing in $f"; OK=0; fi
+            # dc:identifier with that id and urn:uuid: value (RFC4122 canonical form)
+            IDTXT=$(xmllint --xpath "string(//*[local-name()='identifier' and @id='$UID'])" "$OPF" 2>/dev/null || true)
+            if ! echo "$IDTXT" | grep -Eq '^urn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+              echo "identifier not canonical urn:uuid in $f: '$IDTXT'"; OK=0;
+            fi
+            # modified present
+            MOD=$(xmllint --xpath "string(//*[local-name()='meta' and @property='dcterms:modified'])" "$OPF" 2>/dev/null || true)
+            if [ -z "$MOD" ]; then echo "dcterms:modified missing in $f"; OK=0; fi
+            # language is ja
+            LANG=$(xmllint --xpath "string(//*[local-name()='language'])" "$OPF" 2>/dev/null || true)
+            if [ "$LANG" != "ja" ]; then echo "language not 'ja' in $f (got '$LANG')"; OK=0; fi
+            # nav item present in manifest
+            NAV=$(xmllint --xpath "count(//*[local-name()='manifest']/*[local-name()='item' and contains(@properties,'nav')])" "$OPF" 2>/dev/null || true)
+            if [ "${NAV}" = "0" ]; then echo "nav item missing in manifest for $f"; OK=0; fi
+            # spine page-progression-direction set to rtl or ltr
+            PPD=$(xmllint --xpath "string(//*[local-name()='spine']/@page-progression-direction)" "$OPF" 2>/dev/null || true)
+            if [ -z "$PPD" ]; then echo "spine/@page-progression-direction missing in $f"; OK=0; fi
+            # writing-mode vs PPD consistency (vertical-rl => rtl, horizontal-tb => ltr)
+            EXPECT=""
+            if [ -f "$WORK/OPS/css/vertical_text.css" ] && grep -qiE "writing-mode:\s*vertical-rl" "$WORK/OPS/css/vertical_text.css"; then
+              EXPECT="rtl"
+            elif [ -f "$WORK/OPS/css/horizontal_text.css" ] && grep -qiE "writing-mode:\s*horizontal-tb" "$WORK/OPS/css/horizontal_text.css"; then
+              EXPECT="ltr"
+            fi
+            if [ -n "$EXPECT" ] && [ "$PPD" != "$EXPECT" ]; then
+              echo "PPD '$PPD' mismatches writing-mode expectation '$EXPECT' in $f"; OK=0;
+            fi
+          done
+          if [ "$OK" = "0" ]; then
+            echo "OPF essential checks failed"
+            exit 1
+          fi
+
+      - name: Summarize epubcheck results
+        if: ${{ hashFiles('build/epub_out/*.epubcheck.txt') != '' }}
+        run: |
+          set -e
+          echo "# EPUBCheck Summary" >> $GITHUB_STEP_SUMMARY
+          total=0; errs=0; warns=0
+          for t in build/epub_out/*.epubcheck.txt; do
+            name=$(basename "$t")
+            ce=$(grep -ic "\bERROR\b" "$t" || true)
+            cw=$(grep -ic "\bWARNING\b" "$t" || true)
+            total=$((total+1)); errs=$((errs+ce)); warns=$((warns+cw))
+            echo "- $name: ${ce} errors, ${cw} warnings" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "\nTotal EPUBs: ${total}, Errors: ${errs}, Warnings: ${warns}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Accessibility summary (non-failing)
+        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        run: |
+          set -e
+          TMPDIR=$(mktemp -d)
+          echo "# Accessibility (non-failing)" >> $GITHUB_STEP_SUMMARY
+          for f in build/epub_out/*.epub; do
+            WORK="$TMPDIR/$(basename "$f" .epub)"
+            mkdir -p "$WORK"
+            unzip -q "$f" -d "$WORK"
+            MISSING=$(grep -RIl "<img[^>]*>" "$WORK/OPS/xhtml" 2>/dev/null | xargs -r grep -IL "alt=\"" | wc -l | tr -d ' ')
+            echo "- $(basename "$f"): images without alt across XHTML files: ${MISSING}" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Upload EPUBs
+        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-epubs
+          path: build/epub_out/*.epub
+
+      - name: Basic 電書連ガイドライン checks
+        if: ${{ hashFiles('build/epub_out/*.epub') != '' }}
+        run: |
+          set -e
+          TMPDIR=$(mktemp -d)
+          OK=1
+          for f in build/epub_out/*.epub; do
+            WORK="$TMPDIR/$(basename "$f" .epub)"
+            mkdir -p "$WORK"
+            unzip -q "$f" -d "$WORK"
+            # nav.xhtml is required in EPUB3
+            if [ ! -f "$WORK/OPS/nav.xhtml" ] && [ ! -f "$WORK/OEBPS/nav.xhtml" ]; then
+              echo "nav.xhtml missing in $f"
+              OK=0
+            fi
+            # Writing mode existence in CSS for JP vertical/horizontal
+            if ls "$WORK"/OPS/css/*_text.css >/dev/null 2>&1; then
+              if ! grep -E "writing-mode:\s*(vertical-rl|horizontal-tb)" -i "$WORK"/OPS/css/*_text.css >/dev/null; then
+                echo "writing-mode not found in *_text.css of $f"
+                OK=0
+              fi
+            fi
+          done
+          if [ "$OK" = "0" ]; then
+            echo "Basic 電書連 checks failed"
+            exit 1
+          fi
+
+      - name: Lint container.xml well-formedness
+        run: |
+          sudo apt-get update -y >/dev/null 2>&1 || true
+          sudo apt-get install -y libxml2-utils >/dev/null 2>&1 || true
+          xmllint --noout template/META-INF/container.xml
+
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-reports
+          path: |
+            build/test-results/test
+            build/reports/tests/test
+            build/epub_out/*.epubcheck.txt
