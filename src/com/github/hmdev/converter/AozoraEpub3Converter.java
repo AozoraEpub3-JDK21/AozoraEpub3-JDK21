@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -299,14 +300,42 @@ public class AozoraEpub3Converter
 		//初期化されていたら終了
 		if (inited) return;
 		
-		//拡張ラテン変換
-		latinConverter = new LatinConverter(new File(jarPath+"chuki_latin.txt"));
+		//拡張ラテン変換 (JAR内リソースまたはファイルシステムから読み込み)
+		File latinFile = new File(jarPath+"chuki_latin.txt");
+		if (latinFile.exists()) {
+			latinConverter = new LatinConverter(latinFile);
+		} else {
+			// JAR内リソースとして読み込み
+			InputStream latinStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_latin.txt");
+			if (latinStream == null) throw new IOException("chuki_latin.txt not found");
+			latinConverter = new LatinConverter(latinStream, "chuki_latin.txt");
+		}
 		
-		gaijiConverter = new AozoraGaijiConverter(jarPath);
+		// 外字変換 (JAR内リソースまたはファイルシステムから読み込み)
+		File ivsFile = new File(jarPath+"chuki_ivs.txt");
+		if (ivsFile.exists()) {
+			gaijiConverter = new AozoraGaijiConverter(jarPath);
+		} else {
+			// JAR内リソースとして読み込み
+			gaijiConverter = new AozoraGaijiConverter();
+			InputStream ivsStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_ivs.txt");
+			if (ivsStream != null) gaijiConverter.loadChukiFileFromStream(ivsStream, "chuki_ivs.txt", gaijiConverter.chukiUtfMap);
+			InputStream utfStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_utf.txt");
+			if (utfStream != null) gaijiConverter.loadChukiFileFromStream(utfStream, "chuki_utf.txt", gaijiConverter.chukiUtfMap);
+			InputStream altStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_alt.txt");
+			if (altStream != null) gaijiConverter.loadChukiFileFromStream(altStream, "chuki_alt.txt", gaijiConverter.chukiAltMap);
+		}
 		
 		//注記タグ変換
 		File chukiTagFile = new File(jarPath+"chuki_tag.txt");
-		BufferedReader src = new BufferedReader(new InputStreamReader(new FileInputStream(chukiTagFile), "UTF-8"));
+		BufferedReader src;
+		if (chukiTagFile.exists()) {
+			src = new BufferedReader(new InputStreamReader(new FileInputStream(chukiTagFile), "UTF-8"));
+		} else {
+			InputStream tagStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_tag.txt");
+			if (tagStream == null) throw new IOException("chuki_tag.txt not found");
+			src = new BufferedReader(new InputStreamReader(tagStream, "UTF-8"));
+		}
 		String line;
 		int lineNum = 0;
 		try {
@@ -335,7 +364,7 @@ public class AozoraEpub3Converter
 						}
 						
 					} catch (Exception e) {
-						LogAppender.error(lineNum, chukiTagFile.getName(), line);
+						LogAppender.error(lineNum, "chuki_tag.txt", line);
 					}
 				}
 			}
@@ -350,7 +379,13 @@ public class AozoraEpub3Converter
 		
 		//前方参照注記
 		File chukiSufFile = new File(jarPath+"chuki_tag_suf.txt");
-		src = new BufferedReader(new InputStreamReader(new FileInputStream(chukiSufFile), "UTF-8"));
+		if (chukiSufFile.exists()) {
+			src = new BufferedReader(new InputStreamReader(new FileInputStream(chukiSufFile), "UTF-8"));
+		} else {
+			InputStream sufStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_tag_suf.txt");
+			if (sufStream == null) throw new IOException("chuki_tag_suf.txt not found");
+			src = new BufferedReader(new InputStreamReader(sufStream, "UTF-8"));
+		}
 		lineNum = 0;
 		try {
 			while ((line = src.readLine()) != null) {
@@ -367,7 +402,7 @@ public class AozoraEpub3Converter
 						if (values.length > 3 && values[3].length() > 0) sufChukiMap.put(values[3]+values[0], tags);
 						
 					} catch (Exception e) {
-						LogAppender.error(lineNum, chukiTagFile.getName(), line);
+						LogAppender.error(lineNum, "chuki_tag_suf.txt", line);
 					}
 				}
 			}
