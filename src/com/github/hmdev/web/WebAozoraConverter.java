@@ -61,8 +61,8 @@ public class WebAozoraConverter
 	
 	////////////////////////////////
 	//変換設定
-	/** 取得間隔 ミリ秒 */
-	int interval = 500;
+	/** 取得間隔 ミリ秒（なろう等のレート制限対策: 最低1秒推奨） */
+	int interval = 1500;
 	
 	/** 未更新時は変換スキップ */
 	boolean convertUpdated = false;
@@ -201,7 +201,8 @@ public class WebAozoraConverter
 		//日付一覧が取得できない場合は常に更新
 		this.updated = true;
 		
-		this.interval = Math.max(500, interval);
+		// なろう等のレート制限対策: 最低1秒間隔
+		this.interval = Math.max(1000, interval);
 		this.modifiedExpire = Math.max(0, modifiedExpire);
 		this.convertUpdated = convertUpdated;
 		this.convertModifiedOnly = convertModifiedOnly;
