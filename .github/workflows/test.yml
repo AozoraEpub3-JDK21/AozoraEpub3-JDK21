@@ -57,3 +57,4 @@ jobs:
         files: build/test-results/test/TEST-*.xml
         check_name: Test Results
         compare_to_earlier_commit: false
+        github_token: ${{ secrets. GITHUB_TOKEN }}
