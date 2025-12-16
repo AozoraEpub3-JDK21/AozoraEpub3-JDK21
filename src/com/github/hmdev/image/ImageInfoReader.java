@@ -8,14 +8,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Vector;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
-import org.apache.commons.compress.archivers.zip.ZipFile;
+
 
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.FileNameComparator;
@@ -232,7 +233,7 @@ public class ImageInfoReader
 			if (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".gif")) {
 				ImageInfo imageInfo = null;
 				try {
-					imageInfo = ImageInfo.getImageInfo(zis, zis.getCount());
+					imageInfo = ImageInfo.getImageInfo(zis);
 				} catch (Exception e) {
 					LogAppender.error("画像が読み込めませんでした: "+srcFile.getPath());
 					e.printStackTrace();
@@ -257,8 +258,7 @@ public class ImageInfoReader
 		for (FileHeader fileHeader : archive.getFileHeaders()) {
 			if (idx++ % 10 == 0) LogAppender.append(".");
 			if (!fileHeader.isDirectory()) {
-				String entryName = fileHeader.getFileNameW();
-				if (entryName.length() == 0) entryName = fileHeader.getFileNameString();
+				String entryName = fileHeader.getFileName();
 				entryName = entryName.replace('\\', '/');
 				String lowerName = entryName.toLowerCase();
 				if (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".gif")) {
@@ -342,8 +342,7 @@ public class ImageInfoReader
 				FileHeader fileHeader = archive.nextFileHeader();
 				while (fileHeader != null) {
 					if (!fileHeader.isDirectory()) {
-						String entryName = fileHeader.getFileNameW();
-						if (entryName.length() == 0) entryName = fileHeader.getFileNameString();
+						String entryName = fileHeader.getFileName();
 						entryName = entryName.replace('\\', '/');
 						if (srcImageFileName.equals(entryName)) {
 							is = archive.getInputStream(fileHeader);
@@ -358,22 +357,41 @@ public class ImageInfoReader
 				}
 				
 			} else {
-				ZipFile zf = new ZipFile(this.srcFile, "MS932");
-				ZipArchiveEntry entry = zf.getEntry(srcImageFileName);
-				if (entry == null) {
+				// ZipFileの非推奨使用を避けるため、ZipArchiveInputStreamを使用
+				try (InputStream fis = Files.newInputStream(this.srcFile.toPath(), StandardOpenOption.READ);
+				     ZipArchiveInputStream zais = new ZipArchiveInputStream(fis, "MS932")) {
+					
+					ArchiveEntry entry = null;
+					while ((entry = zais.getNextEntry()) != null) {
+						if (entry.getName().equalsIgnoreCase(srcImageFileName)) {
+							try {
+								return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais);
+							} catch (Exception e) {
+								e.printStackTrace();
+								return null;
+							}
+						}
+					}
+					
+					// 拡張子が異なる場合は正しい拡張子を探す
 					srcImageFileName = this.correctExt(srcImageFileName);
-					entry = zf.getEntry(srcImageFileName);
-					if (entry == null) return null;
+					try (InputStream fis2 = Files.newInputStream(this.srcFile.toPath(), StandardOpenOption.READ);
+					     ZipArchiveInputStream zais2 = new ZipArchiveInputStream(fis2, "MS932")) {
+						
+						ArchiveEntry entry2 = null;
+						while ((entry2 = zais2.getNextEntry()) != null) {
+							if (entry2.getName().equalsIgnoreCase(srcImageFileName)) {
+								try {
+									return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais2);
+								} catch (Exception e) {
+									e.printStackTrace();
+									return null;
+								}
+							}
+						}
+					}
 				}
-				InputStream is = zf.getInputStream(entry);
-				try {
-					return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), is);
-				} catch (Exception e) {
-					e.printStackTrace();
-				} finally {
-					is.close();
-					zf.close();
-				}
+				return null;
 			}
 		}
 		return null;

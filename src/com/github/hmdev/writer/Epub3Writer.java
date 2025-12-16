@@ -15,10 +15,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
-import java.net.URL;
+import java.net.URI;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.Vector;
 import java.util.zip.CRC32;
@@ -29,9 +30,10 @@ import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.commons.compress.utils.IOUtils;
 import org.apache.velocity.VelocityContext;
+import org.apache.velocity.Template;
 import org.apache.velocity.app.Velocity;
+import org.apache.velocity.app.VelocityEngine;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.converter.PageBreakType;
@@ -258,6 +260,8 @@ public class Epub3Writer
 	
 	/** Velocity変数格納コンテキスト */
 	VelocityContext velocityContext;
+	/** 注入可能な VelocityEngine。未設定時は静的 Velocity を使用 */
+	private VelocityEngine velocityEngine;
 	
 	/** テンプレートパス */
 	String templatePath;
@@ -279,14 +283,107 @@ public class Epub3Writer
 	public Epub3Writer(String templatePath)
 	{
 		this.templatePath = templatePath;
-		//初回実行時のみ有効
-		Velocity.init();
+		//Velocity初期化: ファイルシステム優先、JAR内リソース代替
+		initVelocity();
 		this.sectionInfos = new Vector<SectionInfo>();
 		this.chapterInfos = new Vector<ChapterInfo>();
 		this.vecGaijiInfo = new Vector<GaijiInfo>();
 		this.gaijiNameSet = new HashSet<String>();
 		this.imageInfos = new Vector<ImageInfo>();
 		this.outImageFileNames = new HashSet<String>();
+	}
+	
+	/** Velocity初期化（ファイルシステム優先、JAR内リソース代替） */
+	private void initVelocity() {
+		File templateDir = new File(templatePath);
+		if (templateDir.exists() && templateDir.isDirectory()) {
+			// ファイルシステムにテンプレートがある場合
+			Properties p = new Properties();
+			p.setProperty("resource.loaders", "file");
+			p.setProperty("resource.loader.file.class", "org.apache.velocity.runtime.resource.loader.FileResourceLoader");
+			p.setProperty("resource.loader.file.path", templatePath);
+			p.setProperty("resource.loader.file.cache", "false");
+			Velocity.init(p);
+		} else {
+			// JAR内リソースから読み込み
+			Properties p = new Properties();
+			p.setProperty("resource.loaders", "class");
+			p.setProperty("resource.loader.class.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
+			p.setProperty("resource.loader.class.cache", "false");
+			Velocity.init(p);
+		}
+	}
+
+	/** コンストラクタ（Velocityエンジン注入版）
+	 * @param templatePath テンプレート格納パス（最後は"/")
+	 * @param velocityEngine 事前設定済みの VelocityEngine（ファイルローダ等を外部設定可能）
+	 */
+	public Epub3Writer(String templatePath, VelocityEngine velocityEngine)
+	{
+		this.templatePath = templatePath;
+		this.velocityEngine = velocityEngine;
+		this.sectionInfos = new Vector<SectionInfo>();
+		this.chapterInfos = new Vector<ChapterInfo>();
+		this.vecGaijiInfo = new Vector<GaijiInfo>();
+		this.gaijiNameSet = new HashSet<String>();
+		this.imageInfos = new Vector<ImageInfo>();
+		this.outImageFileNames = new HashSet<String>();
+	}
+
+	/** VelocityEngine を後から設定（テスト等で使用） */
+	public void setVelocityEngine(VelocityEngine velocityEngine) {
+		this.velocityEngine = velocityEngine;
+	}
+
+	/** テンプレートをマージして Writer に出力 */
+	private void mergeTemplate(String templateFilePath, BufferedWriter bw) throws IOException {
+		try {
+			if (this.velocityEngine != null) {
+				String resourceName = templateFilePath;
+				if (this.templatePath != null && templateFilePath.startsWith(this.templatePath)) {
+					resourceName = templateFilePath.substring(this.templatePath.length());
+				}
+				Template t = this.velocityEngine.getTemplate(resourceName, "UTF-8");
+				t.merge(this.velocityContext, bw);
+			} else {
+				// パスを調整: ファイルシステムにない場合は "template/" から始まるリソースパスに変換
+				String resourcePath = templateFilePath;
+				File templateDir = new File(templatePath);
+				if (templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+				// 外部ファイルシステムのテンプレートを使用する場合、
+				// FileResourceLoaderはベースパス（templatePath）からの相対パスを期待する
+				resourcePath = templateFilePath.substring(templatePath.length());
+				while (resourcePath.startsWith("/")) {
+					resourcePath = resourcePath.substring(1);
+				}
+			} else if (!templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+					// JAR内リソース用のパスに変換（ClasspathResourceLoaderは"/"から始まらないパスを期待）
+					// パスから余分なスラッシュを削除
+					String relativePath = templateFilePath.substring(templatePath.length());
+					while (relativePath.startsWith("/")) {
+						relativePath = relativePath.substring(1);
+					}
+					resourcePath = "template/" + relativePath;
+					try {
+						Template t = Velocity.getTemplate(resourcePath, "UTF-8");
+						t.merge(this.velocityContext, bw);
+						return;
+					} catch (Exception e) {
+						// フォールバック: template プレフィックスなしで試す
+						try {
+							Template t = Velocity.getTemplate("OPS/" + relativePath, "UTF-8");
+							t.merge(this.velocityContext, bw);
+							return;
+						} catch (Exception e2) {
+							throw e;
+						}
+					}
+				}
+				Velocity.mergeTemplate(resourcePath, "UTF-8", this.velocityContext, bw);
+			}
+		} catch (Exception e) {
+			throw new IOException("Failed to merge template: " + templateFilePath, e);
+		}
 	}
 	/** プログレスバー設定 */
 	public void setProgressBar(JProgressBar jProgressBar)
@@ -369,19 +466,36 @@ public class Epub3Writer
 		this.canceled = true;
 	}
 	
-	private void writeFile(ZipArchiveOutputStream zos, String fileName) throws IOException
+	/** テンプレートファイルまたはJAR内リソースからInputStreamを取得 */
+	private InputStream getTemplateInputStream(String fileName) throws IOException
 	{
-		zos.putArchiveEntry(new ZipArchiveEntry(fileName));
-		//customファイル優先
+		// まずファイルシステムをチェック（カスタムファイル優先）
 		File file = new File(templatePath+fileName);
 		int idx = fileName.lastIndexOf('/');
 		if (idx > 0) { 
 			File customFile = new File(templatePath+fileName.substring(0, idx)+"_custom/"+fileName.substring(idx+1));
-			if (customFile.exists()) file = customFile;
+			if (customFile.exists()) return new FileInputStream(customFile);
 		}
-		FileInputStream fis = new FileInputStream(file);
-		IOUtils.copy(fis, zos);
-		fis.close();
+		if (file.exists()) return new FileInputStream(file);
+		
+		// JAR内リソースから読み込み
+		InputStream stream = Epub3Writer.class.getResourceAsStream("/template/"+fileName);
+		if (stream == null) {
+			throw new IOException("Template not found: "+fileName);
+		}
+		return stream;
+	}
+	
+	private void writeFile(ZipArchiveOutputStream zos, String fileName) throws IOException
+	{
+		zos.putArchiveEntry(new ZipArchiveEntry(fileName));
+		try (InputStream is = getTemplateInputStream(fileName)) {
+			byte[] buf = new byte[8192];
+			int len;
+			while ((len = is.read(buf)) > 0) {
+				zos.write(buf, 0, len);
+			}
+		}
 		zos.closeArchiveEntry();
 	}
 	
@@ -462,10 +576,11 @@ public class Epub3Writer
 		//mimetypeは非圧縮
 		//STOREDで格納しCRCとsizeを指定する必要がある
 		ZipArchiveEntry mimeTypeEntry = new ZipArchiveEntry(MIMETYPE_PATH);
-		FileInputStream fis = new FileInputStream(new File(templatePath+MIMETYPE_PATH));
 		byte[] b = new byte[256];
-		int len = fis.read(b);
-		fis.close();
+		int len;
+		try (InputStream is = getTemplateInputStream(MIMETYPE_PATH)) {
+			len = is.read(b);
+		}
 		CRC32 crc32 = new CRC32();
 		crc32.update(b, 0, len);
 		mimeTypeEntry.setMethod(ZipArchiveEntry.STORED);
@@ -500,13 +615,13 @@ public class Epub3Writer
 		if (bookInfo.vertical) {
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+CSS_PATH+VERTICAL_TEXT_CSS));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-			Velocity.mergeTemplate(templatePath+OPS_PATH+CSS_PATH+VERTICAL_TEXT_CSS_VM, "UTF-8", velocityContext, bw);
+			mergeTemplate(templatePath+OPS_PATH+CSS_PATH+VERTICAL_TEXT_CSS_VM, bw);
 			bw.flush();
 			zos.closeArchiveEntry();
 		} else {
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+CSS_PATH+HORIZONTAL_TEXT_CSS));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-			Velocity.mergeTemplate(templatePath+OPS_PATH+CSS_PATH+HORIZONTAL_TEXT_CSS_VM, "UTF-8", velocityContext, bw);
+			mergeTemplate(templatePath+OPS_PATH+CSS_PATH+HORIZONTAL_TEXT_CSS_VM, bw);
 			bw.flush();
 			zos.closeArchiveEntry();
 		}
@@ -539,7 +654,7 @@ public class Epub3Writer
 			//package.opf内で目次前に出力
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+TITLE_FILE));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-			Velocity.mergeTemplate(vmFilePath, "UTF-8", velocityContext, bw);
+			mergeTemplate(vmFilePath, bw);
 			bw.flush();
 			zos.closeArchiveEntry();
 			
@@ -567,18 +682,27 @@ public class Epub3Writer
 				}
 				BufferedInputStream bis;
 				if (bookInfo.coverFileName.startsWith("http")) {
-					bis = new BufferedInputStream(new URL(bookInfo.coverFileName).openStream(), 8192);
+					bis = new BufferedInputStream(new URI(bookInfo.coverFileName).toURL().openStream(), 8192);
 				} else {
 					bis = new BufferedInputStream(new FileInputStream(new File(bookInfo.coverFileName)), 8192);
 				}
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				IOUtils.copy(bis, baos);
-				coverImageBytes = baos.toByteArray();
-				bis.close();
-				baos.close();
+				try {
+					byte[] buf = new byte[8192];
+					while ((len = bis.read(buf)) > 0) {
+						baos.write(buf, 0, len);
+					}
+					coverImageBytes = baos.toByteArray();
+				} finally {
+					bis.close();
+					baos.close();
+				}
 				ByteArrayInputStream bais = new ByteArrayInputStream(coverImageBytes);
-				coverImageInfo = ImageInfo.getImageInfo(bais);
-				bais.close();
+				try {
+					coverImageInfo = ImageInfo.getImageInfo(bais);
+				} finally {
+					bais.close();
+				}
 				String ext = coverImageInfo.getExt();
 				if (isKindle || ext.equals("jpeg")) ext = "jpg";
 				coverImageInfo.setId("0000");
@@ -667,7 +791,7 @@ public class Epub3Writer
 				this.velocityContext.put("coverImage", insertCoverInfo);
 				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+COVER_FILE));
 				bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-				Velocity.mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+COVER_VM, "UTF-8", velocityContext, bw);
+				mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+COVER_VM, bw);
 				bw.flush();
 				zos.closeArchiveEntry();
 			} else {
@@ -679,9 +803,10 @@ public class Epub3Writer
 		//package.opf 出力
 		velocityContext.put("sections", sectionInfos);
 		velocityContext.put("images", imageInfos);
+		velocityContext.put("vecGaijiInfo", this.vecGaijiInfo);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+PACKAGE_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, bw);
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -803,7 +928,7 @@ public class Epub3Writer
 		velocityContext.put("chapters", chapterInfos);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+XHTML_NAV_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+XHTML_NAV_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+XHTML_NAV_VM, bw);
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -811,7 +936,7 @@ public class Epub3Writer
 		velocityContext.put("chapters", chapterInfos);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+TOC_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(templatePath+OPS_PATH+TOC_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(templatePath+OPS_PATH+TOC_VM, bw);
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -828,9 +953,13 @@ public class Epub3Writer
 				for (File fontFile : fontsPath.listFiles()) {
 					String outFileName = OPS_PATH+FONTS_PATH+fontFile.getName();
 					zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
-					fis = new FileInputStream(new File(templatePath+outFileName));
-					IOUtils.copy(fis, zos);
-					fis.close();
+					try (InputStream is = getTemplateInputStream(outFileName)) {
+						byte[] buf = new byte[8192];
+						int fontLen;
+						while ((fontLen = is.read(buf)) > 0) {
+							zos.write(buf, 0, fontLen);
+						}
+					}
 					zos.closeArchiveEntry();
 				}
 			}
@@ -842,9 +971,12 @@ public class Epub3Writer
 			if (gaijiFile.exists()) {
 				String outFileName = OPS_PATH+GAIJI_PATH+gaijiFile.getName();
 				zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
-				fis = new FileInputStream(gaijiFile);
-				IOUtils.copy(fis, zos);
-				fis.close();
+				try (FileInputStream fis = new FileInputStream(gaijiFile)) {
+					byte[] buf = new byte[8192];
+					while ((len = fis.read(buf)) > 0) {
+						zos.write(buf, 0, len);
+					}
+				}
 				zos.closeArchiveEntry();
 			}
 		}
@@ -904,11 +1036,11 @@ public class Epub3Writer
 					} else {
 						File imageFile = imageInfoReader.getImageFile(srcImageFileName);
 						if (imageFile.exists()) {
-							fis = new FileInputStream(imageFile);
-							zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
-							this.writeImage(new BufferedInputStream(fis, 8192), zos, imageInfo);
-							zos.closeArchiveEntry();
-							fis.close();
+							try (FileInputStream fis = new FileInputStream(imageFile)) {
+								zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
+								this.writeImage(new BufferedInputStream(fis, 8192), zos, imageInfo);
+								zos.closeArchiveEntry();
+							}
 							outImageFileNames.remove(srcImageFileName);
 						}
 					}
@@ -924,8 +1056,8 @@ public class Epub3Writer
 				try {
 				for (FileHeader fileHeader : archive.getFileHeaders()) {
 					if (!fileHeader.isDirectory()) {
-						String entryName = fileHeader.getFileNameW();
-						if (entryName.length() == 0) entryName = fileHeader.getFileNameString();
+						String entryName = fileHeader.getFileName();
+						if (entryName.length() == 0) entryName = "";
 						entryName = entryName.replace('\\', '/');
 						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
 						String srcImageFileName = entryName.substring(archivePathLength);
@@ -946,11 +1078,18 @@ public class Epub3Writer
 				ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false);
 				try {
 				ArchiveEntry entry;
-				while( (entry = zis.getNextZipEntry()) != null ) {
-					//アーカイブ内のサブフォルダは除外してテキストからのパスにする
-					String srcImageFileName = entry.getName().substring(archivePathLength);
-					if (outImageFileNames.contains(srcImageFileName)) {
-						this.writeArchiveImage(srcImageFileName, zis);
+				while( (entry = zis.getNextEntry()) != null ) {
+					try {
+						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
+						String entryName = sanitizeArchiveEntryName(entry.getName());
+						String srcImageFileName = entryName.substring(archivePathLength);
+						if (outImageFileNames.contains(srcImageFileName)) {
+							this.writeArchiveImage(srcImageFileName, zis);
+						}
+					} catch (IllegalArgumentException e) {
+						System.err.println("Skipping suspicious archive entry: " + e.getMessage());
+						// 疑わしいエントリはスキップ
+						continue;
 					}
 				}
 				} finally { zis.close(); }
@@ -997,7 +1136,11 @@ public class Epub3Writer
 				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 				//Zip,Rarからの直接読み込みは失敗するので一旦バイト配列にする
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				IOUtils.copy(new BufferedInputStream(is, 16384), baos);
+				byte[] buf = new byte[16384];
+				int len;
+				while ((len = is.read(buf)) > 0) {
+					baos.write(buf, 0, len);
+				}
 				byte[] bytes = baos.toByteArray();
 				baos.close();
 				ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
@@ -1103,7 +1246,7 @@ public class Epub3Writer
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
-		Velocity.mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, bw);
 		bw.flush();
 	}
 	/** セクション終了. 
@@ -1112,7 +1255,7 @@ public class Epub3Writer
 	{
 		//フッタ出力
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		Velocity.mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_FOOTER_VM, "UTF-8", velocityContext, bw);
+		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_FOOTER_VM, bw);
 		bw.flush();
 		
 		this.zos.closeArchiveEntry();
@@ -1340,6 +1483,40 @@ public class Epub3Writer
 	public String getGaijiFontPath()
 	{
 		return GAIJI_PATH;
+	}
+	
+	/**
+	 * Path Traversal 脆弱性対策
+	 * ZipEntry のパス名から安全なファイル名を抽出する
+	 * @param entryName ZipEntry の名前
+	 * @return 正規化されたファイル名
+	 * @throws IllegalArgumentException パストラバーサル攻撃が検出された場合
+	 */
+	static String sanitizeArchiveEntryName(String entryName) throws IllegalArgumentException
+	{
+		if (entryName == null || entryName.isEmpty()) {
+			throw new IllegalArgumentException("Entry name cannot be null or empty");
+		}
+		
+		// 絶対パスの検出
+		if (entryName.startsWith("/") || entryName.startsWith("\\")) {
+			throw new IllegalArgumentException("Absolute path detected in archive entry: " + entryName);
+		}
+		
+		// パストラバーサル攻撃の検出
+		if (entryName.contains("..") || entryName.contains("~") || entryName.contains("$")) {
+			throw new IllegalArgumentException("Path traversal attempt detected: " + entryName);
+		}
+		
+		// バックスラッシュをスラッシュに統一
+		String normalized = entryName.replace("\\", "/");
+		
+		// ダブルスラッシュを単一スラッシュに
+		while (normalized.contains("//")) {
+			normalized = normalized.replace("//", "/");
+		}
+		
+		return normalized;
 	}
 	
 }

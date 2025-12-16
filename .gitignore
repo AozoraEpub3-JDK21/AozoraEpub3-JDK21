@@ -1,10 +1,59 @@
-/AozoraEpub3.ini
-/bin
-/.settings
-/AozoraEpub3.jar
-/.cache
-/_kindlegen.exe
-/replace.txt
-/パッケージ作成*
-/profiles
-/kindlegen.exe
+# Gradle 設定ファイル
+## IDE 設定
+.gradle/
+.idea/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+
+## ビルド出力
+build/
+dist/
+target/
+
+## 出力ファイル
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.zip
+*.tar.gz
+
+## テンポラリ
+*.class
+*.log
+*.tmp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
+## IDE
+.vscode/
+.eclipse
+
+## OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+
+## アプリケーション設定
+AozoraEpub3.ini
+replace.txt
+kindlegen.exe
+
+## テストデータ
+test_results/
+
+## 個人情報・機密情報
+*.key
+*.pem
+*.p12
+*.jks
+secrets/
+credentials/
+.env
+.env.local

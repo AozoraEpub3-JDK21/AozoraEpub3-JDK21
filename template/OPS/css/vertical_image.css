@@ -13,15 +13,21 @@ writing-mode: horizontal-tb;
 -epub-writing-mode: horizontal-tb;
 margin: 0;
 padding: 0;
+height: 100%;
 }
 
 body {
 margin: 0;
 padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+height: 100%;
 text-align: center;
 }
 /* ページ内 画像は縮小のみ */
 body .img {
+	display: block;
 }
 
 /* 幅を合わせる */

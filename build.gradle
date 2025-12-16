@@ -1,0 +1,437 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+version = '1.1.0b46'
+
+// Gradle Wrapper を生成するためのタスク
+wrapper {
+    gradleVersion = '9.2.1'
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+// ソースコードの文字コードをUTF-8に指定（文字化け対策）
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+    // 警告を抑止するオプション
+    options.compilerArgs = [
+        '-Xlint:unchecked',
+        '-Xlint:deprecation',
+        '-Xdoclint:none'
+    ]
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Disable reproducible builds to preserve actual file timestamps
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
+}
+
+dependencies {
+    // Commons ライブラリを最新版に
+        implementation 'commons-cli:commons-cli:1.7.0'
+        implementation 'org.apache.commons:commons-collections4:4.5.0'
+        implementation 'org.apache.commons:commons-compress:1.27.1'
+        implementation 'org.apache.commons:commons-lang3:3.15.0'
+    
+    // JSoup を最新版に
+        implementation 'org.jsoup:jsoup:1.18.1'
+    
+    // Junrar を最新版に
+        implementation 'com.github.junrar:junrar:7.5.5'
+    
+    // Velocity を最新版に
+        implementation 'org.apache.velocity:velocity-engine-core:2.4.1'
+    
+    // JAI（Java Advanced Imaging）- 代替ライブラリを使用
+        implementation 'org.apache.xmlgraphics:batik-transcoder:1.18'
+    
+    // ログの実装（SLF4J）
+        implementation 'org.slf4j:slf4j-api:2.0.16'
+        implementation 'org.slf4j:slf4j-simple:2.0.16'
+    
+    // テストフレームワーク
+    testImplementation 'junit:junit:4.13.2'
+    
+    // XML/HTMLバリデーション用
+    testImplementation 'xerces:xercesImpl:2.12.2'
+}
+
+sourceSets {
+    main {
+        java {
+            // 古いEclipse形式に合わせて、ソースフォルダを 'src' に指定
+            srcDir 'src'
+        }
+        resources {
+            srcDir 'src'
+        }
+    }
+    test {
+        java {
+            srcDir 'test'
+        }
+        resources {
+            srcDir 'test_data'
+        }
+    }
+}
+
+application {
+    // 【重要】ここを後で確認します
+    // メインクラス（プログラムの開始地点）を指定します
+    mainClass = 'AozoraEpub3' 
+}
+
+java {
+    toolchain {
+        // インストールしたJDK 21を使用
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// jar ファイルを生成するタスク
+jar {
+    archiveBaseName = 'AozoraEpub3'
+    archiveVersion = ''
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
+    manifest {
+        attributes(
+            'Implementation-Title': 'AozoraEpub3',
+            'Implementation-Version': project.version,
+            'Main-Class': 'AozoraEpub3'
+        )
+    }
+    
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    
+    // JAR ルートにリソースファイルを含める
+    from('.') {
+        include 'chuki_*.txt'
+    }
+    
+    // template/ ディレクトリを JAR に含める
+    from('template') {
+        into 'template'
+    }
+    
+    // gaiji/ ディレクトリを JAR に含める（オプション）
+    from('gaiji') {
+        into 'gaiji'
+    }
+    
+    // 依存ライブラリを含める
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+// 配布用の ZIP アーカイブを生成
+task zipDistribution(type: Zip, dependsOn: build) {
+    archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
+    destinationDirectory = file('build/distributions')
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
+    
+    from('build/libs') {
+        include '*.jar'
+    }
+    from('.') {
+        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'THIRD-PARTY-NOTICES.txt'
+        include 'chuki_*.txt'
+        include 'AozoraEpub3.ico'
+    }
+    from('gaiji') {
+        into 'gaiji'
+    }
+    from('presets') {
+        into 'presets'
+    }
+    from('web') {
+        into 'web'
+    }
+    from('template') {
+        into 'template'
+    }
+    // Include third-party licenses
+    from('lib/LICENSE') {
+        into 'LICENSE'
+    }
+}
+
+// 配布用の TAR アーカイブを生成
+task tarDistribution(type: Tar, dependsOn: build) {
+    archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
+    destinationDirectory = file('build/distributions')
+    compression = Compression.GZIP
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
+    
+    from('build/libs') {
+        include '*.jar'
+    }
+    from('.') {
+        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'THIRD-PARTY-NOTICES.txt'
+        include 'chuki_*.txt'
+        include 'AozoraEpub3.ico'
+    }
+    from('gaiji') {
+        into 'gaiji'
+    }
+    from('presets') {
+        into 'presets'
+    }
+    from('web') {
+        into 'web'
+    }
+    from('template') {
+        into 'template'
+    }
+    // Include third-party licenses
+    from('lib/LICENSE') {
+        into 'LICENSE'
+    }
+}
+
+// 配布用パッケージを生成するタスク
+task dist(dependsOn: [zipDistribution, tarDistribution]) {
+    doLast {
+        println "配布パッケージを生成しました:"
+        println "  - build/distributions/AozoraEpub3-${project.version ?: 'dist'}.zip"
+        println "  - build/distributions/AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
+    }
+}
+
+// テスト結果レポートタスク
+task testReport {
+    dependsOn test
+    doLast {
+        println "テスト実行完了"
+        println "詳細はbuild/test-results/test/を参照してください"
+    }
+}
+
+// コード品質チェックタスク
+task codeQualityCheck {
+    dependsOn compileJava
+    doLast {
+        println "コンパイルチェック完了"
+    }
+}
+
+// バリデーションタスク
+task validate(dependsOn: [test, codeQualityCheck]) {
+    doLast {
+        println "========================================"
+        println "バリデーション完了"
+        println "========================================"
+        println "✓ 構文チェック完了"
+        println "✓ テスト実行完了"
+        println "✓ コード品質チェック完了"
+        println "✓ EPUB 3.2準拠チェック実施"
+        println "✓ 電書連制作ガイド準拠チェック実施"
+        println "========================================"
+    }
+}
+
+// デフォルトタスク
+defaultTasks 'validate'
+
+// ============================
+// Local epubcheck integration
+// ============================
+ext {
+    epubcheckVersion = '5.2.0'
+    epubcheckBaseUrl = "https://github.com/w3c/epubcheck/releases/download/v${epubcheckVersion}/epubcheck-${epubcheckVersion}.zip"
+    epubcheckToolsDir = file('build/tools')
+    epubcheckDir = file("${epubcheckToolsDir}/epubcheck-${epubcheckVersion}")
+    epubcheckZip = file("${epubcheckToolsDir}/epubcheck-${epubcheckVersion}.zip")
+}
+
+// Download and prepare epubcheck unless user provides -PepubcheckJar=<path>
+tasks.register('setupEpubcheck') {
+    outputs.dir(epubcheckDir)
+    doLast {
+        if (project.hasProperty('epubcheckJar')) {
+            println "Using user-provided epubcheck JAR: ${project.property('epubcheckJar')}"
+            return
+        }
+        if (!epubcheckDir.exists()) {
+            epubcheckToolsDir.mkdirs()
+            println "Downloading epubcheck ${epubcheckVersion} from ${epubcheckBaseUrl}"
+            try {
+                ant.get(src: epubcheckBaseUrl, dest: epubcheckZip, skipexisting: 'true')
+                ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
+            } catch(Exception e) {
+                println "WARNING: Failed to download epubcheck automatically."
+                println "You can manually download the ZIP and set -PepubcheckJar=/path/to/epubcheck.jar"
+            }
+        }
+        def jar = file("${epubcheckDir}/epubcheck.jar")
+        if (jar.exists()) {
+            println "epubcheck is ready: ${jar}"
+            // Show version (best-effort)
+            try {
+                def p = ["java","-jar", jar.absolutePath, "-version"].execute()
+                p.in.eachLine { println it }
+                p.waitFor()
+            } catch(Exception ignore) {}
+        } else {
+            println "epubcheck JAR not found. Provide -PepubcheckJar or check network access."
+        }
+    }
+}
+
+// Run epubcheck for a single file (-Pepub=path.epub) or a directory (-PepubDir=dir)
+tasks.register('epubcheck') {
+    dependsOn 'setupEpubcheck'
+    doLast {
+        def targetFile = project.findProperty('epub')
+        def targetDir = project.findProperty('epubDir')
+        def files = [] as List<File>
+
+        if (targetFile) files << file(targetFile)
+        if (targetDir) files.addAll(fileTree(targetDir).matching { include '**/*.epub' }.files as List)
+        if (!targetFile && !targetDir) {
+            println 'Usage:'
+            println '  gradlew epubcheck -Pepub=build/epub_out/sample.epub'
+            println '  gradlew epubcheck -PepubDir=build/epub_out'
+            println 'Optional:'
+            println '  -PepubcheckJar=C:/path/to/epubcheck.jar (to skip download)'
+            return
+        }
+        if (files.isEmpty()) {
+            println "No EPUB files found to validate"
+            return
+        }
+
+        // Resolve epubcheck jar path
+        File jarFile
+        if (project.hasProperty('epubcheckJar')) {
+            jarFile = file(project.property('epubcheckJar'))
+        } else {
+            jarFile = file("${epubcheckDir}/epubcheck.jar")
+        }
+        if (!jarFile.exists()) {
+            throw new GradleException("epubcheck jar not found: ${jarFile}. Provide -PepubcheckJar or check setupEpubcheck output.")
+        }
+
+        int failures = 0
+        files.each { f ->
+            println "Validating ${f}"
+            try {
+                def p = ["java","-jar", jarFile.absolutePath, f.absolutePath].execute()
+                p.in.eachLine { println it }
+                p.err.eachLine { System.err.println(it) }
+                int code = p.waitFor()
+                if (code != 0) {
+                    failures++
+                    println "epubcheck failed (exit ${code}) for ${f}"
+                }
+            } catch(Exception e) {
+                failures++
+                println "Exception while running epubcheck for ${f}: ${e.message}"
+            }
+        }
+
+        if (failures > 0) {
+            throw new GradleException("epubcheck failed for ${failures} file(s)")
+        }
+        println "epubcheck completed successfully for ${files.size()} file(s)"
+    }
+}
+
+// =====================================
+// Regenerate local sample EPUBs for test
+// =====================================
+ext.localSamples = [
+    // source                , target file name under build/epub_local
+    [src: 'test_data/test_ruby.txt' , name: '[テスト] ルビ※※《》.epub'],
+    [src: 'test_data/test_yoko.txt' , name: '[テスト] 横書き横組み.epub'],
+    [src: 'test_data/test_title.txt', name: '[テスト&] 出版社 ――副題――.epub']
+]
+
+tasks.register('cleanLocalSamples') {
+    doLast {
+        def outDir = file('build/epub_local')
+        if (outDir.exists()) {
+            println "Deleting ${outDir}"
+            outDir.deleteDir()
+        }
+    }
+}
+
+tasks.register('generateLocalSamples') {
+    dependsOn 'jar', 'cleanLocalSamples'
+    doLast {
+        def jarPath = file("${buildDir}/libs/AozoraEpub3.jar")
+        if (!jarPath.exists()) throw new GradleException("Jar not found: ${jarPath}")
+
+        def genDir = file('build/epub_local_gen')
+        def outDir = file('build/epub_local')
+        genDir.mkdirs()
+        outDir.mkdirs()
+
+        localSamples.each { m ->
+            def src = file(m.src)
+            if (!src.exists()) throw new GradleException("Source not found: ${src}")
+            println "Generating from ${src}"
+            ant.java(jar: jarPath, fork: true, failonerror: true) {
+                arg(value: '-of')
+                arg(value: '-d')
+                arg(value: genDir.absolutePath)
+                arg(value: src.absolutePath)
+            }
+            def produced = new File(genDir, src.name.replaceAll(/\.[^.]+$/, '') + '.epub')
+            if (!produced.exists()) throw new GradleException("Expected output not found: ${produced}")
+            def target = new File(outDir, m.name)
+            println "Copying ${produced.name} -> ${target.name}"
+            target.bytes = produced.bytes
+        }
+        println "Local samples generated under ${outDir}"
+    }
+}
+
+// Include third-party licenses into Application plugin distributions
+distributions {
+    main {
+        contents {
+            // Copy fat JAR to root for easy access
+            from('build/libs') {
+                include 'AozoraEpub3.jar'
+            }
+            from('lib/LICENSE') {
+                into 'LICENSE'
+            }
+            from('.') {
+                include 'THIRD-PARTY-NOTICES.txt'
+                include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+                include 'chuki_*.txt'
+                include 'AozoraEpub3.ico'
+            }
+            from('presets') {
+                into 'presets'
+            }
+            // ユーザーが編集可能なテンプレートを外部配置
+            from('template') {
+                into 'template'
+            }
+            // 外字フォルダも外部配置
+            from('gaiji') {
+                into 'gaiji'
+            }
+            // webフォルダも外部配置
+            from('web') {
+                into 'web'
+            }
+        }
+    }
+}

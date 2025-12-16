@@ -8,8 +8,7 @@ import java.awt.Image;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -75,7 +74,7 @@ public class JProfileDialog extends JDialog
 		jButtonCreate = new JButton("新規作成");
 		jButtonCreate.setBorder(paddingButton);
 		//jButtonCreate.setPreferredSize(new Dimension(80, 26));
-		try { jButtonCreate.setIcon(new ImageIcon(new URL(imageURLPath+"add.png"))); } catch (MalformedURLException e1) {}
+		try { jButtonCreate.setIcon(new ImageIcon(new URI(imageURLPath+"add.png").toURL())); } catch (Exception e1) {}
 		jButtonCreate.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (linstener != null) linstener.actionPerformed(new ActionEvent(jTextProfileName.getText(), 1, "create"));
@@ -90,7 +89,7 @@ public class JProfileDialog extends JDialog
 		jButtonEdit = new JButton("名称変更");
 		jButtonEdit.setBorder(paddingButton);
 		//jButtonEdit.setPreferredSize(new Dimension(80, 26));
-		try { jButtonEdit.setIcon(new ImageIcon(new URL(imageURLPath+"edit.png"))); } catch (MalformedURLException e1) {}
+		try { jButtonEdit.setIcon(new ImageIcon(new URI(imageURLPath+"edit.png").toURL())); } catch (Exception e1) {}
 		jButtonEdit.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (linstener != null) linstener.actionPerformed(new ActionEvent(jTextProfileName.getText(), 2, "edit"));
@@ -105,7 +104,7 @@ public class JProfileDialog extends JDialog
 		jButtonDelete = new JButton("削除");
 		jButtonDelete.setBorder(paddingButton);
 		//jButtonDelete.setPreferredSize(new Dimension(80, 26));
-		try { jButtonDelete.setIcon(new ImageIcon(new URL(imageURLPath+"delete.png"))); } catch (MalformedURLException e1) {}
+		try { jButtonDelete.setIcon(new ImageIcon(new URI(imageURLPath+"delete.png").toURL())); } catch (Exception e1) {}
 		jButtonDelete.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (linstener != null) {
@@ -125,7 +124,7 @@ public class JProfileDialog extends JDialog
 		jButtonCancel = new JButton("キャンセル");
 		jButtonCancel.setBorder(paddingButton);
 		//jButtonCancel.setPreferredSize(new Dimension(80, 26));
-		try { jButtonCancel.setIcon(new ImageIcon(new URL(imageURLPath+"cross.png"))); } catch (MalformedURLException e1) {}
+		try { jButtonCancel.setIcon(new ImageIcon(new URI(imageURLPath+"cross.png").toURL())); } catch (Exception e1) {}
 		jButtonCancel.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				jTextProfileName.setText("");
