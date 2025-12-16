@@ -405,8 +405,18 @@ distributions {
             from('presets') {
                 into 'presets'
             }
-            // Note: gaiji, web, template are included in the fat JAR
-            // and should not be distributed separately to avoid conflicts
+            // ユーザーが編集可能なテンプレートを外部配置
+            from('template') {
+                into 'template'
+            }
+            // 外字フォルダも外部配置
+            from('gaiji') {
+                into 'gaiji'
+            }
+            // webフォルダも外部配置
+            from('web') {
+                into 'web'
+            }
         }
     }
 }

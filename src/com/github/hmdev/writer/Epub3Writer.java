@@ -349,7 +349,14 @@ public class Epub3Writer
 				// パスを調整: ファイルシステムにない場合は "template/" から始まるリソースパスに変換
 				String resourcePath = templateFilePath;
 				File templateDir = new File(templatePath);
-				if (!templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+				if (templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+				// 外部ファイルシステムのテンプレートを使用する場合、
+				// FileResourceLoaderはベースパス（templatePath）からの相対パスを期待する
+				resourcePath = templateFilePath.substring(templatePath.length());
+				while (resourcePath.startsWith("/")) {
+					resourcePath = resourcePath.substring(1);
+				}
+			} else if (!templateDir.exists() && templateFilePath.startsWith(templatePath)) {
 					// JAR内リソース用のパスに変換（ClasspathResourceLoaderは"/"から始まらないパスを期待）
 					// パスから余分なスラッシュを削除
 					String relativePath = templateFilePath.substring(templatePath.length());
