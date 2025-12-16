@@ -19,6 +19,15 @@ on:
       - '.gitignore'
   workflow_dispatch:
     inputs:
+      java_version:
+        description: 'JDK version to test (21, 25, or 21,25 for both)'
+        required: false
+        default: '21'
+        type: choice
+        options:
+          - '21'
+          - '25'
+          - '21,25'
       ini_font_size:
         description: "INI FontSize (percent)"
         required: false
@@ -30,8 +39,12 @@ on:
 
 jobs:
   build-test-validate:
-    name: Build, Test, Validate (EPUB 3.2 / 電書連)
+    name: Build, Test, Validate (EPUB 3.2 / 電書連) - JDK ${{ matrix.java-version }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.java_version == '21,25' && '["21", "25"]' || format('["{0}"]', inputs.java_version)) || '["21"]') }}
+      fail-fast: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,11 +52,11 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x ./gradlew
 
-      - name: Setup Java 21
+      - name: Setup Java ${{ matrix.java-version }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: ${{ matrix.java-version }}
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -88,7 +101,7 @@ jobs:
           fi
           echo "Using JAR: $JAR_FILE"
           ls -lh "$JAR_FILE"
-          
+
           # Generate EPUB with verbose output
           echo "Generating EPUB from test_data/test_title.txt..."
           java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_title.txt 2>&1 || echo "Warning: test_title.txt conversion failed"
@@ -96,7 +109,7 @@ jobs:
           java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_ruby.txt 2>&1 || echo "Warning: test_ruby.txt conversion failed"
           echo "Generating EPUB from test_data/test_yoko.txt..."
           java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_yoko.txt 2>&1 || echo "Warning: test_yoko.txt conversion failed"
-          
+
           echo "Generated files:"
           ls -la build/epub_out || echo "build/epub_out is empty"
 
@@ -301,7 +314,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: generated-epubs
+          name: generated-epubs-jdk-${{ matrix.java-version }}
           path: build/epub_out/*.epub
           if-no-files-found: ignore
 
@@ -350,7 +363,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-reports
+          name: junit-reports-jdk-${{ matrix.java-version }}
           path: |
             build/test-results/test/
             build/reports/tests/test/
