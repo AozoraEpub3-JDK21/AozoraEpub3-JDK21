@@ -9,30 +9,48 @@ AozoraEpub3 の開発に参加するための情報をまとめています。
 このドキュメントは以下を対象としています：
 - プロジェクト構造を理解したい方
 - バグ修正・機能追加をしたい方
-- ビルド・テスト環境を構築したい方
-
+## ビルド・テスト
+### 開発環境セットアップ
+1. JDK 21 をインストール（Temurin 推奨）
+2. リポジトリを clone
+3. Gradle Wrapper を使用してビルド
 利用者向けのドキュメントは [README.md](README.md) を参照してください。
 
 ---
 
-## プロジェクト構造
-
+```bash
+./gradlew test
+./gradlew build
 ```
-AozoraEpub3/
 ├── src/                           # Java ソースコード
-│   ├── AozoraEpub3.java          # GUI起動クラス
-│   ├── AozoraEpub3Applet.java    # アプレット（GUIメイン）
+│   ├── AozoraEpub3.java          # CLIエントリーポイント
+### 配布物の生成（FAT版のみ）
+FAT 版（依存関係込み単一JAR）のみ公式配布します。Windows は ZIP、Unix/Linux/macOS は TAR.GZ を生成します。
 │   └── com/github/hmdev/         # 主要なロジック
 │       ├── config/               # 設定・解析（INI、プリセット）
 │       ├── epub/                 # EPUB生成・検証
 │       ├── image/                # 画像処理
-│       ├── parser/               # テキスト解析
-│       ├── util/                 # ユーティリティ
-│       ├── validator/            # EPUB検証ロジック
-│       └── writer/               # EPUB3Writer（テンプレート駆動）
+```bash
+./gradlew zipDistribution
+./gradlew tarDistribution
+```
 ├── test/                          # Javaテストコード
 │   └── com/github/hmdev/         # テスト（JUnit 4）
-├── template/                      # Velocityテンプレート（EPUB生成）
+### GUIフォントの扱い（開発者向けメモ）
+- 英語OS環境では論理フォント `Dialog` が CJK汎用フォントにマップされ、日本語字形に違和感が出る場合があります。
+- 本プロジェクトでは OS 別に日本語フォント候補を検出して UI 全体へ適用します。
+   - Windows: Yu Gothic UI → Meiryo → Yu Gothic → MS UI Gothic → MS Gothic
+   - macOS: Hiragino Sans → Hiragino Kaku Gothic ProN → Hiragino Kaku Gothic Pro
+   - Linux: Noto Sans CJK JP → Noto Sans JP → IPAGothic → VL Gothic → TakaoGothic
+- 個別コンポーネントは `getPreferredJapaneseFontName()` を利用して明示指定可能です（例: `JTextArea`）。
+
+### Velocityテンプレートの注意点
+- テンプレートパスは `template/` を基準に相対指定。テストでは FileResourceLoader で `template/` を指す設定にすること。
+- プレースホルダは複雑化させず、ビジネスロジックは Java 側で解決してから値を渡す。
+
+### Windows配布時の起動
+- `.jar` ダブルクリックが動かないケースがあるため、FAT版 ZIP に `AozoraEpub3起動.bat` を同梱。
+   - `javaw.exe` を用いてコンソール無しで起動。
 │   ├── OPS/
 │   │   ├── package.vm            # package.opf テンプレート
 │   │   ├── toc.ncx.vm            # NCX (目次) テンプレート
