@@ -175,6 +175,62 @@ java -jar AozoraEpub3.jar *.txt
 
 ---
 
+## テンプレートのカスタマイズ
+
+AozoraEpub3では、EPUB生成に使用するVelocityテンプレートをカスタマイズできます。
+
+### テンプレートの優先順位
+
+1. **外部テンプレート（優先）**: `AozoraEpub3.jar`と同じフォルダの`template/`ディレクトリ
+2. **内蔵テンプレート（フォールバック）**: JAR内に含まれるデフォルトテンプレート
+
+### カスタマイズ方法
+
+1. 配布ZIPに含まれる`template/`フォルダから編集したいテンプレートを確認
+2. 必要なテンプレートファイル（`.vm`ファイル）を編集
+3. `AozoraEpub3.jar`と同じ場所に`template/`フォルダがあることを確認
+
+```
+配布ディレクトリ構成例:
+your-directory/
+├── AozoraEpub3.jar
+├── template/           ← カスタマイズ可能
+│   ├── OPS/
+│   │   ├── package.vm
+│   │   ├── nav.xhtml.vm
+│   │   ├── css/
+│   │   │   ├── vertical_text.vm
+│   │   │   └── horizontal_text.vm
+│   │   └── xhtml/
+│   │       └── *.vm
+│   └── META-INF/
+│       └── *.vm
+├── gaiji/              ← 外字追加可能
+├── presets/            ← プリセット編集可能
+└── web/
+```
+
+外部の`template/`フォルダが存在しない場合、JAR内のデフォルトテンプレートが自動的に使用されます。
+
+### 編集可能な主なテンプレート
+
+| テンプレート | 用途 |
+|-------------|------|
+| `OPS/package.vm` | EPUB メタデータ・マニフェスト |
+| `OPS/nav.xhtml.vm` | ナビゲーション目次 |
+| `OPS/css/vertical_text.vm` | 縦書きCSS |
+| `OPS/css/horizontal_text.vm` | 横書きCSS |
+| `OPS/xhtml/*.vm` | 本文XHTML生成 |
+
+### 注意事項
+
+- テンプレートファイルはUTF-8エンコーディングで保存してください
+- Velocityの文法に従って記述してください
+- 不正なテンプレートはEPUB生成エラーの原因となります
+- バックアップを取ってから編集することを推奨します
+
+---
+
 ## トラブルシューティング
 
 ### 変換できない注記が多い
