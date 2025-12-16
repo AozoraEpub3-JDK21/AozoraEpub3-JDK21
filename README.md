@@ -4,6 +4,16 @@
 
 青空文庫の注記入りテキストファイルを EPUB 3 ファイルに変換するツールです。
 
+## このプロジェクトについて
+
+このプロジェクトは [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3) を元に、Java 21対応および [narou.rb](https://github.com/Sunset-Yuhi/narou) での利用を目的として改変したものです。
+
+- **元プロジェクト**: [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3)
+- **ライセンス**: GPL v3（元作者に帰属）
+- **目的**: narou.rb との統合、Java 21 への対応
+
+---
+
 ## 特徴
 
 - 青空文庫テキスト（txt/zip）を EPUB 3.2 に変換
