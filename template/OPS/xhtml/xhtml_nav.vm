@@ -82,20 +82,10 @@ nav#landmarks { display:none; }
 #if ($chapter.ChapterName)
 #set($hasChapter = true)
 #set($idx=$idx+1)
-#if (${navNest})
-#foreach(${start} in ${chapter.LevelStart})
-		<li><ol>
-#end
-#end
 #if ($chapter.ChapterId)
 			<li class="chapter" id="toc${idx}"><a href="${chapter.SectionId}.xhtml#${chapter.ChapterId}">${chapter.ChapterName}</a></li>
 #else
 			<li class="chapter" id="toc${idx}"><a href="${chapter.SectionId}.xhtml">${chapter.ChapterName}</a></li>
-#end
-#if (${navNest})
-#foreach(${end} in ${chapter.LevelEnd})
-		</ol></li>
-#end
 #end
 #end
 #end
