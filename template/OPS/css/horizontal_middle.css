@@ -32,8 +32,12 @@ display: table-cell;
 }
 
 /* 左右中央 */
+table.middle {
+padding-top: 3em;
+}
 table.middle td {
-vertical-align: middle;
+vertical-align: top;
+padding-top: 2em;
 }
 /* ページ左 */
 table.bottom td {
@@ -60,4 +64,5 @@ writing-mode: horizontal-tb;
 text-align: left;
 line-height: 1.5;
 width: 95%;
+padding-top: 5em;
 }

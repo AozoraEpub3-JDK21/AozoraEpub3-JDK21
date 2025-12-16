@@ -803,6 +803,7 @@ public class Epub3Writer
 		//package.opf 出力
 		velocityContext.put("sections", sectionInfos);
 		velocityContext.put("images", imageInfos);
+		velocityContext.put("vecGaijiInfo", this.vecGaijiInfo);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+PACKAGE_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
 		mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, bw);

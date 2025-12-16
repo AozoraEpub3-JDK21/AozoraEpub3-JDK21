@@ -31,8 +31,12 @@ display: table-cell;
 }
 
 /* 左右中央 */
+table.middle {
+padding-top: 3em;
+}
 table.middle td {
-vertical-align: middle;
+vertical-align: top;
+padding-top: 2em;
 }
 /* ページ左 */
 table.bottom td {
@@ -41,14 +45,14 @@ vertical-align: bottom;
 
 /* kindle左右中央 */
 div.kindle_outer {
-writing-mode: horizontal-tb;
--webkit-writing-mode: horizontal-tb;
--epub-writing-mode: horizontal-tb;
+writing-mode: vertical-rl;
+-webkit-writing-mode: vertical-rl;
+-epub-writing-mode: vertical-rl;
 text-align: center;
 width:100%;
 margin: 0;
 padding: 0;
-line-height: 0;
+line-height: normal;
 }
 div.kindle_outer.bottom {
 text-align: left;
@@ -60,5 +64,15 @@ writing-mode: vertical-rl;
 -epub-writing-mode: vertical-rl;
 text-align: left;
 line-height: 1.5;
-height: 95%;
+height: auto;
+max-height: 95%;
+padding-top: 3em;
+}
+
+/* Kindle用: 100%テーブルでのはみ出しを防ぐ */
+body.kindle table.middle {
+height: auto;
+}
+body.kindle table.middle td {
+height: auto;
 }

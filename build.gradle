@@ -7,7 +7,7 @@ version = '1.1.0b46'
 
 // Gradle Wrapper を生成するためのタスク
 wrapper {
-    gradleVersion = '8.11.1'
+    gradleVersion = '9.2.1'
     distributionType = Wrapper.DistributionType.BIN
 }
 
@@ -26,28 +26,34 @@ repositories {
     mavenCentral()
 }
 
+// Disable reproducible builds to preserve actual file timestamps
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
+}
+
 dependencies {
     // Commons ライブラリを最新版に
-    implementation 'commons-cli:commons-cli:1.6.0'
-    implementation 'org.apache.commons:commons-collections4:4.4'
-    implementation 'org.apache.commons:commons-compress:1.26.0'
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
+        implementation 'commons-cli:commons-cli:1.7.0'
+        implementation 'org.apache.commons:commons-collections4:4.5.0'
+        implementation 'org.apache.commons:commons-compress:1.27.1'
+        implementation 'org.apache.commons:commons-lang3:3.15.0'
     
     // JSoup を最新版に
-    implementation 'org.jsoup:jsoup:1.17.2'
+        implementation 'org.jsoup:jsoup:1.18.1'
     
     // Junrar を最新版に
-    implementation 'com.github.junrar:junrar:7.5.5'
+        implementation 'com.github.junrar:junrar:7.5.5'
     
     // Velocity を最新版に
-    implementation 'org.apache.velocity:velocity-engine-core:2.3'
+        implementation 'org.apache.velocity:velocity-engine-core:2.4.1'
     
     // JAI（Java Advanced Imaging）- 代替ライブラリを使用
-    implementation 'org.apache.xmlgraphics:batik-transcoder:1.17'
+        implementation 'org.apache.xmlgraphics:batik-transcoder:1.18'
     
     // ログの実装（SLF4J）
-    implementation 'org.slf4j:slf4j-api:2.0.9'
-    implementation 'org.slf4j:slf4j-simple:2.0.9'
+        implementation 'org.slf4j:slf4j-api:2.0.16'
+        implementation 'org.slf4j:slf4j-simple:2.0.16'
     
     // テストフレームワーク
     testImplementation 'junit:junit:4.13.2'
@@ -93,6 +99,8 @@ java {
 jar {
     archiveBaseName = 'AozoraEpub3'
     archiveVersion = ''
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
     manifest {
         attributes(
             'Implementation-Title': 'AozoraEpub3',
@@ -128,6 +136,8 @@ jar {
 task zipDistribution(type: Zip, dependsOn: build) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
     destinationDirectory = file('build/distributions')
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
     
     from('build/libs') {
         include '*.jar'
@@ -161,6 +171,8 @@ task tarDistribution(type: Tar, dependsOn: build) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
     destinationDirectory = file('build/distributions')
     compression = Compression.GZIP
+    preserveFileTimestamps = true
+    reproducibleFileOrder = false
     
     from('build/libs') {
         include '*.jar'
@@ -372,8 +384,11 @@ tasks.register('generateLocalSamples') {
             def src = file(m.src)
             if (!src.exists()) throw new GradleException("Source not found: ${src}")
             println "Generating from ${src}"
-            exec {
-                commandLine 'java', '-jar', jarPath.absolutePath, '-of', '-d', genDir.absolutePath, src.absolutePath
+            ant.java(jar: jarPath, fork: true, failonerror: true) {
+                arg(value: '-of')
+                arg(value: '-d')
+                arg(value: genDir.absolutePath)
+                arg(value: src.absolutePath)
             }
             def produced = new File(genDir, src.name.replaceAll(/\.[^.]+$/, '') + '.epub')
             if (!produced.exists()) throw new GradleException("Expected output not found: ${produced}")

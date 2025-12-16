@@ -1,172 +1,175 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="pub-id" xml:lang="ja" version="3.0"
-	prefix="rendition: http://www.idpf.org/vocab/rendition/#">
-	<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+  prefix="rendition: http://www.idpf.org/vocab/rendition/#">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 
-		<dc:title id="title">${title}</dc:title>
-		<meta refines="#title" property="dcterms:title">${title}</meta>
+	<dc:title id="title">${title}</dc:title>
+	<meta refines="#title" property="dcterms:title">${title}</meta>
 #if (${titleAs})
-		<meta refines="#title" property="file-as">${titleAs}</meta>
+	<meta refines="#title" property="file-as">${titleAs}</meta>
 #end
 #if (${creator})
-		<dc:creator id="creator">${creator}</dc:creator>
-		<meta refines="#creator" property="dcterms:creator">${creator}</meta>
+	<dc:creator id="creator">${creator}</dc:creator>
+	<meta refines="#creator" property="dcterms:creator">${creator}</meta>
 #if (${creatorAs})
-		<meta refines="#creator" property="file-as">${creatorAs}</meta>
+	<meta refines="#creator" property="file-as">${creatorAs}</meta>
 #end
 #end
 #if (${publisher})
-		<dc:publisher id="publisher">${publisher}</dc:publisher>
-		<meta refines="#publisher" property="dcterms:publisher">${publisher}</meta>
+	<dc:publisher id="publisher">${publisher}</dc:publisher>
+	<meta refines="#publisher" property="dcterms:publisher">${publisher}</meta>
 #end
-		<dc:language id="pub-lang">ja</dc:language>
-		<meta refines="#pub-lang" property="dcterms:language">ja</meta>
-		<dc:identifier id="pub-id">urn:uuid:${identifier}</dc:identifier>
-		<meta refines="#pub-id" property="dcterms:identifier">urn:uuid:${identifier}</meta>
-		<meta property="dcterms:modified">${modified}</meta>
+	<dc:language id="pub-lang">ja</dc:language>
+	<meta refines="#pub-lang" property="dcterms:language">ja</meta>
+	<dc:identifier id="pub-id">urn:uuid:${identifier}</dc:identifier>
+	<meta refines="#pub-id" property="dcterms:identifier">urn:uuid:${identifier}</meta>
+	<meta property="dcterms:modified">${modified}</meta>
 #if (${bookInfo.InsertCoverPage})
-		<meta name="cover" content="img${coverImage.Id}"/>
+	<meta name="cover" content="img${coverImage.Id}"/>
 #end
 #if (${bookInfo.ImageOnly})
 #if (${svgImage})
-		<meta property="rendition:layout">pre-paginated</meta>
+	<meta property="rendition:layout">pre-paginated</meta>
 #end
-		<meta name="fixed-layout" content="true"/>
-		<meta name="book-type" content="comic"/>
+	<meta name="fixed-layout" content="true"/>
+	<meta name="book-type" content="comic"/>
 #if (${kindle})
-		<meta name="zero-gutter" content="true"/>
-		<meta name="zero-margin" content="true"/>
-		<meta name="primary-writing-mode" content="horizontal-rl"/>
-		<meta name="RegionMagnification" content="false"/>
-		<meta name="orientation-lock" content="none"/>
-		<!--<meta name="original-resolution" content="844x1200"/>-->
+	<meta name="zero-gutter" content="true"/>
+	<meta name="zero-margin" content="true"/>
+	<meta name="primary-writing-mode" content="horizontal-rl"/>
+	<meta name="RegionMagnification" content="false"/>
+	<meta name="orientation-lock" content="none"/>
+	<!--<meta name="original-resolution" content="844x1200"/>-->
 #end
 #end
 #if (${bookInfo.ImageOnly})
-    <meta property="rendition:layout">pre-paginated</meta>
-    <meta property="rendition:spread">landscape</meta>
-    <meta name="original-resolution" content="${coverImage.Width}x${coverImage.Height}"/>
+	<meta property="rendition:layout">pre-paginated</meta>
+	<meta property="rendition:spread">landscape</meta>
+	<meta name="original-resolution" content="${coverImage.Width}x${coverImage.Height}"/>
 
-    #if (${bookInfo.Vertical})
-        <meta name="primary-writing-mode" content="horizontal-rl"/>
-    #else
-        <meta name="primary-writing-mode" content="horizontal-lr"/>
-    #end
+	#if (${bookInfo.Vertical})
+		<meta name="primary-writing-mode" content="horizontal-rl"/>
+	#else
+		<meta name="primary-writing-mode" content="horizontal-lr"/>
+	#end
 
 #elseif (!${bookInfo.ImageOnly})
-    <meta property="rendition:layout">reflowable</meta>
+	<meta property="rendition:layout">reflowable</meta>
 
-    #if (${bookInfo.Vertical})
-        <meta name="primary-writing-mode" content="horizontal-rl"/>
+	#if (${bookInfo.Vertical})
+		<meta name="primary-writing-mode" content="horizontal-rl"/>
 		<meta name="writing-mode" content="vertical-rl"/>
-    #else
-        <meta name="primary-writing-mode" content="horizontal-lr"/>
-    #end
+	#else
+		<meta name="primary-writing-mode" content="horizontal-lr"/>
+	#end
 #end
-	</metadata>
+  </metadata>
 
-	<manifest>
+  <manifest>
 #if (${kindle} && ${bookInfo.ImageOnly})
-		<item id="k_image" href="css/kindle_image.css" media-type="text/css"/>
+	<item id="k_image" href="css/kindle_image.css" media-type="text/css"/>
 #elseif (${svgImage} && ${bookInfo.ImageOnly})
-		<item id="svg_image" href="css/svg_image.css" media-type="text/css"/>
+	<item id="svg_image" href="css/svg_image.css" media-type="text/css"/>
 #elseif (${bookInfo.Vertical})
 #if (${bookInfo.ImageOnly})
-		<item id="v_image" href="css/vertical_image.css" media-type="text/css"/>
+	<item id="v_image" href="css/vertical_image.css" media-type="text/css"/>
 #else
-		<item id="vertical" href="css/vertical.css" media-type="text/css"/>
-		<item id="v_font" href="css/vertical_font.css" media-type="text/css"/>
-		<item id="v_text" href="css/vertical_text.css" media-type="text/css"/>
-		<item id="v_middle" href="css/vertical_middle.css" media-type="text/css"/>
-		<item id="v_image" href="css/vertical_image.css" media-type="text/css"/>
+	<item id="vertical" href="css/vertical.css" media-type="text/css"/>
+	<item id="v_font" href="css/vertical_font.css" media-type="text/css"/>
+	<item id="v_text" href="css/vertical_text.css" media-type="text/css"/>
+	<item id="v_middle" href="css/vertical_middle.css" media-type="text/css"/>
+	<item id="v_image" href="css/vertical_image.css" media-type="text/css"/>
 #end
 #else
 #if (${bookInfo.ImageOnly})
-		<item id="h_image" href="css/horizontal_image.css" media-type="text/css"/>
+	<item id="h_image" href="css/horizontal_image.css" media-type="text/css"/>
 #else
-		<item id="horizontal" href="css/horizontal.css" media-type="text/css"/>
-		<item id="h_font" href="css/horizontal_font.css" media-type="text/css"/>
-		<item id="h_text" href="css/horizontal_text.css" media-type="text/css"/>
-		<item id="h_middle" href="css/horizontal_middle.css" media-type="text/css"/>
-		<item id="h_image" href="css/horizontal_image.css" media-type="text/css"/>
+	<item id="horizontal" href="css/horizontal.css" media-type="text/css"/>
+	<item id="h_font" href="css/horizontal_font.css" media-type="text/css"/>
+	<item id="h_text" href="css/horizontal_text.css" media-type="text/css"/>
+	<item id="h_middle" href="css/horizontal_middle.css" media-type="text/css"/>
+	<item id="h_image" href="css/horizontal_image.css" media-type="text/css"/>
 #end
 #end
 
-		<item id="nav" properties="nav" href="xhtml/nav.xhtml" media-type="application/xhtml+xml"/>
+	<item id="nav" properties="nav" href="xhtml/nav.xhtml" media-type="application/xhtml+xml"/>
 
 #if (${bookInfo.InsertCoverPage})
 #if ($svgImage && ${bookInfo.ImageOnly})
-		<item id="cover-page" href="xhtml/cover.xhtml" media-type="application/xhtml+xml" properties="svg"/>
+	<item id="cover-page" href="xhtml/cover.xhtml" media-type="application/xhtml+xml" properties="svg"/>
 #else
-		<item id="cover-page" href="xhtml/cover.xhtml" media-type="application/xhtml+xml"/>
+	<item id="cover-page" href="xhtml/cover.xhtml" media-type="application/xhtml+xml"/>
 #end
 #end
 #if (${title_page})
-		<item id="title-page" href="xhtml/title.xhtml" media-type="application/xhtml+xml"/>
+	<item id="title-page" href="xhtml/title.xhtml" media-type="application/xhtml+xml"/>
 #end
 
 #if ($svgImage && ${bookInfo.ImageOnly})
 #foreach(${sectionInfo} in ${sections})
-		<item id="sec${sectionInfo.SectionId}" href="xhtml/${sectionInfo.SectionId}.xhtml" media-type="application/xhtml+xml" properties="svg"/>
+	<item id="sec${sectionInfo.SectionId}" href="xhtml/${sectionInfo.SectionId}.xhtml" media-type="application/xhtml+xml" properties="svg"/>
 #end
 #else
 #foreach(${sectionInfo} in ${sections})
-		<item id="sec${sectionInfo.SectionId}" href="xhtml/${sectionInfo.SectionId}.xhtml" media-type="application/xhtml+xml"/>
+	<item id="sec${sectionInfo.SectionId}" href="xhtml/${sectionInfo.SectionId}.xhtml" media-type="application/xhtml+xml"/>
 #end
 #end
 #foreach($image in ${images})
 #if ($image.IsCover)
-		<item id="img${image.Id}" href="images/${image.OutFileName}" media-type="${image.Format}" properties="cover-image"/>
+	<item id="img${image.Id}" href="images/${image.OutFileName}" media-type="${image.Format}" properties="cover-image"/>
 #else
-		<item id="img${image.Id}" href="images/${image.OutFileName}" media-type="${image.Format}"/>
+	<item id="img${image.Id}" href="images/${image.OutFileName}" media-type="${image.Format}"/>
 #end
 #end
-		<item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
-	</manifest>
+#foreach($gaijiInfo in ${vecGaijiInfo})
+    <item id="font_${gaijiInfo.ClassName}" href="gaiji/${gaijiInfo.File.Name}" media-type="font/ttf"/>
+#end
+    <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
 
 #if (${bookInfo.Vertical})
-	<spine page-progression-direction="rtl" toc="ncx">
+  <spine page-progression-direction="rtl" toc="ncx">
 #else
-	<spine page-progression-direction="ltr" toc="ncx">
+  <spine page-progression-direction="ltr" toc="ncx">
 #end
 #if (${bookInfo.InsertCoverPage})
-		<itemref idref="cover-page" linear="yes"/>
+	<itemref idref="cover-page" linear="yes"/>
 #end
 #if (${title_page})
-		<itemref idref="title-page" linear="yes"/>
+	<itemref idref="title-page" linear="yes"/>
 #end
 #if (${bookInfo.InsertTocPage})
-		<itemref idref="nav" linear="yes"/>
+	<itemref idref="nav" linear="yes"/>
 #end
 
 #foreach(${sectionInfo} in ${sections})
 #if (${kindle} && ${bookInfo.ImageOnly})
 #if ($velocityCount % 2 == 0)
-		<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-left"/>
+	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-left"/>
 #else
-		<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-right"/>
+	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-right"/>
 #end
 #else
-		<itemref idref="sec${sectionInfo.SectionId}" linear="yes"/>
+	<itemref idref="sec${sectionInfo.SectionId}" linear="yes"/>
 #end
 #end
-	</spine>
+  </spine>
 
 #if (${bookInfo.InsertCoverPage} || ${bookInfo.InsertTocPage})
-	<guide>
+  <guide>
 #if (${bookInfo.InsertCoverPage})
-		<reference type="cover" title="cover-page" href="xhtml/cover.xhtml"/>
+	<reference type="cover" title="cover-page" href="xhtml/cover.xhtml"/>
 #end
 #if (${title_page})
-		<reference type="title" title="title-page" href="xhtml/title.xhtml"/>
+	<reference type="title" title="title-page" href="xhtml/title.xhtml"/>
 #end
 #if (${bookInfo.InsertTocPage})
-		<reference type="toc" title="nav" href="xhtml/nav.xhtml"/>
+	<reference type="toc" title="nav" href="xhtml/nav.xhtml"/>
 #end
 #foreach(${sectionInfo} in ${sections})
-		<reference type="text" title="sec${sectionInfo.SectionId}" href="xhtml/${sectionInfo.SectionId}.xhtml"/>
+	<reference type="text" title="sec${sectionInfo.SectionId}" href="xhtml/${sectionInfo.SectionId}.xhtml"/>
 #break
 #end
-	</guide>
+  </guide>
 #end
 </package>

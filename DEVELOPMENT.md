@@ -58,21 +58,21 @@ AozoraEpub3/
 ## 技術スタック
 
 ### Java環境
-- **Java**: 21
-- **ビルドツール**: Gradle 8
+- **Java**: 21（実行はJRE 21で可、開発/ビルドはJDK 21が必要）
+- **ビルドツール**: Gradle 9.2.1（Wrapper 同梱）
 - **テスト**: JUnit 4.13.2
 
-### 主要ライブラリ
-- **Apache Velocity 2.3**: テンプレートエンジン（EPUB生成時にXHTML/CSSを動的生成）
-- **JSoup 1.17.2**: HTML解析（Web小説の取得）
+### 主要ライブラリ（抜粋）
+- **Apache Velocity 2.4.1**: テンプレートエンジン（EPUB生成）
+- **JSoup 1.18.1**: HTML解析
 - **Apache Commons**: CLI, Collections, Compress, Lang3
 - **Junrar 7.5.5**: RAR解凍
-- **Apache Batik 1.17**: 画像トランスコーディング（JAI代替）
-- **SLF4J 2.0.9**: ロギング
+- **Apache Batik 1.18**: 画像トランスコーディング（JAI代替）
+- **SLF4J 2.0.16**: ロギング
 
 ### CI/CD
 - **GitHub Actions**: ビルド、テスト、EPUB生成・検証の自動化
-- **epubcheck 5.2.6**: EPUB 3.2 仕様検証
+- **epubcheck 5.2.0**: EPUB 3 仕様検証（同梱しない。必要時はダウンロード）
 - **xmllint**: XML形式検証
 
 ---
@@ -108,6 +108,30 @@ AozoraEpub3/
 ```
 
 テスト結果は `build/reports/tests/test/index.html` に出力されます。
+
+### EPUB検証（開発者向け）
+
+- ランタイム: JRE 21 で実行可。
+- epubcheck は配布物に同梱しません（EPL-2.0 / GPL-2.0-or-later）。必要に応じて開発者が取得してください。
+
+手順例（ローカル確認）:
+
+```bash
+# サンプルEPUB生成と検証（ネット接続必要）
+./gradlew clean generateLocalSamples epubcheck -PepubDir=build/epub_local
+
+# 既に epubcheck-5.2.0 をダウンロード済みの場合（例: build/tools 配下）
+./gradlew epubcheck -PepubDir=build/epub_local -PepubcheckJar=build/tools/epubcheck-5.2.0/epubcheck.jar
+```
+
+取得方法（参考）:
+
+```bash
+mkdir -p build/tools
+cd build/tools
+curl -L -o epubcheck-5.2.0.zip https://github.com/w3c/epubcheck/releases/download/v5.2.0/epubcheck-5.2.0.zip
+unzip epubcheck-5.2.0.zip
+```
 
 ---
 

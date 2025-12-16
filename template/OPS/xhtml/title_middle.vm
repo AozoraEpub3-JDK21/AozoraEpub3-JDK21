@@ -23,7 +23,7 @@
 .subtitle { font-size:1.6em; }
 .subtitle ruby rt { font-size:.5em; }
 .suborgtitle { font-size:1.25em; }
-.creator { font-size:1.25em; }
+.creator { font-size:1.25em; margin-top:1em; }
 .subcreator { font-size:1.25em; }
 </style>
 <title>${title}</title>
