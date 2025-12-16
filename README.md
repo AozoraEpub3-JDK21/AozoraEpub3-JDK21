@@ -10,7 +10,7 @@
 
 - **元プロジェクト**: [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3)
 - **ライセンス**: GPL v3（元作者に帰属）
-- **目的**: narou.rb との統合、Java 21 への対応
+- **目的**: narou.rb との連携、Java 21 への対応
 
 ---
 
