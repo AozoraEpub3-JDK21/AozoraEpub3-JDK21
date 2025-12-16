@@ -1,38 +1,38 @@
-# リリースノート - JDK21 初期リリース
+# AozoraEpub3 JDK21対応 初期リリース
 
 ## バージョン: jdk21-initial
 
 **リリース日**: 2025年12月16日
 
 ### 概要
-AozoraEpub3 を Java 21 と現代的なツールチェーンに完全に近代化しました。EPUB 3.2 サポートの向上と包括的な依存関係の更新が含まれています。
+AozoraEpub3 を Java 21 と最新のツールチェーンに対応させました。EPUB 3.2 サポートを強化し、依存ライブラリを包括的に更新しています。
 
 ### 主な変更点
 
 #### 🔧 ビルド・ツール
-- **Gradle**: 9.2.1 へアップグレード
-- **Java**: Java 21（JDK 21 LTS）でビルド・テスト
-- **CI/CD**: GitHub Actions によるオートビルド・テスト・EPUB検証
-- **オプション**: CI パイプラインで Java 25 評価版対応
+- **Gradle**: 9.2.1 にアップグレード
+- **Java**: Java 21（JDK 21 LTS）でビルド・テスト実施
+- **CI/CD**: GitHub Actions による自動ビルド・テスト・EPUB 検証
+- **試験版**: CI パイプラインで Java 25 対応も評価中
 
-#### 📦 依存関係の更新
+#### 📦 依存ライブラリ更新
 - **Apache Velocity**: 2.4.1（EPUB テンプレートレンダリング）
-- **JSoup**: 1.18.1（Web スクレイパーの HTML パース）
-- **Apache Commons**: CLI 1.7.0、Collections 4.5.0、Compress 1.27.1、Lang3 3.15.0
-- **Batik**: 1.18（SVG サポート）
-- **SLF4J**: 2.0.16（ロギング）
-- **Junrar**: 7.5.5（アーカイブ展開）
+- **JSoup**: 1.18.1（HTML パース）
+- **Apache Commons**: CLI 1.7.0 / Collections 4.5.0 / Compress 1.27.1 / Lang3 3.15.0
+- **Batik**: 1.18（SVG 対応）
+- **SLF4J**: 2.0.16
+- **Junrar**: 7.5.5
 
 #### 🎨 EPUB テンプレート・CSS 改善
-- **外字（gaiji）フォント対応**: OPF マニフェストへの含有を修正、Velocity コンテキスト経由でフォント宣言を適切に注入
-- **タイトル・カバーレイアウト**: Kindle・iOS レンダラー向けの CSS パディングと垂直配置を改善
-- **縦書き対応**: Kindle 向け writing-mode ディレクティブの強化（iOS 制限はドキュメント化済み）
-- **Package.vm**: ループベースの外字フォント項目生成をマニフェストに追加
+- **外字フォント対応**: OPF マニフェストに外字フォント宣言を正しく注入
+- **タイトル・カバーレイアウト**: Kindle・iOS 向けの CSS パディングと垂直配置を最適化
+- **縦書き対応**: Kindle の writing-mode ディレクティブを改善（iOS の制限は既知の問題）
+- **Package.vm**: 外字フォント項目をマニフェストに動的に生成
 
 #### 🔄 Web 機能
-- **レート制限**: デフォルト 1500ms（最小 1000ms）へ引き上げ、サーバー負荷に配慮
-- **対応プラットフォーム**: narou.rb 互換の Web 小説変換
-- **注意**: ncode.syosetu.com の HTML 構造が変わった可能性があり、セレクタの更新が必要な場合があります
+- **レート制限**: デフォルト 1500ms（最小 1000ms）に設定、サーバー負荷に配慮
+- **互換性**: narou.rb との連携を想定した Web 小説変換に対応
+- **注意**: ncode.syosetu.com の HTML 構造が変わった場合、セレクタの更新が必要な可能性あり
 
 #### 📝 ドキュメント
 - **README.md**: 
@@ -51,9 +51,9 @@ AozoraEpub3 を Java 21 と現代的なツールチェーンに完全に近代�
 - **Copilot 指示**: AI アシスタント向けのプロジェクト貢献ガイダンス追加
 
 ### テスト
-- **ユニットテスト**: JUnit 4.13.2 の全 5 テスト合格
-- **ビルド状態**: Gradle 9.2.1・Java 21 で `BUILD SUCCESSFUL`
-- **EPUB 検証**: CI/CD パイプラインで epubcheck 検証対応済み
+- **ユニットテスト**: JUnit 4.13.2 の 5 テスト全て合格
+- **ビルド**: Gradle 9.2.1 / Java 21 で `BUILD SUCCESSFUL` を確認
+- **EPUB 検証**: CI/CD パイプラインで epubcheck 検証に対応
 
 ### 互換性
 - **基本版**: hmdev/AozoraEpub3 の全機能・デバイスプリセットを継承
@@ -82,14 +82,14 @@ java -jar build/libs/AozoraEpub3.jar -of -d output/ input.txt
 
 ### 謝辞
 - **オリジナル作成者**: hmdev
-- **JDK 21 近代化・依存関係**: AozoraEpub3-JDK21 貢献者
-- **アップストリーム**: narou.rb プロジェクトとの連携を想定
+- **JDK 21 近代化・ライブラリ更新**: AozoraEpub3-JDK21 プロジェクト
+- **連携想定**: narou.rb プロジェクト
 
 ### リンク
 - **GitHub リポジトリ**: https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21
-- **前安定版**: pre-jdk21 タグ（hmdev の最終リリース）
-- **ビルド**: DEVELOPMENT.md を参照してセットアップ・貢献ガイドラインを確認
+- **以前の安定版**: pre-jdk21 タグ（hmdev の最終リリース）
+- **セットアップ・貢献**: DEVELOPMENT.md を参照
 
 ---
 
-**概要**: このリリースは AozoraEpub3 を現代的な Java エコシステムに導き入れ、オリジナルの hmdev コードベースとの互換性を保持しています。すべてのテストが合格し、Java 21 での再現可能なビルドが実現されました。
+**まとめ**: このリリースは AozoraEpub3 を最新の Java 環境に対応させながら、hmdev の元のコードベースとの互換性を完全に保持しています。全テスト合格し、Java 21 での再現可能なビルドが実現されました。
