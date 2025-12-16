@@ -1,95 +1,95 @@
-# Release Notes - JDK21 Initial Release
+# リリースノート - JDK21 初期リリース
 
-## Version: jdk21-initial
+## バージョン: jdk21-initial
 
-**Release Date:** 2025-12-16
+**リリース日**: 2025年12月16日
 
-### Overview
-Complete modernization of AozoraEpub3 for Java 21 and contemporary tooling, with improved EPUB 3.2 support and comprehensive dependency updates.
+### 概要
+AozoraEpub3 を Java 21 と現代的なツールチェーンに完全に近代化しました。EPUB 3.2 サポートの向上と包括的な依存関係の更新が含まれています。
 
-### Key Changes
+### 主な変更点
 
-#### 🔧 Build & Tooling
-- **Gradle**: Upgraded to 9.2.1 (from legacy version)
-- **Java**: Now built and tested on Java 21 (JDK 21 LTS)
-- **CI/CD**: GitHub Actions workflows for automated building, testing, and EPUB validation
-- **Optional**: Java 25 evaluation support in CI pipeline
+#### 🔧 ビルド・ツール
+- **Gradle**: 9.2.1 へアップグレード
+- **Java**: Java 21（JDK 21 LTS）でビルド・テスト
+- **CI/CD**: GitHub Actions によるオートビルド・テスト・EPUB検証
+- **オプション**: CI パイプラインで Java 25 評価版対応
 
-#### 📦 Dependencies Updated
-- **Apache Velocity**: 2.4.1 (template rendering for EPUB)
-- **JSoup**: 1.18.1 (HTML parsing for web scrapers)
-- **Apache Commons**: CLI 1.7.0, Collections 4.5.0, Compress 1.27.1, Lang3 3.15.0
-- **Batik**: 1.18 (SVG support)
-- **SLF4J**: 2.0.16 (logging)
-- **Junrar**: 7.5.5 (archive extraction)
+#### 📦 依存関係の更新
+- **Apache Velocity**: 2.4.1（EPUB テンプレートレンダリング）
+- **JSoup**: 1.18.1（Web スクレイパーの HTML パース）
+- **Apache Commons**: CLI 1.7.0、Collections 4.5.0、Compress 1.27.1、Lang3 3.15.0
+- **Batik**: 1.18（SVG サポート）
+- **SLF4J**: 2.0.16（ロギング）
+- **Junrar**: 7.5.5（アーカイブ展開）
 
-#### 🎨 EPUB Template & CSS Enhancements
-- **Gaiji (外字) Font Support**: Fixed manifest inclusion in OPF; font declarations now properly injected via Velocity context
-- **Title/Cover Layout**: Improved CSS padding and vertical alignment for Kindle and iOS renderers
-- **Vertical Writing**: Enhanced writing-mode directives for Kindle (known iOS limitation documented)
-- **Package.vm**: Loop-based gaiji font item generation in manifest
+#### 🎨 EPUB テンプレート・CSS 改善
+- **外字（gaiji）フォント対応**: OPF マニフェストへの含有を修正、Velocity コンテキスト経由でフォント宣言を適切に注入
+- **タイトル・カバーレイアウト**: Kindle・iOS レンダラー向けの CSS パディングと垂直配置を改善
+- **縦書き対応**: Kindle 向け writing-mode ディレクティブの強化（iOS 制限はドキュメント化済み）
+- **Package.vm**: ループベースの外字フォント項目生成をマニフェストに追加
 
-#### 🔄 Web Features
-- **Rate Limiting**: Increased throttle to 1500ms default (minimum 1000ms) to respect server load
-- **Supported Platforms**: narou.rb-compatible conversion for web novel scrapers
-- **Caution**: ncode.syosetu.com HTML structure may have changed; selector updates may be required
+#### 🔄 Web 機能
+- **レート制限**: デフォルト 1500ms（最小 1000ms）へ引き上げ、サーバー負荷に配慮
+- **対応プラットフォーム**: narou.rb 互換の Web 小説変換
+- **注意**: ncode.syosetu.com の HTML 構造が変わった可能性があり、セレクタの更新が必要な場合があります
 
-#### 📝 Documentation
+#### 📝 ドキュメント
 - **README.md**: 
-  - Added project origin attribution (hmdev)
-  - Documented narou.rb usage intent
-  - Listed environment requirements and execution examples
-  - Known issues: iPhone Kindle vertical writing rendering variance
-  - Web scraping rate limits and potential selector breakage warnings
-- **DEVELOPMENT.md**: Updated tooling versions, added epubcheck validation steps, clarified Velocity configuration
-- **THIRD-PARTY-NOTICES.txt**: Updated to reflect current dependency versions
-- **LICENSE.txt**: Noted derivative nature and JDK 21/25 modernization
+  - プロジェクト出典を hmdev として記載
+  - narou.rb 用途を記載
+  - 実行環境・実行例を列記
+  - 既知の問題: iPhone Kindle 縦書きレンダリングの差異
+  - Web スクレイピングのレート制限と潜在的なセレクタ破損についての警告
+- **DEVELOPMENT.md**: ツール版のアップデート、epubcheck 検証ステップ追加、Velocity 設定の明確化
+- **THIRD-PARTY-NOTICES.txt**: 現在の依存関係版を反映
+- **LICENSE.txt**: 派生版および JDK 21/25 近代化に関する記載
 
-#### 🔐 Security & Maintenance
-- **Git Configuration**: Support for anonymous commit authorship (no-reply email configuration)
-- **.gitignore**: Hardened against secrets leakage (keys, certs, .env, credentials)
-- **Copilot Instructions**: Added AI assistant guidance for project contributions
+#### 🔐 セキュリティ・保守
+- **Git 設定**: 匿名コミット著者対応（no-reply メール設定）
+- **.gitignore**: シークレット漏洩対策強化（キー、証明書、.env、認証情報ディレクトリ）
+- **Copilot 指示**: AI アシスタント向けのプロジェクト貢献ガイダンス追加
 
-### Testing
-- **Unit Tests**: All 5 JUnit 4.13.2 tests passing
-- **Build Status**: `BUILD SUCCESSFUL` with Gradle 9.2.1 and Java 21
-- **EPUB Validation**: Ready for epubcheck validation in CI/CD pipeline
+### テスト
+- **ユニットテスト**: JUnit 4.13.2 の全 5 テスト合格
+- **ビルド状態**: Gradle 9.2.1・Java 21 で `BUILD SUCCESSFUL`
+- **EPUB 検証**: CI/CD パイプラインで epubcheck 検証対応済み
 
-### Compatibility
-- **Base Version**: Inherits all functionality and device presets from hmdev/AozoraEpub3
-- **Device Presets**: Kobo (Touch, Glo, Full), Kindle Paperwhite, Reader (T3, standard)
-- **Input Format**: Aozora Bunko text (.txt with ruby, bouten, gaiji, images support)
-- **Output**: EPUB 3.2 compliant with 電書協/電書連ガイド (denso-booken) support
+### 互換性
+- **基本版**: hmdev/AozoraEpub3 の全機能・デバイスプリセットを継承
+- **デバイスプリセット**: Kobo（Touch、Glo、Full）、Kindle Paperwhite、Reader（T3、標準）
+- **入力形式**: 青空文庫テキスト（.txt、ルビ・圏点・外字・画像対応）
+- **出力形式**: EPUB 3.2 準拠、電書協/電書連ガイド（denso-booken）対応
 
-### Breaking Changes
-None. This release is fully backward-compatible with existing Aozora text inputs and presets.
+### 破壊的変更
+なし。このリリースは既存の青空文庫テキスト入力とプリセットと完全に後方互換です。
 
-### Known Issues
-- **iPhone Kindle**: Vertical writing mode title page rendering may vary; documented as expected behavior
-- **ncode.syosetu.com**: Web scraper selectors in `web/ncode.syosetu.com/extract.txt` may need updating if HTML structure changed
+### 既知の問題
+- **iPhone Kindle**: 縦書きモードのタイトルページレンダリングに差異がある可能性があります（期待される動作として記載済み）
+- **ncode.syosetu.com**: HTML 構造が変わった場合、`web/ncode.syosetu.com/extract.txt` のセレクタの更新が必要になる場合があります
 
-### Migration Guide
-Simply replace the JAR with the new build:
+### マイグレーションガイド
+新しいビルドで JAR を置き換えるだけです：
 ```bash
 ./gradlew distZip
-# Use the generated zip in build/distributions/
+# build/distributions/ の生成された zip を使用
 ```
 
-Or build and run directly:
+または直接ビルド・実行：
 ```bash
 java -jar build/libs/AozoraEpub3.jar -of -d output/ input.txt
 ```
 
-### Credits
-- **Original Author**: hmdev
-- **JDK 21 Modernization & Dependencies**: AozoraEpub3-JDK21 Contributors
-- **Upstream**: narou.rb project collaboration intent
+### 謝辞
+- **オリジナル作成者**: hmdev
+- **JDK 21 近代化・依存関係**: AozoraEpub3-JDK21 貢献者
+- **アップストリーム**: narou.rb プロジェクトとの連携を想定
 
-### Links
-- **GitHub Repository**: https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21
-- **Previous Stable**: pre-jdk21 tag (hmdev's final release)
-- **Build**: See DEVELOPMENT.md for setup and contribution guidelines
+### リンク
+- **GitHub リポジトリ**: https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21
+- **前安定版**: pre-jdk21 タグ（hmdev の最終リリース）
+- **ビルド**: DEVELOPMENT.md を参照してセットアップ・貢献ガイドラインを確認
 
 ---
 
-**Summary**: This release brings AozoraEpub3 into the modern Java ecosystem while preserving compatibility with the original hmdev codebase. All tests pass, and builds are reproducible under Java 21.
+**概要**: このリリースは AozoraEpub3 を現代的な Java エコシステムに導き入れ、オリジナルの hmdev コードベースとの互換性を保持しています。すべてのテストが合格し、Java 21 での再現可能なビルドが実現されました。
