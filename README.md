@@ -49,24 +49,28 @@
 
 最新版は [GitHub Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) から取得できます。
 
-**Windows・一般向け:**
+配布は **FAT版のみ** 提供します（依存関係込みの単一JAR）。
+
+**Windows（ZIP）:**
 ```
-AozoraEpub3-1.2.0-jdk21.zip
+AozoraEpub3-1.2.1-jdk21.zip
 ```
 
-**Linux・macOS向け:**
+**Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.2.0-jdk21.tar
+AozoraEpub3-1.2.1-jdk21.tar.gz
 ```
 
 ### インストール手順
 
 1. 上記リンクからお使いのOS向けファイルをダウンロード
 2. ファイルを任意のフォルダに解凍
-3. `AozoraEpub3.jar` をダブルクリック、または以下のコマンドで実行：
-   ```bash
-   java -jar AozoraEpub3.jar
-   ```
+3. GUI起動方法（以下のいずれか）：
+   - **Windows**: `AozoraEpub3起動.bat` または `AozoraEpub3.bat` をダブルクリック（推奨）
+   - **Unix/Linux/macOS**: `AozoraEpub3.sh` を実行
+   - **直接実行**: `java -jar AozoraEpub3.jar`
+
+**注意**: Windows 11では `.jar` ファイルのダブルクリックが動作しないことがあります。その場合は `.bat` ファイルをご利用ください。
 
 ### 方法 2: ソースからビルド
 
@@ -75,8 +79,8 @@ AozoraEpub3-1.2.0-jdk21.tar
 ```bash
 git clone https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21.git
 cd AozoraEpub3-JDK21
-./gradlew distZip  # または distTar
-# build/distributions/ に zip/tar が生成されます
+./gradlew zipDistribution tarDistribution
+# build/distributions/ に FAT版の zip / tar.gz が生成されます
 ```
 
 ---
@@ -84,6 +88,8 @@ cd AozoraEpub3-JDK21
 ## 既知の問題
 
 - iOS版Kindleで表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。現状は端末依存のため回避策はなく、必要に応じて「表題ページ出力を無効にする」「カスタム表紙のみ出力する」設定をご検討ください。
+ - Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3起動.bat` の使用を推奨します。
+ - GUIフォントについて: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
 
 ---
 
@@ -92,7 +98,9 @@ cd AozoraEpub3-JDK21
 ### 基本的な流れ
 
 1. **アプリケーション起動**
-   - `AozoraEpub3.jar` をダブルクリック
+   - Windows: `AozoraEpub3起動.bat` をダブルクリック（推奨）
+   - Unix/Linux/macOS: `AozoraEpub3.sh` を実行
+   - または: `java -jar AozoraEpub3.jar`
    
 2. **ファイル指定**
    - 変換したい青空文庫テキストファイル（`.txt` または `.zip`）をドラッグ&ドロップ
@@ -192,11 +200,24 @@ Koboなど一部の端末では、4バイト文字（絵文字など）が行内
 
 ## コマンドライン実行
 
-GUIを使わずにコマンドラインから実行できます。
+GUIを起動せずにコマンドラインで直接変換実行するには、入力ファイルを引数として指定します。
+
+### 基本的な使い方
 
 ```bash
+# GUI起動（引数なし）
+java -jar AozoraEpub3.jar
+
+# 入力ファイルを指定（CLI実行）
 java -jar AozoraEpub3.jar [オプション] 入力ファイル
 ```
+
+### 使い分け
+
+| 実行方式 | 用途 | コマンド |
+|---------|------|---------|
+| **GUI** | 対話的な操作（推奨） | `java -jar AozoraEpub3.jar` |
+| **CLI** | バッチ処理・スクリプト化 | `java -jar AozoraEpub3.jar -d out input.txt` |
 
 ### 主なオプション
 
@@ -210,6 +231,8 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-d <パス>` | 出力先ディレクトリ | `-d ./output/` |
 | `-ext <拡張子>` | 出力ファイル拡張子 | `-ext .kepub.epub` |
 | `-of` | ファイル名から表題を生成 | |
+| `-hor` | 横書きで出力 | |
+| `-device <種別>` | 端末種別を指定 | `-device kindle` |
 
 ### 例
 
@@ -223,8 +246,11 @@ java -jar AozoraEpub3.jar -d ./books/ input.txt
 # Kobo形式で出力
 java -jar AozoraEpub3.jar -ext .kepub.epub input.txt
 
+# UTF-8エンコードで出力先を指定
+java -jar AozoraEpub3.jar -enc UTF-8 -d ./output/ input.txt
+
 # 複数ファイルを一括変換
-java -jar AozoraEpub3.jar *.txt
+java -jar AozoraEpub3.jar -d ./books/ file1.txt file2.txt file3.txt
 ```
 
 ---

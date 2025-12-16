@@ -111,6 +111,73 @@ import com.github.hmdev.writer.Epub3Writer;
 @SuppressWarnings("removal")
 public class AozoraEpub3Applet extends JApplet
 {
+	/**
+	 * 日本語に適したUIフォントをOS毎の候補から選択して、UIManagerの全フォントに適用します。
+	 * 候補が見つからない場合は論理フォント Dialog を使用します。
+	 */
+	private static void applyJapaneseFontDefaults() {
+		try {
+			String os = System.getProperty("os.name").toLowerCase();
+			String[] candidates;
+			if (os.contains("windows")) {
+				candidates = new String[]{"Yu Gothic UI", "Meiryo", "Yu Gothic", "MS UI Gothic", "MS Gothic"};
+			} else if (os.contains("mac")) {
+				candidates = new String[]{"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro"};
+			} else {
+				candidates = new String[]{"Noto Sans CJK JP", "Noto Sans JP", "IPAGothic", "VL Gothic", "TakaoGothic"};
+			}
+
+			java.awt.GraphicsEnvironment ge = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment();
+			java.util.Set<String> available = new java.util.HashSet<>();
+			for (String name : ge.getAvailableFontFamilyNames()) {
+				available.add(name);
+			}
+
+			String chosen = null;
+			for (String c : candidates) {
+				if (available.contains(c)) { chosen = c; break; }
+			}
+			if (chosen == null) {
+				chosen = Font.DIALOG; // 論理フォントの fallback
+			}
+
+			UIDefaults defaults = UIManager.getLookAndFeelDefaults();
+			for (Object key : defaults.keySet()) {
+				if (key != null && key.toString().toLowerCase().endsWith("font")) {
+					Object val = UIManager.get(key);
+					if (val instanceof FontUIResource) {
+						FontUIResource f = (FontUIResource) val;
+						FontUIResource repl = new FontUIResource(chosen, Font.PLAIN, f.getSize());
+						UIManager.put(key, repl);
+					}
+				}
+			}
+		} catch (Throwable t) {
+			// フォント適用失敗時は黙って既定を使用
+		}
+	}
+
+	/**
+	 * UI個別コンポーネントで使う推奨日本語フォント名（OS別候補から選択）
+	 */
+	private static String getPreferredJapaneseFontName() {
+		try {
+			String os = System.getProperty("os.name").toLowerCase();
+			String[] candidates;
+			if (os.contains("windows")) {
+				candidates = new String[]{"Yu Gothic UI", "Meiryo", "Yu Gothic", "MS UI Gothic", "MS Gothic"};
+			} else if (os.contains("mac")) {
+				candidates = new String[]{"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro"};
+			} else {
+				candidates = new String[]{"Noto Sans CJK JP", "Noto Sans JP", "IPAGothic", "VL Gothic", "TakaoGothic"};
+			}
+			java.awt.GraphicsEnvironment ge = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment();
+			java.util.Set<String> available = new java.util.HashSet<>();
+			for (String name : ge.getAvailableFontFamilyNames()) available.add(name);
+			for (String c : candidates) if (available.contains(c)) return c;
+		} catch (Throwable ignore) {}
+		return Font.DIALOG; // fallback
+	}
 	private static final long serialVersionUID = 1L;
 	
 	/** アプレットが表示されているフレーム */
@@ -2201,7 +2268,13 @@ public class AozoraEpub3Applet extends JApplet
 		jTextArea.append(" )\n対応ファイル: 青空文庫txt(txt,zip,rar), 画像(zip,rar,cbz), URLショートカット(url)\n");
 		jTextArea.append("ファイルまたはURL文字列をここにドラッグ＆ドロップ／ペーストで変換します。\n");
 		jTextArea.setEditable(false);
-		jTextArea.setFont(new Font("Default", Font.PLAIN, 12));
+		// 推奨日本語フォントを優先して適用（可読性改善のため13pt）
+		try {
+			String preferred = getPreferredJapaneseFontName();
+			jTextArea.setFont(new Font(preferred, Font.PLAIN, 13));
+		} catch (Throwable t) {
+			jTextArea.setFont(new Font(Font.DIALOG, Font.PLAIN, 13));
+		}
 		jTextArea.setBorder(new LineBorder(Color.white, 3));
 		//new DropTarget(jTextArea, DnDConstants.ACTION_COPY_OR_MOVE, new DropListener(), true);
 		jTextArea.setTransferHandler(new TextAreaTransferHandler("text"));
@@ -3740,6 +3813,47 @@ public class AozoraEpub3Applet extends JApplet
 		if (overWrite &&  outFile.exists()) {
 			int ret = JOptionPane.showConfirmDialog(this, "ファイルが存在します\n上書きしますか？\n(取り消しで変換キャンセル)", "上書き確認", JOptionPane.YES_NO_CANCEL_OPTION);
 			if (ret == JOptionPane.NO_OPTION) {
+		private static void applyJapaneseFontDefaults() {
+			try {
+				String os = System.getProperty("os.name").toLowerCase();
+				String[] candidates;
+				if (os.contains("windows")) {
+					candidates = new String[]{"Yu Gothic UI", "Meiryo", "Yu Gothic", "MS UI Gothic", "MS Gothic"};
+				} else if (os.contains("mac")) {
+					candidates = new String[]{"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro"};
+				} else {
+					candidates = new String[]{"Noto Sans CJK JP", "Noto Sans JP", "IPAGothic", "VL Gothic", "TakaoGothic"};
+				}
+
+				java.awt.GraphicsEnvironment ge = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment();
+				java.util.Set<String> available = new java.util.HashSet<>();
+				for (String name : ge.getAvailableFontFamilyNames()) {
+					available.add(name);
+				}
+
+				String chosen = null;
+				for (String c : candidates) {
+					if (available.contains(c)) { chosen = c; break; }
+				}
+				if (chosen == null) {
+					chosen = Font.DIALOG; // 論理フォントの fallback
+				}
+
+				UIDefaults defaults = UIManager.getLookAndFeelDefaults();
+				for (Object key : defaults.keySet()) {
+					if (key != null && key.toString().toLowerCase().endsWith("font")) {
+						Object val = UIManager.get(key);
+						if (val instanceof FontUIResource) {
+							FontUIResource f = (FontUIResource) val;
+							FontUIResource repl = new FontUIResource(chosen, Font.PLAIN, f.getSize());
+							UIManager.put(key, repl);
+						}
+					}
+				}
+			} catch (Throwable t) {
+				// フォント適用失敗時は黙って既定を使用
+			}
+		}
 				LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 				return;
 			} else if (ret == JOptionPane.CANCEL_OPTION) {
@@ -4668,20 +4782,30 @@ public class AozoraEpub3Applet extends JApplet
 			String lafName = UIManager.getSystemLookAndFeelClassName();
 			//lafName = "";
 			if (lafName.startsWith("com.sun.java.swing.plaf.windows.")) {
+				// WindowsではシステムLook&Feelを使用（日本語フォントが適切に設定される）
 				UIManager.setLookAndFeel(lafName);
 			} else {
-				//Windows以外はMetalのままでFontはPLAIN
+				// Windows以外はMetalのままでFontはPLAIN、論理フォント名を使用
 				UIDefaults defaultTable = UIManager.getLookAndFeelDefaults();
 				for (Object o: defaultTable.keySet()) {
 					if (o.toString().toLowerCase().endsWith("font")) {
 						FontUIResource font = (FontUIResource)UIManager.get(o);
-						font = new FontUIResource(font.getName(), Font.PLAIN, font.getSize());
+						// 日本語対応の論理フォント名（Dialog, DialogInput, SansSerif等）を使用
+						String fontName = font.getName();
+						// 不正なフォント名の場合は論理フォントに置き換え
+						if (fontName == null || fontName.equals("Default") || fontName.isEmpty()) {
+							fontName = Font.DIALOG;
+						}
+						font = new FontUIResource(fontName, Font.PLAIN, font.getSize());
 						UIManager.put(o, font);
 					}
 				}
 			}
 			
 		} catch(Exception e) { e.printStackTrace(); }
+
+		// 可能ならGUI全体のフォントを日本語対応フォントへ統一（再適用）
+		applyJapaneseFontDefaults();
 		
 		//フレーム初期化
 		final JFrame jFrame = new JFrame("AozoraEpub3");
@@ -4828,23 +4952,19 @@ public class AozoraEpub3Applet extends JApplet
 	/** 変換履歴格納用 最大255件 */
 	LinkedHashMap<String, BookInfoHistory> mapBookInfoHistory = new LinkedHashMap<String, BookInfoHistory>(){
 		private static final long serialVersionUID = 1L;
-		@SuppressWarnings("rawtypes")
-		protected boolean removeEldestEntry(Map.Entry eldest) { return size() > 256; }
 	};
-	
-	//以前の変換情報取得
-	BookInfoHistory getBookInfoHistory(BookInfo bookInfo)
-	{
-		String key = bookInfo.srcFile.getAbsolutePath();
-		if (bookInfo.textEntryName != null) key += "/"+bookInfo.textEntryName;
-		return mapBookInfoHistory.get(key);
-	}
-	
 	void setBookInfoHistory(BookInfo bookInfo)
 	{
 		String key = bookInfo.srcFile.getAbsolutePath();
 		if (bookInfo.textEntryName != null) key += "/"+bookInfo.textEntryName;
 		mapBookInfoHistory.put(key, new BookInfoHistory(bookInfo));
+	}
+
+	BookInfoHistory getBookInfoHistory(BookInfo bookInfo)
+	{
+		String key = bookInfo.srcFile.getAbsolutePath();
+		if (bookInfo.textEntryName != null) key += "/"+bookInfo.textEntryName;
+		return mapBookInfoHistory.get(key);
 	}
 	
 }

@@ -3,7 +3,7 @@ plugins {
     id 'application'
 }
 
-version = '1.2.0-jdk21'
+version = '1.2.1-jdk21'
 
 // Gradle Wrapper を生成するためのタスク
 wrapper {
@@ -83,10 +83,15 @@ sourceSets {
 }
 
 application {
-    // 【重要】ここを後で確認します
     // メインクラス（プログラムの開始地点）を指定します
-    mainClass = 'AozoraEpub3' 
+    // GUI が主体的に使用されるため AozoraEpub3Applet をメインに設定
+    mainClass = 'AozoraEpub3Applet'
 }
+
+// Thin-JAR版の配布タスク（distZip/distTar）を無効化
+// FAT-JAR版のみを配布するため
+distZip.enabled = false
+distTar.enabled = false
 
 java {
     toolchain {
@@ -105,7 +110,7 @@ jar {
         attributes(
             'Implementation-Title': 'AozoraEpub3',
             'Implementation-Version': project.version,
-            'Main-Class': 'AozoraEpub3'
+            'Main-Class': 'AozoraEpub3Applet'
         )
     }
     
@@ -132,8 +137,80 @@ jar {
     }
 }
 
-// 配布用の ZIP アーカイブを生成
-task zipDistribution(type: Zip, dependsOn: build) {
+// ランチャーバッチファイルを生成（Windows用）
+task createLauncher {
+    doLast {
+        def launcherBat = file('build/distributions/AozoraEpub3.bat')
+        launcherBat.text = '''@echo off
+rem AozoraEpub3 GUI Launcher for Windows
+rem This batch file launches AozoraEpub3.jar with javaw.exe
+
+setlocal
+
+rem Get the directory where this batch file is located
+set "SCRIPT_DIR=%~dp0"
+
+rem Check if java is available
+where javaw >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo Error: javaw.exe not found in PATH.
+    echo Please install Java 21 or later.
+    pause
+    exit /b 1
+)
+
+rem Launch AozoraEpub3.jar with javaw (no console window)
+start "" javaw -jar "%SCRIPT_DIR%AozoraEpub3.jar"
+
+endlocal
+'''
+        
+        // 日本語版ランチャー（Windows Shift_JIS）
+        def launcherBatJa = file('build/distributions/AozoraEpub3起動.bat')
+        def batContent = '@echo off\r\n' +
+            'rem AozoraEpub3 GUI' + 'ランチャー（Windows用）\r\n' +
+            'rem ' + 'このバッチファイルはjavaw.exe' + 'を使ってAozoraEpub3.jar' + 'を起動します\r\n\r\n' +
+            'setlocal\r\n\r\n' +
+            'rem ' + 'バッチファイルの場所を取得\r\n' +
+            'set "SCRIPT_DIR=%~dp0"\r\n\r\n' +
+            'rem Java' + 'が利用可能か確認\r\n' +
+            'where javaw >nul 2>&1\r\n' +
+            'if %ERRORLEVEL% neq 0 (\r\n' +
+            '    echo ' + 'エラー: javaw.exe' + 'がPATH' + 'に見つかりません。\r\n' +
+            '    echo Java 21' + '以降をインストールしてください。\r\n' +
+            '    pause\r\n' +
+            '    exit /b 1\r\n' +
+            ')\r\n\r\n' +
+            'rem AozoraEpub3.jar' + 'をjavaw' + 'で起動（コンソールなし）\r\n' +
+            'start "" javaw -jar "%SCRIPT_DIR%AozoraEpub3.jar"\r\n\r\n' +
+            'endlocal\r\n'
+        launcherBatJa.withWriter('Windows-31J') { writer ->
+            writer.write(batContent)  // Shift_JIS (Windows-31J)
+        }
+        
+        def launcherSh = file('build/distributions/AozoraEpub3.sh')
+        launcherSh.text = '''#!/bin/bash
+# AozoraEpub3 GUI Launcher for Unix/Linux/macOS
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if java is available
+if ! command -v java &> /dev/null; then
+    echo "Error: java not found in PATH."
+    echo "Please install Java 21 or later."
+    exit 1
+fi
+
+# Launch AozoraEpub3.jar
+java -jar "$SCRIPT_DIR/AozoraEpub3.jar"
+'''
+        launcherSh.executable = true
+    }
+}
+
+// 配布用の ZIP アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
+task zipDistribution(type: Zip, dependsOn: [build, createLauncher]) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
     destinationDirectory = file('build/distributions')
     preserveFileTimestamps = true
@@ -141,6 +218,9 @@ task zipDistribution(type: Zip, dependsOn: build) {
     
     from('build/libs') {
         include '*.jar'
+    }
+    from('build/distributions') {
+        include 'AozoraEpub3.bat', 'AozoraEpub3起動.bat', 'AozoraEpub3.sh'
     }
     from('.') {
         include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
@@ -166,8 +246,8 @@ task zipDistribution(type: Zip, dependsOn: build) {
     }
 }
 
-// 配布用の TAR アーカイブを生成
-task tarDistribution(type: Tar, dependsOn: build) {
+// 配布用の TAR アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
+task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
     destinationDirectory = file('build/distributions')
     compression = Compression.GZIP
@@ -176,6 +256,12 @@ task tarDistribution(type: Tar, dependsOn: build) {
     
     from('build/libs') {
         include '*.jar'
+    }
+    from('build/distributions') {
+        include 'AozoraEpub3.bat', 'AozoraEpub3起動.bat', 'AozoraEpub3.sh'
+        filePermissions {
+            unix(0755)  // Unix実行権限を設定
+        }
     }
     from('.') {
         include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'

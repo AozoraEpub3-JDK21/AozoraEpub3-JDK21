@@ -1,4 +1,42 @@
-# AozoraEpub3 JDK21対応 初期リリース
+# AozoraEpub3 リリースノート
+
+## バージョン: 1.2.1-jdk21
+
+**リリース日**: 2025年12月17日
+
+### 新機能
+
+- **GUI機能の復活**: オリジナルのhmdev版GUIをJDK21対応で復活
+  - `AozoraEpub3Applet.java`をメインクラスとして直接起動可能に
+  - ドラッグ&ドロップによるファイル指定
+  - 各種EPUB設定をGUIから簡単に変更可能
+
+- **Windows向けランチャーバッチファイル**:
+  - `AozoraEpub3起動.bat` (日本語版、Shift_JIS)
+  - `AozoraEpub3.bat` (英語版、ASCII)
+  - Windows 11の.jar ダブルクリック問題を回避
+  - javaw.exeを使用してコンソールなしで起動
+
+- **Unix/Linux/macOS向けシェルスクリプト**:
+  - `AozoraEpub3.sh` (実行権限付き)
+  - クロスプラットフォーム対応
+
+### 改善
+
+- FAT-JAR配布版に起動用バッチ/シェルスクリプトを同梱
+- GUI全体のフォントをOS別日本語フォントに統一（Windows: Yu Gothic UI/Meiryo優先）
+  - 英語OS環境でも日本語字形の違和感を軽減
+  - テキスト領域のフォントサイズを13ptに改善（可読性向上）
+- README.mdとDEVELOPMENT.mdにGUI起動方法、開発者向けビルド手順を詳細に記載
+- 配布はFAT版のみに統一（シンプルで配布しやすい構成）
+
+### 技術的変更
+
+- `AozoraEpub3Launcher.java`を削除し、アーキテクチャを簡素化
+- `application.mainClass`を`AozoraEpub3Applet`に変更
+- Gradleビルドにランチャー生成タスク (`createLauncher`) を追加
+
+---
 
 ## バージョン: 1.2.0-jdk21
 
