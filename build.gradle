@@ -3,7 +3,7 @@ plugins {
     id 'application'
 }
 
-version = '1.1.0b46'
+version = '1.2.0-jdk21'
 
 // Gradle Wrapper を生成するためのタスク
 wrapper {
