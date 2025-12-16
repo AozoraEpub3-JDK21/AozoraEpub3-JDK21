@@ -45,11 +45,39 @@
 
 ## インストール
 
-1. `AozoraEpub3-*.zip` を任意のフォルダに解凍します。
-2. `AozoraEpub3.jar` をダブルクリックまたは以下のコマンドで実行します：
+### 方法 1: リリース版をダウンロード（推奨）
+
+最新版は [GitHub Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) から取得できます。
+
+**Windows・一般向け:**
+```
+AozoraEpub3-1.2.0-jdk21.zip
+```
+
+**Linux・macOS向け:**
+```
+AozoraEpub3-1.2.0-jdk21.tar
+```
+
+### インストール手順
+
+1. 上記リンクからお使いのOS向けファイルをダウンロード
+2. ファイルを任意のフォルダに解凍
+3. `AozoraEpub3.jar` をダブルクリック、または以下のコマンドで実行：
    ```bash
    java -jar AozoraEpub3.jar
    ```
+
+### 方法 2: ソースからビルド
+
+開発版の場合は以下の手順でビルドしてください：
+
+```bash
+git clone https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21.git
+cd AozoraEpub3-JDK21
+./gradlew distZip  # または distTar
+# build/distributions/ に zip/tar が生成されます
+```
 
 ---
 
