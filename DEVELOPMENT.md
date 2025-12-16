@@ -9,58 +9,46 @@ AozoraEpub3 の開発に参加するための情報をまとめています。
 このドキュメントは以下を対象としています：
 - プロジェクト構造を理解したい方
 - バグ修正・機能追加をしたい方
-## ビルド・テスト
-### 開発環境セットアップ
-1. JDK 21 をインストール（Temurin 推奨）
-2. リポジトリを clone
-3. Gradle Wrapper を使用してビルド
+
 利用者向けのドキュメントは [README.md](README.md) を参照してください。
 
 ---
 
-```bash
-./gradlew test
-./gradlew build
+## 開発環境セットアップ
+
+1. JDK 21 をインストール（Temurin 推奨）
+2. リポジトリを clone
+3. Gradle Wrapper を使用してビルド・テスト
+
+---
+
+## プロジェクト構造
+
 ```
+AozoraEpub3/
 ├── src/                           # Java ソースコード
 │   ├── AozoraEpub3.java          # CLIエントリーポイント
-### 配布物の生成（FAT版のみ）
-FAT 版（依存関係込み単一JAR）のみ公式配布します。Windows は ZIP、Unix/Linux/macOS は TAR.GZ を生成します。
+│   ├── AozoraEpub3Applet.java    # GUI エントリーポイント（Swing）
 │   └── com/github/hmdev/         # 主要なロジック
 │       ├── config/               # 設定・解析（INI、プリセット）
 │       ├── epub/                 # EPUB生成・検証
 │       ├── image/                # 画像処理
-```bash
-./gradlew zipDistribution
-./gradlew tarDistribution
-```
+│       └── ...
 ├── test/                          # Javaテストコード
 │   └── com/github/hmdev/         # テスト（JUnit 4）
-### GUIフォントの扱い（開発者向けメモ）
-- 英語OS環境では論理フォント `Dialog` が CJK汎用フォントにマップされ、日本語字形に違和感が出る場合があります。
-- 本プロジェクトでは OS 別に日本語フォント候補を検出して UI 全体へ適用します。
-   - Windows: Yu Gothic UI → Meiryo → Yu Gothic → MS UI Gothic → MS Gothic
-   - macOS: Hiragino Sans → Hiragino Kaku Gothic ProN → Hiragino Kaku Gothic Pro
-   - Linux: Noto Sans CJK JP → Noto Sans JP → IPAGothic → VL Gothic → TakaoGothic
-- 個別コンポーネントは `getPreferredJapaneseFontName()` を利用して明示指定可能です（例: `JTextArea`）。
-
-### Velocityテンプレートの注意点
-- テンプレートパスは `template/` を基準に相対指定。テストでは FileResourceLoader で `template/` を指す設定にすること。
-- プレースホルダは複雑化させず、ビジネスロジックは Java 側で解決してから値を渡す。
-
-### Windows配布時の起動
-- `.jar` ダブルクリックが動かないケースがあるため、FAT版 ZIP に `AozoraEpub3起動.bat` を同梱。
-   - `javaw.exe` を用いてコンソール無しで起動。
-│   ├── OPS/
-│   │   ├── package.vm            # package.opf テンプレート
-│   │   ├── toc.ncx.vm            # NCX (目次) テンプレート
-│   │   ├── css/                  # CSSテンプレート（VelocityでINI値を反映）
-│   │   └── xhtml/                # XHTML テンプレート
-│   └── META-INF/
-│       └── container.xml         # EPUB容器定義
+├── template/                      # Velocity テンプレート
+│   ├── mimetype                  # EPUB mimetype ファイル
+│   ├── META-INF/
+│   │   └── container.xml         # EPUB容器定義
+│   └── OPS/
+│       ├── package.vm            # package.opf テンプレート
+│       ├── toc.ncx.vm            # NCX (目次) テンプレート
+│       ├── css/                  # CSSテンプレート（VelocityでINI値を反映）
+│       └── xhtml/                # XHTML テンプレート
 ├── test_data/                     # テスト用テキストファイル
 ├── presets/                       # デバイスプリセット（INI）
 ├── web/                           # Web小説サイト定義
+├── gaiji/                         # 外字変換スクリプト
 ├── .github/
 │   ├── copilot-instructions.md   # Copilot指針（このプロジェクト特有）
 │   └── workflows/                # GitHub Actions CI/CD
@@ -82,8 +70,8 @@ FAT 版（依存関係込み単一JAR）のみ公式配布します。Windows �
 
 ### 主要ライブラリ（抜粋）
 - **Apache Velocity 2.4.1**: テンプレートエンジン（EPUB生成）
-- **JSoup 1.18.1**: HTML解析
-- **Apache Commons**: CLI, Collections, Compress, Lang3
+- **JSoup 1.18.3**: HTML解析
+- **Apache Commons**: CLI 1.9.0, Collections 4.5.0-M2, Compress 1.27.1, Lang3 3.18.0
 - **Junrar 7.5.5**: RAR解凍
 - **Apache Batik 1.18**: 画像トランスコーディング（JAI代替）
 - **SLF4J 2.0.16**: ロギング
@@ -97,20 +85,28 @@ FAT 版（依存関係込み単一JAR）のみ公式配布します。Windows �
 
 ## ビルド・テスト
 
-### ビルド
+### コンパイル・JAR生成
 
 ```bash
 # JARファイル生成（src/のコンパイル）
-./gradlew jar
+./gradlew build
 
-# 配布パッケージ生成（ZIP/TAR.GZ）
-./gradlew distZip  # または distTar
-
-# クリーン（build/ディレクトリ削除）
-./gradlew clean
+# または、リビルド（クリーン後にビルド）
+./gradlew clean build
 ```
 
-生成物は `build/libs/` に出力されます。
+### 配布物の生成（FAT版のみ）
+
+FAT版（依存関係込み単一JAR）のみ公式配布します。Windows は ZIP、Unix/Linux/macOS は TAR.GZ を生成します。
+
+```bash
+# FAT-JAR + ランチャースクリプト + リソース を パッケージ化
+./gradlew zipDistribution      # Windows向け ZIP
+
+./gradlew tarDistribution      # Unix/Linux/macOS向け TAR.GZ
+```
+
+生成物は `build/distributions/` に出力されます。
 
 ### テスト実行
 
@@ -126,6 +122,47 @@ FAT 版（依存関係込み単一JAR）のみ公式配布します。Windows �
 ```
 
 テスト結果は `build/reports/tests/test/index.html` に出力されます。
+
+### GUIフォントの扱い（開発者向けメモ）
+
+英語OS環境では論理フォント `Dialog` が CJK汎用フォントにマップされ、日本語字形に違和感が出る場合があります。本プロジェクトでは OS別に日本語フォント候補を検出して UI全体へ適用します。
+
+**対応するフォント候補（優先度順）:**
+- **Windows**: Yu Gothic UI → Meiryo → Yu Gothic → MS UI Gothic → MS Gothic
+- **macOS**: Hiragino Sans → Hiragino Kaku Gothic ProN → Hiragino Kaku Gothic Pro
+- **Linux**: Noto Sans CJK JP → Noto Sans JP → IPAGothic → VL Gothic → TakaoGothic
+
+**実装詳細:**
+
+[AozoraEpub3Applet.java](src/AozoraEpub3Applet.java) の以下メソッドを参照：
+
+```java
+// UIManager全体に日本語フォント適用
+private void applyJapaneseFontDefaults()
+
+// 個別コンポーネント用に推奨フォント取得
+private String getPreferredJapaneseFontName()
+```
+
+個別コンポーネントは `getPreferredJapaneseFontName()` を利用して明示指定可能です：
+
+```java
+JTextArea area = new JTextArea();
+area.setFont(new Font(getPreferredJapaneseFontName(), Font.PLAIN, 13));
+```
+
+### Velocityテンプレートの注意点
+
+- テンプレートパスは `template/` を基準に相対指定
+- テストでは FileResourceLoader で `template/` を指す設定にすること
+- プレースホルダは複雑化させず、ビジネスロジックは Java側で解決してから値を渡す
+- `VelocityEngine` 注入により、テスト容易性とカスタマイズ性を確保
+
+### Windows 配布時の起動
+
+- `.jar` ダブルクリックが動作しないケースがあるため、FAT版 ZIP に `AozoraEpub3起動.bat` を同梱
+- `javaw.exe` を用いてコンソール無しで起動
+- Shift_JIS エンコーディング対応で日本語パスにも対応
 
 ### EPUB検証（開発者向け）
 
