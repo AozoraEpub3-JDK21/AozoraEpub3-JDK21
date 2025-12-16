@@ -47,3 +47,13 @@ kindlegen.exe
 
 ## テストデータ
 test_results/
+
+## 個人情報・機密情報
+*.key
+*.pem
+*.p12
+*.jks
+secrets/
+credentials/
+.env
+.env.local

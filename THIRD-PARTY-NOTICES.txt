@@ -12,10 +12,10 @@ distribution.
 ================================================================================
 
 1. Apache Commons Libraries
-   - commons-cli 1.6.0
-   - commons-collections4 4.4
-   - commons-compress 1.26.0
-   - commons-lang3 3.14.0
+   - commons-cli 1.7.0
+   - commons-collections4 4.5.0
+   - commons-compress 1.27.1
+   - commons-lang3 3.15.0
    
    Copyright: The Apache Software Foundation
    License: Apache License 2.0
@@ -25,7 +25,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 2. Apache Velocity
-   - velocity-engine-core 2.3
+   - velocity-engine-core 2.4.1
    
    Copyright: 2000-2007 The Apache Software Foundation
    License: Apache License 2.0
@@ -35,7 +35,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 3. Apache Batik
-   - batik-transcoder 1.17 (and dependencies)
+   - batik-transcoder 1.18 (and dependencies)
    
    Copyright: 2025 The Apache Software Foundation
    License: Apache License 2.0
@@ -45,7 +45,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 4. jsoup
-   - jsoup 1.17.2
+   - jsoup 1.18.1
    
    Copyright: 2009-2025 Jonathan Hedley
    License: MIT License
@@ -55,8 +55,8 @@ distribution.
 --------------------------------------------------------------------------------
 
 5. SLF4J (Simple Logging Facade for Java)
-   - slf4j-api 2.0.9
-   - slf4j-simple 2.0.9
+   - slf4j-api 2.0.16
+   - slf4j-simple 2.0.16
    
    Copyright: 2004-2025 QOS.ch
    License: MIT License
