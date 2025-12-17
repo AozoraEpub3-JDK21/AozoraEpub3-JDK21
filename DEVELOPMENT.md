@@ -78,7 +78,7 @@ AozoraEpub3/
 
 ### CI/CD
 - **GitHub Actions**: ビルド、テスト、EPUB生成・検証の自動化
-- **epubcheck 5.2.0**: EPUB 3 仕様検証（同梱しない。必要時はダウンロード）
+- **epubcheck 5.3.0**: EPUB 3.3 仕様検証（同梱しない。必要時はダウンロード）
 - **xmllint**: XML形式検証
 
 ---
@@ -175,8 +175,8 @@ area.setFont(new Font(getPreferredJapaneseFontName(), Font.PLAIN, 13));
 # サンプルEPUB生成と検証（ネット接続必要）
 ./gradlew clean generateLocalSamples epubcheck -PepubDir=build/epub_local
 
-# 既に epubcheck-5.2.0 をダウンロード済みの場合（例: build/tools 配下）
-./gradlew epubcheck -PepubDir=build/epub_local -PepubcheckJar=build/tools/epubcheck-5.2.0/epubcheck.jar
+# 既に epubcheck-5.3.0 をダウンロード済みの場合（例: build/tools 配下）
+./gradlew epubcheck -PepubDir=build/epub_local -PepubcheckJar=build/tools/epubcheck-5.3.0/epubcheck.jar
 ```
 
 取得方法（参考）:
@@ -184,8 +184,8 @@ area.setFont(new Font(getPreferredJapaneseFontName(), Font.PLAIN, 13));
 ```bash
 mkdir -p build/tools
 cd build/tools
-curl -L -o epubcheck-5.2.0.zip https://github.com/w3c/epubcheck/releases/download/v5.2.0/epubcheck-5.2.0.zip
-unzip epubcheck-5.2.0.zip
+curl -L -o epubcheck-5.3.0.zip https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
+unzip epubcheck-5.3.0.zip
 ```
 
 ---

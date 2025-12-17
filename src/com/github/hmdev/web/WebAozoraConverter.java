@@ -31,6 +31,9 @@ import org.jsoup.select.Elements;
 import com.github.hmdev.util.CharUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.web.ExtractInfo.ExtractId;
+import com.github.hmdev.web.api.NarouApiClient;
+import com.github.hmdev.web.api.exception.ApiException;
+import com.github.hmdev.web.api.model.NovelMetadata;
 
 /** HTMLを青空txtに変換 */
 public class WebAozoraConverter
@@ -81,6 +84,15 @@ public class WebAozoraConverter
 	boolean canceled = false;
 	//更新有りフラグ
 	boolean updated = false;
+	
+	////////////////////////////////
+	// なろうAPI関連
+	/** なろうAPI使用フラグ */
+	private boolean useApi = false;
+	/** API失敗時のHTMLフォールバック有効フラグ */
+	private boolean apiFallbackEnabled = true;
+	/** なろうAPIクライアント */
+	private NarouApiClient apiClient = null;
 	
 	////////////////////////////////////////////////////////////////
 	/** fqdnに対応したインスタンスを生成してキャッシュして変換実行 */
@@ -184,6 +196,113 @@ public class WebAozoraConverter
 	}
 	
 	////////////////////////////////////////////////////////////////
+	// なろうAPI関連メソッド
+	
+	/**
+	 * なろうAPI使用を設定
+	 * @param useApi API使用フラグ
+	 */
+	public void setUseApi(boolean useApi) {
+		this.useApi = useApi;
+		if (useApi && apiClient == null) {
+			apiClient = new NarouApiClient();
+			LogAppender.println("なろうAPI: 有効化");
+		}
+	}
+	
+	/**
+	 * APIフォールバック設定
+	 * @param enabled フォールバック有効フラグ
+	 */
+	public void setApiFallbackEnabled(boolean enabled) {
+		this.apiFallbackEnabled = enabled;
+	}
+	
+	/**
+	 * URLからNコードを抽出
+	 * 例: https://ncode.syosetu.com/n0001a/ → n0001a
+	 * @param url 作品URL
+	 * @return Nコード (小文字)、抽出できない場合はnull
+	 */
+	private String extractNcode(String url) {
+		if (url == null || !url.contains("syosetu.com")) {
+			return null;
+		}
+		// ncode.syosetu.com/n1234ab/ または /n1234ab/123/ のパターン
+		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(".*/([nN]\\d{4}[a-zA-Z]+)/?.*");
+		java.util.regex.Matcher matcher = pattern.matcher(url);
+		if (matcher.matches()) {
+			return matcher.group(1).toLowerCase();
+		}
+		return null;
+	}
+	
+	/**
+	 * APIからメタデータを取得してキャッシュ
+	 * @param ncode Nコード
+	 * @param cachePath キャッシュディレクトリ
+	 * @return NovelMetadata 取得成功時、nullは失敗
+	 */
+	private NovelMetadata fetchAndCacheMetadata(String ncode, File cachePath) {
+		if (apiClient == null) return null;
+		
+		try {
+			LogAppender.println("なろうAPI: メタデータ取得中... " + ncode);
+			NovelMetadata metadata = apiClient.getNovelMetadata(ncode);
+			
+			// メタデータをキャッシュに保存
+			File metadataFile = new File(cachePath, "metadata.json");
+			saveMetadataToCache(metadata, metadataFile);
+			
+			LogAppender.println("なろうAPI: 取得成功 - " + metadata.getTitle());
+			return metadata;
+			
+		} catch (ApiException e) {
+			LogAppender.println("なろうAPI: エラー - " + e.getMessage());
+			return null;
+		}
+	}
+	
+	/**
+	 * メタデータをJSONファイルとして保存
+	 */
+	private void saveMetadataToCache(NovelMetadata metadata, File file) {
+		try (BufferedWriter writer = new BufferedWriter(
+			new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
+			
+			// 簡易JSON形式で保存
+			writer.write("{\n");
+			writer.write("  \"ncode\": \"" + escapeJson(metadata.getNcode()) + "\",\n");
+			writer.write("  \"title\": \"" + escapeJson(metadata.getTitle()) + "\",\n");
+			writer.write("  \"writer\": \"" + escapeJson(metadata.getWriter()) + "\",\n");
+			writer.write("  \"story\": \"" + escapeJson(metadata.getStory()) + "\",\n");
+			writer.write("  \"general_all_no\": " + metadata.getGeneralAllNo() + ",\n");
+			writer.write("  \"length\": " + metadata.getLength() + ",\n");
+			writer.write("  \"novel_type\": " + metadata.getNovelType() + ",\n");
+			writer.write("  \"end\": " + metadata.getEnd() + ",\n");
+			writer.write("  \"global_point\": " + metadata.getGlobalPoint() + ",\n");
+			writer.write("  \"fav_novel_cnt\": " + metadata.getFavNovelCnt() + ",\n");
+			writer.write("  \"timestamp\": " + System.currentTimeMillis() + "\n");
+			writer.write("}\n");
+			
+		} catch (IOException e) {
+			LogAppender.println("メタデータキャッシュ保存エラー: " + e.getMessage());
+		}
+	}
+	
+	/**
+	 * JSON用文字列エスケープ
+	 */
+	private String escapeJson(String str) {
+		if (str == null) return "";
+		return str.replace("\\", "\\\\")
+				  .replace("\"", "\\\"")
+				  .replace("\n", "\\n")
+				  .replace("\r", "\\r")
+				  .replace("\t", "\\t");
+	}
+	
+	////////////////////////////////////////////////////////////////
 	/** 変換実行
 	 * @param urlString
 	 * @param cachePath
@@ -268,6 +387,24 @@ public class WebAozoraConverter
 			
 			//urlStringのファイルをキャッシュ
 			File cacheFile = new File(cachePath.getAbsolutePath()+"/"+urlFilePath);
+			
+			// なろうAPI処理: メタデータ取得を試行
+			NovelMetadata apiMetadata = null;
+			if (useApi) {
+				String ncode = extractNcode(urlString);
+				if (ncode != null) {
+					LogAppender.println("なろうAPI: Nコード検出 - " + ncode);
+					apiMetadata = fetchAndCacheMetadata(ncode, parentFile);
+					
+					if (apiMetadata == null && !apiFallbackEnabled) {
+						LogAppender.println("なろうAPI: 取得失敗（フォールバック無効）");
+						return null;
+					}
+				} else {
+					LogAppender.println("なろうAPI: Nコード未検出、HTML取得を継続");
+				}
+			}
+			
 			try {
 				LogAppender.append(urlString);
 				cacheFile(urlString, cacheFile, null);

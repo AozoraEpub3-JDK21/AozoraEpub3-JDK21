@@ -335,7 +335,7 @@ defaultTasks 'validate'
 // Local epubcheck integration
 // ============================
 ext {
-    epubcheckVersion = '5.2.0'
+    epubcheckVersion = '5.3.0'
     epubcheckBaseUrl = "https://github.com/w3c/epubcheck/releases/download/v${epubcheckVersion}/epubcheck-${epubcheckVersion}.zip"
     epubcheckToolsDir = file('build/tools')
     epubcheckDir = file("${epubcheckToolsDir}/epubcheck-${epubcheckVersion}")
