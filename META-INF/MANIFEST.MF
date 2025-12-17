@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Implementation-Title: AozoraEpub3
+Implementation-Version: 1.2.0-jdk21
+Main-Class: AozoraEpub3Applet
+

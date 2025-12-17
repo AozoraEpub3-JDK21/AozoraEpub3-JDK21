@@ -46,11 +46,11 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Vector;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
@@ -401,6 +401,11 @@ public class AozoraEpub3Applet extends JApplet
 	JCheckBox jCheckWebModifiedOnly;
 	JCheckBox jCheckWebModifiedTail;
 	JTextField jTextWebModifiedExpire;
+	
+	//なろうAPI
+	JCheckBox jCheckUseNarouApi;
+	JCheckBox jCheckApiFallback;
+	JLabel jLabelApiStatus;
 	
 	//テキストエリア
 	//JScrollPane jScrollPane;
@@ -2171,6 +2176,43 @@ public class AozoraEpub3Applet extends JApplet
 		label.setBorder(padding1);
 		panel.add(label);
 		
+		////////////////////////////////
+		//なろうAPI設定
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setBorder(new NarrowTitledBorder("なろうAPI設定"));
+		tabPanel.add(panel);
+		
+		jCheckUseNarouApi = new JCheckBox("なろうAPI使用");
+		jCheckUseNarouApi.setToolTipText("小説家になろう公式APIを使用します。メタデータ取得が高速化され、レート制限が緩和されます");
+		jCheckUseNarouApi.setFocusPainted(false);
+		jCheckUseNarouApi.setBorder(padding2);
+		jCheckUseNarouApi.setSelected(true); // デフォルトON
+		jCheckUseNarouApi.addChangeListener(e -> {
+			// API無効時はフォールバックも無効化
+			if (!jCheckUseNarouApi.isSelected()) {
+				jCheckApiFallback.setSelected(false);
+			}
+			jCheckApiFallback.setEnabled(jCheckUseNarouApi.isSelected());
+			updateApiStatusLabel();
+		});
+		panel.add(jCheckUseNarouApi);
+		
+		jCheckApiFallback = new JCheckBox("API失敗時HTML取得");
+		jCheckApiFallback.setToolTipText("API取得失敗時に従来のHTML取得にフォールバックします");
+		jCheckApiFallback.setFocusPainted(false);
+		jCheckApiFallback.setBorder(padding2);
+		jCheckApiFallback.setSelected(true); // デフォルトON
+		panel.add(jCheckApiFallback);
+		
+		panel.add(Box.createHorizontalGlue());
+		
+		jLabelApiStatus = new JLabel("API未使用");
+		jLabelApiStatus.setForeground(Color.GRAY);
+		jLabelApiStatus.setBorder(padding2);
+		panel.add(jLabelApiStatus);
+		
+		////////////////////////////////
 		//キャッシュ保存先
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
@@ -3993,6 +4035,10 @@ public class AozoraEpub3Applet extends JApplet
 					continue;
 				}
 				
+				// なろうAPI設定を反映
+				webConverter.setUseApi(jCheckUseNarouApi.isSelected());
+				webConverter.setApiFallbackEnabled(jCheckApiFallback.isSelected());
+				
 				int interval = 500;
 				try { interval = (int)(Float.parseFloat(jTextWebInterval.getText())*1000); } catch (Exception e) {}
 				int beforeChapter = 0;
@@ -4082,6 +4128,20 @@ public class AozoraEpub3Applet extends JApplet
 		} catch (IOException e) {
 		}
 		return false;
+	}
+	
+	/** なろうAPIステータスラベル更新 */
+	private void updateApiStatusLabel()
+	{
+		if (jCheckUseNarouApi != null && jLabelApiStatus != null) {
+			if (jCheckUseNarouApi.isSelected()) {
+				jLabelApiStatus.setText("API有効");
+				jLabelApiStatus.setForeground(new Color(0, 128, 0)); // 緑
+			} else {
+				jLabelApiStatus.setText("API無効");
+				jLabelApiStatus.setForeground(Color.GRAY);
+			}
+		}
 	}
 	////////////////////////////////////////////////////////////////
 	/** 別スレッド実行用SwingWorkerを実行
@@ -4610,6 +4670,11 @@ public class AozoraEpub3Applet extends JApplet
 		setPropsSelected(jCheckWebModifiedTail, props, "WebModifiedTail");
 		setPropsSelected(jCheckWebBeforeChapter, props, "WebBeforeChapter");
 		setPropsIntText(jTextWebBeforeChapterCount, props, "WebBeforeChapterCount");
+		
+		//なろうAPI
+		setPropsSelected(jCheckUseNarouApi, props, "UseNarouApi");
+		setPropsSelected(jCheckApiFallback, props, "ApiFallback");
+		updateApiStatusLabel();
 	}
 	
 	/** アプレットの設定状態をpropsに保存 */
@@ -4764,6 +4829,10 @@ public class AozoraEpub3Applet extends JApplet
 		props.setProperty("WebBeforeChapter", this.jCheckWebBeforeChapter.isSelected()?"1":"");
 		props.setProperty("WebBeforeChapterCount", this.jTextWebBeforeChapterCount.getText());
 		
+		//なろうAPI
+		props.setProperty("UseNarouApi", this.jCheckUseNarouApi.isSelected()?"1":"");
+		props.setProperty("ApiFallback", this.jCheckApiFallback.isSelected()?"1":"");
+		
 		//確認ダイアログの元画像を残す
 		props.setProperty("ReplaceCover", this.jConfirmDialog.jCheckReplaceCover.isSelected()?"1":"");
 		
@@ -4777,6 +4846,12 @@ public class AozoraEpub3Applet extends JApplet
 	/** Jar実行用 */
 	public static void main(String args[])
 	{
+		// コマンドライン引数がある場合はCLIモード(AozoraEpub3)を起動
+		if (args != null && args.length > 0) {
+			AozoraEpub3.main(args);
+			return;
+		}
+		
 		//LookAndFeel変更
 		try {
 			String lafName = UIManager.getSystemLookAndFeelClassName();
