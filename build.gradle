@@ -140,6 +140,10 @@ jar {
 // ランチャーバッチファイルを生成（Windows用）
 task createLauncher {
     doLast {
+        // ディレクトリが存在しない場合は作成
+        def distDir = file('build/distributions')
+        distDir.mkdirs()
+        
         def launcherBat = file('build/distributions/AozoraEpub3.bat')
         launcherBat.text = '''@echo off
 rem AozoraEpub3 GUI Launcher for Windows
