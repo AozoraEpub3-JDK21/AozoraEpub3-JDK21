@@ -46,7 +46,6 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Vector;
 
@@ -4847,6 +4846,12 @@ public class AozoraEpub3Applet extends JApplet
 	/** Jar実行用 */
 	public static void main(String args[])
 	{
+		// コマンドライン引数がある場合はCLIモード(AozoraEpub3)を起動
+		if (args != null && args.length > 0) {
+			AozoraEpub3.main(args);
+			return;
+		}
+		
 		//LookAndFeel変更
 		try {
 			String lafName = UIManager.getSystemLookAndFeelClassName();
