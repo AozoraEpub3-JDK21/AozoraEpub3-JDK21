@@ -2189,15 +2189,13 @@ public class AozoraEpub3Applet extends JApplet
 		jCheckUseNarouApi.setFocusPainted(false);
 		jCheckUseNarouApi.setBorder(padding2);
 		jCheckUseNarouApi.setSelected(true); // デフォルトON
-		jCheckUseNarouApi.addChangeListener(new ChangeListener() {
-			public void stateChanged(ChangeEvent e) {
-				// API無効時はフォールバックも無効化
-				if (!jCheckUseNarouApi.isSelected()) {
-					jCheckApiFallback.setSelected(false);
-				}
-				jCheckApiFallback.setEnabled(jCheckUseNarouApi.isSelected());
-				updateApiStatusLabel();
+		jCheckUseNarouApi.addChangeListener(e -> {
+			// API無効時はフォールバックも無効化
+			if (!jCheckUseNarouApi.isSelected()) {
+				jCheckApiFallback.setSelected(false);
 			}
+			jCheckApiFallback.setEnabled(jCheckUseNarouApi.isSelected());
+			updateApiStatusLabel();
 		});
 		panel.add(jCheckUseNarouApi);
 		
