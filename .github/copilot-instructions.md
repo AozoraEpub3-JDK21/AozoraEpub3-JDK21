@@ -17,10 +17,30 @@ These instructions tailor Copilot to this repository so it can generate correct,
 - Distribution scripts: `build/scripts/`
 
 ## Build & Run
-- Build & test: `./gradlew test` (Windows: `gradlew.bat test`)
-- Build fat jar: `./gradlew jar` (dist: `./gradlew distZip`)
+
+### Important: Build Tasks (混乱防止)
+プロジェクトはカスタムビルドタスクを使用しています：
+
+1. **FAT JAR作成** (単一実行可能JAR)
+   - コマンド: `./gradlew jar` (Windows: `gradlew.bat jar`)
+   - 出力: `build/libs/AozoraEpub3.jar`
+   - 用途: すべての依存関係を含む単一JAR
+
+2. **配布パッケージ作成** (ZIP/TAR)
+   - コマンド: `./gradlew dist` (Windows: `gradlew.bat dist`)
+   - 出力: 
+     - `build/distributions/AozoraEpub3-<version>.zip`
+     - `build/distributions/AozoraEpub3-<version>.tar.gz`
+   - 内容: JAR + ランチャースクリプト + ドキュメント + テンプレート
+   - 注意: `distZip`は無効化済み。`dist`を使用すること
+
+3. **テスト実行**
+   - コマンド: `./gradlew test` (Windows: `gradlew.bat test`)
+
+### 実行方法
 - Run CLI: `java -jar build/libs/AozoraEpub3.jar [options] input.txt`
 - Sample conversion (UTF-8): `java -jar build/libs/AozoraEpub3.jar -of -d out input.txt`
+- GUI起動: 引数なしで実行 `java -jar build/libs/AozoraEpub3.jar`
 
 ## CI & Validation
 - GitHub Actions workflow builds, runs tests, generates sample EPUBs, and runs `epubcheck`.
