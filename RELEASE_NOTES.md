@@ -1,5 +1,43 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.2-jdk21
+
+**リリース日**: 2025年12月17日
+
+### 新機能
+
+- **EPUB 3.3 対応**: EPUBCheck 5.3.0にアップグレード
+  - EPUB 3.3仕様準拠（W3C Recommendation 2025年3月27日）
+  - 後方互換性維持（EPUB 3.2と同じpackage version="3.0"属性を使用）
+
+### バグ修正
+
+- **CLIモード引数バグ修正**: コマンドライン引数を指定した際にGUIが起動する問題を修正
+  - `MANIFEST.MF`のMain-Classを`AozoraEpub3`に変更
+  - `AozoraEpub3Applet.main()`に引数チェックを追加し、引数がある場合は`AozoraEpub3.main()`に委譲
+
+### 改善
+
+- **ビルドプロセス改善**: 配布タスクの信頼性向上
+  - `createLauncher`タスクでdistributionsディレクトリを自動作成
+  - copilot-instructions.mdにビルドタスク詳細を文書化（jar/dist/distZip の違いを明記）
+
+### 技術的変更
+
+- EPUBCheck: 5.2.0 → 5.3.0
+- バージョン表記を1.2.2に統一（`build.gradle`, `AozoraEpub3.java`, `AozoraEpub3Applet.java`）
+
+### 検証結果
+
+```
+EPUBCheck 5.3.0
+Validating using EPUB 3.3 rules.
+No errors or warnings detected.
+Messages: 0 fatals / 0 errors / 0 warnings / 0 infos
+```
+
+---
+
 ## バージョン: 1.2.1-jdk21
 
 **リリース日**: 2025年12月17日
