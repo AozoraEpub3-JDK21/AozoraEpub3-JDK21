@@ -6,6 +6,7 @@ description: 青空文庫対応 EPUB3 変換ツール：セットアップ & ス
 url: "https://aozoraepub3-jdk21.github.io"
 baseurl: "/AozoraEpub3-JDK21"
 lang: ja
+google_site_verification: tds69JTvGd_azZ-92Tnej_sFgaO0U8LUQ1c6f8xI76w
 
 # Jekyll theme
 theme: jekyll-theme-slate
