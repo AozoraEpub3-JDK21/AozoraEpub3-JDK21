@@ -265,7 +265,7 @@ INI設定ファイルの値（`font_size`, `line_height` など）は Velocity �
 
 ---
 
-## EPUB 3.2 仕様への対応
+## EPUB 3.3 準拠（EPUB 3.2後方互換）への対応
 
 ### 検証項目（CI で自動化）
 
@@ -474,7 +474,7 @@ GitHub Issues で以下の情報を提供してください：
 - [AozoraEpub3 GitHub](https://github.com/Harusame64/AozoraEpub3-JDK21)
 - [オリジナルプロジェクト](https://github.com/hmdev/AozoraEpub3)
 - [青空文庫](https://www.aozora.gr.jp/)
-- [EPUB 3.2 仕様](https://www.w3.org/publishing/epub32/)
+- [EPUB 3.3 仕様](https://www.w3.org/TR/epub-33/)
 - [epubcheck](https://github.com/w3c/epubcheck)
 
 ---

@@ -28,7 +28,7 @@
 
 ## 特徴
 
-- 青空文庫テキスト（txt/zip）を EPUB 3.2 に変換
+ - 青空文庫テキスト（txt/zip）を EPUB 3.3 準拠（EPUB 3.2後方互換）で変換
 - Web小説サイトのHTMLから青空文庫形式テキストを取得して変換
 - 画像zip/rarを EPUB 3 に変換
 - 縦書き・横書きに対応
@@ -168,7 +168,7 @@ Web小説サイト（ニコニコ小説、小説家になろう など）のURL�
 
 | 拡張子 | 対応デバイス | 説明 |
 |--------|------------|------|
-| `.epub` | 標準 | 標準的な EPUB 3.2 形式 |
+| `.epub` | 標準 | 標準的な EPUB 3.3 準拠形式（EPUB 3.2後方互換） |
 | `.kepub.epub` | Kobo | Kobo向け拡張形式 |
 | `.fxl.kepub.epub` | Kobo | Kobo固定レイアウト用 |
 | `.mobi` | Kindle | Kindle形式（kindlegenjの別途インストール必要） |
