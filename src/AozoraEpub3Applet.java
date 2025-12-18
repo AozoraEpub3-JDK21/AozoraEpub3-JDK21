@@ -212,6 +212,9 @@ public class AozoraEpub3Applet extends JApplet
 	/** 端末プリセット読み込み */
 	JButton jButtonPreset;
 	JPopupMenu jPopupPreset;
+	/** 言語切替 */
+	JButton jButtonLanguage;
+	JPopupMenu jPopupLanguage;
 	
 	/** 表題 */
 	JComboBox<String> jComboTitle;
@@ -684,13 +687,59 @@ public class AozoraEpub3Applet extends JApplet
 			}
 		}
 		jButtonPreset = new JButton("端末設定", new ImageIcon(AozoraEpub3Applet.class.getResource("images/viewer.png")));
-		jButtonPreset.setToolTipText("端末に合わせた画面サイズと機種依存の最低限の設定を反映します");
+		jButtonPreset.setToolTipText(I18n.t("ui.tooltip.preset"));
 		jButtonPreset.setBorder(padding3);
 		jButtonPreset.setFocusPainted(false);
 		jButtonPreset.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent arg0) {
 			jPopupPreset.show(jButtonPreset, 8, 20);
 		}});
 		panel.add(jButtonPreset);
+
+		// 言語切替メニュー
+		jPopupLanguage = new JPopupMenu();
+		JMenuItem langJa = new JMenuItem(I18n.t("ui.language.ja"));
+		langJa.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			props.setProperty("UILang", "ja");
+			// 設定ファイル更新
+			try {
+				try (FileOutputStream fos = new FileOutputStream(jarPath+propFileName)) {
+					props.store(fos, "AozoraEpub3 Parameters");
+				}
+			} catch (Exception ignore) {}
+			JOptionPane.showMessageDialog(
+				jFrameParent,
+				I18n.t("ui.language.changed", I18n.t("ui.language.ja")),
+				I18n.t("ui.language.title"),
+				JOptionPane.INFORMATION_MESSAGE
+			);
+		}});
+		JMenuItem langEn = new JMenuItem(I18n.t("ui.language.en"));
+		langEn.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			props.setProperty("UILang", "en");
+			// 設定ファイル更新
+			try {
+				try (FileOutputStream fos = new FileOutputStream(jarPath+propFileName)) {
+					props.store(fos, "AozoraEpub3 Parameters");
+				}
+			} catch (Exception ignore) {}
+			JOptionPane.showMessageDialog(
+				jFrameParent,
+				I18n.t("ui.language.changed", I18n.t("ui.language.en")),
+				I18n.t("ui.language.title"),
+				JOptionPane.INFORMATION_MESSAGE
+			);
+		}});
+		jPopupLanguage.add(langJa);
+		jPopupLanguage.add(langEn);
+
+		jButtonLanguage = new JButton(I18n.t("ui.language.button"));
+		jButtonLanguage.setToolTipText(I18n.t("ui.language.tooltip"));
+		jButtonLanguage.setBorder(padding3);
+		jButtonLanguage.setFocusPainted(false);
+		jButtonLanguage.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			jPopupLanguage.show(jButtonLanguage, 8, 20);
+		}});
+		panel.add(jButtonLanguage);
 		
 		
 		jTabbedPane = new JTabbedPane();
@@ -963,11 +1012,11 @@ public class AozoraEpub3Applet extends JApplet
 		//panel1.setPreferredSize(panelSize);
 		panel1.setBorder(padding0);
 		//入力文字コード
-		label = new JLabel("入力文字コード");
+		label = new JLabel(I18n.t("ui.label.inputEncoding"));
 		label.setBorder(padding0);
 		panel1.add(label);
 		jComboEncType = new JComboBox<>(new String[]{"MS932", "UTF-8"});
-		jComboEncType.setToolTipText("入力ファイルのテキストファイルの文字コード。青空文庫の標準はMS932(SJIS)です");
+		jComboEncType.setToolTipText(I18n.t("ui.tooltip.encType"));
 		jComboEncType.setFocusable(false);
 		jComboEncType.setPreferredSize(new Dimension(100, 22));
 		panel1.add(jComboEncType);
@@ -985,7 +1034,7 @@ public class AozoraEpub3Applet extends JApplet
 		//jRadioVertical.setBorder(BorderFactory.createEmptyBorder(0, 100, 0, 0));
 		jRadioVertical.setBorder(padding0);
 		jRadioVertical.setIconTextGap(0);
-		label = new JLabel("縦書き", new ImageIcon(AozoraEpub3Applet.class.getResource("images/page_vertical.png")), JLabel.LEFT);
+		label = new JLabel(I18n.t("ui.label.vertical"), new ImageIcon(AozoraEpub3Applet.class.getResource("images/page_vertical.png")), JLabel.LEFT);
 		label.setBorder(iconPadding);
 		jRadioVertical.add(label);
 		panel2.add(jRadioVertical);
@@ -994,14 +1043,14 @@ public class AozoraEpub3Applet extends JApplet
 		jRadioHorizontal.setFocusPainted(false);
 		jRadioHorizontal.setBorder(padding0);
 		jRadioHorizontal.setIconTextGap(0);
-		label = new JLabel("横書き ", new ImageIcon(AozoraEpub3Applet.class.getResource("images/page_horizontal.png")), JLabel.LEFT);
+		label = new JLabel(I18n.t("ui.label.horizontal")+" ", new ImageIcon(AozoraEpub3Applet.class.getResource("images/page_horizontal.png")), JLabel.LEFT);
 		label.setBorder(iconPadding);
 		jRadioHorizontal.add(label);
 		panel2.add(jRadioHorizontal);
 		buttonGroup.add(jRadioHorizontal);
 		//ファイル選択
-		jButtonFile = new JButton("ファイル選択");
-		jButtonFile.setToolTipText("ファイル選択後に変換処理を開始します");
+		jButtonFile = new JButton(I18n.t("ui.button.fileSelect"));
+		jButtonFile.setToolTipText(I18n.t("ui.tooltip.fileSelect"));
 		jButtonFile.setBorder(padding5H3V);
 		//jButtonFile.setPreferredSize(new Dimension(100, 24));
 		jButtonFile.setIcon(new ImageIcon(AozoraEpub3Applet.class.getResource("images/convert.png")));
@@ -2425,8 +2474,8 @@ public class AozoraEpub3Applet extends JApplet
 		statusPane.add(panel);
 		
 		//変換前に確認
-		jCheckConfirm = new JCheckBox("変換前確認", true);
-		jCheckConfirm.setToolTipText("変換前にタイトルと表紙の設定が可能な確認画面を表示します");
+		jCheckConfirm = new JCheckBox(I18n.t("ui.label.preConfirm"), true);
+		jCheckConfirm.setToolTipText(I18n.t("ui.tooltip.confirm"));
 		jCheckConfirm.setFocusPainted(false);
 		jCheckConfirm.setBorder(padding0);
 		panel.add(jCheckConfirm);
