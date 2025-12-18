@@ -2,7 +2,7 @@
 
 # Site metadata
 title: AozoraEpub3-JDK21
-description: 青空文庫テキストをEPUB3に変換するツール。Kindle・Apple Books対応。Java 21版。
+description: 青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
 url: "https://aozoraepub3-jdk21.github.io"
 baseurl: "/AozoraEpub3-JDK21"
 lang: ja

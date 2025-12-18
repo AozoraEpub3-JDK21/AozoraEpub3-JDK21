@@ -1,10 +1,10 @@
 ---
 layout: default
-title: AozoraEpub3-JDK21 — ダウンロードとインストール
-description: 青空文庫テキストをEPUB3に変換。Kindle・Apple Books対応。Java 21版ダウンロード・インストールガイド。
+title: AozoraEpub3-JDK21 のダウンロード
+description: 青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
 ---
 
-# AozoraEpub3-JDK21 — ダウンロードとインストール
+# AozoraEpub3-JDK21 のダウンロード
 
 青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
 
