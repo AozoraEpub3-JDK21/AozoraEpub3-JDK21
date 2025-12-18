@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AozoraEpub3 ダウンロードとインストール</title>
-  <meta name=\"description\" content=\"AozoraEpub3のダウンロードとインストール手順。Windows/macOS/Linux向けのガイド。\">
-  <meta property=\"og:title\" content=\"AozoraEpub3 ダウンロードとインストール\">
-  <meta property=\"og:description\" content=\"Windows/macOS/Linux向けのガイド。ダウンロードと起動方法を解説。\">
+  <title>AozoraEpub3 - Kindle対応EPUB3変換ツール | 青空文庫テキスト対応</title>
+  <meta name="description" content="青空文庫テキストをEPUB3に変換。Kindle・Apple Books対応。narou.rb互換。Java 21版ダウンロード・インストールガイド。">
+  <meta name="keywords" content="aozoraepub3, epub3, ebook, kindle, aozora-bunko, text-to-epub, java21, ebook-converter, narou, jdk21">
+  <meta property="og:title" content="AozoraEpub3 - Kindle対応EPUB3変換ツール">
+  <meta property="og:description" content="青空文庫テキストをEPUB3に変換。Kindle・Apple Books対応。narou.rb互換。">
   <meta property="og:type" content="website">
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.7; margin: 0; color: #222; }
@@ -45,40 +46,75 @@
     <section>
       <h2>必要な環境</h2>
       <ul>
-        <li>Java 21 以降（Temurin等のJRE/JDKを推奨）</li>
-        <li>対応OS: Windows / macOS / Linux</li>
+        <li><strong>Java 21 以降</strong>（JRE / JDK）</li>
+        <li><strong>対応OS:</strong> Windows / macOS / Linux</li>
       </ul>
+      <p><strong>推奨:</strong> <a href="https://adoptium.net/temurin/releases/">Eclipse Temurin</a> から Java 21 LTS の JRE をダウンロード</p>
     </section>
 
     <section>
-      <h2>Windowsの手順（おすすめ）</h2>
-      <ul>
-        <li>Releasesから <strong>ZIP</strong> をダウンロードして任意フォルダに展開</li>
-        <li>フォルダ内の <strong>AozoraEpub3起動.bat</strong> または <strong>AozoraEpub3.bat</strong> をダブルクリック</li>
-        <li>うまく起動しない場合は <span class="note">Java 21 の導入</span> と <span class="note">bat経由の起動</span> を確認</li>
-      </ul>
+      <h2>Java 21 のインストール（Eclipse Temurin）</h2>
+      <h3>Windows</h3>
+      <ol>
+        <li><a href="https://adoptium.net/temurin/releases/">Adoptium Releases</a> を開く</li>
+        <li>JDK 21 → Windows x64 → <strong>.MSI</strong> を選択してダウンロード</li>
+        <li>.MSI ファイルをダブルクリックして実行し、ウィザードに従ってインストール</li>
+        <li>ターミナル（コマンドプロンプト）で確認: <code>java -version</code></li>
+      </ol>
+
+      <h3>macOS</h3>
+      <ol>
+        <li><a href="https://adoptium.net/temurin/releases/">Adoptium Releases</a> を開く</li>
+        <li>JDK 21 → macOS → <strong>.PKG</strong> (Intel) または <strong>.PKG</strong> (Apple Silicon M1/M2) を選択してダウンロード</li>
+        <li>.PKG ファイルをダブルクリックしてインストール</li>
+        <li>ターミナルで確認: <code>java -version</code></li>
+      </ol>
+
+      <h3>Linux（Ubuntu/Debian）</h3>
+      <ol>
+        <li><a href="https://adoptium.net/temurin/releases/">Adoptium Releases</a> を開く</li>
+        <li>JDK 21 → Linux x64 → <strong>.TAR.GZ</strong> をダウンロード</li>
+        <li>任意のフォルダに展開: <code>tar -xzf OpenJDK21U-jdk_x64_linux_hotspot_21_x.tar.gz</code></li>
+        <li>PATH に追加するか、コマンド全パスで実行: <code>./jdk-21.x.x+yy/bin/java -version</code></li>
+      </ol>
     </section>
 
     <section>
-      <h2>macOS / Linuxの手順</h2>
-      <ul>
-        <li>Releasesから <strong>TAR.GZ</strong> をダウンロードして展開</li>
+      <h2>Windows でのダウンロード・インストール（おすすめ）</h2>
+      <ol>
+        <li><a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases">リリースページ</a> から最新の <strong>ZIP</strong> をダウンロード</li>
+        <li>ZIP を任意のフォルダ（例: `C:\Program Files` や デスクトップ）に展開</li>
+        <li>フォルダを開き、<strong>AozoraEpub3起動.bat</strong> をダブルクリック</li>
+        <li>GUI が起動したら準備完了</li>
+      </ol>
+      <p><span class="note"><strong>注:</strong> jar ファイルのダブルクリックが無反応の場合は、.bat ファイルをご利用ください</span></p>
+    </section>
+
+    <section>
+      <h2>macOS / Linux でのダウンロード・インストール</h2>
+      <ol>
+        <li><a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases">リリースページ</a> から <strong>TAR.GZ</strong> をダウンロード</li>
+        <li>任意のフォルダに展開: <code>tar -xzf AozoraEpub3-*.tar.gz</code></li>
         <li>ターミナルでフォルダに移動し、<code>./AozoraEpub3.sh</code> を実行</li>
-        <li>権限エラー時は <code>chmod +x AozoraEpub3.sh</code> を実行してから起動</li>
-      </ul>
+        <li>権限エラー時は先に実行: <code>chmod +x AozoraEpub3.sh</code></li>
+      </ol>
     </section>
 
     <section>
-      <h2>直接コマンドで起動（カスタム向け）</h2>
+      <h2>CLI（コマンドライン）での実行</h2>
+      <p>カスタマイズの詳細設定が必要な場合、コマンドラインから直接実行できます。</p>
       <pre><code>java -jar AozoraEpub3.jar -of -d out input.txt</code></pre>
-      <p>GUIは <strong>引数なし</strong> で <code>java -jar AozoraEpub3.jar</code> を実行すると起動します。</p>
+      <p>引数の詳細は <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme">README</a> をご参照ください。</p>
+      <p>GUI は <strong>引数なし</strong> で起動：<code>java -jar AozoraEpub3.jar</code></p>
     </section>
 
     <section>
-      <h2>よくある質問（FAQ）</h2>
+      <h2>トラブルシューティング</h2>
       <ul>
-        <li><strong>Windowsで.jarが開けない:</strong> バッチ（.bat）から起動してください。</li>
-        <li><strong>Javaが見つからない:</strong> Java 21 の JRE/JDK をインストールしてください。</li>
+        <li><strong>Java がインストールされていない:</strong> <a href="https://adoptium.net/temurin/releases/">Temurin</a> から Java 21 JRE をダウンロード・インストール後に再度お試しください。</li>
+        <li><strong>Windows の jar ファイルがダブルクリックで開かない:</strong> <code>.bat</code> ファイルを使用してください。または、ターミナルから <code>java -jar AozoraEpub3.jar</code> で起動できます。</li>
+        <li><strong>Linux/macOS で permission denied エラー:</strong> <code>chmod +x AozoraEpub3.sh</code> を実行してから再度起動してください。</li>
+        <li><strong>その他の問題:</strong> <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues">GitHub Issues</a> でお知らせください。</li>
       </ul>
     </section>
 
