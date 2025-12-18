@@ -79,9 +79,14 @@ AozoraEpub3-1.2.1-jdk21.tar.gz
 ```bash
 git clone https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21.git
 cd AozoraEpub3-JDK21
-./gradlew zipDistribution tarDistribution
+./gradlew dist
 # build/distributions/ に FAT版の zip / tar.gz が生成されます
 ```
+
+**ビルドタスク詳細:**
+- **`./gradlew jar`**: FAT JAR を生成（`build/libs/AozoraEpub3.jar`）
+- **`./gradlew dist`**: 配布パッケージを生成（ZIP / TAR.GZ）【推奨】
+- **`./gradlew test`**: テスト実行
 
 ---
 
