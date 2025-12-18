@@ -1,5 +1,6 @@
 ---
 layout: default
+lang: ja
 title: EPUB 3.3 日本語解説
 description: AozoraEpub3-JDK21 の EPUB 3.3 日本語解説ページ。EPUB 3.0 からの差分と対応状況を解説。
 ---
@@ -44,7 +45,6 @@ EPUB 3.3 では、より詳細なメタデータと構造化情報が推奨さ�
 
 ### ✅ 実装済み
 
-- Java 21（LTS）による安定稼働
 - 基本的な EPUB 3.3 フォーマット生成
 - 電書協ガイドラインに準拠した CSS
 - Ruby（ルビ）対応
