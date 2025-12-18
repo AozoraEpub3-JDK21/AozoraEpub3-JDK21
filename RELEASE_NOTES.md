@@ -1,5 +1,39 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.3-jdk21
+
+**リリース日**: 2025年12月18日
+
+### セキュリティ修正
+
+- **ZipSlip脆弱性対策**: ZIP抽出時のパストラバーサル攻撃を防止
+  - `ImageInfoReader.java`: `sanitizeArchiveEntryName()`メソッドを追加
+  - アーカイブエントリの絶対パス・相対パストラバーサル（`..`）・不正シンボルを検出・排除
+  - GitHub Code Scanning Alert #2を解決
+
+- **GitHub Actions権限設定**: GITHUB_TOKENの最小権限化
+  - `.github/workflows/ci.yml`: `permissions: {contents: read}`を明示的に設定
+  - セキュリティベストプラクティスに準拠
+  - GitHub Code Scanning Alert #1を解決
+
+### 改善
+
+- **ドキュメント更新**: narou.rb のGitHubリンク修正
+  - README.md: `https://github.com/whiteleaf7/narou` に更新
+  
+- **Copilot指示ドキュメント更新**: コミットメッセージの言語規約を明記
+  - `.github/copilot-instructions.md`: 「全てのコミットメッセージは日本語」を追記
+
+### 検証結果
+
+```
+GitHub Code Scanning: ✓ 0 alerts (Alert #1, #2を完全解決)
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ All tests passed
+```
+
+---
+
 ## バージョン: 1.2.2-jdk21
 
 **リリース日**: 2025年12月17日
