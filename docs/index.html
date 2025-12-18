@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AozoraEpub3 ダウンロードとインストール</title>
+  <meta name="description" content="AozoraEpub3の入門用ダウンロードとインストール手順。Windows/macOS/Linux向けの簡単ガイド。">
+  <meta property="og:title" content="AozoraEpub3 ダウンロードとインストール">
+  <meta property="og:description" content="Windows/macOS/Linux向けの簡単ガイド。初心者向けにダウンロードと起動方法を解説。">
+  <meta property="og:type" content="website">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.7; margin: 0; color: #222; }
+    header { padding: 2.5rem 1rem; text-align: center; background: #0f62fe; color: #fff; }
+    header h1 { margin: 0 0 .5rem; font-size: 1.8rem; }
+    header p { margin: 0 0 1rem; }
+    .btn { display: inline-block; background: #fff; color: #0f62fe; padding: .75rem 1.25rem; border-radius: .5rem; text-decoration: none; font-weight: 600; }
+    main { max-width: 880px; margin: 2rem auto; padding: 0 1rem; }
+    h2 { margin-top: 2rem; font-size: 1.4rem; }
+    pre { background: #f6f8fa; padding: .75rem; border-radius: .5rem; overflow: auto; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    ul { padding-left: 1.25rem; }
+    footer { margin-top: 3rem; padding: 1.5rem; background: #f6f8fa; text-align: center; font-size: .95rem; }
+    .note { background: #fff3cd; border: 1px solid #ffe69c; padding: .75rem; border-radius: .5rem; }
+  </style>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AozoraEpub3",
+    "applicationCategory": "DesktopApplication",
+    "operatingSystem": "Windows, macOS, Linux",
+    "softwareVersion": "jdk21",
+    "url": "https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21",
+    "downloadUrl": "https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases"
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>AozoraEpub3 — ダウンロードとインストール</h1>
+    <p>青空文庫形式テキストをEPUBに変換するツールの入門ページです。</p>
+    <p><a class="btn" href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases">最新リリースを開く</a></p>
+  </header>
+  <main>
+    <section>
+      <h2>必要な環境</h2>
+      <ul>
+        <li>Java 21 以降（Temurin等のJRE/JDKを推奨）</li>
+        <li>対応OS: Windows / macOS / Linux</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Windowsの手順（おすすめ）</h2>
+      <ul>
+        <li>Releasesから <strong>ZIP</strong> をダウンロードして任意フォルダに展開</li>
+        <li>フォルダ内の <strong>AozoraEpub3起動.bat</strong> または <strong>AozoraEpub3.bat</strong> をダブルクリック</li>
+        <li>うまく起動しない場合は <span class="note">Java 21 の導入</span> と <span class="note">bat経由の起動</span> を確認</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>macOS / Linuxの手順</h2>
+      <ul>
+        <li>Releasesから <strong>TAR.GZ</strong> をダウンロードして展開</li>
+        <li>ターミナルでフォルダに移動し、<code>./AozoraEpub3.sh</code> を実行</li>
+        <li>権限エラー時は <code>chmod +x AozoraEpub3.sh</code> を実行してから起動</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>直接コマンドで起動（上級者向け）</h2>
+      <pre><code>java -jar AozoraEpub3.jar -of -d out input.txt</code></pre>
+      <p>GUIは <strong>引数なし</strong> で <code>java -jar AozoraEpub3.jar</code> を実行すると起動します。</p>
+    </section>
+
+    <section>
+      <h2>よくある質問（FAQ）</h2>
+      <ul>
+        <li><strong>Windowsで.jarが開けない:</strong> バッチ（.bat）から起動してください。</li>
+        <li><strong>Javaが見つからない:</strong> Java 21 の JRE/JDK をインストールしてください。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>詳細情報</h2>
+      <p>詳しい機能や設定は GitHub のREADMEをご覧ください。</p>
+      <p><a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme">READMEを開く</a></p>
+      <p>EPUB 3.3の日本語解説（差分の要点）は、準備中の記事からご覧いただけます。</p>
+      <p><a href="./epub33-ja.html">EPUB 3.3 日本語解説（準備中）</a></p>
+    </section>
+  </main>
+  <footer>
+    <p>&copy; AozoraEpub3-JDK21. ライセンス: GPL v3.</p>
+  </footer>
+</body>
+</html>
