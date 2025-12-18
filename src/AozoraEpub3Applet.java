@@ -600,7 +600,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel.setBorder(padding4H2V);
 		topPane.add(panel);
 		//プロファイル
-		label = new JLabel("プロファイル: ");
+		label = new JLabel(I18n.t("ui.label.profile"));
 		panel.add(label);
 		jComboProfile = new JComboBox<>();
 		jComboProfile.setEditable(false);
@@ -686,7 +686,7 @@ public class AozoraEpub3Applet extends JApplet
 				jPopupPreset.add(menu);
 			}
 		}
-		jButtonPreset = new JButton("端末設定", new ImageIcon(AozoraEpub3Applet.class.getResource("images/viewer.png")));
+		jButtonPreset = new JButton(I18n.t("ui.button.preset"), new ImageIcon(AozoraEpub3Applet.class.getResource("images/viewer.png")));
 		jButtonPreset.setToolTipText(I18n.t("ui.tooltip.preset"));
 		jButtonPreset.setBorder(padding3);
 		jButtonPreset.setFocusPainted(false);
