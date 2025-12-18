@@ -6,7 +6,7 @@
 
 ## このプロジェクトについて
 
-このプロジェクトは [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3) を元に、Java 21対応および [narou.rb](https://github.com/Sunset-Yuhi/narou) での利用を目的として改変したものです。
+このプロジェクトは [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3) を元に、Java 21対応および [narou.rb](https://github.com/whiteleaf7/narou) での利用を目的として改変したものです。
 
 - **元プロジェクト**: [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3)
 - **ライセンス**: GPL v3（元作者に帰属）

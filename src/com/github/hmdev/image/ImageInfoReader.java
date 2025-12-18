@@ -229,6 +229,15 @@ public class ImageInfoReader
 		while ((entry = zis.getNextEntry()) != null) {
 			if (idx++ % 10 == 0) LogAppender.append(".");
 			String entryName = entry.getName();
+			
+			// ZipSlip脆弱性対策: パストラバーサル攻撃をチェック
+			try {
+				entryName = sanitizeArchiveEntryName(entryName);
+			} catch (IllegalArgumentException e) {
+				System.err.println("Skipping suspicious archive entry: " + e.getMessage());
+				continue;  // 疑わしいエントリはスキップ
+			}
+			
 			String lowerName = entryName.toLowerCase();
 			if (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".gif")) {
 				ImageInfo imageInfo = null;
@@ -304,6 +313,40 @@ public class ImageInfoReader
 		}
 		Collections.sort(names, new FileNameComparator());
 		for (String name : names) this.imageFileNames.add(name);
+	}
+	
+	/**
+	 * Path Traversal 脆弱性対策
+	 * ZipEntry のパス名から安全なファイル名を抽出する
+	 * @param entryName ZipEntry の名前
+	 * @return 正規化されたファイル名
+	 * @throws IllegalArgumentException パストラバーサル攻撃が検出された場合
+	 */
+	static String sanitizeArchiveEntryName(String entryName) throws IllegalArgumentException
+	{
+		if (entryName == null || entryName.isEmpty()) {
+			throw new IllegalArgumentException("Entry name cannot be null or empty");
+		}
+		
+		// 絶対パスの検出
+		if (entryName.startsWith("/") || entryName.startsWith("\\")) {
+			throw new IllegalArgumentException("Absolute path detected in archive entry: " + entryName);
+		}
+		
+		// パストラバーサル攻撃の検出
+		if (entryName.contains("..") || entryName.contains("~") || entryName.contains("$")) {
+			throw new IllegalArgumentException("Path traversal attempt detected: " + entryName);
+		}
+		
+		// バックスラッシュをスラッシュに統一
+		String normalized = entryName.replace("\\", "/");
+		
+		// ダブルスラッシュを単一スラッシュに
+		while (normalized.contains("//")) {
+			normalized = normalized.replace("//", "/");
+		}
+		
+		return normalized;
 	}
 	
 	/** 指定した順番の画像情報を取得 
