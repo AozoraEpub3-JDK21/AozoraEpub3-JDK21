@@ -1,5 +1,8 @@
 # DEVELOPMENT.md
 
+> [!NOTE]
+> **Read this in other languages:** [English](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/DEVELOPMENT.md) (Auto-translated by your browser)
+
 AozoraEpub3 の開発に参加するための情報をまとめています。
 
 ---
