@@ -1,0 +1,40 @@
+# Jekyll configuration for AozoraEpub3-JDK21 GitHub Pages
+
+# Site metadata
+title: AozoraEpub3-JDK21
+description: 青空文庫テキストをEPUB3に変換するツール。Kindle・Apple Books対応。Java 21版。
+url: "https://aozoraepub3-jdk21.github.io"
+baseurl: "/AozoraEpub3-JDK21"
+lang: ja
+
+# Jekyll theme
+theme: jekyll-theme-slate
+
+# Plugins
+plugins:
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# SEO defaults
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+      image: ""
+
+# Markdown processor
+markdown: kramdown
+
+# Timezone
+timezone: Asia/Tokyo
+
+# Build settings
+exclude:
+  - "*.md~"
+  - ".gitignore"
+  - "CNAME"
+  - "README.md"
+  - "node_modules"
+  - "Gemfile"
+  - "Gemfile.lock"
