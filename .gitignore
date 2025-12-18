@@ -14,6 +14,11 @@ build/
 dist/
 target/
 
+## 旧IDE/Eclipse系のビルド出力（コミット不要）
+bin/
+!bin/**/.gitignore
+bin/main/i18n/
+
 ## 出力ファイル
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
