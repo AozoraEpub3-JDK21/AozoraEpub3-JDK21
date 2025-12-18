@@ -2,6 +2,9 @@
 
 **Java 21対応版 / Gradle対応版**
 
+> [!NOTE]
+> **Read this in other languages:** [English](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) (Auto-translated by your browser)
+
 青空文庫の注記入りテキストファイルを EPUB 3 ファイルに変換するツールです。
 
 ## このプロジェクトについて
