@@ -43,6 +43,8 @@ import java.net.URLDecoder;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -101,6 +103,7 @@ import com.github.hmdev.swing.JConfirmDialog;
 import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
 import com.github.hmdev.util.LogAppender;
+import com.github.hmdev.util.I18n;
 import com.github.hmdev.web.WebAozoraConverter;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
@@ -495,6 +498,14 @@ public class AozoraEpub3Applet extends JApplet
 		} catch (Exception e) { }
 		String path = props.getProperty("LastDir");
 		if (path != null && path.length() >0) this.currentPath = new File(path);
+
+		// UI言語初期化 (外部上書き: profiles/i18n)
+		String uiLang = props.getProperty("UILang");
+		Locale loc = (uiLang != null && uiLang.trim().length() > 0)
+			? Locale.forLanguageTag(uiLang.trim())
+			: Locale.getDefault();
+		Path extI18n = new File(this.profilePath, "i18n").toPath();
+		I18n.init(loc, extI18n);
 		
 		JPanel tabPanel;
 		JPanel panel;
@@ -3745,7 +3756,11 @@ public class AozoraEpub3Applet extends JApplet
 				}
 			}
 			if (kindlegen == null) {
-				JOptionPane.showMessageDialog(this, "kindlegenがありません\nkindlegen.exeをjarファイルの場所にコピーしてください", "kindlegenエラー", JOptionPane.WARNING_MESSAGE);
+				JOptionPane.showMessageDialog(
+					this,
+					I18n.t("ui.kindlegen.missing"),
+					I18n.t("ui.kindlegen.title"),
+					JOptionPane.WARNING_MESSAGE);
 				LogAppender.println("変換処理をキャンセルしました");
 				return;
 			}
@@ -3853,7 +3868,11 @@ public class AozoraEpub3Applet extends JApplet
 		}
 		/*
 		if (overWrite &&  outFile.exists()) {
-			int ret = JOptionPane.showConfirmDialog(this, "ファイルが存在します\n上書きしますか？\n(取り消しで変換キャンセル)", "上書き確認", JOptionPane.YES_NO_CANCEL_OPTION);
+			int ret = JOptionPane.showConfirmDialog(
+				this,
+				I18n.t("ui.overwrite.confirm"),
+				I18n.t("ui.overwrite.title"),
+				JOptionPane.YES_NO_CANCEL_OPTION);
 			if (ret == JOptionPane.NO_OPTION) {
 		private static void applyJapaneseFontDefaults() {
 			try {
@@ -4165,7 +4184,11 @@ public class AozoraEpub3Applet extends JApplet
 			dstPath = new File(jComboDstPath.getEditor().getItem().toString());
 			String dstPathName = dstPath.getAbsolutePath();
 			if (dstPathName.length() > 70) dstPathName = dstPathName.substring(0, 32)+" ... "+dstPathName.substring(dstPathName.length()-32);
-			int ret = JOptionPane.showConfirmDialog(jConfirmDialog, "出力先がありません\n"+dstPathName+"\nにフォルダを作成しますか？", "出力先確認", JOptionPane.YES_NO_OPTION);
+			int ret = JOptionPane.showConfirmDialog(
+				jConfirmDialog,
+				I18n.t("ui.output.dir.missing", dstPathName),
+				I18n.t("ui.output.dir.title"),
+				JOptionPane.YES_NO_OPTION);
 			if (ret == JOptionPane.YES_OPTION) {
 				//フォルダ作成
 				dstPath.mkdirs();
