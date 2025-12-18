@@ -6,8 +6,6 @@ description: 青空文庫対応 EPUB3 変換ツール：セットアップ & ス
 
 # AozoraEpub3-JDK21 のダウンロード
 
-青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
-
 [最新リリースをダウンロード](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases){:.btn}
 
 ---
