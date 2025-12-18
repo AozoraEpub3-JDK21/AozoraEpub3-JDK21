@@ -1,0 +1,9 @@
+<div class="language-switcher">
+  {% if page.lang == 'ja' or page.lang == nil %}
+    <span class="current-lang">日本語</span>
+    <a href="{{ site.baseurl }}/en/" class="lang-link">English</a>
+  {% elsif page.lang == 'en' %}
+    <a href="{{ site.baseurl }}/" class="lang-link">日本語</a>
+    <span class="current-lang">English</span>
+  {% endif %}
+</div>

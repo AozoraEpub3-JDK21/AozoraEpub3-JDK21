@@ -1,5 +1,6 @@
 ---
 layout: default
+lang: ja
 title: AozoraEpub3-JDK21 のダウンロード
 description: 青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
 ---
@@ -99,3 +100,4 @@ GUI を起動する場合は引数なしで実行します: `java -jar AozoraEpu
 
 - [GitHub README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) — 機能・設定詳細
 - [EPUB 3.3 日本語解説](epub33-ja.html) — 3.0 との差分と対応状況
+- [English](en/index.html) — View this page in English
