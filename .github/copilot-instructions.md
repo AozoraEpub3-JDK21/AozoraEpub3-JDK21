@@ -52,8 +52,7 @@ These instructions tailor Copilot to this repository so it can generate correct,
 - Avoid introducing global state. If needed (e.g., Velocity), allow dependency injection.
 - Favor small helpers over large monolith methods; keep public APIs stable.
 - Validate inputs and fail fast with clear messages.
-- Don’t add license headers unless explicitly requested.
-
+- Don’t add license headers unless explicitly requested.- **Git Commits**: All commit messages **must be in Japanese**. Format should clearly describe the what/why of changes.
 ## Templates (Velocity) – Important
 - Velocity resources live under `template/`. Use relative paths consistently from a configurable `templatePath`.
 - Do NOT hard-code absolute paths. Tests and CI may run with different working directories.

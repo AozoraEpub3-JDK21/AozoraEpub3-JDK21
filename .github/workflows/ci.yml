@@ -37,6 +37,9 @@ on:
         required: false
         default: "1.7"
 
+permissions:
+  contents: read
+
 jobs:
   build-test-validate:
     name: Build, Test, Validate (EPUB 3.2 / 電書連) - JDK ${{ matrix.java-version }}
