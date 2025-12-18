@@ -753,7 +753,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		jTabbedPane.setPreferredSize(new Dimension(1920, 220));
-		jTabbedPane.addTab("変換 ", epubIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.convert"), epubIcon, tabPanel);
 		
 		////////////////////////////////
 		//表題
@@ -1065,7 +1065,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("画像1", imageIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.image1"), imageIcon, tabPanel);
 		
 		////////////////////////////////
 		//挿絵なし
@@ -1339,7 +1339,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("画像2", imageIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.image2"), imageIcon, tabPanel);
 		
 		////////////////////////////////
 		//全画面＋SVG
@@ -1574,7 +1574,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("詳細設定", pageSettingIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.pageSettings"), pageSettingIcon, tabPanel);
 		
 		////////////////////////////////
 		//文中全角スペースの処理
@@ -1849,7 +1849,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("目次", tocIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.toc"), tocIcon, tabPanel);
 		
 		////////////////////////////////
 		//目次設定
@@ -2035,7 +2035,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("スタイル", styleIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.style"), styleIcon, tabPanel);
 		
 		////////////////////////////////
 		panel = new JPanel();
@@ -2164,7 +2164,7 @@ public class AozoraEpub3Applet extends JApplet
 		/*tabPanel = new JPanel();
 		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("文字", charIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.char"), charIcon, tabPanel);
 		*/
 		//スタイルタブの下に追加
 		panel = new JPanel();
@@ -2212,7 +2212,7 @@ public class AozoraEpub3Applet extends JApplet
 		tabPanel = new JPanel();
 		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
 		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab("Web", webIcon, tabPanel);
+		jTabbedPane.addTab(I18n.t("ui.tab.web"), webIcon, tabPanel);
 		
 		////////////////////////////////
 		//取得間隔
