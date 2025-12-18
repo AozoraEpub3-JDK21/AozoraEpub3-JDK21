@@ -765,9 +765,9 @@ public class AozoraEpub3Applet extends JApplet
 		panel.setPreferredSize(panelSize);
 		panel.setBorder(padding4H2V);
 		tabPanel.add(panel);
-		label = new JLabel("表題: ");
+		label = new JLabel(I18n.t("ui.label.title"));
 		panel.add(label);
-		label = new JLabel("本文内");
+		label = new JLabel(I18n.t("ui.label.inText"));
 		label.setBorder(padding2H);
 		panel.add(label);
 		jComboTitle = new JComboBox<>(BookInfo.TitleType.titleTypeNames);
@@ -797,7 +797,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel.setBorder(padding4H2V);
 		tabPanel.add(panel);
 		//表紙
-		label = new JLabel("表紙: ");
+		label = new JLabel(I18n.t("ui.label.cover"));
 		panel.add(label);
 		
 		jTextMaxCoverLine = new JTextField("10");
@@ -809,7 +809,7 @@ public class AozoraEpub3Applet extends JApplet
 		jTextMaxCoverLine.addFocusListener(new TextSelectFocusListener(jTextMaxCoverLine));
 		jTextMaxCoverLine.setInputVerifier(new IntegerInputVerifier(10, 0, 9999));
 		panel.add(jTextMaxCoverLine);
-		jLabelMaxCoverLine = new JLabel("行目までの");
+		jLabelMaxCoverLine = new JLabel(I18n.t("ui.label.maxCoverLineSuffix"));
 		jLabelMaxCoverLine.setToolTipText(jTextMaxCoverLine.getToolTipText());
 		jLabelMaxCoverLine.setBorder(padding2H);
 		panel.add(jLabelMaxCoverLine);
@@ -914,7 +914,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel.setBorder(padding4H2V);
 		tabPanel.add(panel);
 		//拡張子
-		label = new JLabel("拡張子: ");
+		label = new JLabel(I18n.t("ui.label.ext"));
 		panel.add(label);
 		jComboExt = new JComboBox<>(new String[]{".epub", ".kepub.epub", ".fxl.kepub.epub", ".mobi", ".mobi+.epub"});
 		jComboExt.setToolTipText("出力するファイルの拡張子を選択します。 mobi出力時はKindlegenが必要になります");
@@ -925,13 +925,13 @@ public class AozoraEpub3Applet extends JApplet
 		label = new JLabel("  ");
 		panel.add(label);
 		//出力ファイル名設定
-		jCheckAutoFileName = new JCheckBox("出力ファイル名に表題利用", true);
+		jCheckAutoFileName = new JCheckBox(I18n.t("ui.label.useTitleAsFilename"), true);
 		jCheckAutoFileName.setFocusPainted(false);
 		panel.add(jCheckAutoFileName);
 		label = new JLabel("  ");
 		panel.add(label);
 		//ファイルの上書き許可
-		jCheckOverWrite = new JCheckBox("出力ファイル上書き", true);
+		jCheckOverWrite = new JCheckBox(I18n.t("ui.label.overwrite"), true);
 		jCheckOverWrite.setFocusPainted(false);
 		panel.add(jCheckOverWrite);
 		
@@ -948,9 +948,9 @@ public class AozoraEpub3Applet extends JApplet
 		panel.setBorder(padding4H2V);
 		tabPanel.add(panel);
 		//出力先
-		label = new JLabel("出力先: ");
+		label = new JLabel(I18n.t("ui.label.dst"));
 		panel.add(label);
-		jCheckSamePath = new JCheckBox("入力と同じ", true);
+		jCheckSamePath = new JCheckBox(I18n.t("ui.label.sameAsInput"), true);
 		jCheckSamePath.setToolTipText("入力ファイルと同じ場所に出力します");
 		panel.add(jCheckSamePath);
 		jCheckSamePath.addChangeListener(new ChangeListener() { public void stateChanged(ChangeEvent e){
@@ -2102,24 +2102,21 @@ public class AozoraEpub3Applet extends JApplet
 		NumberVerifier numberVerifier0 = new NumberVerifier(0, 0);
 		for (int i=0; i<jTextPageMargins.length; i++) {
 			label = new JLabel(marginLabels[i]);
-			label.setBorder(padding2);
 			panel.add(label);
-			JTextField jTextField = new JTextField("0.5");
-			jTextPageMargins[i] = jTextField;
-			jTextField.setHorizontalAlignment(JTextField.RIGHT);
-			jTextField.addFocusListener(new TextSelectFocusListener(jTextField));
-			jTextField.setInputVerifier(numberVerifier0);
-			jTextField.setMaximumSize(text3);
-			jTextField.setPreferredSize(text3);
-			panel.add(jTextField);
+			JTextField tf = new JTextField();
+			tf.setHorizontalAlignment(JTextField.RIGHT);
+			tf.setInputVerifier(numberVerifier0);
+			tf.setMaximumSize(text3);
+			tf.setPreferredSize(text3);
+			panel.add(tf);
+			jTextPageMargins[i] = tf;
 		}
-		panel.add(new JLabel("  "));
 		ButtonGroup group = new ButtonGroup();
 		jRadioPageMarginUnit0 = new JRadioButton("字 ", true);
 		jRadioPageMarginUnit0.setBorder(padding0);
 		jRadioPageMarginUnit0.setFocusPainted(false);
 		panel.add(jRadioPageMarginUnit0);
-		group.add(jRadioPageMarginUnit0);
+			jRadioTitleHorizontal = new JRadioButton(I18n.t("ui.label.titleHorizontal"));
 		jRadioPageMarginUnit1 = new JRadioButton("%");
 		jRadioPageMarginUnit1.setBorder(padding0);
 		jRadioPageMarginUnit1.setFocusPainted(false);
@@ -2127,20 +2124,20 @@ public class AozoraEpub3Applet extends JApplet
 		group.add(jRadioPageMarginUnit1);
 		
 		////////////////////////////////
-		panel = new JPanel();
+			jCheckTocPage = new JCheckBox(I18n.t("ui.label.toc"));
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder("テキスト余白 (html margin) Reader用"));
 		panelH.add(panel);
 		jTextBodyMargins = new JTextField[4];
 		for (int i=0; i<jTextBodyMargins.length; i++) {
 			label = new JLabel(marginLabels[i]);
-			label.setBorder(padding2);
+			jRadioTocV = new JRadioButton(I18n.t("ui.label.verticalShort"), true);
 			panel.add(label);
 			JTextField jTextField = new JTextField("0");
 			jTextBodyMargins[i] = jTextField;
 			jTextField.setHorizontalAlignment(JTextField.RIGHT);
 			jTextField.addFocusListener(new TextSelectFocusListener(jTextField));
-			jTextField.setInputVerifier(numberVerifier0);
+			jRadioTocH = new JRadioButton(I18n.t("ui.label.horizontalShort"));
 			jTextField.setMaximumSize(text3);
 			jTextField.setPreferredSize(text3);
 			panel.add(jTextField);
