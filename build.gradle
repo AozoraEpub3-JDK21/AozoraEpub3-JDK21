@@ -57,6 +57,9 @@ dependencies {
     
     // テストフレームワーク
     testImplementation 'junit:junit:4.13.2'
+
+    // JSON parsing for epubcheck integration
+    implementation 'com.google.code.gson:gson:2.10.1'
     
     // XML/HTMLバリデーション用
     testImplementation 'xerces:xercesImpl:2.12.2'
