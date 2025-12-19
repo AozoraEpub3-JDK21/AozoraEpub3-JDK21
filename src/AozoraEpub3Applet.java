@@ -107,6 +107,7 @@ import com.github.hmdev.util.I18n;
 import com.github.hmdev.web.WebAozoraConverter;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
+import com.github.hmdev.epubcheck.EpubcheckRunner;
 
 /**
  * 青空文庫テキスト→ePub3変換操作用アプレット
@@ -2462,6 +2463,37 @@ public class AozoraEpub3Applet extends JApplet
 			}
 		});
 		panel.add(jButtonCancel);
+
+		// EpubCheck検証ボタン
+		JButton jButtonValidate = new JButton("検証開始");
+		jButtonValidate.setBorder(padding2);
+		jButtonValidate.setIcon(new ImageIcon(AozoraEpub3Applet.class.getResource("images/check.png")));
+		jButtonValidate.setFocusPainted(false);
+		jButtonValidate.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				JFileChooser chooser = new JFileChooser();
+				chooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
+					@Override
+					public boolean accept(File f) {
+						return f.isDirectory() || f.getName().endsWith(".epub");
+					}
+					@Override
+					public String getDescription() {
+						return "EPUB files (*.epub)";
+					}
+				});
+				if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+					File selectedFile = chooser.getSelectedFile();
+					try {
+						com.github.hmdev.epubcheck.EpubcheckRunner.runAndLog(selectedFile);
+					} catch (Exception ex) {
+						LogAppender.error("検証実行エラー: " + ex.getMessage());
+					}
+				}
+			}
+		});
+		panel.add(jButtonValidate);
 		
 		////////////////////////////////
 		//右パネル

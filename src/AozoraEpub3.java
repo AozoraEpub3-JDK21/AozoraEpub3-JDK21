@@ -23,6 +23,7 @@ import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
+import com.github.hmdev.epubcheck.EpubcheckRunner;
 import com.github.junrar.Archive;
 import com.github.junrar.exception.RarException;
 import com.github.junrar.rarfile.FileHeader;
@@ -75,8 +76,8 @@ public class AozoraEpub3
 			//options.addOption("tm", false, "表題を左右中央");
 			//options.addOption("cp", false, "表紙画像ページ追加");
 			options.addOption("hor", false, "横書き (指定がなければ縦書き)");
-			options.addOption("device", true, "端末種別(指定した端末向けの例外処理を行う)\n[kindle]");
-
+			options.addOption("device", true, "端末種別(指定した端末向けの例外処理を行う)\n[kindle]");		options.addOption(null, "include-source-map", false, "EPUB内にソースマップ（OPS/aozora/aozora-source-map.json）を含めます");
+		options.addOption(null, "no-source-map", false, "ソースマップを含めません（デフォルト動作）");
 			CommandLine commandLine;
 			try {
 				commandLine = new DefaultParser().parse(options, args, true);
@@ -512,11 +513,13 @@ public class AozoraEpub3
 			
 			LogAppender.append("変換完了["+(((System.currentTimeMillis()-time)/100)/10f)+"s] : ");
 			LogAppender.println(outFile.getPath());
-			
-		} catch (Exception e) {
-			e.printStackTrace();
-			LogAppender.println("エラーが発生しました : "+e.getMessage());
-			//LogAppender.printStaclTrace(e);
+		
+		// 生成直後にepubcheckを実行（lib/epubcheck.jar が存在する場合）
+		try {
+			EpubcheckRunner.runAndLog(outFile);
+		} catch (Exception ex) {
+			LogAppender.println("[WARN] epubcheck 実行に失敗しました: "+ ex.getMessage());
+		}
 		}
 	}
 	
