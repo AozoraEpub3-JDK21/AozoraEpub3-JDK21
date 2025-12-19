@@ -1,5 +1,33 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.4-jdk21
+
+**リリース日**: 2025年12月19日
+
+### 管理・改善
+
+- **コミット履歴のコントリビューター統一**
+  - 過去のコミット履歴から Harusame64 および AozoraEpub3-JDK21 アカウントを AozoraEpub3 Bot に統一
+  - リリース・メンテナンスを一貫したボットアカウントで管理
+  
+- **配布版の一本化**
+  - 本リリースを最新安定版として保持
+  - 過去の複数リリース v1.2.1、v1.2.2、v1.2.3 を削除し、管理を簡潔化
+
+### 配布ファイル
+
+- **Windows**: `AozoraEpub3-1.2.4-jdk21.zip` (起動スクリプト `AozoraEpub3起動.bat` 同梱)
+- **Linux/macOS**: `AozoraEpub3-1.2.4-jdk21.tar.gz` (起動スクリプト `AozoraEpub3.sh` 同梱)
+
+### 検証結果
+
+```
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ All tests passed
+```
+
+---
+
 ## バージョン: 1.2.3-jdk21
 
 **リリース日**: 2025年12月18日
