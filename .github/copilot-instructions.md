@@ -47,6 +47,12 @@ These instructions tailor Copilot to this repository so it can generate correct,
 - Basic checks for EPUB 3.2 and 電書協/電書連ガイド対応 are included as shell assertions.
 - When adding tests, prefer small, deterministic unit tests over end-to-end unless necessary.
 
+## Epubcheck Integration (現状メモ)
+- feature/epubchecker は master を取り込み済みでテスト済み（`gradlew test` 114/114）。
+- EPUB 書き出し直後に `EpubcheckRunner` が自動実行（`lib/epubcheck.jar` がある場合）。`-Depubcheck.jar=/path/to/jar` で上書き可、タイムアウト30s、エラー数をログに集計。
+- ソースマップ: `--include-source-map` がデフォルト、`--no-source-map` で無効化。生成ファイルは `OPS/aozora/aozora-source-map.json`。`SourceMapper` が `/` 区切りで正規化し逆引きする。
+- 解析パイプライン: `EpubValidator` (JSON取得) → `ErrorAnalyzer` (SourceMapperと結合) → ログ出力。未実装の辞書/i18nやUIは DESIGN_EPUBCHECKER.md のフェーズ2以降で拡張予定。
+
 ### IndexNow (Docs 配信・検索エンジン通知)
 - docs 配下のサイト更新時は `docs/sitemap.xml` に新規/更新ページが含まれることを前提に IndexNow 送信を行う（ワークフローでサイトマップから自動収集）。
 - ホスト確認用キーは `docs/fad6fa3a81974f6aa0740a0861fbaefe.txt`（内容はキー文字列の1行）。ページ追加時、キーファイルの配置は変更不要。

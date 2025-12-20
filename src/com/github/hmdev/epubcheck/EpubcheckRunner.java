@@ -41,14 +41,26 @@ public class EpubcheckRunner {
             if ("ERROR".equalsIgnoreCase(sev)) errors++;
             else if ("WARN".equalsIgnoreCase(sev) || "WARNING".equalsIgnoreCase(sev)) warns++;
             else infos++;
+            String code = (r.getCode() != null ? r.getCode() : "");
             String src = (r.getSourceInfo() != null ? r.getSourceInfo().getSourceName() : null);
             String loc = r.getPath() + (r.getLine() != null ? (":" + r.getLine()) : "");
-            LogAppender.println(String.format("[%s] %s %s %s%s",
+            String hint = EpubcheckDictionary.messageFor(code);
+            String cat = EpubcheckDictionary.typeFor(code).getCategory();
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("[%s] %s%s %s %s",
                     sev,
-                    (r.getCode() != null ? r.getCode() : ""),
+                    code,
+                    (cat != null ? " (" + cat + ")" : ""),
                     loc,
-                    (src != null ? " ← " + src : ""),
-                    (r.getMessage() != null ? "\n  └ " + r.getMessage() : "")));
+                    (src != null ? " ← " + src : "")));
+            if (r.getMessage() != null) {
+                sb.append("\n  └ ").append(r.getMessage());
+            }
+            if (hint != null && hint.length() > 0) {
+                sb.append("\n  ↳ ").append(hint);
+            }
+            LogAppender.println(sb.toString());
         }
         LogAppender.println(String.format("epubcheck まとめ: ERROR=%d, WARN=%d, INFO=%d", errors, warns, infos));
     }
