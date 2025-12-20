@@ -65,8 +65,9 @@ jobs:
             echo "No URLs matching host $INDEXNOW_HOST found in sitemap."; exit 1
           fi
 
+          # Build JSON body from all lines (use `inputs` to read all)
           BODY=$(jq -Rn --arg host "$INDEXNOW_HOST" --arg key "$KEY" --arg keyLocation "$KEY_LOCATION" '
-            (input | split("\n") | map(select(length>0))) as $urls |
+            [inputs | select(length>0)] as $urls |
             {host:$host, key:$key, keyLocation:$keyLocation, urlList:$urls}
           ' <<< "$URLS_FILTERED")
 
