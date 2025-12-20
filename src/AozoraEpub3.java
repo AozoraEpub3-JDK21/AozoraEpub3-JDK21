@@ -1,4 +1,3 @@
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -18,7 +17,6 @@ import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
-import com.github.hmdev.io.OutputNamer;
 import com.github.hmdev.pipeline.WriterConfigurator;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
