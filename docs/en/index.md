@@ -5,21 +5,38 @@ title: AozoraEpub3-JDK21 Download
 description: Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
 ---
 
+<div style="text-align: right; margin-bottom: 1em;">
+  <a href="../">🌐 日本語</a>
+</div>
+
+<nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
+  <strong>📚 Documentation:</strong>
+  <a href="./">Home</a> | 
+  <a href="usage.html">Usage</a> | 
+  <a href="development.html">Development</a> | 
+  <a href="epub33.html">EPUB 3.3</a> |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
+</nav>
+
 # AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.zip" class="btn" style="font-size: 1.2em; padding: 15px 30px; background: #0366d6; color: white; margin: 10px;">
-    📦 Download for Windows (ZIP)
-  </a>
-  <br>
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.tar.gz" class="btn" style="margin: 10px;">
-    🐧 Download for Linux (TAR.GZ)
-  </a>
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.tar.gz" class="btn" style="margin: 10px;">
-    🍎 Download for macOS (TAR.GZ)
-  </a>
-  <br>
-  <small><a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases">View all releases</a></small>
+  <p><strong>Latest:</strong> v1.2.5-jdk21 (December 20, 2025) | 
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">Release Notes</a></p>
+  
+  <div style="display: inline-block; text-align: center;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+      📦 Windows (ZIP)
+    </a>
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+      🐧 Linux (TAR.GZ)
+    </a>
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+      🍎 macOS (TAR.GZ)
+    </a>
+  </div>
+  
+  <p><small><a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases">📋 View all releases</a></small></p>
 </div>
 
 ---
