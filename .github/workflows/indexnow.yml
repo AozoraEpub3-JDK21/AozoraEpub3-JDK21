@@ -1,0 +1,64 @@
+name: IndexNow Submit
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *" # 毎日 03:00 UTC に送信
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Submit URLs to IndexNow
+        env:
+          INDEXNOW_HOST: ${{ vars.INDEXNOW_HOST }}
+          INDEXNOW_BASE_URL: ${{ vars.INDEXNOW_BASE_URL }}
+        run: |
+          set -e
+          OWNER="$GITHUB_REPOSITORY_OWNER"
+          REPO="${GITHUB_REPOSITORY#*/}"
+
+          DOCS_URL=$(sed -nE 's/^url:[[:space:]]*"?([^"#]+)"?.*/\1/p' docs/_config.yml | head -n1)
+          DOCS_BASE=$(sed -nE 's/^baseurl:[[:space:]]*"?([^"#]+)"?.*/\1/p' docs/_config.yml | head -n1)
+          DOCS_URL=${DOCS_URL%/}
+          DOCS_BASE=${DOCS_BASE%/}
+
+          DEFAULT_BASE="https://$OWNER.github.io/$REPO"
+          BASE_URL="${INDEXNOW_BASE_URL:-${DOCS_URL}${DOCS_BASE}}"
+          BASE_URL=${BASE_URL%/}
+          if [ -z "$BASE_URL" ]; then BASE_URL="$DEFAULT_BASE"; fi
+
+          HOST_DEFAULT=$(echo "$BASE_URL" | sed -E 's#^https?://([^/]+).*#\1#')
+          INDEXNOW_HOST="${INDEXNOW_HOST:-$HOST_DEFAULT}"
+          KEY="fad6fa3a81974f6aa0740a0861fbaefe"
+          KEY_LOCATION="$BASE_URL/$KEY.txt"
+
+          if [ ! -f docs/sitemap.xml ]; then
+            echo "docs/sitemap.xml not found"; exit 1
+          fi
+
+          URLS=$(grep -oP '(?<=<loc>)[^<]+' docs/sitemap.xml)
+
+          BODY=$(jq -Rn --arg host "$INDEXNOW_HOST" --arg key "$KEY" --arg keyLocation "$KEY_LOCATION" '
+            (input | split("\n") | map(select(length>0))) as $urls |
+            {host:$host, key:$key, keyLocation:$keyLocation, urlList:$urls}
+          ' <<< "$URLS")
+
+          echo "Request body:"; echo "$BODY" | jq .
+
+          HTTP_CODE=$(curl -sS -X POST \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            -d "$BODY" https://api.indexnow.org/indexnow \
+            -o response.json -w "%{http_code}")
+
+          echo "IndexNow response code: $HTTP_CODE"
+          test "$HTTP_CODE" -ge 200 -a "$HTTP_CODE" -lt 300
+
+          echo "Response body:"; cat response.json | jq .
