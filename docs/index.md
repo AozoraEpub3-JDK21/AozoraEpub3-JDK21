@@ -1,13 +1,43 @@
 ---
 layout: default
 lang: ja
-title: AozoraEpub3-JDK21 のダウンロード
+title: ダウンロード
 description: 青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
 ---
 
-# AozoraEpub3-JDK21 のダウンロード
+<div style="text-align: right; margin-bottom: 1em;">
+  <a href="en/">🌐 English</a>
+</div>
 
-[最新リリースをダウンロード](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases){:.btn}
+<nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
+  <strong>📚 ドキュメント:</strong>
+  <a href="./">ホーム</a> | 
+  <a href="usage.html">使い方</a> | 
+  <a href="development.html">開発者向け</a> | 
+  <a href="epub33-ja.html">EPUB 3.3準拠</a> |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
+</nav>
+
+# ダウンロード
+
+<div style="text-align: center; margin: 2em 0;">
+  <p><strong>最新版:</strong> v1.2.5-jdk21 (2025年12月20日) | 
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">リリースノート</a></p>
+  
+  <div style="display: inline-block; text-align: center;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+      📦 Windows版 (ZIP)
+    </a>
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+      🐧 Linux版 (TAR.GZ)
+    </a>
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+      🍎 macOS版 (TAR.GZ)
+    </a>
+  </div>
+  
+  <p><small><a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases">📋 すべてのリリースを見る</a></small></p>
+</div>
 
 ---
 
@@ -55,7 +85,7 @@ Java をお持ちでない場合は、[Eclipse Temurin](https://adoptium.net/tem
 
 ## 推奨手順（Windows）
 
-1. [Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) から最新の ZIP ファイルをダウンロードします
+1. 上記の **Windows版ダウンロード** ボタンから最新の ZIP ファイルをダウンロードします
 2. 任意のフォルダに展開します
 3. `AozoraEpub3起動.bat` をダブルクリックして起動します
 4. GUI が表示されたらセットアップ完了です
@@ -66,7 +96,7 @@ Java をお持ちでない場合は、[Eclipse Temurin](https://adoptium.net/tem
 
 ## インストール（macOS / Linux）
 
-1. [Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) から TAR.GZ ファイルをダウンロードします
+1. 上記の **macOS版** または **Linux版ダウンロード** ボタンから TAR.GZ ファイルをダウンロードします
 2. 展開します: `tar -xzf AozoraEpub3-*.tar.gz`
 3. フォルダに移動し実行します: `./AozoraEpub3.sh`
 4. 実行権限エラーの場合は先に実行: `chmod +x AozoraEpub3.sh`

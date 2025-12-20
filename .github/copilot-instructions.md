@@ -47,6 +47,13 @@ These instructions tailor Copilot to this repository so it can generate correct,
 - Basic checks for EPUB 3.2 and 電書協/電書連ガイド対応 are included as shell assertions.
 - When adding tests, prefer small, deterministic unit tests over end-to-end unless necessary.
 
+### IndexNow (Docs 配信・検索エンジン通知)
+- docs 配下のサイト更新時は `docs/sitemap.xml` に新規/更新ページが含まれることを前提に IndexNow 送信を行う（ワークフローでサイトマップから自動収集）。
+- ホスト確認用キーは `docs/fad6fa3a81974f6aa0740a0861fbaefe.txt`（内容はキー文字列の1行）。ページ追加時、キーファイルの配置は変更不要。
+- Actions Variables: `INDEXNOW_HOST` と `INDEXNOW_BASE_URL` を必要に応じて設定。未設定でもサイトマップの最初のURLから自動検出するが、ホスト移行時は変数の整合性を優先。
+- 送信タイミング: push（docs/** の変更）と手動実行（workflow_dispatch）に加え、毎日 03:00 UTC（JST 12:00）の定期実行で送信。
+- ワークフローのログに「Discovered N URL(s)」と先頭20件サンプル、`Request body` の `urlList` が全件含まれていることを確認。必要ならサイトマップ生成/掲載ページを見直す。
+
 ## Coding Guidelines
 - Keep changes minimal and focused; align with existing style.
 - Avoid introducing global state. If needed (e.g., Velocity), allow dependency injection.
@@ -112,3 +119,4 @@ These instructions tailor Copilot to this repository so it can generate correct,
 - Prefer asking for the intended device/preset (e.g., Kobo, Kindle).
 - Confirm whether a change belongs in Java code or the Velocity templates.
 - If a Velocity context key is missing, check writer/converter population and tests.
+ - Docs ページを追加・更新する場合は、`docs/sitemap.xml` に反映されているか確認し、IndexNow ワークフローが URL を拾えることを前提に作業する（個別のURL列挙は不要）。

@@ -1,113 +1,36 @@
-# AozoraEpub3
+---
+layout: default
+lang: ja
+title: 使い方 - AozoraEpub3-JDK21
+description: AozoraEpub3-JDK21の使い方ガイド：GUI操作、コマンドライン実行、設定項目の詳細説明
+---
 
-**Java 21対応版 / Gradle対応版**
+<div style="text-align: right; margin-bottom: 1em;">
+  <a href="en/usage.html">🌐 English</a>
+</div>
 
-> [!NOTE]
-> **Read this in other languages:** [English](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) (Auto-translated by your browser)
+<nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
+  <strong>📚 ドキュメント:</strong>
+  <a href="./">ホーム</a> | 
+  <a href="usage.html">使い方</a> | 
+  <a href="development.html">開発者向け</a> | 
+  <a href="epub33-ja.html">EPUB 3.3準拠</a> |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
+</nav>
 
-青空文庫の注記入りテキストファイルを EPUB 3 ファイルに変換するツールです。
+# 使い方ガイド
 
-## このプロジェクトについて
+## 目次
 
-このプロジェクトは [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3) を元に、Java 21対応および [narou.rb](https://github.com/whiteleaf7/narou) での利用を目的として改変したものです。
-
-- **元プロジェクト**: [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3)
-- **ライセンス**: GPL v3（元作者に帰属）
-- **目的**: narou.rb との連携、Java 21 への対応
+- [GUI での使い方](#gui-での使い方)
+- [主な設定項目](#主な設定項目)
+- [コマンドライン実行](#コマンドライン実行)
+- [テンプレートのカスタマイズ](#テンプレートのカスタマイズ)
+- [トラブルシューティング](#トラブルシューティング)
 
 ---
 
-## ライセンス
-
-- **AozoraEpub3 の再配布・改変には GPL v3** が適用されます（元作者に帰属）。
-
-
-## 特徴
-
- - 青空文庫テキスト（txt/zip）を EPUB 3.3 準拠（EPUB 3.2後方互換）で変換
-- Web小説サイトのHTMLから青空文庫形式テキストを取得して変換
-- 画像zip/rarを EPUB 3 に変換
-- 縦書き・横書きに対応
-- 日本の主要電子書籍リーダー（Kobo, Kindle, Reader等）に対応
-- Java 21 の最新機能を活用（Java 25 対応評価中）
-- iPhone版Kindle縦書き対応（※表題ページのレイアウトが画面比率により崩れることがあります）
-- **高速変換**: 大容量アーカイブの処理を最適化（アーカイブスキャンを4回→1回に削減）
-
----
-
-## 動作環境
-
-**Java 21以降** が必要です。
-
-- 実行: JRE 21 で動作します（JDK不要）。Temurin などのランタイム配布を推奨。
-- ビルド/開発: JDK 21 が必要です（Gradle 9.2.1 で動作確認済み）。
-
-[Adoptium](https://adoptium.net/) などから Java 21 の JRE もしくは JDK をインストールしてください。
-
-### 対応OS
-
-- Windows 10 以降
-- macOS
-- Ubuntu
-
----
-
-## インストール
-
-### 方法 1: リリース版をダウンロード（推奨）
-
-最新版は [GitHub Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) から取得できます。
-
-配布は **FAT版のみ** 提供します（依存関係込みの単一JAR）。
-
-**Windows（ZIP）:**
-```
-AozoraEpub3-1.2.1-jdk21.zip
-```
-
-**Linux/macOS（TAR.GZ）:**
-```
-AozoraEpub3-1.2.1-jdk21.tar.gz
-```
-
-### インストール手順
-
-1. 上記リンクからお使いのOS向けファイルをダウンロード
-2. ファイルを任意のフォルダに解凍
-3. GUI起動方法（以下のいずれか）：
-   - **Windows**: `AozoraEpub3起動.bat` または `AozoraEpub3.bat` をダブルクリック（推奨）
-   - **Unix/Linux/macOS**: `AozoraEpub3.sh` を実行
-   - **直接実行**: `java -jar AozoraEpub3.jar`
-
-**注意**: Windows 11では `.jar` ファイルのダブルクリックが動作しないことがあります。その場合は `.bat` ファイルをご利用ください。
-
-### 方法 2: ソースからビルド
-
-開発版の場合は以下の手順でビルドしてください：
-
-```bash
-git clone https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21.git
-cd AozoraEpub3-JDK21
-./gradlew dist
-# build/distributions/ に FAT版の zip / tar.gz が生成されます
-```
-
-**ビルドタスク詳細:**
-- **`./gradlew jar`**: FAT JAR を生成（`build/libs/AozoraEpub3.jar`）
-- **`./gradlew dist`**: 配布パッケージを生成（ZIP / TAR.GZ）【推奨】
-- **`./gradlew test`**: テスト実行
-
----
-
-## 既知の問題
-
-- iOS版Kindleで表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。現状は端末依存のため回避策はなく、必要に応じて「表題ページ出力を無効にする」「カスタム表紙のみ出力する」設定をご検討ください。
- - Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3起動.bat` の使用を推奨します。
- - GUIフォントについて: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
-
----
-
-## 使い方（GUI）
+## GUI での使い方
 
 ### 基本的な流れ
 
@@ -248,7 +171,7 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-hor` | 横書きで出力 | |
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
 
-### 例
+### 実行例
 
 ```bash
 # 標準的な変換
@@ -331,7 +254,7 @@ your-directory/
 
 - 青空文庫の仕様外にある注記は対応していません
 - ログに表示される注記を確認し、元のテキストを修正してください
-- 対応している注記については、[DEVELOPMENT.md](DEVELOPMENT.md#対応している注記) を参照
+- 対応している注記については、[開発者向けドキュメント](development.html#対応している注記) を参照
 
 ### ファイルが開かない
 
@@ -351,6 +274,12 @@ your-directory/
 java -Xmx2g -jar AozoraEpub3.jar input.txt
 ```
 
+### 既知の問題
+
+- iOS版Kindleで表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。現状は端末依存のため回避策はなく、必要に応じて「表題ページ出力を無効にする」「カスタム表紙のみ出力する」設定をご検討ください。
+- Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3起動.bat` の使用を推奨します。
+- GUIフォントについて: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
+
 ---
 
 ## ライセンス
@@ -368,13 +297,6 @@ ePubファイルの修正や配布は入力データの著作権内で自由に�
 
 ---
 
-## 更新履歴
-
-詳細は [README_Changes.txt](README_Changes.txt) を参照してください。
-
----
-
-## 開発への参加
-
-バグ報告・機能提案・プルリクエストを歓迎します。  
-詳細は [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
+<div style="text-align: center; margin-top: 3em; padding-top: 2em; border-top: 1px solid #e1e4e8;">
+  <p><a href="./">ホーム</a> | <a href="development.html">開発者向けドキュメント</a> | <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a></p>
+</div>

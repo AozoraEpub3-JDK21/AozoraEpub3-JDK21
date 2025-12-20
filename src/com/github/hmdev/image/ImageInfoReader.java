@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Vector;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
@@ -19,6 +20,7 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 
 
 import com.github.hmdev.info.ImageInfo;
+import com.github.hmdev.io.ArchiveCache;
 import com.github.hmdev.util.FileNameComparator;
 import com.github.hmdev.util.LogAppender;
 import com.github.junrar.Archive;
@@ -218,90 +220,88 @@ public class ImageInfoReader
 		return null;
 	}
 	
-	/** zip内の画像情報をすべて読み込み
+	/** zip内の画像情報をすべて読み込み（ArchiveCacheを使用してスキャンを1回のみに）
 	 * @throws IOException */
 	public void loadZipImageInfos(File srcFile, boolean addFileName) throws IOException
 	{
-		ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false);
 		try {
-		ArchiveEntry entry;
+			loadArchiveImageInfosFromCache(srcFile, "zip", addFileName);
+		} catch (RarException e) {
+			throw new IOException(e);
+		}
+	}
+	
+	/** rar内の画像情報をすべて読み込み（ArchiveCacheを使用） */
+	public void loadRarImageInfos(File srcFile, boolean addFileName) throws IOException, RarException
+	{
+		loadArchiveImageInfosFromCache(srcFile, "rar", addFileName);
+	}
+	
+	/** キャッシュから画像エントリを取得してImageInfoを読み込む */
+	private void loadArchiveImageInfosFromCache(File srcFile, String ext, boolean addFileName) throws IOException, RarException
+	{
+		ArchiveCache cache = new ArchiveCache(srcFile, ext);
+		cache.scan();
+		
+		List<String> imageEntries = cache.getImageEntries();
 		int idx = 0;
-		while ((entry = zis.getNextEntry()) != null) {
+		for (String entryName : imageEntries) {
 			if (idx++ % 10 == 0) LogAppender.append(".");
-			String entryName = entry.getName();
 			
 			// ZipSlip脆弱性対策: パストラバーサル攻撃をチェック
 			try {
 				entryName = sanitizeArchiveEntryName(entryName);
 			} catch (IllegalArgumentException e) {
 				System.err.println("Skipping suspicious archive entry: " + e.getMessage());
-				continue;  // 疑わしいエントリはスキップ
+				continue;
 			}
 			
-			String lowerName = entryName.toLowerCase();
-			if (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".gif")) {
-				ImageInfo imageInfo = null;
-				try {
-					imageInfo = ImageInfo.getImageInfo(zis);
-				} catch (Exception e) {
-					LogAppender.error("画像が読み込めませんでした: "+srcFile.getPath());
-					e.printStackTrace();
-				}
-				if (imageInfo != null) {
-					this.imageFileInfos.put(entryName, imageInfo);
-					if (addFileName) this.addImageFileName(entryName);
-				}
+			ImageInfo imageInfo = null;
+			try {
+				// アーカイブを再度開いて画像を読み込む（画像内容はキャッシュしない）
+				imageInfo = readImageInfoFromArchive(srcFile, ext, entryName);
+			} catch (Exception e) {
+				LogAppender.error("画像が読み込めませんでした: " + entryName);
+				e.printStackTrace();
+			}
+			if (imageInfo != null) {
+				this.imageFileInfos.put(entryName, imageInfo);
+				if (addFileName) this.addImageFileName(entryName);
 			}
 		}
-		} finally {
-			LogAppender.println();
-			zis.close();
-		}
+		LogAppender.println();
 	}
-	/** rar内の画像情報をすべて読み込み */
-	public void loadRarImageInfos(File srcFile, boolean addFileName) throws IOException, RarException
-	{
-		Archive archive = new Archive(srcFile);
-		try {
-		int idx = 0;
-		for (FileHeader fileHeader : archive.getFileHeaders()) {
-			if (idx++ % 10 == 0) LogAppender.append(".");
-			if (!fileHeader.isDirectory()) {
-				String entryName = fileHeader.getFileName();
-				entryName = entryName.replace('\\', '/');
-				String lowerName = entryName.toLowerCase();
-				if (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".gif")) {
-					ImageInfo imageInfo = null;
-					InputStream is = null;
-					try {
-						//読めない場合があるので一旦バイト配列に読み込み
+	
+	/** アーカイブ内の特定エントリからImageInfoを読み込む */
+	private ImageInfo readImageInfoFromArchive(File srcFile, String ext, String entryName) throws IOException, RarException {
+		if ("zip".equals(ext) || "txtz".equals(ext)) {
+			try (ZipArchiveInputStream zis = new ZipArchiveInputStream(
+					new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false)) {
+				ArchiveEntry entry;
+				while ((entry = zis.getNextEntry()) != null) {
+					if (entry.getName().equals(entryName)) {
+						return ImageInfo.getImageInfo(zis);
+					}
+				}
+			}
+		} else if ("rar".equals(ext)) {
+			try (Archive archive = new Archive(srcFile)) {
+				for (FileHeader fileHeader : archive.getFileHeaders()) {
+					String rarEntryName = fileHeader.getFileName().replace('\\', '/');
+					if (rarEntryName.equals(entryName)) {
 						ByteArrayOutputStream baos = new ByteArrayOutputStream();
 						archive.extractFile(fileHeader, baos);
 						baos.close();
-						is = new ByteArrayInputStream(baos.toByteArray());
-						imageInfo = ImageInfo.getImageInfo(is);
-						if (imageInfo != null) {
-							this.imageFileInfos.put(entryName, imageInfo);
-							if (addFileName) this.addImageFileName(entryName);
-						} else {
-							LogAppender.println();
-							LogAppender.error("画像が読み込めませんでした: "+entryName);
+						try (InputStream is = new ByteArrayInputStream(baos.toByteArray())) {
+							return ImageInfo.getImageInfo(is);
 						}
-					} catch (Exception e) {
-						LogAppender.println();
-						LogAppender.error("画像が読み込めませんでした: "+entryName);
-						e.printStackTrace();
-					} finally {
-						if (is != null) is.close();
 					}
 				}
 			}
 		}
-		} finally {
-			LogAppender.println();
-			archive.close();
-		}
+		return null;
 	}
+	
 	
 	/** 圧縮ファイル内の画像で画像注記以外の画像も表紙に選択できるように追加 */
 	public void addNoNameImageFileName()

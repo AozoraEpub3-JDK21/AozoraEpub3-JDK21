@@ -94,6 +94,7 @@ import javax.swing.text.JTextComponent;
 import javax.swing.text.TextAction;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
+import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.BookInfoHistory;
@@ -3568,14 +3569,14 @@ public class AozoraEpub3Applet extends JApplet
 		LogAppender.append("------ ");
 		if("zip".equals(ext) || "txtz".equals(ext)) { 
 			try {
-				txtCount = AozoraEpub3.countZipText(srcFile);
+				txtCount = ArchiveTextExtractor.countZipText(srcFile);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 			if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 		} else if ("rar".equals(ext)) {
 			try {
-				txtCount = AozoraEpub3.countRarText(srcFile);
+				txtCount = ArchiveTextExtractor.countRarText(srcFile);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}

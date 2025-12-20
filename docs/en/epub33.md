@@ -5,6 +5,15 @@ title: EPUB 3.3 Guide
 description: AozoraEpub3-JDK21 EPUB 3.3 support guide. Changes from 3.0 and implementation status.
 ---
 
+<nav style="background: #f5f5f5; padding: 12px; border-radius: 4px; margin-bottom: 24px;">
+  <a href="index.html">🏠 Home</a> |
+  <a href="usage.html">📖 Usage</a> |
+  <a href="development.html">👨‍💻 Development</a> |
+  <strong>📚 EPUB 3.3</strong> |
+  <a href="https://github.com/Harusame64/AozoraEpub3-JDK21">💻 GitHub</a>
+  <div style="float: right;">🌐 <a href="../epub33-ja.html">日本語</a></div>
+</nav>
+
 # EPUB 3.3 Guide
 
 Overview of EPUB 3.3 support in AozoraEpub3-JDK21.

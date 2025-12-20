@@ -1,0 +1,84 @@
+name: IndexNow Submit
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *" # 毎日 03:00 UTC に送信
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Submit URLs to IndexNow
+        env:
+          INDEXNOW_HOST: ${{ vars.INDEXNOW_HOST }}
+          INDEXNOW_BASE_URL: ${{ vars.INDEXNOW_BASE_URL }}
+        run: |
+          set -e
+          # Validate sitemap presence
+          if [ ! -f docs/sitemap.xml ]; then
+            echo "docs/sitemap.xml not found"; exit 1
+          fi
+
+          # Collect URLs from sitemap
+          URLS=$(grep -oP '(?<=<loc>)[^<]+' docs/sitemap.xml)
+          if [ -z "$URLS" ]; then
+            echo "No URLs found in docs/sitemap.xml"; exit 1
+          fi
+
+          # Detect host and BASE_URL from the first URL in sitemap
+          FIRST_URL=$(echo "$URLS" | head -n1)
+          DETECTED_HOST=$(echo "$FIRST_URL" | sed -E 's#^https?://([^/]+).*#\1#')
+          BASE_URL_FROM_SITEMAP=$(echo "$FIRST_URL" | sed -E 's#^(https?://[^/]+)(/.*)?$#\1\2#' | sed 's#/$##')
+
+          # Allow overrides via Actions Variables if provided
+          INDEXNOW_HOST="${INDEXNOW_HOST:-$DETECTED_HOST}"
+          BASE_URL="${INDEXNOW_BASE_URL:-$BASE_URL_FROM_SITEMAP}"
+          BASE_URL=${BASE_URL%/}
+
+          KEY="fad6fa3a81974f6aa0740a0861fbaefe"
+          KEY_LOCATION="$BASE_URL/$KEY.txt"
+
+          # Filter URL list to the detected host to avoid 422
+          URLS_FILTERED=$(echo "$URLS" | while read -r u; do
+            host=$(echo "$u" | sed -E 's#^https?://([^/]+).*#\1#')
+            if [ "$host" = "$INDEXNOW_HOST" ]; then
+              echo "$u"
+            fi
+          done)
+
+          COUNT=$(echo "$URLS_FILTERED" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo "Discovered $COUNT URL(s) for host $INDEXNOW_HOST"
+          echo "Sample URLs:"; echo "$URLS_FILTERED" | head -n 20
+
+          if [ -z "$URLS_FILTERED" ]; then
+            echo "No URLs matching host $INDEXNOW_HOST found in sitemap."; exit 1
+          fi
+
+          # Build JSON body from all lines (use `inputs` to read all)
+          BODY=$(jq -Rn --arg host "$INDEXNOW_HOST" --arg key "$KEY" --arg keyLocation "$KEY_LOCATION" '
+            [inputs | select(length>0)] as $urls |
+            {host:$host, key:$key, keyLocation:$keyLocation, urlList:$urls}
+          ' <<< "$URLS_FILTERED")
+
+          echo "Request body:"; echo "$BODY" | jq .
+
+          HTTP_CODE=$(curl -sS -X POST \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            -d "$BODY" https://api.indexnow.org/indexnow \
+            -o response.json -w "%{http_code}")
+
+          echo "IndexNow response code: $HTTP_CODE"
+          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]
+
+          echo "Response body:"; cat response.json | jq .
