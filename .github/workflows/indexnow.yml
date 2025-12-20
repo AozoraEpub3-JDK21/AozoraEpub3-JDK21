@@ -50,7 +50,12 @@ jobs:
           KEY_LOCATION="$BASE_URL/$KEY.txt"
 
           # Filter URL list to the detected host to avoid 422
-          URLS_FILTERED=$(echo "$URLS" | grep -E "^https?://$INDEXNOW_HOST(/|$)")
+          URLS_FILTERED=$(echo "$URLS" | while read -r u; do
+            host=$(echo "$u" | sed -E 's#^https?://([^/]+).*#\1#')
+            if [ "$host" = "$INDEXNOW_HOST" ]; then
+              echo "$u"
+            fi
+          done)
 
           COUNT=$(echo "$URLS_FILTERED" | sed '/^$/d' | wc -l | tr -d ' ')
           echo "Discovered $COUNT URL(s) for host $INDEXNOW_HOST"
