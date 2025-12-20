@@ -71,6 +71,6 @@ jobs:
             -o response.json -w "%{http_code}")
 
           echo "IndexNow response code: $HTTP_CODE"
-          test "$HTTP_CODE" -ge 200 -a "$HTTP_CODE" -lt 300
+          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]
 
           echo "Response body:"; cat response.json | jq .
