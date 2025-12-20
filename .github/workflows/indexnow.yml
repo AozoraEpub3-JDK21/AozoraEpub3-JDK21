@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: "0 3 * * *" # 毎日 03:00 UTC に送信
 
+permissions:
+  contents: read
+
 jobs:
   submit:
     runs-on: ubuntu-latest
