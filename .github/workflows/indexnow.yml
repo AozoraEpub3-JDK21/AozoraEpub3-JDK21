@@ -50,9 +50,11 @@ jobs:
           KEY_LOCATION="$BASE_URL/$KEY.txt"
 
           # Filter URL list to the detected host to avoid 422
-          URLS_FILTERED=$(echo "$URLS" | awk -v h="$INDEXNOW_HOST" 'BEGIN{FS="//"} $0 ~ "^https?://" h {
-            print $0
-          }')
+          URLS_FILTERED=$(echo "$URLS" | grep -E "^https?://$INDEXNOW_HOST(/|$)")
+
+          COUNT=$(echo "$URLS_FILTERED" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo "Discovered $COUNT URL(s) for host $INDEXNOW_HOST"
+          echo "Sample URLs:"; echo "$URLS_FILTERED" | head -n 20
 
           if [ -z "$URLS_FILTERED" ]; then
             echo "No URLs matching host $INDEXNOW_HOST found in sitemap."; exit 1
