@@ -59,17 +59,12 @@ gem install narou
 
 ## 3. AozoraEpub3 の準備
 
-公式サイト https://w.atwiki.jp/hmdev/ は現在ダウンロードできないため、以下の配布サイトから取得してください。
+本ソフトウェア（AozoraEpub3-JDK21）を準備します。
 
-- 改造版 AozoraEPUB3: https://kyukyunyorituryo.github.io/aozoraepub/
-- AozoraEPUB3-JDK21: https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/
+- **[ダウンロードページ (Releases)](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases)** から最新の zip ファイルをダウンロードします。
+- 任意の場所（例: `C:\Tools\AozoraEpub3` など）に解凍します。
 
-手順（簡潔）:
-1. 上記いずれかのサイトを開く
-2. OS に合ったパッケージ（ZIP推奨）をダウンロード
-3. 任意の場所（例: `C:\Tools\AozoraEpub3`）で ZIP を解凍する
-
-> **Point**: パスに日本語やスペースが含まれていると、うまく動作しない場合があります。なるべく半角英数字だけのフォルダに置くことを推奨します。
+> **Point**: パス（フォルダの場所）に日本語やスペースが含まれていると、うまく動作しない場合があります。なるべく半角英数字だけの場所に置くことを推奨します。
 
 ---
 
