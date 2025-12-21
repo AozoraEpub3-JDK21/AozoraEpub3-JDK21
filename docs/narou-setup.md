@@ -54,20 +54,23 @@ gem install narou
 
 ---
 
-## 2.5 AozoraEpub3 のダウンロードとインストール
+## 3. AozoraEpub3 のダウンロードとインストール
 
-narou.rb の準備ができたら、AozoraEpub3 をダウンロード・インストールします。
+まず公式サイト https://w.atwiki.jp/hmdev/ は現在ダウンロードができないため、以下のいずれかの配布サイトから取得してください。
 
-1. 公式サイトのダウンロードページを開く: https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/
-2. OS に合ったパッケージをダウンロード（Windows: ZIP, macOS/Linux: TAR.GZ）。
-3. 展開後、`AozoraEpub3起動.bat`（Windows）または `AozoraEpub3.sh`（macOS/Linux）で起動。
-4. narou.rb からの連携設定例:
-   - `narou s aozoraepub3.path="C:/path/to/AozoraEpub3.jar"`
-   - 必要に応じて AozoraEpub3 の CLI オプション（例: `-of -d out`）を設定。
+- 改造版 AozoraEPUB3: https://kyukyunyorituryo.github.io/aozoraepub/
+- AozoraEPUB3-JDK21: https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/
+
+手順（簡易）：
+1. 上記いずれかのサイトを開く
+2. OSに合ったパッケージ（ZIP推奨）をダウンロード
+3. 任意の場所でZIPを解凍する（ここまででOK）
+
+起動や narou.rb との連携設定は、後続の節で説明します。
 
 ---
 
-## 3. 起動エラーの修正（tilt/erubis）【既知の不具合】
+## 4. 起動エラーの修正（tilt/erubis）【既知の不具合】
 
 **症状**: `narou` 実行時に `cannot load such file -- tilt/erubis` エラーが出る。
 
@@ -89,7 +92,7 @@ narou.rb の準備ができたら、AozoraEpub3 をダウンロード・イン�
 
 ---
 
-## 4. 「小説家になろう」目次取得エラーの修正【暫定回避策】
+## 5. 「小説家になろう」目次取得エラーの修正【暫定回避策】
 
 **症状**: ダウンロード時に目次や本文が取得できません。
 
@@ -118,7 +121,7 @@ narou.rb の準備ができたら、AozoraEpub3 をダウンロード・イン�
 
 ---
 
-## 5. 初期化と動作確認
+## 6. 初期化と動作確認
 
 ```powershell
 mkdir MyNovels
@@ -130,7 +133,7 @@ narou init
 
 ---
 
-## 6. AozoraEpub3 との連携（最小構成）
+## 7. AozoraEpub3 との連携（最小構成）
 
 - narou.rb から AozoraEpub3 を呼び出す場合、設定で実行パスを指定します。
   ```powershell
@@ -140,7 +143,7 @@ narou init
 
 ---
 
-## 7. トラブルシュートのヒント
+## 8. トラブルシュートのヒント
 
 - 依存ライブラリのバージョン確認: `gem list tilt` / `gem list narou`
 - GEM パス確認: `gem env home`
