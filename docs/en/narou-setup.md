@@ -5,10 +5,6 @@ title: narou.rb Setup Guide (December 2025)
 description: narou.rb installation, known issues (December 2025), and AozoraEpub3 integration steps.
 ---
 
-<div style="text-align: right; margin-bottom: 1em;">
-  <a href="../narou-setup.html">🌐 日本語</a>
-</div>
-
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
    <strong>📚 Documentation:</strong>
    <a href="index.html">Home</a> | 

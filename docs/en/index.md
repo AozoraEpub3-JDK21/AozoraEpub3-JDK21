@@ -5,10 +5,6 @@ title: AozoraEpub3-JDK21 Download
 description: Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
 ---
 
-<div style="text-align: right; margin-bottom: 1em;">
-  <a href="../">🌐 日本語</a>
-</div>
-
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
   <strong>📚 Documentation:</strong>
   <a href="./">Home</a> | 
@@ -17,6 +13,7 @@ description: Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
   <a href="development.html">Development</a> | 
   <a href="epub33.html">EPUB 3.3</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
+  <div style="float: right;">🌐 <a href="../">日本語</a></div>
 </nav>
 
 # AozoraEpub3-JDK21 Download
