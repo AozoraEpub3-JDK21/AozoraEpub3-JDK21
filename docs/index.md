@@ -13,6 +13,7 @@ description: 青空文庫対応 EPUB3 変換ツール：セットアップ & ス
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
+  <a href="narou-setup.html">narou.rb</a> |
   <a href="development.html">開発者向け</a> | 
   <a href="epub33-ja.html">EPUB 3.3準拠</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
@@ -114,6 +115,12 @@ java -jar AozoraEpub3.jar -of -d out input.txt
 GUI を起動する場合は引数なしで実行します: `java -jar AozoraEpub3.jar`
 
 詳細は [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) をご参照ください。
+
+---
+
+## 関連ガイド
+
+- **[narou.rb 導入ガイド](narou-setup.html)** — Web小説ダウンローダーの導入と AozoraEpub3 連携
 
 ---
 

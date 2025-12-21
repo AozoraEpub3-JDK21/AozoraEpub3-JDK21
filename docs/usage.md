@@ -13,6 +13,7 @@ description: AozoraEpub3-JDK21の使い方ガイド：GUI操作、コマンド�
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
+  <a href="narou-setup.html">narou.rb</a> |
   <a href="development.html">開発者向け</a> | 
   <a href="epub33-ja.html">EPUB 3.3準拠</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
