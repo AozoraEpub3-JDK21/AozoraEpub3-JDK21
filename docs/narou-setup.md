@@ -6,9 +6,13 @@ description: narou.rb のインストールと、2025-12 時点で必要な手�
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
-  <a href="../">ホーム</a> |
-  <a href="../usage.html">使い方</a> |
-  <a href="./narou-setup.html">narou.rb ガイド</a>
+   <strong>📚 ドキュメント:</strong>
+   <a href="./">ホーム</a> | 
+   <a href="usage.html">使い方</a> | 
+   <strong>narou.rb</strong> |
+   <a href="development.html">開発者向け</a> | 
+   <a href="epub33-ja.html">EPUB 3.3準拠</a> |
+   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
 </nav>
 
 # narou.rb 導入 & トラブルシューティングガイド
@@ -47,6 +51,19 @@ gem install narou
 ```
 
 インストール直後は依存ライブラリの不整合で起動しない場合があります。次節の修正を続けてください。
+
+---
+
+## 2.5 AozoraEpub3 のダウンロードとインストール
+
+narou.rb の準備ができたら、AozoraEpub3 をダウンロード・インストールします。
+
+1. 公式サイトのダウンロードページを開く: https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/
+2. OS に合ったパッケージをダウンロード（Windows: ZIP, macOS/Linux: TAR.GZ）。
+3. 展開後、`AozoraEpub3起動.bat`（Windows）または `AozoraEpub3.sh`（macOS/Linux）で起動。
+4. narou.rb からの連携設定例:
+   - `narou s aozoraepub3.path="C:/path/to/AozoraEpub3.jar"`
+   - 必要に応じて AozoraEpub3 の CLI オプション（例: `-of -d out`）を設定。
 
 ---
 

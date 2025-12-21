@@ -5,12 +5,14 @@ title: EPUB 3.3 日本語解説
 description: AozoraEpub3-JDK21 の EPUB 3.3 日本語解説ページ。EPUB 3.0 からの差分と対応状況を解説。
 ---
 
-<nav style="background: #f5f5f5; padding: 12px; border-radius: 4px; margin-bottom: 24px;">
-  <a href="index.html">🏠 ホーム</a> |
-  <a href="usage.html">📖 使い方</a> |
-  <a href="development.html">👨‍💻 開発者向け</a> |
-  <strong>📚 EPUB 3.3</strong> |
-  <a href="https://github.com/Harusame64/AozoraEpub3-JDK21">💻 GitHub</a>
+<nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
+  <strong>📚 ドキュメント:</strong>
+  <a href="./">ホーム</a> | 
+  <a href="usage.html">使い方</a> | 
+  <a href="narou-setup.html">narou.rb</a> |
+  <a href="development.html">開発者向け</a> | 
+  <strong>EPUB 3.3準拠</strong> |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
   <div style="float: right;">🌐 <a href="en/epub33.html">English</a></div>
 </nav>
 

@@ -3,12 +3,14 @@ layout: default
 title: Development Guide - AozoraEpub3
 ---
 
-<nav style="background: #f5f5f5; padding: 12px; border-radius: 4px; margin-bottom: 24px;">
-  <a href="index.html">🏠 Home</a> |
-  <a href="usage.html">📖 Usage</a> |
-  <strong>👨‍💻 Development</strong> |
-  <a href="epub33.html">📚 EPUB 3.3</a> |
-  <a href="https://github.com/Harusame64/AozoraEpub3-JDK21">💻 GitHub</a>
+<nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
+  <strong>📚 Documentation:</strong>
+  <a href="index.html">Home</a> | 
+  <a href="usage.html">Usage</a> | 
+  <a href="../narou-setup.html">narou.rb (ja)</a> |
+  <strong>Development</strong> | 
+  <a href="epub33.html">EPUB 3.3</a> |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
   <div style="float: right;">🌐 <a href="../development.html">日本語</a></div>
 </nav>
 
