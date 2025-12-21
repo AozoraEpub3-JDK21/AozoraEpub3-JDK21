@@ -32,6 +32,9 @@ Web小説ダウンローダー **narou.rb** を導入し、AozoraEpub3 と連携
 
 本ガイドは、これらに対するコミュニティから共有されている回避策をまとめたものです。
 
+公式インストール手順（必須ツールや kindlegen の入手方法など）は、以下も参照してください。
+- narou.rb 公式 Wiki: https://github.com/whiteleaf7/narou/wiki#how_to_install
+
 ---
 
 ## 1. Ruby のインストール（Windowsの例）
