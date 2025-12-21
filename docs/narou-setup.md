@@ -66,10 +66,15 @@ gem install narou
 
 ## 3. AozoraEpub3 の準備
 
-本ソフトウェア（AozoraEpub3-JDK21）を準備します。
+本ソフトウェア（AozoraEpub3-JDK21）を動作させるには **Java 21** が必要です。
 
-- **[ダウンロードページ (Releases)](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases)** から最新の zip ファイルをダウンロードします。
-- 任意の場所（例: `C:\Tools\AozoraEpub3` など）に解凍します。
+1. **Java の確認**  
+   コマンドプロンプトで `java -version` を実行し、バージョン「21」が表示されるか確認してください。  
+   * **まだインストールしていない場合**: 👉 **[トップページのインストールガイド](./#java-21-%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%ABeclipse-temurin)** を参照して導入してください。
+
+2. **ソフトウェアのダウンロード**
+   * **[ダウンロードページ (Releases)](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases)** から最新の zip ファイルをダウンロードします。
+   * 任意の場所（例: `C:\Tools\AozoraEpub3` など）に解凍します。
 
 > **Point**: パス（フォルダの場所）に日本語やスペースが含まれていると、うまく動作しない場合があります。なるべく半角英数字だけの場所に置くことを推奨します。
 

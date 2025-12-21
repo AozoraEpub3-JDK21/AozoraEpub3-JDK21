@@ -69,10 +69,15 @@ gem install narou
 
 ## 3. Prepare AozoraEpub3
 
-Set up the AozoraEpub3-JDK21 software.
+Running AozoraEpub3-JDK21 requires **Java 21**.
 
-- Download the latest zip file from **[Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases)**.
-- Extract it to any location (example: `C:\Tools\AozoraEpub3`).
+1. **Check Java**  
+   Run `java -version` in Command Prompt and confirm it shows version "21".  
+   * **If Java is not installed**: 👉 See the **[installation guide on the top page](index.html#install-java-21-eclipse-temurin)**.
+
+2. **Download the software**
+   * Download the latest zip from **[Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases)**.
+   * Extract it to any location (e.g., `C:\Tools\AozoraEpub3`).
 
 > **Point**: Avoid paths with Japanese characters or spaces; use ASCII characters only for best compatibility.
 
