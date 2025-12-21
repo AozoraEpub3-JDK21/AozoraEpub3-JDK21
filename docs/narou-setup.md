@@ -140,6 +140,7 @@ narou init
 1. **「AozoraEpub3のフォルダを指定して下さい」** と表示されます。
 2. 手順3で用意した **`AozoraEpub3.jar` が入っているフォルダのパス** を入力して Enter を押します。
    - 例: `C:\Tools\AozoraEpub3`
+   - エクスプローラからフォルダをドラッグ＆ドロップしても入力できます。
 
 これで `narou.rb` が AozoraEpub3 の場所を記憶し、自動連携の設定は完了です。
 
@@ -164,6 +165,7 @@ narou init
 - **[narou.rb Issues](https://github.com/whiteleaf7/narou/issues)** — バグ報告・既知問題
 - **[narou.rb 公式掲示板](https://jbbs.shitaraba.net/computer/44668/)** — ユーザーコミュニティ・情報交換
 - **[AozoraEpub3 使い方](../usage.html)** — AozoraEpub3 の詳細設定
+- **[Send to Kindle (Web/メール)](https://www.amazon.co.jp/sendtokindle/)** — Kindleで読む場合に便利。※narou.rb の既知障害として、自動メール送信時に電子書籍タイトルが数字化する事象があります。
 
 ---
 
