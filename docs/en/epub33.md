@@ -9,7 +9,7 @@ description: AozoraEpub3-JDK21 EPUB 3.3 support guide. Changes from 3.0 and impl
   <strong>📚 Documentation:</strong>
   <a href="index.html">Home</a> | 
   <a href="usage.html">Usage</a> | 
-  <a href="../narou-setup.html">narou.rb (ja)</a> |
+  <a href="narou-setup.html">narou.rb Setup</a> |
   <a href="development.html">Development</a> | 
   <strong>EPUB 3.3</strong> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
