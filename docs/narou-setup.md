@@ -5,6 +5,10 @@ title: narou.rb 導入ガイド (2025年12月時点)
 description: narou.rb のインストールと、2025-12 時点で必要な手動修正、AozoraEpub3 連携手順のまとめ
 ---
 
+<div style="text-align: right; margin-bottom: 1em;">
+  <a href="en/narou-setup.html">🌐 English</a>
+</div>
+
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
    <strong>📚 ドキュメント:</strong>
    <a href="./">ホーム</a> | 
