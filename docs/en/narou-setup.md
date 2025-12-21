@@ -9,7 +9,7 @@ description: narou.rb installation, known issues (December 2025), and AozoraEpub
    <strong>📚 Documentation:</strong>
    <a href="index.html">Home</a> | 
    <a href="usage.html">Usage</a> | 
-   <strong>narou.rb Setup (ja)</strong> |
+   <strong>narou.rb Setup</strong> |
    <a href="development.html">Development</a> | 
    <a href="epub33.html">EPUB 3.3</a> |
    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
