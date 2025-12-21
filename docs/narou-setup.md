@@ -20,7 +20,7 @@ description: narou.rb のインストールと、2025-12 時点で必要な手�
 > ⚠️ **注記**
 > - 本記事は「narou.rb」公式マニュアルではありません。
 > - 以下の記載は 2025-12-21 時点の暫定対応であり、**適用は自己責任** でお願いします。
-> - **必ず [narou.rb 公式 Wiki/Issues](https://github.com/whiteleaf7/narou) を確認し、公式の最新情報を優先してください。**
+> - **必ず [narou.rb 公式 Wiki](https://github.com/whiteleaf7/narou/wiki) や [Issues](https://github.com/whiteleaf7/narou/issues) を確認し、公式の最新情報を優先してください。**
 > - ツール本体が更新された場合、本記事の手動修正は不要になる可能性があります。
 > - 検証環境: Windows 11, Ruby 3.4.1, narou 3.9.1
 
@@ -33,7 +33,7 @@ Web小説ダウンローダー **narou.rb** を導入し、AozoraEpub3 と連携
 本ガイドは、これらに対するコミュニティから共有されている回避策をまとめたものです。
 
 公式インストール手順（必須ツールなど）は、以下も参照してください。kindlegen については現行では send to kindle / email での登録が使えないため本ガイドでは扱いません。
-- narou.rb 公式 Wiki: https://github.com/whiteleaf7/narou/wiki#how_to_install
+- **[narou.rb 公式 Wiki - インストール](https://github.com/whiteleaf7/narou/wiki/Home#%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB)**
 
 ---
 
