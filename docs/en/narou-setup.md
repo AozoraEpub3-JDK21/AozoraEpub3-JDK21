@@ -63,7 +63,7 @@ In PowerShell (or Command Prompt), run:
 gem install narou
 ```
 
-> **Note**: Dependency issues may occur immediately after installation. If you see errors, proceed to the next section for fixes.
+> **Note**: Dependency issues may occur immediately after installation. If you see errors, apply the fixes in section 4 and later.
 
 ---
 
