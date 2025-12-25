@@ -19,7 +19,7 @@ description: AozoraEpub3-JDK21の使い方ガイド：GUI操作、コマンド�
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
 </nav>
 
-# 使い方ガイド
+## 使い方ガイド
 
 ## 目次
 
@@ -143,10 +143,10 @@ GUIを起動せずにコマンドラインで直接変換実行するには、�
 ### 基本的な使い方
 
 ```bash
-# GUI起動（引数なし）
+## GUI起動（引数なし）
 java -jar AozoraEpub3.jar
 
-# 入力ファイルを指定（CLI実行）
+## 入力ファイルを指定（CLI実行）
 java -jar AozoraEpub3.jar [オプション] 入力ファイル
 ```
 
@@ -175,19 +175,19 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 ### 実行例
 
 ```bash
-# 標準的な変換
+## 標準的な変換
 java -jar AozoraEpub3.jar input.txt
 
-# 出力先を指定
+## 出力先を指定
 java -jar AozoraEpub3.jar -d ./books/ input.txt
 
-# Kobo形式で出力
+## Kobo形式で出力
 java -jar AozoraEpub3.jar -ext .kepub.epub input.txt
 
-# UTF-8エンコードで出力先を指定
+## UTF-8エンコードで出力先を指定
 java -jar AozoraEpub3.jar -enc UTF-8 -d ./output/ input.txt
 
-# 複数ファイルを一括変換
+## 複数ファイルを一括変換
 java -jar AozoraEpub3.jar -d ./books/ file1.txt file2.txt file3.txt
 ```
 

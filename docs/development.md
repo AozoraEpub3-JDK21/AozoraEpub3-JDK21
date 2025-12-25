@@ -14,7 +14,7 @@ title: 開発者向けガイド - AozoraEpub3
   <div style="float: right;">🌐 <a href="en/development.html">English</a></div>
 </nav>
 
-# 開発者向けガイド
+## 開発者向けガイド
 
 AozoraEpub3の開発に参加する方、または内部実装を理解したい方向けのドキュメントです。
 
@@ -74,13 +74,13 @@ cd AozoraEpub3-JDK21
 ### 基本的なビルド
 
 ```bash
-# クリーンビルド
+## クリーンビルド
 ./gradlew clean build
 
-# FAT JAR 作成（すべての依存関係を含む）
+## FAT JAR 作成（すべての依存関係を含む）
 ./gradlew jar
 
-# 配布パッケージ作成 (ZIP + TAR.GZ)
+## 配布パッケージ作成 (ZIP + TAR.GZ)
 ./gradlew dist
 ```
 
@@ -89,12 +89,12 @@ cd AozoraEpub3-JDK21
 ### テストの実行
 
 ```bash
-# すべてのテスト実行
+## すべてのテスト実行
 ./gradlew test
 
-# レポート生成
+## レポート生成
 ./gradlew test --rerun-tasks
-# → build/reports/tests/test/index.html
+## → build/reports/tests/test/index.html
 ```
 
 ### 生成物の場所
@@ -108,16 +108,16 @@ cd AozoraEpub3-JDK21
 ### 実行方法
 
 ```bash
-# GUI起動（引数なし）
+## GUI起動（引数なし）
 java -jar build/libs/AozoraEpub3.jar
 
-# CLI使用（UTF-8テキストから EPUB 生成）
+## CLI使用（UTF-8テキストから EPUB 生成）
 java -jar build/libs/AozoraEpub3.jar -of -d out input.txt
 
-# 縦書きサンプル
+## 縦書きサンプル
 java -jar build/libs/AozoraEpub3.jar -enc UTF-8 test_data/test_title.txt
 
-# 横書きサンプル
+## 横書きサンプル
 java -jar build/libs/AozoraEpub3.jar -enc UTF-8 -y test_data/test_yoko.txt
 ```
 
@@ -371,7 +371,7 @@ INI設定ファイルの値（`font_size`, `line_height` など）は Velocity �
 ### epubcheck による検証
 
 ```bash
-# Gradle タスク（カスタム）
+## Gradle タスク（カスタム）
 ./gradlew epubcheck \
   -PepubDir=build/epub_local \
   -PepubcheckJar=build/tools/epubcheck-5.3.0/epubcheck.jar

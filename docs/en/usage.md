@@ -14,7 +14,7 @@ title: Usage Guide - AozoraEpub3
   <div style="float: right;">🌐 <a href="../usage.html">日本語</a></div>
 </nav>
 
-# AozoraEpub3 Usage Guide
+## AozoraEpub3 Usage Guide
 
 Complete guide for using AozoraEpub3 to convert Aozora Bunko format text files to EPUB 3 format.
 
@@ -48,10 +48,10 @@ A graphical interface will open where you can:
 ### CLI Mode (Simple)
 
 ```bash
-# Convert UTF-8 text to EPUB
+## Convert UTF-8 text to EPUB
 java -jar AozoraEpub3.jar -of -d output input.txt
 
-# Convert with encoding specification
+## Convert with encoding specification
 java -jar AozoraEpub3.jar -enc UTF-8 -of -d output input.txt
 ```
 

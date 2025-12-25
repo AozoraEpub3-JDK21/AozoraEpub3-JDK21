@@ -19,7 +19,7 @@ description: narou.rb のインストールと、2025-12 時点で必要な手�
    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
 </nav>
 
-# narou.rb 導入 & トラブルシューティングガイド
+## narou.rb 導入 & トラブルシューティングガイド
 
 > ⚠️ **注記**
 > - 本記事は「narou.rb」公式マニュアルではありません。

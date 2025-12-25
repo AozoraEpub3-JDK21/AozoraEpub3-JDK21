@@ -16,7 +16,7 @@ description: AozoraEpub3-JDK21 EPUB 3.3 support guide. Changes from 3.0 and impl
   <div style="float: right;">🌐 <a href="../epub33-ja.html">日本語</a></div>
 </nav>
 
-# EPUB 3.3 Guide
+## EPUB 3.3 Guide
 
 Overview of EPUB 3.3 support in AozoraEpub3-JDK21.
 

@@ -14,7 +14,7 @@ title: Development Guide - AozoraEpub3
   <div style="float: right;">🌐 <a href="../development.html">日本語</a></div>
 </nav>
 
-# Development Guide
+## Development Guide
 
 Developer documentation for contributing to AozoraEpub3 or understanding its internal implementation.
 
@@ -74,13 +74,13 @@ Then: Import → Existing Projects
 ### Basic Build
 
 ```bash
-# Clean build
+## Clean build
 ./gradlew clean build
 
-# Create FAT JAR (with all dependencies)
+## Create FAT JAR (with all dependencies)
 ./gradlew jar
 
-# Create distribution packages (ZIP + TAR.GZ)
+## Create distribution packages (ZIP + TAR.GZ)
 ./gradlew dist
 ```
 
@@ -89,12 +89,12 @@ Then: Import → Existing Projects
 ### Running Tests
 
 ```bash
-# Run all tests
+## Run all tests
 ./gradlew test
 
-# Generate test report
+## Generate test report
 ./gradlew test --rerun-tasks
-# → build/reports/tests/test/index.html
+## → build/reports/tests/test/index.html
 ```
 
 ### Build Artifacts
@@ -108,16 +108,16 @@ Then: Import → Existing Projects
 ### Running the Application
 
 ```bash
-# Launch GUI (no arguments)
+## Launch GUI (no arguments)
 java -jar build/libs/AozoraEpub3.jar
 
-# CLI usage (convert UTF-8 text to EPUB)
+## CLI usage (convert UTF-8 text to EPUB)
 java -jar build/libs/AozoraEpub3.jar -of -d out input.txt
 
-# Vertical writing sample
+## Vertical writing sample
 java -jar build/libs/AozoraEpub3.jar -enc UTF-8 test_data/test_title.txt
 
-# Horizontal writing sample
+## Horizontal writing sample
 java -jar build/libs/AozoraEpub3.jar -enc UTF-8 -y test_data/test_yoko.txt
 ```
 
@@ -371,7 +371,7 @@ In `package.vm` L60 (for ImageOnly + Kindle):
 ### epubcheck Validation
 
 ```bash
-# Custom Gradle task
+## Custom Gradle task
 ./gradlew epubcheck \
   -PepubDir=build/epub_local \
   -PepubcheckJar=build/tools/epubcheck-5.3.0/epubcheck.jar
