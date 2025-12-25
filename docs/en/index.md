@@ -1,8 +1,8 @@
 ---
 layout: default
 lang: en
-title: AozoraEpub3-JDK21 Download
-description: Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
+title:  AozoraEpub3-JDK21 Download
+description:  Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
@@ -16,12 +16,12 @@ description: Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
   <div style="float: right;">🌐 <a href="../">日本語</a></div>
 </nav>
 
-# AozoraEpub3-JDK21 Download
+## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest:</strong> v1.2.5-jdk21 (December 20, 2025) | 
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">Release Notes</a></p>
-  
+  <p><strong>Latest: </strong> v1.2.5-jdk21 (December 20, 2025) | 
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES. md">Release Notes</a></p>
+   
   <div style="display: inline-block; text-align: center;">
     <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.5-jdk21/AozoraEpub3-1.2.5-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
