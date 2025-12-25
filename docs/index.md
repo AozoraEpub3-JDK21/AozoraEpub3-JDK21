@@ -5,21 +5,21 @@ title: ダウンロード
 description: 青空文庫対応 EPUB3 変換ツール：セットアップ & スタートアップマニュアル
 ---
 
-<div style="text-align: right; margin-bottom: 1em;">
+<div style="text-align: right; margin-bottom:  1em;">
   <a href="en/">🌐 English</a>
 </div>
 
-<nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
+<nav style="background: #f6f8fa; padding:  1em; margin-bottom:  2em; border-radius:  6px;">
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
-  <a href="narou-setup.html">narou.rb</a> |
+  <a href="narou-setup.html">narou. rb</a> |
   <a href="development.html">開発者向け</a> | 
   <a href="epub33-ja.html">EPUB 3.3準拠</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
 </nav>
 
-# ダウンロード
+## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
   <p><strong>最新版:</strong> v1.2.5-jdk21 (2025年12月20日) | 
