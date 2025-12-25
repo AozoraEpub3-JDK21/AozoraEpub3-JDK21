@@ -16,7 +16,7 @@ description: AozoraEpub3-JDK21 の EPUB 3.3 日本語解説ページ。EPUB 3.0 
   <div style="float: right;">🌐 <a href="en/epub33.html">English</a></div>
 </nav>
 
-# EPUB 3.3 日本語解説
+## EPUB 3.3 日本語解説
 
 AozoraEpub3-JDK21 による EPUB 3.3 対応の解説です。
 

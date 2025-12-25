@@ -16,7 +16,7 @@ description: narou.rb installation, known issues (December 2025), and AozoraEpub
    <div style="float: right;">🌐 <a href="../narou-setup.html">日本語</a></div>
 </nav>
 
-# narou.rb Setup & Troubleshooting Guide
+## narou.rb Setup & Troubleshooting Guide
 
 > ⚠️ **Notice**
 > - This article is **not** an official narou.rb manual.
