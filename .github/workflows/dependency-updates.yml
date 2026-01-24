@@ -1,0 +1,41 @@
+name: Dependency Updates Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎週 月曜 03:00 UTC 実行
+    - cron: '0 3 * * 1'
+  push:
+    paths:
+      - 'build.gradle'
+      - 'gradle/**'
+      - '.github/workflows/dependency-updates.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Make Gradle Wrapper executable
+        run: chmod +x gradlew
+
+      - name: Run dependencyUpdates
+        run: ./gradlew dependencyUpdates --warning-mode all
+
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-updates
+          path: |
+            build/dependencyUpdates/report.txt
+            build/reports/problems/problems-report.html
+          if-no-files-found: warn

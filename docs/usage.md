@@ -191,6 +191,8 @@ java -jar AozoraEpub3.jar -enc UTF-8 -d ./output/ input.txt
 java -jar AozoraEpub3.jar -d ./books/ file1.txt file2.txt file3.txt
 ```
 
+> 注記: CLIのヘルプ表示は Commons CLI の新パッケージ `org.apache.commons.cli.help.HelpFormatter` を使用しており、従来と同等の形式で出力されます（内部非推奨APIの解消）。
+
 ---
 
 ## テンプレートのカスタマイズ

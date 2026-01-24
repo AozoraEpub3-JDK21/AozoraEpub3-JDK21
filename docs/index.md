@@ -22,7 +22,7 @@ description: 青空文庫対応 EPUB3 変換ツール：セットアップ & ス
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.2.5-jdk21 (2025年12月20日) | 
+  <p><strong>最新版:</strong> v1.2.5-jdk21 (2026年1月24日) | 
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">リリースノート</a></p>
   
   <div style="display: inline-block; text-align: center;">

@@ -8,7 +8,7 @@ import java.util.Properties;
 
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.help.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
@@ -49,7 +49,8 @@ public class AozoraEpub3
 		/** 出力先パス */
 		File dstPath = null;
 		
-		String helpMsg = "AozoraEpub3 [-options] input_files(txt,zip,cbz)\nversion : "+VERSION;
+		String syntax = "AozoraEpub3 [-options] input_files(txt,zip,cbz)";
+		String header = "version : "+VERSION;
 		
 		try {
 			//コマンドライン オプション設定
@@ -75,19 +76,19 @@ public class AozoraEpub3
 			try {
 				commandLine = new DefaultParser().parse(options, args, true);
 			} catch (ParseException e) {
-				new HelpFormatter().printHelp(helpMsg, options);
+				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return;
 			}
 			//オプションの後ろをファイル名に設定
 			String[] fileNames = commandLine.getArgs();
 			if (fileNames.length == 0) {
-				new HelpFormatter().printHelp(helpMsg, options);
+				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return;
 			}
 			
 			//ヘルプ出力
 			if (commandLine.hasOption('h') ) {
-				new HelpFormatter().printHelp(helpMsg, options);
+				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return;
 			}
 			//iniファイル確認
