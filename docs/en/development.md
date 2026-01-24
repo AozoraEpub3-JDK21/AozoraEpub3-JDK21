@@ -46,7 +46,7 @@ Developer documentation for contributing to AozoraEpub3 or understanding its int
 ### Clone Repository
 
 ```bash
-git clone https://github.com/Harusame64/AozoraEpub3-JDK21.git
+git clone https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21.git
 cd AozoraEpub3-JDK21
 ```
 
@@ -235,7 +235,7 @@ Separated responsibilities from the large `AozoraEpub3.java` (originally 645 lin
 - New classes: 5 classes (350 lines total)
 - Unit tests added: OutputNamerTest (4 tests)
 
-Details: [notes/refactor-plan.md](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/notes/refactor-plan.md)
+Details: [notes/refactor-plan.md](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/notes/refactor-plan.md)
 
 #### Performance Optimization 🚀
 
@@ -265,7 +265,7 @@ Details: [notes/refactor-plan.md](https://github.com/Harusame64/AozoraEpub3-JDK2
 - Auto-release via `ArchiveTextExtractor.clearCache()` after conversion
 - Only text content cached (images loaded on demand)
 
-Details: [notes/archive-cache-optimization.md](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/notes/archive-cache-optimization.md)
+Details: [notes/archive-cache-optimization.md](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/notes/archive-cache-optimization.md)
 
 ---
 
@@ -331,8 +331,8 @@ INI settings (`font_size`, `line_height`, etc.) are placed in Velocity context a
 ```
 
 **Related Tests:**
-- [CssTemplateRenderTest.java](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/CssTemplateRenderTest.java): Vertical CSS
-- [HorizontalCssTemplateRenderTest.java](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/HorizontalCssTemplateRenderTest.java): Horizontal CSS
+- [CssTemplateRenderTest.java](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/CssTemplateRenderTest.java): Vertical CSS
+- [HorizontalCssTemplateRenderTest.java](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/HorizontalCssTemplateRenderTest.java): Horizontal CSS
 
 ---
 
@@ -366,7 +366,7 @@ In `package.vm` L60 (for ImageOnly + Kindle):
 <meta name="primary-writing-mode" content="horizontal-rl"/>
 ```
 
-**Preservation Test**: [PackageTemplateKindleMetaTest.java](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/epub/PackageTemplateKindleMetaTest.java)
+**Preservation Test**: [PackageTemplateKindleMetaTest.java](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/epub/PackageTemplateKindleMetaTest.java)
 
 ### epubcheck Validation
 
@@ -552,7 +552,7 @@ Provide the following information in GitHub Issues:
 - [🏠 Home](index.html)
 - [📖 Usage Guide](usage.html)
 - [📚 EPUB 3.3 Support](epub33.html)
-- [💻 GitHub Repository](https://github.com/Harusame64/AozoraEpub3-JDK21)
+- [💻 GitHub Repository](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21)
 - [🔧 Original Project](https://github.com/hmdev/AozoraEpub3)
 - [📝 Aozora Bunko](https://www.aozora.gr.jp/)
 - [📖 EPUB 3.3 Specification](https://www.w3.org/TR/epub-33/)

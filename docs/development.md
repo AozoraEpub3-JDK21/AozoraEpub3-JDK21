@@ -46,7 +46,7 @@ AozoraEpub3の開発に参加する方、または内部実装を理解したい
 ### リポジトリのクローン
 
 ```bash
-git clone https://github.com/Harusame64/AozoraEpub3-JDK21.git
+git clone https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21.git
 cd AozoraEpub3-JDK21
 ```
 
@@ -235,7 +235,7 @@ AozoraEpub3/
 - 新規クラス: 5クラス（計350行）
 - 単体テスト追加: OutputNamerTest（4テスト）
 
-詳細は [notes/refactor-plan.md](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/notes/refactor-plan.md) を参照。
+詳細は [notes/refactor-plan.md](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/notes/refactor-plan.md) を参照。
 
 #### パフォーマンス最適化 🚀
 
@@ -265,7 +265,7 @@ AozoraEpub3/
 - 変換完了後に `ArchiveTextExtractor.clearCache()` で自動解放
 - テキストコンテンツのみキャッシュ（画像本体は都度読み込み）
 
-詳細は [notes/archive-cache-optimization.md](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/notes/archive-cache-optimization.md) を参照。
+詳細は [notes/archive-cache-optimization.md](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/notes/archive-cache-optimization.md) を参照。
 
 ---
 
@@ -331,8 +331,8 @@ INI設定ファイルの値（`font_size`, `line_height` など）は Velocity �
 ```
 
 **関連テスト:**
-- [CssTemplateRenderTest.java](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/CssTemplateRenderTest.java): 縦書きCSS
-- [HorizontalCssTemplateRenderTest.java](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/HorizontalCssTemplateRenderTest.java): 横書きCSS
+- [CssTemplateRenderTest.java](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/CssTemplateRenderTest.java): 縦書きCSS
+- [HorizontalCssTemplateRenderTest.java](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/config/HorizontalCssTemplateRenderTest.java): 横書きCSS
 
 ---
 
@@ -366,7 +366,7 @@ INI設定ファイルの値（`font_size`, `line_height` など）は Velocity �
 <meta name="primary-writing-mode" content="horizontal-rl"/>
 ```
 
-**保持テスト**: [PackageTemplateKindleMetaTest.java](https://github.com/Harusame64/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/epub/PackageTemplateKindleMetaTest.java)
+**保持テスト**: [PackageTemplateKindleMetaTest.java](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21/blob/master/test/com/github/hmdev/epub/PackageTemplateKindleMetaTest.java)
 
 ### epubcheck による検証
 
@@ -552,7 +552,7 @@ GitHub Issues で以下の情報を提供してください：
 - [🏠 ホームページ](index.html)
 - [📖 使い方ガイド](usage.html)
 - [📚 EPUB 3.3 対応](epub33-ja.html)
-- [💻 GitHub リポジトリ](https://github.com/Harusame64/AozoraEpub3-JDK21)
+- [💻 GitHub リポジトリ](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21)
 - [🔧 オリジナルプロジェクト](https://github.com/hmdev/AozoraEpub3)
 - [📝 青空文庫](https://www.aozora.gr.jp/)
 - [📖 EPUB 3.3 仕様](https://www.w3.org/TR/epub-33/)
@@ -562,7 +562,7 @@ GitHub Issues で以下の情報を提供してください：
 
 ## ライセンス
 
-GPL v3 - 詳細は [README](https://github.com/Harusame64/AozoraEpub3-JDK21#ライセンス) を参照
+GPL v3 - 詳細は [README](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21#ライセンス) を参照
 
 ---
 
@@ -573,6 +573,6 @@ GPL v3 - 詳細は [README](https://github.com/Harusame64/AozoraEpub3-JDK21#ラ�
     <a href="usage.html">使い方</a> |
     <a href="development.html">開発者向け</a> |
     <a href="epub33-ja.html">EPUB 3.3</a> |
-    <a href="https://github.com/Harusame64/AozoraEpub3-JDK21">GitHub</a>
+    <a href="https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21">GitHub</a>
   </p>
 </footer>
