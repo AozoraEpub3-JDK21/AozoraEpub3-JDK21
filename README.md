@@ -62,12 +62,12 @@
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.2.1-jdk21.zip
+AozoraEpub3-1.2.5-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.2.1-jdk21.tar.gz
+AozoraEpub3-1.2.5-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -97,6 +97,10 @@ cd AozoraEpub3-JDK21
 - **`./gradlew dist`**: 配布パッケージを生成（ZIP / TAR.GZ）【推奨】
 - **`./gradlew test`**: テスト実行
 
+**依存更新（開発者向け）:**
+- **`./gradlew dependencyUpdates --warning-mode all`**: 依存の更新候補をレポート
+- 安定版のみを推奨（alpha/RCは除外）。今回の更新では CLI のヘルプAPIを新パッケージに移行し、非推奨警告を解消しています。
+
 ---
 
 ## 既知の問題
@@ -104,6 +108,14 @@ cd AozoraEpub3-JDK21
 - iOS版Kindleで表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。現状は端末依存のため回避策はなく、必要に応じて「表題ページ出力を無効にする」「カスタム表紙のみ出力する」設定をご検討ください。
  - Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3起動.bat` の使用を推奨します。
  - GUIフォントについて: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
+
+---
+
+## 最近の変更（1.2.5-jdk21）
+
+- 依存ライブラリ更新（安定版）: commons-cli 1.11.0、commons-collections4 4.5.0、commons-compress 1.28.0、commons-lang3 3.20.0、jsoup 1.22.1、junrar 7.5.7、batik-transcoder 1.19
+- CLIヘルプAPIの非推奨解消: `org.apache.commons.cli.HelpFormatter` から `org.apache.commons.cli.help.HelpFormatter` へ移行
+- CIに依存更新レポート用ワークフローを追加（Artifactsにレポート保存）
 
 ---
 
