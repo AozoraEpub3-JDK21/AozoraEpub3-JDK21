@@ -62,12 +62,12 @@
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.2.5-jdk21.zip
+AozoraEpub3-1.2.6-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.2.5-jdk21.tar.gz
+AozoraEpub3-1.2.6-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -111,11 +111,11 @@ cd AozoraEpub3-JDK21
 
 ---
 
-## 最近の変更（1.2.5-jdk21）
+## 最近の変更（1.2.6-jdk21）
 
-- 依存ライブラリ更新（安定版）: commons-cli 1.11.0、commons-collections4 4.5.0、commons-compress 1.28.0、commons-lang3 3.20.0、jsoup 1.22.1、junrar 7.5.7、batik-transcoder 1.19
-- CLIヘルプAPIの非推奨解消: `org.apache.commons.cli.HelpFormatter` から `org.apache.commons.cli.help.HelpFormatter` へ移行
-- CIに依存更新レポート用ワークフローを追加（Artifactsにレポート保存）
+- 依存ライブラリを最新安定版へ更新: commons-cli 1.11.0、commons-collections4 4.5.0、commons-compress 1.28.0、commons-lang3 3.20.0、jsoup 1.22.1、junrar 7.5.7、batik-transcoder 1.19
+- CLIヘルプAPIの非推奨警告を解消（`org.apache.commons.cli.help.HelpFormatter` と新シグネチャに移行）
+- 依存更新レポート用ワークフローを追加し、Artifactsにレポートを保存
 
 ---
 
