@@ -11,6 +11,9 @@ on:
       - 'gradle/**'
       - '.github/workflows/dependency-updates.yml'
 
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
