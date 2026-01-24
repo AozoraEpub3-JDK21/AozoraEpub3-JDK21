@@ -1,5 +1,32 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.6-jdk21（安定リリース）
+
+**リリース日**: 2026年1月24日
+
+### 変更概要
+
+- 依存ライブラリを最新安定版へ更新
+  - commons-cli: 1.11.0
+  - commons-collections4: 4.5.0
+  - commons-compress: 1.28.0
+  - commons-lang3: 3.20.0
+  - jsoup: 1.22.1
+  - junrar: 7.5.7
+  - batik-transcoder: 1.19
+- CLIヘルプAPIの非推奨警告を解消
+  - `org.apache.commons.cli.HelpFormatter` → `org.apache.commons.cli.help.HelpFormatter`
+  - `printHelp(syntax, header, options, footer, autoUsage)` へ移行
+- 依存更新レポート用ワークフローを追加（`dependencyUpdates` 実行結果をArtifacts保存）
+
+### 検証結果
+
+```
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ 全テスト成功
+Distributions: ✓ ZIP/TAR 生成済み
+```
+
 ## バージョン: 1.2.5-jdk21（依存更新）
 
 **リリース日**: 2026年1月24日
