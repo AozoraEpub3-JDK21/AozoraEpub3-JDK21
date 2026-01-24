@@ -62,3 +62,7 @@ secrets/
 credentials/
 .env
 .env.local
+
+## epubcheck
+epubcheck*/
+epubcheck-*/
