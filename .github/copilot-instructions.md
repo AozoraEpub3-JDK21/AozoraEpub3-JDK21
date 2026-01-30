@@ -3,7 +3,7 @@
 These instructions tailor Copilot to this repository so it can generate correct, maintainable changes and avoid common pitfalls.
 
 ## Project Overview
-- Purpose: Convert Aozora-style text into EPUB 3.2, supporting Ruby, vertical writing, images, and device presets.
+- Purpose: Convert Aozora-style text into EPUB 3.3 (backward compatible with EPUB 3.2), supporting Ruby, vertical writing, images, and device presets.
 - Language/Build: Java 21 (Gradle 8), JUnit 4.13 tests.
 - Templates: Apache Velocity templates under `template/` control most XHTML/CSS generation.
 - CLI: `AozoraEpub3` (main class) orchestrates parsing, conversion, and packaging.
@@ -18,48 +18,50 @@ These instructions tailor Copilot to this repository so it can generate correct,
 
 ## Build & Run
 
-### Important: Build Tasks (混乱防止)
-プロジェクトはカスタムビルドタスクを使用しています：
+### Important: Build Tasks (to avoid confusion)
+This project uses custom build tasks:
 
-1. **FAT JAR作成** (単一実行可能JAR)
-   - コマンド: `./gradlew jar` (Windows: `gradlew.bat jar`)
-   - 出力: `build/libs/AozoraEpub3.jar`
-   - 用途: すべての依存関係を含む単一JAR
+1. **Build FAT JAR** (single runnable JAR)
+  - Command: `./gradlew jar` (Windows: `gradlew.bat jar`)
+  - Output: `build/libs/AozoraEpub3.jar`
+  - Purpose: Single JAR including all dependencies
 
-2. **配布パッケージ作成** (ZIP/TAR)
-   - コマンド: `./gradlew dist` (Windows: `gradlew.bat dist`)
-   - 出力: 
+2. **Build distribution package** (ZIP/TAR)
+  - Command: `./gradlew dist` (Windows: `gradlew.bat dist`)
+  - Output:
      - `build/distributions/AozoraEpub3-<version>.zip`
      - `build/distributions/AozoraEpub3-<version>.tar.gz`
-   - 内容: JAR + ランチャースクリプト + ドキュメント + テンプレート
-   - 注意: `distZip`は無効化済み。`dist`を使用すること
+  - Contents: JAR + launcher scripts + docs + templates
+  - Note: `distZip` is disabled. Use `dist`.
 
-3. **テスト実行**
-   - コマンド: `./gradlew test` (Windows: `gradlew.bat test`)
+3. **Run tests**
+  - Command: `./gradlew test` (Windows: `gradlew.bat test`)
 
-### 実行方法
+### How to run
 - Run CLI: `java -jar build/libs/AozoraEpub3.jar [options] input.txt`
 - Sample conversion (UTF-8): `java -jar build/libs/AozoraEpub3.jar -of -d out input.txt`
-- GUI起動: 引数なしで実行 `java -jar build/libs/AozoraEpub3.jar`
+- Launch GUI: run with no arguments `java -jar build/libs/AozoraEpub3.jar`
 
 ## CI & Validation
 - GitHub Actions workflow builds, runs tests, generates sample EPUBs, and runs `epubcheck`.
-- Basic checks for EPUB 3.2 and 電書協/電書連ガイド対応 are included as shell assertions.
+- Basic checks for EPUB 3.3 and industry guide compliance are included as shell assertions.
 - When adding tests, prefer small, deterministic unit tests over end-to-end unless necessary.
 
-### IndexNow (Docs 配信・検索エンジン通知)
-- docs 配下のサイト更新時は `docs/sitemap.xml` に新規/更新ページが含まれることを前提に IndexNow 送信を行う（ワークフローでサイトマップから自動収集）。
-- ホスト確認用キーは `docs/fad6fa3a81974f6aa0740a0861fbaefe.txt`（内容はキー文字列の1行）。ページ追加時、キーファイルの配置は変更不要。
-- Actions Variables: `INDEXNOW_HOST` と `INDEXNOW_BASE_URL` を必要に応じて設定。未設定でもサイトマップの最初のURLから自動検出するが、ホスト移行時は変数の整合性を優先。
-- 送信タイミング: push（docs/** の変更）と手動実行（workflow_dispatch）に加え、毎日 03:00 UTC（JST 12:00）の定期実行で送信。
-- ワークフローのログに「Discovered N URL(s)」と先頭20件サンプル、`Request body` の `urlList` が全件含まれていることを確認。必要ならサイトマップ生成/掲載ページを見直す。
+### IndexNow (docs delivery / search engine notification)
+- When docs are updated, IndexNow submissions assume `docs/sitemap.xml` includes new/updated pages (the workflow auto-collects URLs from the sitemap).
+- Host verification key: `docs/fad6fa3a81974f6aa0740a0861fbaefe.txt` (single-line key). Do not move this file when adding pages.
+- Actions Variables: configure `INDEXNOW_HOST` and `INDEXNOW_BASE_URL` as needed. If unset, the workflow auto-detects from the first sitemap URL, but prioritize variable consistency when migrating hosts.
+- Submission timing: on push (docs/** changes), manual runs (workflow_dispatch), and a daily schedule at 03:00 UTC (12:00 JST).
+- In workflow logs, confirm “Discovered N URL(s)”, the first 20 samples, and that `urlList` in the request body contains all URLs. If not, review sitemap generation/published pages.
 
 ## Coding Guidelines
 - Keep changes minimal and focused; align with existing style.
 - Avoid introducing global state. If needed (e.g., Velocity), allow dependency injection.
 - Favor small helpers over large monolith methods; keep public APIs stable.
 - Validate inputs and fail fast with clear messages.
-- Don’t add license headers unless explicitly requested.- **Git Commits**: All commit messages **must be in Japanese**. Format should clearly describe the what/why of changes.
+- Don’t add license headers unless explicitly requested.
+- **Git Commits**: All commit messages **must be in Japanese**. Format should clearly describe the what/why of changes.
+
 ## Templates (Velocity) – Important
 - Velocity resources live under `template/`. Use relative paths consistently from a configurable `templatePath`.
 - Do NOT hard-code absolute paths. Tests and CI may run with different working directories.
@@ -68,7 +70,7 @@ These instructions tailor Copilot to this repository so it can generate correct,
   - Initializing only if not already configured.
 - Keep placeholders and conditionals simple. Avoid mixing presentation with business logic.
 
-## Presets / INI → CSS
+## Presets / INI to CSS
 - Device presets and INI values map to CSS via Velocity templates.
 - Add or adjust CSS variables by threading values through the model/context used by templates.
 - When adding new INI keys, update:
@@ -119,4 +121,4 @@ These instructions tailor Copilot to this repository so it can generate correct,
 - Prefer asking for the intended device/preset (e.g., Kobo, Kindle).
 - Confirm whether a change belongs in Java code or the Velocity templates.
 - If a Velocity context key is missing, check writer/converter population and tests.
- - Docs ページを追加・更新する場合は、`docs/sitemap.xml` に反映されているか確認し、IndexNow ワークフローが URL を拾えることを前提に作業する（個別のURL列挙は不要）。
+- When adding or updating docs pages, confirm they are reflected in `docs/sitemap.xml`, since the IndexNow workflow relies on the sitemap (no need to list URLs manually).
