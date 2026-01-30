@@ -27,9 +27,16 @@ AozoraEpub3 の開発に参加するための情報をまとめています。
 
 ## 開発環境セットアップ
 
-1. JDK 21 をインストール（Temurin 推奨）
+1. **JDK 21** をインストール（[Adoptium Temurin](https://adoptium.net/) 推奨）
+   - Java 25 でもビルド・実行可能ですが、公式ビルドは JDK 21 を使用しています
 2. リポジトリを clone
 3. Gradle Wrapper を使用してビルド・テスト
+
+```bash
+git clone https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21.git
+cd AozoraEpub3-JDK21
+./gradlew build
+```
 
 ---
 

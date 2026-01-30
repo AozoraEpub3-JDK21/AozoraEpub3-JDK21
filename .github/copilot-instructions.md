@@ -4,7 +4,7 @@ These instructions tailor Copilot to this repository so it can generate correct,
 
 ## Project Overview
 - Purpose: Convert Aozora-style text into EPUB 3.3 (backward compatible with EPUB 3.2), supporting Ruby, vertical writing, images, and device presets.
-- Language/Build: Java 21 (Gradle 8), JUnit 4.13 tests.
+- Language/Build: Java 21 baseline (Java 25 compatible), Gradle 9.2.1, JUnit 4.13 tests.
 - Templates: Apache Velocity templates under `template/` control most XHTML/CSS generation.
 - CLI: `AozoraEpub3` (main class) orchestrates parsing, conversion, and packaging.
 

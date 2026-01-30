@@ -29,7 +29,7 @@
 - 画像zip/rarを EPUB 3 に変換
 - 縦書き・横書きに対応
 - 日本の主要電子書籍リーダー（Kobo, Kindle, Reader等）に対応
-- Java 21 の最新機能を活用（Java 25 対応評価中）
+- Java 21 ベースで開発（Java 25 でも動作確認済み）
 - iPhone版Kindle縦書き対応（※表題ページのレイアウトが画面比率により崩れることがあります）
 - **高速変換**: 大容量アーカイブの処理を最適化（アーカイブスキャンを4回→1回に削減）
 
@@ -37,12 +37,13 @@
 
 ## 動作環境
 
-**Java 21以降** が必要です。
+**Java 21以降** が必要です（Java 25 でも動作確認済み）。
 
-- 実行: JRE 21 で動作します（JDK不要）。Temurin などのランタイム配布を推奨。
-- ビルド/開発: JDK 21 が必要です（Gradle 9.2.1 で動作確認済み）。
+- **実行**: JRE 21以降で動作します（JDK不要）。[Adoptium Temurin](https://adoptium.net/) などのランタイム配布を推奨。
+- **ビルド/開発**: JDK 21 が必要です（Gradle 9.2.1 で動作確認済み）。
+- **推奨**: 最新の長期サポート版（LTS）である Java 21 を推奨しますが、Java 25 でも互換性を確認しています。
 
-[Adoptium](https://adoptium.net/) などから Java 21 の JRE もしくは JDK をインストールしてください。
+Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から Java 21 または Java 25 をダウンロードしてください。
 
 ### 対応OS
 
@@ -58,7 +59,13 @@
 
 最新版は [GitHub Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) から取得できます。
 
-配布は **FAT版のみ** 提供します（依存関係込みの単一JAR）。
+配布パッケージには以下が含まれます：
+- **FAT JAR**（依存関係込みの単一JAR）
+- 起動スクリプト（`.bat` / `.sh`）
+- テンプレートファイル（`template/`）
+- プリセット設定（`presets/`）
+- 外字定義（`gaiji/`）
+- ドキュメント
 
 **Windows（ZIP）:**
 ```
@@ -89,25 +96,30 @@ AozoraEpub3-1.2.6-jdk21.tar.gz
 git clone https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21.git
 cd AozoraEpub3-JDK21
 ./gradlew dist
-# build/distributions/ に FAT版の zip / tar.gz が生成されます
+# build/distributions/ に配布パッケージ（zip / tar.gz）が生成されます
 ```
 
-**ビルドタスク詳細:**
-- **`./gradlew jar`**: FAT JAR を生成（`build/libs/AozoraEpub3.jar`）
-- **`./gradlew dist`**: 配布パッケージを生成（ZIP / TAR.GZ）【推奨】
-- **`./gradlew test`**: テスト実行
+**重要**: `distZip` タスクは無効化されています。配布パッケージの生成には必ず `dist` を使用してください。
 
-**依存更新（開発者向け）:**
-- **`./gradlew dependencyUpdates --warning-mode all`**: 依存の更新候補をレポート
-- 安定版のみを推奨（alpha/RCは除外）。今回の更新では CLI のヘルプAPIを新パッケージに移行し、非推奨警告を解消しています。
+**ビルドタスク詳細:**
+- **`./gradlew jar`**: FAT JAR を生成（`build/libs/AozoraEpub3.jar`、依存関係込みの単一JAR）
+- **`./gradlew dist`**: 配布パッケージを生成（ZIP / TAR.GZ、JAR + スクリプト + ドキュメント + テンプレート）【推奨】
+- **`./gradlew test`**: テスト実行
+- **`./gradlew dependencyUpdates`**: 依存ライブラリの更新候補をレポート
+
+**依存ライブラリ更新（開発者向け）:**
+- 依存ライブラリは定期的に最新の安定版へ更新しています（alpha/beta/RCは除外）
+- CLI の非推奨APIを最新版に移行し、警告を解消
+- 更新候補確認: `./gradlew dependencyUpdates`
+- 詳細は [RELEASE_NOTES.md](RELEASE_NOTES.md) を参照
 
 ---
 
 ## 既知の問題
 
-- iOS版Kindleで表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。現状は端末依存のため回避策はなく、必要に応じて「表題ページ出力を無効にする」「カスタム表紙のみ出力する」設定をご検討ください。
- - Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3起動.bat` の使用を推奨します。
- - GUIフォントについて: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
+- **iOS版Kindle**: 表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。端末依存の制限のため、必要に応じて「表題ページ出力を無効にする」または「カスタム表紙のみ出力する」設定をご検討ください。
+- **Windows 11**: `.jar` ファイルのダブルクリックが無反応になる場合があります。配布パッケージに同梱の `AozoraEpub3起動.bat` の使用を推奨します。
+- **GUI フォント**: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
 
 ---
 
