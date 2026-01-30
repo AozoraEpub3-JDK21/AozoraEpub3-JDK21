@@ -42,7 +42,7 @@ permissions:
 
 jobs:
   build-test-validate:
-    name: Build, Test, Validate (EPUB 3.2 / 電書連) - JDK ${{ matrix.java-version }}
+    name: Build, Test, Validate (EPUB 3.3 / 電書連) - JDK ${{ matrix.java-version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
