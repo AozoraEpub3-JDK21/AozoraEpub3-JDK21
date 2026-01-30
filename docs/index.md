@@ -44,7 +44,7 @@ description: 青空文庫対応 EPUB3 変換ツール：セットアップ & ス
 
 ## このプロジェクトについて
 
-本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、Java 21 (LTS) 対応と最新 OS 向けの調整を行った派生版です。
+本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rbとの互換性維持、Java 21 (LTS) 対応と最新 OS 向けの調整を行った派生版です。
 
 EPUB 3.3 および 電書協／電書連 EPUB 3 制作ガイドの準拠を目指し、epubcheck 5.x で検証しています。
 
