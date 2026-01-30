@@ -18,6 +18,8 @@ title: Usage Guide - AozoraEpub3
 
 Complete guide for using AozoraEpub3 to convert Aozora Bunko format text files to EPUB 3 format.
 
+> **System Requirements**: Java 25 recommended (Java 21 or later also works). Check with `java -version`.
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)

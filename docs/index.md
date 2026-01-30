@@ -44,7 +44,7 @@ description: 青空文庫対応 EPUB3 変換ツール：セットアップ & ス
 
 ## このプロジェクトについて
 
-本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rbとの互換性維持、Java 21 (LTS) 対応と最新 OS 向けの調整を行った派生版です。
+本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rbとの互換性維持、Java 25 対応と最新 OS 向けの調整を行った派生版です。
 
 EPUB 3.3 および 電書協／電書連 EPUB 3 制作ガイドの準拠を目指し、epubcheck 5.x で検証しています。
 
@@ -52,35 +52,36 @@ EPUB 3.3 および 電書協／電書連 EPUB 3 制作ガイドの準拠を目�
 
 ## 動作環境
 
-- Java 21 以降（JRE / JDK）
+- Java 25 以降（JRE / JDK）を推奨
+  - Java 21 (LTS) との互換性も維持しています
 - Windows / macOS / Linux
 
-Java をお持ちでない場合は、[Eclipse Temurin](https://adoptium.net/temurin/releases/) から Java 21 LTS をダウンロードしてください。
+Java をお持ちでない場合は、[Eclipse Temurin](https://adoptium.net/temurin/releases/) から Java 25 をダウンロードしてください。
 
 ---
 
-## Java 21 のインストール（Eclipse Temurin）
+## Java 25 のインストール（Eclipse Temurin）
 
 ### Windows
 
 1. [Adoptium Releases](https://adoptium.net/temurin/releases/) を開きます
-2. JDK 21 → Windows x64 → `.MSI` を選択しダウンロードします
+2. JDK 25 → Windows x64 → `.MSI` を選択しダウンロードします
 3. MSI ファイルをダブルクリックしインストールします
 4. コマンドプロンプトで `java -version` を実行し確認します
 
 ### macOS
 
 1. [Adoptium Releases](https://adoptium.net/temurin/releases/) を開きます
-2. JDK 21 → macOS → `.PKG`（Intel または Apple Silicon M1/M2）をダウンロードします
+2. JDK 25 → macOS → `.PKG`（Intel または Apple Silicon M1/M2）をダウンロードします
 3. PKG ファイルをダブルクリックしインストールします
 4. ターミナルで `java -version` を実行し確認します
 
 ### Linux（Ubuntu/Debian）
 
 1. [Adoptium Releases](https://adoptium.net/temurin/releases/) を開きます
-2. JDK 21 → Linux x64 → `.TAR.GZ` をダウンロードします
-3. 展開します: `tar -xzf OpenJDK21U-jdk_x64_linux_hotspot_21_x.tar.gz`
-4. PATH に追加するか、`./jdk-21.x.x+yy/bin/java -version` で確認します
+2. JDK 25 → Linux x64 → `.TAR.GZ` をダウンロードします
+3. 展開します: `tar -xzf OpenJDK25U-jdk_x64_linux_hotspot_25_x.tar.gz`
+4. PATH に追加するか、`./jdk-25.x.x+yy/bin/java -version` で確認します
 
 ---
 
@@ -126,7 +127,7 @@ GUI を起動する場合は引数なしで実行します: `java -jar AozoraEpu
 
 ## トラブルシューティング
 
-- **Java がインストールされていない場合** — [Temurin](https://adoptium.net/temurin/releases/) から Java 21 JRE をダウンロードしインストールしてください。
+- **Java がインストールされていない場合** — [Temurin](https://adoptium.net/temurin/releases/) から Java 25 をダウンロードしインストールしてください（Java 21以降であれば動作します）。
 - **Windows で JAR ファイルが開かない場合** — BAT ファイルを使用するか、コマンドプロンプトから `java -jar AozoraEpub3.jar` で起動してください。
 - **Linux/macOS で permission denied エラー** — `chmod +x AozoraEpub3.sh` を実行し、再度起動してください。
 - **その他の問題** — [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues) でご報告ください。

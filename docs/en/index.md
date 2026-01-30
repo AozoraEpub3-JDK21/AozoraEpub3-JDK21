@@ -41,7 +41,7 @@ description:  Aozora Bunko to EPUB3 Converter - Setup & Quick Start Guide
 
 ## About This Project
 
-This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 21 (LTS) compatibility and support for modern operating systems.
+This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 25 compatibility and support for modern operating systems.
 
 It aims to comply with EPUB 3.3 and the [Japanese Book Publishing Association (電書協) EPUB 3 Production Guide](https://www.ebookjapan.jp/), validated with epubcheck 5.x.
 
@@ -49,35 +49,36 @@ It aims to comply with EPUB 3.3 and the [Japanese Book Publishing Association (�
 
 ## System Requirements
 
-- Java 21 or later (JRE / JDK)
+- Java 25 or later (JRE / JDK) recommended
+  - Also compatible with Java 21 (LTS)
 - Windows / macOS / Linux
 
-If you don't have Java installed, download [Eclipse Temurin](https://adoptium.net/temurin/releases/) Java 21 LTS.
+If you don't have Java installed, download [Eclipse Temurin](https://adoptium.net/temurin/releases/) Java 25.
 
 ---
 
-## Install Java 21 (Eclipse Temurin)
+## Install Java 25 (Eclipse Temurin)
 
 ### Windows
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 21 → Windows x64 → `.MSI`
+2. Select JDK 25 → Windows x64 → `.MSI`
 3. Double-click the MSI file and follow the installer
 4. Verify in Command Prompt: `java -version`
 
 ### macOS
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 21 → macOS → `.PKG` (Intel or Apple Silicon M1/M2)
+2. Select JDK 25 → macOS → `.PKG` (Intel or Apple Silicon M1/M2)
 3. Double-click the PKG file and follow the installer
 4. Verify in Terminal: `java -version`
 
 ### Linux (Ubuntu/Debian)
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 21 → Linux x64 → `.TAR.GZ`
-3. Extract: `tar -xzf OpenJDK21U-jdk_x64_linux_hotspot_21_x.tar.gz`
-4. Verify: `./jdk-21.x.x+yy/bin/java -version` or add to PATH
+2. Select JDK 25 → Linux x64 → `.TAR.GZ`
+3. Extract: `tar -xzf OpenJDK25U-jdk_x64_linux_hotspot_25_x.tar.gz`
+4. Verify: `./jdk-25.x.x+yy/bin/java -version` or add to PATH
 
 ---
 
@@ -117,7 +118,7 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 
 ## Troubleshooting
 
-- **Java is not installed** — Download Java 21 JRE from [Temurin](https://adoptium.net/temurin/releases/) and install.
+- **Java is not installed** — Download Java 25 from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
 - **JAR file won't open on Windows** — Use the BAT file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
 - **Permission denied on Linux/macOS** — Run `chmod +x AozoraEpub3.sh` and try again.
 - **Other issues** — Report on [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues).
