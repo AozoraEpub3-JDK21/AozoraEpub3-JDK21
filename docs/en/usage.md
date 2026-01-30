@@ -435,7 +435,7 @@ java -jar AozoraEpub3.jar -tocnest 3 novel.txt
 - [🏠 Home](index.html)
 - [👨‍💻 Development Guide](development.html)
 - [📚 EPUB 3.3 Support](epub33.html)
-- [💻 GitHub Repository](https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21)
+- [💻 GitHub Repository](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21)
 - [📝 Aozora Bunko](https://www.aozora.gr.jp/)
 
 ---
@@ -447,6 +447,6 @@ java -jar AozoraEpub3.jar -tocnest 3 novel.txt
     <a href="usage.html">Usage</a> |
     <a href="development.html">Development</a> |
     <a href="epub33.html">EPUB 3.3</a> |
-    <a href="https://github.com/AozoraJDK21-bot/AozoraEpub3-JDK21">GitHub</a>
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
   </p>
 </footer>
