@@ -27,36 +27,6 @@ Tests: ✓ 全テスト成功
 Distributions: ✓ ZIP/TAR 生成済み
 ```
 
-## バージョン: 1.2.5-jdk21（依存更新）
-
-**リリース日**: 2026年1月24日
-
-### 依存ライブラリ更新 / 非推奨解消
-
-- 依存ライブラリ（安定版）の更新:
-  - commons-cli: 1.11.0
-  - commons-collections4: 4.5.0
-  - commons-compress: 1.28.0
-  - commons-lang3: 3.20.0
-  - jsoup: 1.22.1
-  - junrar: 7.5.7
-  - batik-transcoder: 1.19
-- CLIヘルプAPIの非推奨対応:
-  - `org.apache.commons.cli.HelpFormatter` → `org.apache.commons.cli.help.HelpFormatter`
-  - シグネチャを `printHelp(syntax, header, options, footer, autoUsage)` に移行
-
-### CI/開発者向け改善
-
-- 依存更新レポート用ワークフローを追加（`dependencyUpdates` 実行、Artifacts保存）
-
-### 検証結果
-
-```
-Build: ✓ BUILD SUCCESSFUL
-Tests: ✓ 全テスト成功
-Distributions: ✓ ZIP/TAR 生成済み
-```
-
 ## バージョン: 1.2.5-jdk21
 
 **リリース日**: 2025年12月20日
