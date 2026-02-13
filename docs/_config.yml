@@ -21,7 +21,6 @@ theme: jekyll-theme-slate
 
 # Plugins
 plugins:
-  - jekyll-sitemap
   - jekyll-seo-tag
 
 # SEO defaults

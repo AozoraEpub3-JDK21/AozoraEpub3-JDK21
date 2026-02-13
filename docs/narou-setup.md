@@ -2,7 +2,7 @@
 layout: default
 lang: ja
 title: narou.rb 導入ガイド (2025年12月時点)
-description: narou.rb のインストールと、2025-12 時点で必要な手動修正、AozoraEpub3 連携手順のまとめ
+description: narou.rbのインストール手順とAozoraEpub3-JDK21との連携方法を解説。Ruby環境構築、gem install narou、2025年12月時点での既知の問題と手動修正手順、変換先の設定方法をステップバイステップで説明します。
 ---
 
 <div style="text-align: right; margin-bottom: 1em;">
