@@ -36,6 +36,7 @@ Thumbs.db
 
 ## IDE
 .vscode/
+.claude/
 .eclipse
 
 ## OS
