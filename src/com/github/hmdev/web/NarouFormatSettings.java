@@ -40,6 +40,27 @@ public class NarouFormatSettings {
 	/** 更新日時を各話に表示 */
 	private boolean showPostDate = true;
 
+	/** 行頭のかぎ括弧に二分アキを挿入 */
+	private boolean enableHalfIndentBracket = true;
+
+	/** 数字の漢数字化 (123 → 一二三) */
+	private boolean enableConvertNumToKanji = false;
+
+	/** 漢数字の単位化 (1000 → 千、10000 → 一万) */
+	private boolean enableKanjiNumWithUnits = false;
+
+	/** 単位化する際の下位桁ゼロ数 (デフォルト2: 100以上で単位化) */
+	private int kanjiNumWithUnitsLowerDigitZero = 2;
+
+	/** 記号の全角化 (- → －、< → 〈など) */
+	private boolean enableConvertSymbolsToZenkaku = false;
+
+	/** かぎ括弧内の自動連結 (改行を全角スペースに) */
+	private boolean enableAutoJoinInBrackets = false;
+
+	/** 行末読点での自動連結 */
+	private boolean enableAutoJoinLine = false;
+
 	// === Getters / Setters ===
 
 	public String getAuthorCommentStyle() { return authorCommentStyle; }
@@ -69,6 +90,27 @@ public class NarouFormatSettings {
 
 	public boolean isShowPostDate() { return showPostDate; }
 	public void setShowPostDate(boolean v) { this.showPostDate = v; }
+
+	public boolean isEnableHalfIndentBracket() { return enableHalfIndentBracket; }
+	public void setEnableHalfIndentBracket(boolean v) { this.enableHalfIndentBracket = v; }
+
+	public boolean isEnableConvertNumToKanji() { return enableConvertNumToKanji; }
+	public void setEnableConvertNumToKanji(boolean v) { this.enableConvertNumToKanji = v; }
+
+	public boolean isEnableKanjiNumWithUnits() { return enableKanjiNumWithUnits; }
+	public void setEnableKanjiNumWithUnits(boolean v) { this.enableKanjiNumWithUnits = v; }
+
+	public int getKanjiNumWithUnitsLowerDigitZero() { return kanjiNumWithUnitsLowerDigitZero; }
+	public void setKanjiNumWithUnitsLowerDigitZero(int v) { this.kanjiNumWithUnitsLowerDigitZero = v; }
+
+	public boolean isEnableConvertSymbolsToZenkaku() { return enableConvertSymbolsToZenkaku; }
+	public void setEnableConvertSymbolsToZenkaku(boolean v) { this.enableConvertSymbolsToZenkaku = v; }
+
+	public boolean isEnableAutoJoinInBrackets() { return enableAutoJoinInBrackets; }
+	public void setEnableAutoJoinInBrackets(boolean v) { this.enableAutoJoinInBrackets = v; }
+
+	public boolean isEnableAutoJoinLine() { return enableAutoJoinLine; }
+	public void setEnableAutoJoinLine(boolean v) { this.enableAutoJoinLine = v; }
 
 	/** 字下げの文字数を返す (横書き:1字、縦書き:3字) */
 	public String getIndent() {
@@ -125,6 +167,31 @@ public class NarouFormatSettings {
 			case "show_post_date":
 				showPostDate = toBoolean(value);
 				break;
+			case "enable_half_indent_bracket":
+				enableHalfIndentBracket = toBoolean(value);
+				break;
+			case "enable_convert_num_to_kanji":
+				enableConvertNumToKanji = toBoolean(value);
+				break;
+			case "enable_kanji_num_with_units":
+				enableKanjiNumWithUnits = toBoolean(value);
+				break;
+			case "kanji_num_with_units_lower_digit_zero":
+				try {
+					kanjiNumWithUnitsLowerDigitZero = Integer.parseInt(value);
+				} catch (NumberFormatException e) {
+					// デフォルト値を維持
+				}
+				break;
+			case "enable_convert_symbols_to_zenkaku":
+				enableConvertSymbolsToZenkaku = toBoolean(value);
+				break;
+			case "enable_auto_join_in_brackets":
+				enableAutoJoinInBrackets = toBoolean(value);
+				break;
+			case "enable_auto_join_line":
+				enableAutoJoinLine = toBoolean(value);
+				break;
 		}
 	}
 
@@ -167,6 +234,27 @@ public class NarouFormatSettings {
 			bw.write("\n");
 			bw.write("; 更新日時を各話に表示\n");
 			bw.write("show_post_date = true\n");
+			bw.write("\n");
+			bw.write("; 行頭のかぎ括弧に二分アキを挿入 (縦書き時の見た目改善)\n");
+			bw.write("enable_half_indent_bracket = true\n");
+			bw.write("\n");
+			bw.write("; 数字の漢数字化 (123 → 一二三)\n");
+			bw.write("enable_convert_num_to_kanji = false\n");
+			bw.write("\n");
+			bw.write("; 漢数字の単位化 (1000 → 千、10000 → 一万)\n");
+			bw.write("enable_kanji_num_with_units = false\n");
+			bw.write("\n");
+			bw.write("; 単位化する際の下位桁ゼロ数 (2: 100以上で単位化)\n");
+			bw.write("kanji_num_with_units_lower_digit_zero = 2\n");
+			bw.write("\n");
+			bw.write("; 記号の全角化 (- → －、< → 〈など)\n");
+			bw.write("enable_convert_symbols_to_zenkaku = false\n");
+			bw.write("\n");
+			bw.write("; かぎ括弧内の自動連結 (改行を全角スペースに)\n");
+			bw.write("enable_auto_join_in_brackets = false\n");
+			bw.write("\n");
+			bw.write("; 行末読点での自動連結\n");
+			bw.write("enable_auto_join_line = false\n");
 		}
 	}
 }

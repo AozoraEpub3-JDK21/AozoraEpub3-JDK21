@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(du:*)"
+      "Bash(du:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(git checkout:*)",
+      "Bash(./gradlew tasks:*)",
+      "Bash(./gradlew clean build distZip:*)",
+      "Bash(./gradlew distZip:*)",
+      "Bash(./gradlew clean build:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(javac:*)"
     ]
   }
 }

@@ -102,7 +102,18 @@ public class WebAozoraConverter
 	private boolean apiFallbackEnabled = true;
 	/** なろうAPIクライアント */
 	private NarouApiClient apiClient = null;
-	
+
+	////////////////////////////////
+	// narou.rb互換フォーマット設定
+	/** narou.rb互換フォーマット設定 */
+	private NarouFormatSettings formatSettings = new NarouFormatSettings();
+	/** 作品タイトル (章見出しで柱に使用) */
+	private String bookTitle = null;
+	/** 英文保護用リスト（記号全角化処理で使用） */
+	private java.util.ArrayList<String> englishSentences = new java.util.ArrayList<>();
+	/** 漢数字退避用リスト（数字の漢数字化処理で使用） */
+	private java.util.ArrayList<String> kanjiNumbers = new java.util.ArrayList<>();
+
 	////////////////////////////////////////////////////////////////
 	/** fqdnに対応したインスタンスを生成してキャッシュして変換実行 */
 	public static WebAozoraConverter createWebAozoraConverter(String urlString, File configPath) throws IOException
@@ -225,6 +236,26 @@ public class WebAozoraConverter
 	 */
 	public void setApiFallbackEnabled(boolean enabled) {
 		this.apiFallbackEnabled = enabled;
+	}
+
+	/**
+	 * narou.rb互換フォーマット設定をロード
+	 * @param settingFile 設定ファイル (setting_narourb.ini または narou.rbのsetting.ini)
+	 */
+	public void loadFormatSettings(File settingFile) {
+		try {
+			formatSettings.load(settingFile);
+			LogAppender.println("フォーマット設定読み込み: " + settingFile.getName());
+		} catch (IOException e) {
+			LogAppender.error("フォーマット設定読み込み失敗: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * フォーマット設定を取得
+	 */
+	public NarouFormatSettings getFormatSettings() {
+		return formatSettings;
 	}
 	
 	/**
@@ -403,8 +434,8 @@ public class WebAozoraConverter
 		if (isPath) this.dstPath += urlParentPath;
 		else this.dstPath += urlFilePath+"_converted/";
 		File txtFile = new File(this.dstPath+"converted.txt");
-		//表紙画像はtxtと同じ名前で保存 拡張子はpngだが表示はできるのでそのまま
-		File coverImageFile = new File(this.dstPath+"converted.png");
+		//表紙画像（narou.rb互換: cover.jpg で保存）
+		File coverImageFile = new File(this.dstPath+"cover.jpg");
 		//更新情報格納先
 		File updateInfoFile = new File(this.dstPath+"update.txt");
 		
@@ -444,6 +475,7 @@ public class WebAozoraConverter
 			} catch (Exception e) {
 				e.printStackTrace();
 				LogAppender.println("一覧ページの取得に失敗しました。 ");
+			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
 				if (!cacheFile.exists()) return null;
 				
 				LogAppender.println("キャッシュファイルを利用します。");
@@ -478,6 +510,8 @@ public class WebAozoraConverter
 				printText(bw, title);
 				bw.append('\n');
 				hasTitle = true;
+				// 作品タイトルを保存 (章見出しの柱で使用)
+				this.bookTitle = title;
 			}
 			if (!hasTitle) {
 				LogAppender.println("SERIES/TITLE : タイトルがありません");
@@ -503,41 +537,70 @@ public class WebAozoraConverter
 				printText(bw, author);
 			}
 			bw.append('\n');
-			//説明
-			// APIメタデータのあらすじがあれば優先使用
-			if (apiMetadata != null && apiMetadata.getStory() != null && !apiMetadata.getStory().isEmpty()) {
+
+			// narou.rb互換: 表紙挿絵注記を挿入
+			if (coverImageFile.exists()) {
+				bw.append("［＃挿絵（cover.jpg）入る］\n");
 				bw.append('\n');
+			}
+
+			// narou.rb互換: 掲載URL表示
+			if (formatSettings.isIncludeTocUrl()) {
 				bw.append("［＃区切り線］\n");
 				bw.append('\n');
-				bw.append("［＃ここから２字下げ］\n");
-				bw.append("［＃ここから２字上げ］\n");
-				// APIのあらすじはプレーンテキスト（改行は\nのみ）
-				String story = apiMetadata.getStory().replace("\r\n", "\n").replace("\r", "\n");
-				for (String line : story.split("\n")) {
-					printText(bw, line);
-					bw.append('\n');
-				}
-				bw.append("［＃ここで字上げ終わり］\n");
-				bw.append("［＃ここで字下げ終わり］\n");
-				bw.append('\n');
+				bw.append("掲載ページ:\n");
+				bw.append("<a href=\"");
+				bw.append(urlString);
+				bw.append("\">");
+				bw.append(urlString);
+				bw.append("</a>\n");
 				bw.append("［＃区切り線］\n");
 				bw.append('\n');
-				LogAppender.println("なろうAPI: あらすじ使用");
-			} else {
-				Element description = getExtractFirstElement(doc, this.queryMap.get(ExtractId.DESCRIPTION));
-				if (description != null) {
-					bw.append('\n');
-					bw.append("［＃区切り線］\n");
-					bw.append('\n');
+			}
+			//説明 (あらすじ)
+			// narou.rb互換: include_story設定で制御
+			if (formatSettings.isIncludeStory()) {
+				// APIメタデータのあらすじがあれば優先使用
+				if (apiMetadata != null && apiMetadata.getStory() != null && !apiMetadata.getStory().isEmpty()) {
+					if (!formatSettings.isIncludeTocUrl()) {
+						bw.append('\n');
+						bw.append("［＃区切り線］\n");
+						bw.append('\n');
+					}
+					bw.append("あらすじ：\n");
 					bw.append("［＃ここから２字下げ］\n");
 					bw.append("［＃ここから２字上げ］\n");
-					printNode(bw, description, true);
-					bw.append('\n');
+					// APIのあらすじはプレーンテキスト（改行は\nのみ）
+					String story = apiMetadata.getStory().replace("\r\n", "\n").replace("\r", "\n");
+					for (String line : story.split("\n")) {
+						printText(bw, line);
+						bw.append('\n');
+					}
 					bw.append("［＃ここで字上げ終わり］\n");
 					bw.append("［＃ここで字下げ終わり］\n");
 					bw.append('\n');
 					bw.append("［＃区切り線］\n");
 					bw.append('\n');
+					LogAppender.println("なろうAPI: あらすじ使用");
+				} else {
+					Element description = getExtractFirstElement(doc, this.queryMap.get(ExtractId.DESCRIPTION));
+					if (description != null) {
+						if (!formatSettings.isIncludeTocUrl()) {
+							bw.append('\n');
+							bw.append("［＃区切り線］\n");
+							bw.append('\n');
+						}
+						bw.append("あらすじ：\n");
+						bw.append("［＃ここから２字下げ］\n");
+						bw.append("［＃ここから２字上げ］\n");
+						printNode(bw, description, true);
+						bw.append('\n');
+						bw.append("［＃ここで字上げ終わり］\n");
+						bw.append("［＃ここで字下げ終わり］\n");
+						bw.append('\n');
+						bw.append("［＃区切り線］\n");
+						bw.append('\n');
+					}
 				}
 			}
 			
@@ -765,10 +828,18 @@ public class WebAozoraConverter
 							newChapter = true;
 							preChapterTitle = chapterTitle;
 							bw.append("\n［＃改ページ］\n");
-							bw.append("［＃ここから大見出し］\n");
+							// narou.rb互換: 章中表紙のレイアウト
+							if (formatSettings.isChapterUseCenterPage()) {
+								bw.append("［＃ページの左右中央］\n");
+							}
+							if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
+								bw.append("［＃ここから柱］");
+								printText(bw, this.bookTitle);
+								bw.append("［＃ここで柱終わり］\n");
+							}
+							bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
 							printText(bw, preChapterTitle);
-							bw.append('\n');
-							bw.append("［＃ここで大見出し終わり］\n");
+							bw.append("［＃大見出し終わり］\n");
 							bw.append('\n');
 						}
 						//更新日時を一覧から取得
@@ -821,7 +892,13 @@ public class WebAozoraConverter
 			bw.append("変換日時： ");
 			bw.append(dateFormat.format(new Date()));
 			bw.append('\n');
-			
+
+			// narou.rb互換: 本の終了マーカー
+			if (formatSettings.isEnableDisplayEndOfBook()) {
+				bw.append("\n");
+				bw.append("［＃ここから地付き］［＃小書き］（本を読み終わりました）［＃小書き終わり］［＃ここで地付き終わり］\n");
+			}
+
 		} finally {
 			bw.close();
 		}
@@ -928,6 +1005,11 @@ public class WebAozoraConverter
 	 * @param listSubTitle 一覧側で取得したタイトル */
 	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate) throws IOException
 	{
+		// 英文保護リストをクリア（各話ごとに初期化）
+		englishSentences.clear();
+		// 漢数字退避リストをクリア（各話ごとに初期化）
+		kanjiNumbers.clear();
+
 		Elements contentDivs = getExtractElements(doc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
 		if (contentDivs == null || contentDivs.size() == 0) {
 			LogAppender.println("CONTENT_ARTICLE : 本文が取得できません");
@@ -936,19 +1018,22 @@ public class WebAozoraConverter
 			String subTitle = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_SUBTITLE));
 			if (subTitle == null) subTitle = listSubTitle; //一覧のタイトルを設定
 			if (subTitle != null) {
-				bw.append("［＃ここから中見出し］\n");
+				// narou.rb互換: 横書き時は1字下げ、縦書き時は3字下げ
+				bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃中見出し］");
 				printText(bw, subTitle);
-				bw.append('\n');
-				bw.append("［＃ここで中見出し終わり］\n");
+				bw.append("［＃中見出し終わり］\n");
 			}
 			//公開日付
-			String coutentUpdate = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_UPDATE));
-			if (coutentUpdate != null && coutentUpdate.length() > 0) postDate = coutentUpdate;
-			if (postDate != null) {
-				bw.append("［＃ここから地から１字上げ］\n［＃ここから１段階小さな文字］\n");
-				printText(bw, postDate);
-				bw.append('\n');
-				bw.append("［＃ここで小さな文字終わり］\n［＃ここで字上げ終わり］\n");
+			// narou.rb互換: show_post_date設定で制御
+			if (formatSettings.isShowPostDate()) {
+				String coutentUpdate = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_UPDATE));
+				if (coutentUpdate != null && coutentUpdate.length() > 0) postDate = coutentUpdate;
+				if (postDate != null) {
+					bw.append("［＃ここから地から１字上げ］\n［＃ここから１段階小さな文字］\n");
+					printText(bw, postDate);
+					bw.append('\n');
+					bw.append("［＃ここで小さな文字終わり］\n［＃ここで字上げ終わり］\n");
+				}
 			}
 			
 			bw.append('\n');
@@ -962,16 +1047,30 @@ public class WebAozoraConverter
 			if (preambleDivs != null) {
 				Element startElement = getExtractFirstElement(doc, this.queryMap.get(ExtractId.CONTENT_PREAMBLE_START));
 				Element endElement = getExtractFirstElement(doc, this.queryMap.get(ExtractId.CONTENT_PREAMBLE_END));
-				bw.append("［＃区切り線］\n");
-				bw.append("［＃ここから２字下げ］\n［＃ここから２字上げ］\n");
-				bw.append("［＃ここから１段階小さな文字］\n");
-				bw.append("\n");
-				for (Element elem : preambleDivs) printNode(bw, elem, startElement, endElement, true);
-				bw.append("\n\n");
-				bw.append("［＃ここで小さな文字終わり］\n");
-				bw.append("［＃ここで字上げ終わり］\n［＃ここで字下げ終わり］\n");
-				bw.append("［＃区切り線］\n");
-				bw.append("\n\n");
+				// narou.rb互換: author_comment_styleで分岐
+				String style = formatSettings.getAuthorCommentStyle();
+				if ("css".equals(style)) {
+					// css: ［＃ここから前書き］マーカーで囲む
+					bw.append("［＃ここから前書き］\n");
+					for (Element elem : preambleDivs) printNode(bw, elem, startElement, endElement, true);
+					bw.append("［＃ここで前書き終わり］\n");
+				} else if ("simple".equals(style)) {
+					// simple: 8字下げ＋2段階小さな文字
+					bw.append("\n");
+					bw.append("［＃ここから８字下げ］\n");
+					bw.append("［＃ここから２段階小さな文字］\n");
+					for (Element elem : preambleDivs) printNode(bw, elem, startElement, endElement, true);
+					bw.append("\n");
+					bw.append("［＃ここで小さな文字終わり］\n");
+					bw.append("［＃ここで字下げ終わり］\n");
+				} else {
+					// plain: 区切り線のみ
+					bw.append("\n\n");
+					for (Element elem : preambleDivs) printNode(bw, elem, startElement, endElement, true);
+					bw.append("\n\n");
+					bw.append("［＃区切り線］\n");
+					bw.append("\n");
+				}
 			}
 			//本文
 			String separator = null;
@@ -998,14 +1097,27 @@ public class WebAozoraConverter
 				Element startElement = getExtractFirstElement(doc, this.queryMap.get(ExtractId.CONTENT_APPENDIX_START));
 				Element endElement = getExtractFirstElement(doc, this.queryMap.get(ExtractId.CONTENT_APPENDIX_END));
 				bw.append("\n\n");
-				bw.append("［＃区切り線］\n");
-				bw.append("［＃ここから２字下げ］\n［＃ここから２字上げ］\n");
-				bw.append("［＃ここから１段階小さな文字］\n");
-				bw.append("\n");
-				for (Element elem : appendixDivs) printNode(bw, elem, startElement, endElement, true);
-				bw.append("\n");
-				bw.append("［＃ここで小さな文字終わり］\n");
-				bw.append("［＃ここで字上げ終わり］\n［＃ここで字下げ終わり］\n");
+				// narou.rb互換: author_comment_styleで分岐
+				String style = formatSettings.getAuthorCommentStyle();
+				if ("css".equals(style)) {
+					// css: ［＃ここから後書き］マーカーで囲む
+					bw.append("［＃ここから後書き］\n");
+					for (Element elem : appendixDivs) printNode(bw, elem, startElement, endElement, true);
+					bw.append("［＃ここで後書き終わり］\n");
+				} else if ("simple".equals(style)) {
+					// simple: 8字下げ＋2段階小さな文字
+					bw.append("［＃ここから８字下げ］\n");
+					bw.append("［＃ここから２段階小さな文字］\n");
+					for (Element elem : appendixDivs) printNode(bw, elem, startElement, endElement, true);
+					bw.append("\n");
+					bw.append("［＃ここで小さな文字終わり］\n");
+					bw.append("［＃ここで字下げ終わり］\n");
+				} else {
+					// plain: 区切り線のみ
+					bw.append("［＃区切り線］\n");
+					bw.append("\n");
+					for (Element elem : appendixDivs) printNode(bw, elem, startElement, endElement, true);
+				}
 			}
 		}
 	}
@@ -1104,22 +1216,38 @@ public class WebAozoraConverter
 		return false;
 	}
 	
-	/** ルビを青空ルビにして出力 */
+	/** ルビを青空ルビにして出力
+	 * narou.rb互換: <rb>タグの有無に関わらず処理 */
 	private void printRuby(BufferedWriter bw, Element ruby) throws IOException
 	{
-		Elements rb = ruby.getElementsByTag("rb");
-		Elements rt = ruby.getElementsByTag("rt");
-		if (rb.size() > 0) {
-			if (rt.size() > 0) {
-				bw.append('｜');
-				printText(bw, rb.get(0).text());
-				bw.append('《');
-				printText(bw, rt.get(0).text());
-				bw.append('》');
-			} else {
-				printText(bw, rb.get(0).text());
-			}
+		String rubyHtml = ruby.html();
+
+		// <rt>タグで分割（大文字小文字無視）
+		String[] parts = rubyHtml.split("(?i)<rt>", 2);
+		if (parts.length < 2) {
+			// <rt>タグがない場合は、タグを削除してテキストのみ出力
+			String text = parts[0].replaceAll("<[^>]+>", "");
+			printText(bw, text);
+			return;
 		}
+
+		// 親文字: <rt>の前の部分から<rp>を除去してタグ削除
+		String rubyBase = parts[0]
+			.replaceAll("(?i)<rp>.*?</rp>", "")  // <rp>タグ削除
+			.replaceAll("<[^>]+>", "");           // 残りのタグ削除
+
+		// 振り仮名: <rt>の後の部分から</rt>までを抽出し、<rp>を除去してタグ削除
+		String rtContent = parts[1].split("(?i)</rt>", 2)[0];
+		String rubyText = rtContent
+			.replaceAll("(?i)<rp>.*?</rp>", "")  // <rp>タグ削除
+			.replaceAll("<[^>]+>", "");           // 残りのタグ削除
+
+		// 青空文庫形式で出力
+		bw.append('｜');
+		printText(bw, rubyBase);
+		bw.append('《');
+		printText(bw, rubyText);
+		bw.append('》');
 	}
 	/** 画像をキャッシュして相対パスの注記にする */
 	private void printImage(BufferedWriter bw, Element img) throws IOException
@@ -1171,27 +1299,423 @@ public class WebAozoraConverter
 		}
 	}
 	
+	/**
+	 * 行頭のかぎ括弧類に二分アキを追加（narou.rb互換）
+	 */
+	private String addHalfIndentBracket(String text) {
+		if (!formatSettings.isEnableHalfIndentBracket()) {
+			return text;
+		}
+
+		// 行頭の空白（全角・半角・タブ）+ かぎ括弧類
+		// 空白を削除して［＃二分アキ］に置換
+		Pattern pattern = Pattern.compile("^[ 　\\t]*([「『〔（【〈《≪〝])", Pattern.MULTILINE);
+		return pattern.matcher(text).replaceAll("［＃二分アキ］$1");
+	}
+
+	/**
+	 * 英文（8文字以上）を保護（narou.rb互換）
+	 * 将来の記号全角化処理に備えて、長い英文を一時的にマーカーに置換
+	 */
+	private String protectEnglishSentences(String text) {
+		Pattern pattern = Pattern.compile("[\\w.,!?'\" &:;_-]+");
+		java.util.regex.Matcher matcher = pattern.matcher(text);
+		StringBuffer result = new StringBuffer();
+
+		while (matcher.find()) {
+			String match = matcher.group();
+			if (isEnglishSentence(match)) {
+				// 英文として判定された場合は保護
+				englishSentences.add(match);
+				matcher.appendReplacement(result,
+					"［＃英文＝" + (englishSentences.size() - 1) + "］");
+			} else {
+				// 短い英単語はそのまま（将来は全角化）
+				matcher.appendReplacement(result,
+					java.util.regex.Matcher.quoteReplacement(match));
+			}
+		}
+		matcher.appendTail(result);
+		return result.toString();
+	}
+
+	/**
+	 * 英文かどうかを判定
+	 * 条件: 8文字以上、2文字以上の英字を含む、スペースまたはカンマ/ピリオドを含む
+	 */
+	private boolean isEnglishSentence(String str) {
+		if (str.length() < 8) return false;
+		return str.matches(".*[a-zA-Z]{2,}.*") &&
+		       str.matches(".*[\\s.,].*");
+	}
+
+	/**
+	 * 保護した英文を復元（narou.rb互換）
+	 */
+	private String rebuildEnglishSentences(String text) {
+		for (int i = 0; i < englishSentences.size(); i++) {
+			text = text.replace("［＃英文＝" + i + "］", englishSentences.get(i));
+		}
+		return text;
+	}
+
+	/**
+	 * 縦中横処理（narou.rb互換）
+	 * 2～3個の感嘆符・疑問符を縦中横化
+	 */
+	private String convertTatechuyoko(String text) {
+		// 3個の組み合わせ（長いパターンから先に処理）
+		text = text.replaceAll("！{3}", "［＃縦中横］!!!［＃縦中横終わり］");
+		text = text.replaceAll("！！？", "［＃縦中横］!!?［＃縦中横終わり］");
+		text = text.replaceAll("？！！", "［＃縦中横］?!!［＃縦中横終わり］");
+		text = text.replaceAll("？{3}", "［＃縦中横］???［＃縦中横終わり］");
+
+		// 2個の組み合わせ
+		text = text.replaceAll("！{2}", "［＃縦中横］!!［＃縦中横終わり］");
+		text = text.replaceAll("！？", "［＃縦中横］!?［＃縦中横終わり］");
+		text = text.replaceAll("？！", "［＃縦中横］?!［＃縦中横終わり］");
+		text = text.replaceAll("？{2}", "［＃縦中横］??［＃縦中横終わり］");
+
+		return text;
+	}
+
+	/**
+	 * 数字の漢数字化処理（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:93-232
+	 *
+	 * 処理フロー:
+	 * 1. 既存の漢数字を一時退避
+	 * 2. カンマ区切りの数字は半角保護
+	 * 3. アラビア数字を漢数字に変換
+	 * 4. 単位化（enable_kanji_num_with_units=trueの場合）
+	 * 5. 退避した漢数字を復元
+	 */
+	private String convertNumbersToKanji(String text) {
+		// 1. 既存の漢数字を一時退避
+		text = stashKanjiNum(text);
+
+		// 2. カンマ区切りの数字は半角保護（全角化対策）
+		text = text.replaceAll("([0-9]{1,3}(?:,[0-9]{3})+)", "［＃半角数字＝$1］");
+
+		// 3. アラビア数字を漢数字に変換
+		text = arabicToKanji(text);
+
+		// 4. 単位化（千・万などの単位を追加）
+		if (formatSettings.isEnableKanjiNumWithUnits()) {
+			text = addKanjiUnits(text);
+		}
+
+		// 5. 退避した漢数字を復元
+		text = rebuildKanjiNum(text);
+
+		return text;
+	}
+
+	/**
+	 * 既存の漢数字を一時退避する。
+	 * 既に存在する漢数字を保護し、後で復元できるようにする。
+	 */
+	private String stashKanjiNum(String text) {
+		// 漢数字のパターン（一、二、三...）
+		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+			"[一二三四五六七八九十百千万億兆]+"
+		);
+		java.util.regex.Matcher matcher = pattern.matcher(text);
+		StringBuffer result = new StringBuffer();
+
+		while (matcher.find()) {
+			String kanjiNum = matcher.group();
+			kanjiNumbers.add(kanjiNum);
+			matcher.appendReplacement(result,
+				"［＃漢数字＝" + (kanjiNumbers.size() - 1) + "］");
+		}
+		matcher.appendTail(result);
+		return result.toString();
+	}
+
+	/**
+	 * アラビア数字を漢数字に変換する。
+	 * 例: 123 → 一二三
+	 */
+	private String arabicToKanji(String text) {
+		// 数字のパターン（連続する数字）
+		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[0-9]+");
+		java.util.regex.Matcher matcher = pattern.matcher(text);
+		StringBuffer result = new StringBuffer();
+
+		while (matcher.find()) {
+			String numStr = matcher.group();
+			String kanjiStr = convertNumberStringToKanji(numStr);
+			matcher.appendReplacement(result, java.util.regex.Matcher.quoteReplacement(kanjiStr));
+		}
+		matcher.appendTail(result);
+		return result.toString();
+	}
+
+	/**
+	 * 数字文字列を漢数字に変換する。
+	 * 例: "123" → "一二三"
+	 */
+	private String convertNumberStringToKanji(String numStr) {
+		StringBuilder sb = new StringBuilder();
+		for (char c : numStr.toCharArray()) {
+			switch (c) {
+				case '0': sb.append("〇"); break;
+				case '1': sb.append("一"); break;
+				case '2': sb.append("二"); break;
+				case '3': sb.append("三"); break;
+				case '4': sb.append("四"); break;
+				case '5': sb.append("五"); break;
+				case '6': sb.append("六"); break;
+				case '7': sb.append("七"); break;
+				case '8': sb.append("八"); break;
+				case '9': sb.append("九"); break;
+				default: sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	/**
+	 * 漢数字に単位を追加する。
+	 * 例: 一〇〇〇 → 千、一〇〇〇〇 → 一万
+	 *
+	 * kanji_num_with_units_lower_digit_zero の設定により、
+	 * 下位桁ゼロ数で単位化の閾値を決定。
+	 */
+	private String addKanjiUnits(String text) {
+		int lowerDigitZero = formatSettings.getKanjiNumWithUnitsLowerDigitZero();
+
+		// 4桁（千）の単位化
+		if (lowerDigitZero <= 3) {
+			// 一〇〇〇 → 千
+			text = text.replaceAll("一〇〇〇", "千");
+			text = text.replaceAll("二〇〇〇", "二千");
+			text = text.replaceAll("三〇〇〇", "三千");
+			text = text.replaceAll("四〇〇〇", "四千");
+			text = text.replaceAll("五〇〇〇", "五千");
+			text = text.replaceAll("六〇〇〇", "六千");
+			text = text.replaceAll("七〇〇〇", "七千");
+			text = text.replaceAll("八〇〇〇", "八千");
+			text = text.replaceAll("九〇〇〇", "九千");
+		}
+
+		// 5桁（万）の単位化
+		if (lowerDigitZero <= 4) {
+			// 一〇〇〇〇 → 一万
+			text = text.replaceAll("([一二三四五六七八九千])〇〇〇〇", "$1万");
+			text = text.replaceAll("一〇〇〇〇", "一万");
+		}
+
+		// 3桁（百）の単位化
+		if (lowerDigitZero <= 2) {
+			// 一〇〇 → 百
+			text = text.replaceAll("一〇〇", "百");
+			text = text.replaceAll("二〇〇", "二百");
+			text = text.replaceAll("三〇〇", "三百");
+			text = text.replaceAll("四〇〇", "四百");
+			text = text.replaceAll("五〇〇", "五百");
+			text = text.replaceAll("六〇〇", "六百");
+			text = text.replaceAll("七〇〇", "七百");
+			text = text.replaceAll("八〇〇", "八百");
+			text = text.replaceAll("九〇〇", "九百");
+		}
+
+		return text;
+	}
+
+	/**
+	 * 退避した漢数字を復元する。
+	 */
+	private String rebuildKanjiNum(String text) {
+		for (int i = 0; i < kanjiNumbers.size(); i++) {
+			text = text.replace("［＃漢数字＝" + i + "］", kanjiNumbers.get(i));
+		}
+		return text;
+	}
+
+	/**
+	 * 記号の全角化と特殊変換（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:340-383
+	 *
+	 * 注意: 英文保護エリア（［＃英文＝N］）内は変換しない
+	 */
+	private String convertSymbolsToZenkaku(String text) {
+		// 基本的な記号の全角化
+		text = text.replace("-", "－");   // ハイフン
+		text = text.replace("=", "＝");   // イコール
+		text = text.replace("+", "＋");   // プラス
+		text = text.replace("/", "／");   // スラッシュ
+		text = text.replace("*", "＊");   // アスタリスク
+		text = text.replace("<", "〈");   // 小なり → 始め山括弧
+		text = text.replace(">", "〉");   // 大なり → 終わり山括弧
+		text = text.replace("(", "（");   // 左丸括弧
+		text = text.replace(")", "）");   // 右丸括弧
+		text = text.replace("|", "｜");   // 縦線
+		text = text.replace(",", "，");   // カンマ
+		text = text.replace(".", "．");   // ピリオド
+		text = text.replace("_", "＿");   // アンダースコア
+		text = text.replace(";", "；");   // セミコロン
+		text = text.replace(":", "：");   // コロン
+		text = text.replace("[", "［");   // 左角括弧
+		text = text.replace("]", "］");   // 右角括弧
+		text = text.replace("{", "｛");   // 左波括弧
+		text = text.replace("}", "｝");   // 右波括弧
+		text = text.replace("\\", "￥");  // バックスラッシュ → 円記号
+
+		// 特殊な記号の変換
+		text = text.replace("≪", "※［＃始め二重山括弧］");
+		text = text.replace("≫", "※［＃終わり二重山括弧］");
+		text = text.replace("※※", "※［＃米印、1-2-8］");
+
+		return text;
+	}
+
+	/**
+	 * ローマ数字の変換（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:331-338
+	 *
+	 * ユニコードのローマ数字を通常のアルファベットに変換
+	 * 例: Ⅰ → I, Ⅱ → II, ⅲ → iii
+	 */
+	private String convertRomanNumerals(String text) {
+		// 大文字のローマ数字（U+2160 - U+216F）
+		text = text.replace("Ⅰ", "I");
+		text = text.replace("Ⅱ", "II");
+		text = text.replace("Ⅲ", "III");
+		text = text.replace("Ⅳ", "IV");
+		text = text.replace("Ⅴ", "V");
+		text = text.replace("Ⅵ", "VI");
+		text = text.replace("Ⅶ", "VII");
+		text = text.replace("Ⅷ", "VIII");
+		text = text.replace("Ⅸ", "IX");
+		text = text.replace("Ⅹ", "X");
+		text = text.replace("Ⅺ", "XI");
+		text = text.replace("Ⅻ", "XII");
+		text = text.replace("Ⅼ", "L");
+		text = text.replace("Ⅽ", "C");
+		text = text.replace("Ⅾ", "D");
+		text = text.replace("Ⅿ", "M");
+
+		// 小文字のローマ数字（U+2170 - U+217F）
+		text = text.replace("ⅰ", "i");
+		text = text.replace("ⅱ", "ii");
+		text = text.replace("ⅲ", "iii");
+		text = text.replace("ⅳ", "iv");
+		text = text.replace("ⅴ", "v");
+		text = text.replace("ⅵ", "vi");
+		text = text.replace("ⅶ", "vii");
+		text = text.replace("ⅷ", "viii");
+		text = text.replace("ⅸ", "ix");
+		text = text.replace("ⅹ", "x");
+		text = text.replace("ⅺ", "xi");
+		text = text.replace("ⅻ", "xii");
+		text = text.replace("ⅼ", "l");
+		text = text.replace("ⅽ", "c");
+		text = text.replace("ⅾ", "d");
+		text = text.replace("ⅿ", "m");
+
+		return text;
+	}
+
+	/**
+	 * かぎ括弧内の自動連結（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:520-609
+	 *
+	 * かぎ括弧「」内の改行を全角スペースに置換
+	 * 例: 「これは\n　テストです」 → 「これは　テストです」
+	 *
+	 * ネストした括弧にも対応
+	 */
+	private String autoJoinInBrackets(String text) {
+		// かぎ括弧「」内の改行を全角スペースに置換
+		// ネストに対応するため、繰り返し処理
+		boolean changed = true;
+		while (changed) {
+			String before = text;
+			// 「...」内の改行を検出して置換
+			text = text.replaceAll("「([^「」]*)\n([^「」]*)」", "「$1　$2」");
+			// 『...』内の改行も処理
+			text = text.replaceAll("『([^『』]*)\n([^『』]*)』", "『$1　$2』");
+			changed = !text.equals(before);
+		}
+		return text;
+	}
+
+	/**
+	 * 行末読点での自動連結（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:611-667
+	 *
+	 * 行末が読点（、）で終わる行を次の行と連結
+	 * 例: 「これはテストです、\n次の行に続きます。」 → 「これはテストです、次の行に続きます。」
+	 */
+	private String autoJoinLine(String text) {
+		// 行末が読点で終わる場合、次の行と連結
+		text = text.replaceAll("、\n", "、");
+		return text;
+	}
+
 	/** 文字を出力 特殊文字は注記に変換 */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
+		// narou.rb互換: HTML改行コード（\r\n）を削除
+		// HTMLの整形用改行を除去し、brタグのみを改行として扱う
+		text = text.replaceAll("[\r\n]+", "");
+
+		// narou.rb互換: かぎ括弧内の自動連結（改行があれば処理）
+		if (formatSettings.isEnableAutoJoinInBrackets()) {
+			text = autoJoinInBrackets(text);
+		}
+
+		// narou.rb互換: 行末読点での自動連結
+		if (formatSettings.isEnableAutoJoinLine()) {
+			text = autoJoinLine(text);
+		}
+
+		// narou.rb互換: 行頭のかぎ括弧に二分アキを追加
+		text = addHalfIndentBracket(text);
+
+		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
+		text = convertTatechuyoko(text);
+
+		// narou.rb互換: 数字の漢数字化
+		if (formatSettings.isEnableConvertNumToKanji()) {
+			text = convertNumbersToKanji(text);
+		}
+
+		// narou.rb互換: ローマ数字の変換
+		text = convertRomanNumerals(text);
+
+		// narou.rb互換: 英文を保護（記号全角化処理のため）
+		text = protectEnglishSentences(text);
+
+		// narou.rb互換: 記号の全角化
+		if (formatSettings.isEnableConvertSymbolsToZenkaku()) {
+			text = convertSymbolsToZenkaku(text);
+		}
+
+		// 特殊文字を青空注記に変換
+		StringBuilder sb = new StringBuilder();
 		char[] chars = text.toCharArray();
 		for (char ch : chars) {
-			//青空特殊文字
 			switch (ch) {
-			case '《': bw.append("※［＃始め二重山括弧、1-1-52］"); break;
-			case '》': bw.append("※［＃終わり二重山括弧、1-1-53］"); break;
-			case '［': bw.append("※［＃始め角括弧、1-1-46］"); break;
-			case '］': bw.append("※［＃終わり角括弧、1-1-47］"); break;
-			case '〔': bw.append("※［＃始め亀甲括弧、1-1-44］"); break;
-			case '〕': bw.append("※［＃終わり亀甲括弧、1-1-45］"); break;
-			case '｜': bw.append("※［＃縦線、1-1-35］"); break;
-			case '＃': bw.append("※［＃井げた、1-1-84］"); break;
-			case '※': bw.append("※［＃米印、1-2-8］"); break;
-			case '\t': bw.append(' '); break;
-			case '\n': case '\r': break;
-			default: bw.append(ch);
+			case '《': sb.append("※［＃始め二重山括弧、1-1-52］"); break;
+			case '》': sb.append("※［＃終わり二重山括弧、1-1-53］"); break;
+			case '［': sb.append("※［＃始め角括弧、1-1-46］"); break;
+			case '］': sb.append("※［＃終わり角括弧、1-1-47］"); break;
+			case '〔': sb.append("※［＃始め亀甲括弧、1-1-44］"); break;
+			case '〕': sb.append("※［＃終わり亀甲括弧、1-1-45］"); break;
+			case '｜': sb.append("※［＃縦線、1-1-35］"); break;
+			case '＃': sb.append("※［＃井げた、1-1-84］"); break;
+			case '※': sb.append("※［＃米印、1-2-8］"); break;
+			case '\t': sb.append(' '); break;
+			default: sb.append(ch);
 			}
 		}
+
+		// narou.rb互換: 保護した英文を復元
+		String result = rebuildEnglishSentences(sb.toString());
+		bw.append(result);
 	}
 	
 	////////////////////////////////////////////////////////////////
@@ -1364,7 +1888,13 @@ public class WebAozoraConverter
 		ExtractInfo[] cookie = this.queryMap.get(ExtractId.COOKIE);
 		if (cookie != null && cookie.length > 0) conn.setRequestProperty("Cookie", cookie[0].query);
 		if (referer != null) conn.setRequestProperty("Referer", referer);
+		conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 		conn.setConnectTimeout(10000);//10秒
+		// HTTPレスポンスコードをログ出力
+		if (conn instanceof java.net.HttpURLConnection) {
+			int responseCode = ((java.net.HttpURLConnection)conn).getResponseCode();
+			LogAppender.println("HTTP Response Code: " + responseCode);
+		}
 		BufferedInputStream bis = new BufferedInputStream(conn.getInputStream(), 8192);
 		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(cacheFile));
 		try {
