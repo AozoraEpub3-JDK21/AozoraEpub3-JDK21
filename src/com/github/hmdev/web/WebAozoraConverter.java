@@ -84,7 +84,16 @@ public class WebAozoraConverter
 	boolean canceled = false;
 	//更新有りフラグ
 	boolean updated = false;
-	
+
+	////////////////////////////////
+	// 段階的レート制限 (narou.rbパターン: 10話ごとに長い休止)
+	/** ダウンロードカウンター (段階的待機用) */
+	private static int downloadCounter = 0;
+	/** 長い休止を入れる間隔 (話数) */
+	private static final int LONG_PAUSE_INTERVAL = 10;
+	/** 長い休止の時間 (ミリ秒) */
+	private static final int LONG_PAUSE_MS = 5000;
+
 	////////////////////////////////
 	// なろうAPI関連
 	/** なろうAPI使用フラグ */
@@ -236,19 +245,28 @@ public class WebAozoraConverter
 		}
 		return null;
 	}
+
+	/**
+	 * R18サイト (novel18.syosetu.com) のURLかどうかを判定
+	 */
+	private boolean isR18Url(String url) {
+		return url != null && url.contains("novel18.syosetu.com");
+	}
 	
 	/**
 	 * APIからメタデータを取得してキャッシュ
 	 * @param ncode Nコード
 	 * @param cachePath キャッシュディレクトリ
+	 * @param urlString 元URL (R18判定に使用)
 	 * @return NovelMetadata 取得成功時、nullは失敗
 	 */
-	private NovelMetadata fetchAndCacheMetadata(String ncode, File cachePath) {
+	private NovelMetadata fetchAndCacheMetadata(String ncode, File cachePath, String urlString) {
 		if (apiClient == null) return null;
-		
+
 		try {
-			LogAppender.println("なろうAPI: メタデータ取得中... " + ncode);
-			NovelMetadata metadata = apiClient.getNovelMetadata(ncode);
+			boolean r18 = isR18Url(urlString);
+			LogAppender.println("なろうAPI: メタデータ取得中... " + ncode + (r18 ? " (R18)" : ""));
+			NovelMetadata metadata = apiClient.getNovelMetadata(ncode, r18);
 			
 			// メタデータをキャッシュに保存
 			File metadataFile = new File(cachePath, "metadata.json");
@@ -302,6 +320,20 @@ public class WebAozoraConverter
 				  .replace("\t", "\\t");
 	}
 	
+	/**
+	 * 段階的待機 (narou.rbパターン)
+	 * 通常はintervalミリ秒待機し、LONG_PAUSE_INTERVAL話ごとに長い休止を入れる
+	 */
+	private void sleepForDownload() throws InterruptedException {
+		downloadCounter++;
+		if (downloadCounter % LONG_PAUSE_INTERVAL == 0) {
+			LogAppender.println("レート制限: " + downloadCounter + "話取得、" + (LONG_PAUSE_MS / 1000) + "秒休止");
+			Thread.sleep(LONG_PAUSE_MS);
+		} else {
+			Thread.sleep(this.interval);
+		}
+	}
+
 	////////////////////////////////////////////////////////////////
 	/** 変換実行
 	 * @param urlString
@@ -394,7 +426,7 @@ public class WebAozoraConverter
 				String ncode = extractNcode(urlString);
 				if (ncode != null) {
 					LogAppender.println("なろうAPI: Nコード検出 - " + ncode);
-					apiMetadata = fetchAndCacheMetadata(ncode, parentFile);
+					apiMetadata = fetchAndCacheMetadata(ncode, parentFile, urlString);
 					
 					if (apiMetadata == null && !apiFallbackEnabled) {
 						LogAppender.println("なろうAPI: 取得失敗（フォールバック無効）");
@@ -434,7 +466,14 @@ public class WebAozoraConverter
 				bw.append('\n');
 				hasTitle = true;
 			}
-			String title = getExtractText(doc, this.queryMap.get(ExtractId.TITLE));
+			// APIメタデータがあればタイトルを優先使用
+			String title;
+			if (apiMetadata != null && apiMetadata.getTitle() != null && !apiMetadata.getTitle().isEmpty()) {
+				title = apiMetadata.getTitle();
+				LogAppender.println("なろうAPI: タイトル使用 - " + title);
+			} else {
+				title = getExtractText(doc, this.queryMap.get(ExtractId.TITLE));
+			}
 			if (title != null) {
 				printText(bw, title);
 				bw.append('\n');
@@ -444,28 +483,62 @@ public class WebAozoraConverter
 				LogAppender.println("SERIES/TITLE : タイトルがありません");
 				return null;
 			}
-			
+
+			// APIメタデータから全話数をログ出力
+			if (apiMetadata != null && apiMetadata.getGeneralAllNo() > 0) {
+				LogAppender.println("なろうAPI: 全" + apiMetadata.getGeneralAllNo() + "話"
+					+ (apiMetadata.getEnd() == 0 ? "（連載中）" : "（完結）"));
+			}
+
 			//著者
-			String author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
+			// APIメタデータがあれば著者を優先使用
+			String author;
+			if (apiMetadata != null && apiMetadata.getWriter() != null && !apiMetadata.getWriter().isEmpty()) {
+				author = apiMetadata.getWriter();
+				LogAppender.println("なろうAPI: 著者使用 - " + author);
+			} else {
+				author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
+			}
 			if (author != null) {
 				printText(bw, author);
 			}
 			bw.append('\n');
 			//説明
-			Element description = getExtractFirstElement(doc, this.queryMap.get(ExtractId.DESCRIPTION));
-			if (description != null) {
+			// APIメタデータのあらすじがあれば優先使用
+			if (apiMetadata != null && apiMetadata.getStory() != null && !apiMetadata.getStory().isEmpty()) {
 				bw.append('\n');
 				bw.append("［＃区切り線］\n");
 				bw.append('\n');
 				bw.append("［＃ここから２字下げ］\n");
 				bw.append("［＃ここから２字上げ］\n");
-				printNode(bw, description, true);
-				bw.append('\n');
+				// APIのあらすじはプレーンテキスト（改行は\nのみ）
+				String story = apiMetadata.getStory().replace("\r\n", "\n").replace("\r", "\n");
+				for (String line : story.split("\n")) {
+					printText(bw, line);
+					bw.append('\n');
+				}
 				bw.append("［＃ここで字上げ終わり］\n");
 				bw.append("［＃ここで字下げ終わり］\n");
 				bw.append('\n');
 				bw.append("［＃区切り線］\n");
 				bw.append('\n');
+				LogAppender.println("なろうAPI: あらすじ使用");
+			} else {
+				Element description = getExtractFirstElement(doc, this.queryMap.get(ExtractId.DESCRIPTION));
+				if (description != null) {
+					bw.append('\n');
+					bw.append("［＃区切り線］\n");
+					bw.append('\n');
+					bw.append("［＃ここから２字下げ］\n");
+					bw.append("［＃ここから２字上げ］\n");
+					printNode(bw, description, true);
+					bw.append('\n');
+					bw.append("［＃ここで字上げ終わり］\n");
+					bw.append("［＃ここで字下げ終わり］\n");
+					bw.append('\n');
+					bw.append("［＃区切り線］\n");
+					bw.append('\n');
+				}
 			}
 			
 			String contentsUpdate = getExtractText(doc, this.queryMap.get(ExtractId.UPDATE));
@@ -600,7 +673,7 @@ public class WebAozoraConverter
 						if (reload || !chapterCacheFile.exists()) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
 							try {
-								try { Thread.sleep(this.interval); } catch (InterruptedException e) { }
+								try { sleepForDownload(); } catch (InterruptedException e) { }
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り

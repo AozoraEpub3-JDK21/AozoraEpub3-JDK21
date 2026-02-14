@@ -2,6 +2,7 @@ package com.github.hmdev.web.api;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -9,8 +10,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
 
 import com.github.hmdev.web.api.exception.ApiException;
+import com.github.hmdev.web.api.exception.NetworkException;
+import com.github.hmdev.web.api.exception.RateLimitException;
 import com.github.hmdev.web.api.model.NovelMetadata;
 
 /**
@@ -19,8 +23,10 @@ import com.github.hmdev.web.api.model.NovelMetadata;
  * 参考: https://dev.syosetu.com/man/api/
  */
 public class NarouApiClient {
-	/** APIエンドポイント */
+	/** APIエンドポイント (通常) */
 	private static final String API_ENDPOINT = "https://api.syosetu.com/novelapi/api/";
+	/** APIエンドポイント (R18: ノクターンノベルズ/ムーンライトノベルズ) */
+	private static final String API_ENDPOINT_R18 = "https://api.syosetu.com/novel18api/api/";
 	
 	/** タイムアウト (ミリ秒) */
 	private static final int CONNECT_TIMEOUT = 10000;
@@ -31,33 +37,48 @@ public class NarouApiClient {
 	private long bytesTransferred = 0;
 	
 	/**
-	 * Nコードから作品メタデータを取得
+	 * Nコードから作品メタデータを取得 (通常サイト)
 	 * @param ncode 作品コード (例: "n0001a")
 	 * @return NovelMetadata 作品情報
 	 * @throws ApiException API呼び出し失敗
 	 */
 	public NovelMetadata getNovelMetadata(String ncode) throws ApiException {
+		return getNovelMetadata(ncode, false);
+	}
+
+	/**
+	 * Nコードから作品メタデータを取得
+	 * @param ncode 作品コード (例: "n0001a")
+	 * @param isR18 R18サイト (novel18.syosetu.com) の場合true
+	 * @return NovelMetadata 作品情報
+	 * @throws ApiException API呼び出し失敗
+	 */
+	public NovelMetadata getNovelMetadata(String ncode, boolean isR18) throws ApiException {
 		// Nコードを小文字に正規化
 		ncode = ncode.toLowerCase();
-		
+
 		// URLパラメータ構築
 		Map<String, String> params = new HashMap<>();
 		params.put("ncode", ncode);
 		params.put("out", "json");  // JSON形式で取得
 		params.put("of", "t-n-u-w-s-bg-g-k-gf-gl-nt-e-ga-l-ti-i-gp-f-r-nu");  // 必要項目のみ
-		
-		String jsonResponse = makeApiRequest(params);
+		params.put("gzip", "5");   // gzip圧縮 (narou.rbと同様)
+
+		String endpoint = isR18 ? API_ENDPOINT_R18 : API_ENDPOINT;
+		String jsonResponse = makeApiRequest(endpoint, params);
 		return parseJsonToMetadata(jsonResponse);
 	}
 	
 	/**
 	 * APIリクエスト実行
+	 * @param endpoint APIエンドポイントURL
+	 * @param params リクエストパラメータ
 	 */
-	private String makeApiRequest(Map<String, String> params) throws ApiException {
+	private String makeApiRequest(String endpoint, Map<String, String> params) throws ApiException {
 		HttpURLConnection connection = null;
 		try {
 			// URL構築
-			StringBuilder urlBuilder = new StringBuilder(API_ENDPOINT);
+			StringBuilder urlBuilder = new StringBuilder(endpoint);
 			urlBuilder.append("?");
 			boolean first = true;
 			for (Map.Entry<String, String> entry : params.entrySet()) {
@@ -77,16 +98,25 @@ public class NarouApiClient {
 			connection.setConnectTimeout(CONNECT_TIMEOUT);
 			connection.setReadTimeout(READ_TIMEOUT);
 			connection.setRequestProperty("User-Agent", "AozoraEpub3/1.2.1");
-			
+			connection.setRequestProperty("Accept-Encoding", "gzip");
+
 			// レスポンス取得
 			int responseCode = connection.getResponseCode();
+			if (responseCode == 503) {
+				throw new RateLimitException("サーバー負荷制限中 (503)。時間をおいて再試行してください。");
+			}
 			if (responseCode != 200) {
 				throw new ApiException("API呼び出しエラー: HTTP " + responseCode);
 			}
-			
-			// レスポンス読み込み
+
+			// レスポンス読み込み (gzip対応)
+			InputStream is = connection.getInputStream();
+			String contentEncoding = connection.getContentEncoding();
+			if ("gzip".equalsIgnoreCase(contentEncoding) || params.containsKey("gzip")) {
+				is = new GZIPInputStream(is);
+			}
 			BufferedReader reader = new BufferedReader(
-				new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
+				new InputStreamReader(is, StandardCharsets.UTF_8));
 			StringBuilder response = new StringBuilder();
 			String line;
 			while ((line = reader.readLine()) != null) {
@@ -102,7 +132,9 @@ public class NarouApiClient {
 			return response.toString();
 			
 		} catch (IOException e) {
-			throw new ApiException("ネットワークエラー: " + e.getMessage(), e);
+			throw new NetworkException("ネットワークエラー: " + e.getMessage(), e);
+		} catch (ApiException e) {
+			throw e;
 		} catch (Exception e) {
 			throw new ApiException("APIリクエストエラー: " + e.getMessage(), e);
 		} finally {
