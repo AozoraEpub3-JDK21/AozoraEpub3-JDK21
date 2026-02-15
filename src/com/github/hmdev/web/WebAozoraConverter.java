@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Vector;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.jsoup.Jsoup;
@@ -902,7 +903,18 @@ public class WebAozoraConverter
 		} finally {
 			bw.close();
 		}
-		
+
+		// ファイナライズ処理: 文章全体の後処理
+		// (前書き・後書き検出、自動字下げ、改ページ後見出し化、括弧チェック)
+		try {
+			AozoraTextFinalizer finalizer = new AozoraTextFinalizer(this.formatSettings);
+			finalizer.finalize(txtFile);
+		} catch (IOException e) {
+			LogAppender.println("警告: ファイナライズ処理中にエラーが発生しました: " + e.getMessage());
+			e.printStackTrace();
+			// エラーが発生してもファイルは返す（ファイナライズ処理は付加的な処理のため）
+		}
+
 		this.canceled = false;
 		return txtFile;
 	}
@@ -1363,12 +1375,59 @@ public class WebAozoraConverter
 	 * 縦中横処理（narou.rb互換）
 	 * 2～3個の感嘆符・疑問符を縦中横化
 	 */
+	/**
+	 * 縦中横処理（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:384-423
+	 *
+	 * 感嘆符・疑問符の組み合わせを縦中横化:
+	 * - ！が3個: !!!
+	 * - ！が4個以上: 偶数個に調整して2個ずつ縦中横（!!)(!!）...
+	 * - ！？の2～3個の組み合わせ: 特定パターンのみ
+	 */
 	private String convertTatechuyoko(String text) {
-		// 3個の組み合わせ（長いパターンから先に処理）
+		// ！の連続（4個以上の場合は2個ずつ縦中横化）
+		Pattern pattern4Plus = Pattern.compile("！{4,}");
+		Matcher matcher = pattern4Plus.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (matcher.find()) {
+			int len = matcher.group().length();
+			// 偶数に調整
+			if (len % 2 == 1) len++;
+			// 2個ずつ縦中横化
+			StringBuilder result = new StringBuilder();
+			for (int i = 0; i < len / 2; i++) {
+				result.append("［＃縦中横］!!［＃縦中横終わり］");
+			}
+			matcher.appendReplacement(sb, Matcher.quoteReplacement(result.toString()));
+		}
+		matcher.appendTail(sb);
+		text = sb.toString();
+
+		// ！が3個（4個以上の処理後に実行）
 		text = text.replaceAll("！{3}", "［＃縦中横］!!!［＃縦中横終わり］");
+
+		// ？の連続（4個以上の場合は2個ずつ縦中横化）
+		Pattern pattern4PlusQ = Pattern.compile("？{4,}");
+		Matcher matcherQ = pattern4PlusQ.matcher(text);
+		StringBuffer sbQ = new StringBuffer();
+		while (matcherQ.find()) {
+			int len = matcherQ.group().length();
+			if (len % 2 == 1) len++;
+			StringBuilder result = new StringBuilder();
+			for (int i = 0; i < len / 2; i++) {
+				result.append("［＃縦中横］??［＃縦中横終わり］");
+			}
+			matcherQ.appendReplacement(sbQ, Matcher.quoteReplacement(result.toString()));
+		}
+		matcherQ.appendTail(sbQ);
+		text = sbQ.toString();
+
+		// ？が3個（4個以上の処理後に実行）
+		text = text.replaceAll("？{3}", "［＃縦中横］???［＃縦中横終わり］");
+
+		// 3個の混合組み合わせ（特定パターンのみ）
 		text = text.replaceAll("！！？", "［＃縦中横］!!?［＃縦中横終わり］");
 		text = text.replaceAll("？！！", "［＃縦中横］?!!［＃縦中横終わり］");
-		text = text.replaceAll("？{3}", "［＃縦中横］???［＃縦中横終わり］");
 
 		// 2個の組み合わせ
 		text = text.replaceAll("！{2}", "［＃縦中横］!!［＃縦中横終わり］");
@@ -1541,12 +1600,19 @@ public class WebAozoraConverter
 	 * 注意: 英文保護エリア（［＃英文＝N］）内は変換しない
 	 */
 	private String convertSymbolsToZenkaku(String text) {
-		// 基本的な記号の全角化
+		// 基本的な記号の全角化（narou.rb互換）
+		// 参考: narou-3.8.2/lib/converterbase.rb:340-383
 		text = text.replace("-", "－");   // ハイフン
 		text = text.replace("=", "＝");   // イコール
 		text = text.replace("+", "＋");   // プラス
 		text = text.replace("/", "／");   // スラッシュ
 		text = text.replace("*", "＊");   // アスタリスク
+		text = text.replace("%", "％");   // パーセント
+		text = text.replace("$", "＄");   // ドル記号
+		text = text.replace("#", "＃");   // シャープ記号
+		text = text.replace("&", "＆");   // アンパサンド
+		text = text.replace("!", "！");   // エクスクラメーション
+		text = text.replace("?", "？");   // クエスチョン
 		text = text.replace("<", "〈");   // 小なり → 始め山括弧
 		text = text.replace(">", "〉");   // 大なり → 終わり山括弧
 		text = text.replace("(", "（");   // 左丸括弧
@@ -1619,6 +1685,174 @@ public class WebAozoraConverter
 	}
 
 	/**
+	 * 分数変換（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:265-329
+	 *
+	 * 例: 1/2 → 2分の1, 3/4 → 4分の3
+	 * ただし日付パターン (YYYY/M/D) は除外
+	 */
+	private String convertFractions(String text) {
+		// 日付パターンを先に退避（4桁/1-2桁/1-2桁）
+		Pattern datePattern = Pattern.compile("(\\d{4})/(\\d{1,2})/(\\d{1,2})");
+		java.util.ArrayList<String> dates = new java.util.ArrayList<>();
+		Matcher dateMatcher = datePattern.matcher(text);
+		StringBuffer dateSb = new StringBuffer();
+		while (dateMatcher.find()) {
+			dates.add(dateMatcher.group());
+			dateMatcher.appendReplacement(dateSb, "［＃日付退避＝" + (dates.size() - 1) + "］");
+		}
+		dateMatcher.appendTail(dateSb);
+		text = dateSb.toString();
+
+		// 分数変換: 分子/分母 → 分母分の分子
+		Pattern fractionPattern = Pattern.compile("(\\d+)/(\\d+)");
+		Matcher fractionMatcher = fractionPattern.matcher(text);
+		StringBuffer fractionSb = new StringBuffer();
+		while (fractionMatcher.find()) {
+			String numerator = fractionMatcher.group(1);   // 分子
+			String denominator = fractionMatcher.group(2); // 分母
+			fractionMatcher.appendReplacement(fractionSb,
+				Matcher.quoteReplacement(denominator + "分の" + numerator));
+		}
+		fractionMatcher.appendTail(fractionSb);
+		text = fractionSb.toString();
+
+		// 日付を復元
+		for (int i = 0; i < dates.size(); i++) {
+			text = text.replace("［＃日付退避＝" + i + "］", dates.get(i));
+		}
+
+		return text;
+	}
+
+	/**
+	 * 日付変換（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:265-329
+	 *
+	 * 例: 2024/1/1 → 2024年1月1日
+	 */
+	private String convertDates(String text) {
+		String fmt = formatSettings.getDateFormat();
+		Pattern datePattern = Pattern.compile("(\\d{4})/(\\d{1,2})/(\\d{1,2})");
+		Matcher matcher = datePattern.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (matcher.find()) {
+			String year = matcher.group(1);
+			String month = matcher.group(2);
+			String day = matcher.group(3);
+			String replacement = fmt
+				.replace("%Y", year)
+				.replace("%m", month)
+				.replace("%d", day);
+			matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+		}
+		matcher.appendTail(sb);
+		return sb.toString();
+	}
+
+	/**
+	 * 三点リーダー変換（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:1032-1053
+	 *
+	 * 中黒（・）が3つ以上連続 → 三点リーダー（…）に変換
+	 * 2個ごとに1つの三点リーダー、奇数の場合は末尾を調整
+	 */
+	private String convertHorizontalEllipsis(String text) {
+		// 3個以上の連続する中黒を三点リーダーに変換
+		Pattern pattern = Pattern.compile("・{3,}");
+		Matcher matcher = pattern.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (matcher.find()) {
+			int len = matcher.group().length();
+			int ellipsisCount = len / 3; // 3個で1つの…
+			if (ellipsisCount < 1) ellipsisCount = 1;
+			StringBuilder replacement = new StringBuilder();
+			for (int i = 0; i < ellipsisCount; i++) {
+				replacement.append("…");
+			}
+			matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement.toString()));
+		}
+		matcher.appendTail(sb);
+		return sb.toString();
+	}
+
+	/**
+	 * 濁点フォントの処理（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:470-476
+	 *
+	 * ひらがな・カタカナの後に濁点記号（゛、ﾞ）がある場合を検出し、
+	 * 青空注記で囲む。
+	 * 例: か゛ → ［＃濁点付き片仮名か、1-86-12］
+	 */
+	private String convertDakutenFont(String text) {
+		// ひらがな・カタカナ + 濁点記号
+		Pattern pattern = Pattern.compile("([\\u3040-\\u309F\\u30A0-\\u30FF])[゛ﾞ]");
+		Matcher matcher = pattern.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (matcher.find()) {
+			String base = matcher.group(1);
+			String replacement = "［＃濁点］" + base + "［＃濁点終わり］";
+			matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+		}
+		matcher.appendTail(sb);
+		return sb.toString();
+	}
+
+	/**
+	 * 長音記号の変換（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:478-486
+	 *
+	 * カタカナ長音符（ー）が2個以上連続 → 全角ダッシュ（―）に変換
+	 */
+	private String convertProlongedSoundMark(String text) {
+		// 2個以上連続するカタカナ長音符を全角ダッシュに変換
+		Pattern pattern = Pattern.compile("ー{2,}");
+		Matcher matcher = pattern.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (matcher.find()) {
+			int len = matcher.group().length();
+			StringBuilder replacement = new StringBuilder();
+			for (int i = 0; i < len; i++) {
+				replacement.append("―");
+			}
+			matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement.toString()));
+		}
+		matcher.appendTail(sb);
+		return sb.toString();
+	}
+
+	/**
+	 * なろう独自タグの処理（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:488-518
+	 *
+	 * [newpage] → ［＃改ページ］
+	 * [chapter:タイトル] → 章タイトルとして処理
+	 * [jump:url] → リンクとして処理
+	 */
+	private String convertNarouTags(String text) {
+		// [newpage] → ［＃改ページ］
+		text = text.replace("[newpage]", "［＃改ページ］");
+
+		// [chapter:タイトル] → ３字下げ＋中見出し
+		Pattern chapterPattern = Pattern.compile("\\[chapter:([^\\]]+)\\]");
+		Matcher chapterMatcher = chapterPattern.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (chapterMatcher.find()) {
+			String title = chapterMatcher.group(1);
+			String replacement = "［＃" + formatSettings.getIndent() + "字下げ］［＃中見出し］" + title + "［＃中見出し終わり］";
+			chapterMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+		}
+		chapterMatcher.appendTail(sb);
+		text = sb.toString();
+
+		// [jump:URL] → リンク注記
+		Pattern jumpPattern = Pattern.compile("\\[jump:([^\\]]+)\\]");
+		text = jumpPattern.matcher(text).replaceAll("<a href=\"$1\">$1</a>");
+
+		return text;
+	}
+
+	/**
 	 * かぎ括弧内の自動連結（narou.rb互換）
 	 * 参考: narou-3.8.2/lib/converterbase.rb:520-609
 	 *
@@ -1672,15 +1906,27 @@ public class WebAozoraConverter
 			text = autoJoinLine(text);
 		}
 
+		// narou.rb互換: なろう独自タグの処理
+		if (formatSettings.isEnableNarouTag()) {
+			text = convertNarouTags(text);
+		}
+
 		// narou.rb互換: 行頭のかぎ括弧に二分アキを追加
 		text = addHalfIndentBracket(text);
-
-		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
-		text = convertTatechuyoko(text);
 
 		// narou.rb互換: 数字の漢数字化
 		if (formatSettings.isEnableConvertNumToKanji()) {
 			text = convertNumbersToKanji(text);
+		}
+
+		// narou.rb互換: 分数変換（日付変換より先に実行）
+		if (formatSettings.isEnableTransformFraction()) {
+			text = convertFractions(text);
+		}
+
+		// narou.rb互換: 日付変換
+		if (formatSettings.isEnableTransformDate()) {
+			text = convertDates(text);
 		}
 
 		// narou.rb互換: ローマ数字の変換
@@ -1689,10 +1935,29 @@ public class WebAozoraConverter
 		// narou.rb互換: 英文を保護（記号全角化処理のため）
 		text = protectEnglishSentences(text);
 
-		// narou.rb互換: 記号の全角化
+		// narou.rb互換: 記号の全角化（縦中横処理の前に実行）
 		if (formatSettings.isEnableConvertSymbolsToZenkaku()) {
 			text = convertSymbolsToZenkaku(text);
 		}
+
+		// narou.rb互換: 長音記号の変換（記号全角化の後に実行）
+		if (formatSettings.isEnableProlongedSoundMarkToDash()) {
+			text = convertProlongedSoundMark(text);
+		}
+
+		// narou.rb互換: 三点リーダー変換
+		if (formatSettings.isEnableConvertHorizontalEllipsis()) {
+			text = convertHorizontalEllipsis(text);
+		}
+
+		// narou.rb互換: 濁点フォント処理
+		if (formatSettings.isEnableDakutenFont()) {
+			text = convertDakutenFont(text);
+		}
+
+		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
+		// 注: 記号の全角化後に実行するため、全角の！？を対象とする
+		text = convertTatechuyoko(text);
 
 		// 特殊文字を青空注記に変換
 		StringBuilder sb = new StringBuilder();

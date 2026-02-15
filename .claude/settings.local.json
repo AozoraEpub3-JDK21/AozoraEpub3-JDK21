@@ -13,7 +13,8 @@
       "Bash(ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(javac:*)"
+      "Bash(javac:*)",
+      "Bash(./gradlew test:*)"
     ]
   }
 }

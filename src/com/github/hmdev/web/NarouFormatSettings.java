@@ -61,6 +61,46 @@ public class NarouFormatSettings {
 	/** 行末読点での自動連結 */
 	private boolean enableAutoJoinLine = false;
 
+	// === ファイナライズ処理関連の設定 ===
+
+	/** 前書き・後書きの自動検出 (*44個/*48個のパターン) */
+	private boolean enableAuthorComments = true;
+
+	/** 自動行頭字下げ */
+	private boolean enableAutoIndent = false;
+
+	/** 改ページ直後の見出し化 */
+	private boolean enableEnchantMidashi = true;
+
+	/** かぎ括弧の開閉チェック（警告のみ） */
+	private boolean enableInspectInvalidOpenCloseBrackets = true;
+
+	/** ファイナライズ処理の最大ファイルサイズ（MB単位、デフォルト100MB） */
+	private int maxFinalizableFileSizeMB = 100;
+
+	// === 追加変換処理の設定 ===
+
+	/** 分数変換 (1/2 → 2分の1) */
+	private boolean enableTransformFraction = false;
+
+	/** 日付変換 (2024/1/1 → 2024年1月1日) */
+	private boolean enableTransformDate = false;
+
+	/** 日付フォーマット */
+	private String dateFormat = "%Y年%m月%d日";
+
+	/** 三点リーダー変換 (・・・ → ……) */
+	private boolean enableConvertHorizontalEllipsis = false;
+
+	/** 濁点フォント処理 (か゛ → ［＃濁点付き片仮名か、1-86-12］) */
+	private boolean enableDakutenFont = false;
+
+	/** 長音記号の変換 (ーー → ――) */
+	private boolean enableProlongedSoundMarkToDash = false;
+
+	/** なろう独自タグの処理 ([newpage] → ［＃改ページ］) */
+	private boolean enableNarouTag = true;
+
 	// === Getters / Setters ===
 
 	public String getAuthorCommentStyle() { return authorCommentStyle; }
@@ -111,6 +151,42 @@ public class NarouFormatSettings {
 
 	public boolean isEnableAutoJoinLine() { return enableAutoJoinLine; }
 	public void setEnableAutoJoinLine(boolean v) { this.enableAutoJoinLine = v; }
+
+	public boolean isEnableAuthorComments() { return enableAuthorComments; }
+	public void setEnableAuthorComments(boolean v) { this.enableAuthorComments = v; }
+
+	public boolean isEnableAutoIndent() { return enableAutoIndent; }
+	public void setEnableAutoIndent(boolean v) { this.enableAutoIndent = v; }
+
+	public boolean isEnableEnchantMidashi() { return enableEnchantMidashi; }
+	public void setEnableEnchantMidashi(boolean v) { this.enableEnchantMidashi = v; }
+
+	public boolean isEnableInspectInvalidOpenCloseBrackets() { return enableInspectInvalidOpenCloseBrackets; }
+	public void setEnableInspectInvalidOpenCloseBrackets(boolean v) { this.enableInspectInvalidOpenCloseBrackets = v; }
+
+	public int getMaxFinalizableFileSizeMB() { return maxFinalizableFileSizeMB; }
+	public void setMaxFinalizableFileSizeMB(int v) { this.maxFinalizableFileSizeMB = v; }
+
+	public boolean isEnableTransformFraction() { return enableTransformFraction; }
+	public void setEnableTransformFraction(boolean v) { this.enableTransformFraction = v; }
+
+	public boolean isEnableTransformDate() { return enableTransformDate; }
+	public void setEnableTransformDate(boolean v) { this.enableTransformDate = v; }
+
+	public String getDateFormat() { return dateFormat; }
+	public void setDateFormat(String v) { this.dateFormat = v; }
+
+	public boolean isEnableConvertHorizontalEllipsis() { return enableConvertHorizontalEllipsis; }
+	public void setEnableConvertHorizontalEllipsis(boolean v) { this.enableConvertHorizontalEllipsis = v; }
+
+	public boolean isEnableDakutenFont() { return enableDakutenFont; }
+	public void setEnableDakutenFont(boolean v) { this.enableDakutenFont = v; }
+
+	public boolean isEnableProlongedSoundMarkToDash() { return enableProlongedSoundMarkToDash; }
+	public void setEnableProlongedSoundMarkToDash(boolean v) { this.enableProlongedSoundMarkToDash = v; }
+
+	public boolean isEnableNarouTag() { return enableNarouTag; }
+	public void setEnableNarouTag(boolean v) { this.enableNarouTag = v; }
 
 	/** 字下げの文字数を返す (横書き:1字、縦書き:3字) */
 	public String getIndent() {
@@ -192,6 +268,46 @@ public class NarouFormatSettings {
 			case "enable_auto_join_line":
 				enableAutoJoinLine = toBoolean(value);
 				break;
+			case "enable_author_comments":
+				enableAuthorComments = toBoolean(value);
+				break;
+			case "enable_auto_indent":
+				enableAutoIndent = toBoolean(value);
+				break;
+			case "enable_enchant_midashi":
+				enableEnchantMidashi = toBoolean(value);
+				break;
+			case "enable_inspect_invalid_openclose_brackets":
+				enableInspectInvalidOpenCloseBrackets = toBoolean(value);
+				break;
+			case "max_finalizable_file_size_mb":
+				try {
+					maxFinalizableFileSizeMB = Integer.parseInt(value);
+				} catch (NumberFormatException e) {
+					// デフォルト値を維持
+				}
+				break;
+			case "enable_transform_fraction":
+				enableTransformFraction = toBoolean(value);
+				break;
+			case "enable_transform_date":
+				enableTransformDate = toBoolean(value);
+				break;
+			case "date_format":
+				dateFormat = value;
+				break;
+			case "enable_convert_horizontal_ellipsis":
+				enableConvertHorizontalEllipsis = toBoolean(value);
+				break;
+			case "enable_dakuten_font":
+				enableDakutenFont = toBoolean(value);
+				break;
+			case "enable_prolonged_sound_mark_to_dash":
+				enableProlongedSoundMarkToDash = toBoolean(value);
+				break;
+			case "enable_narou_tag":
+				enableNarouTag = toBoolean(value);
+				break;
 		}
 	}
 
@@ -255,6 +371,43 @@ public class NarouFormatSettings {
 			bw.write("\n");
 			bw.write("; 行末読点での自動連結\n");
 			bw.write("enable_auto_join_line = false\n");
+			bw.write("\n");
+			bw.write("; === ファイナライズ処理 ===\n");
+			bw.write("\n");
+			bw.write("; 前書き・後書きの自動検出\n");
+			bw.write("enable_author_comments = true\n");
+			bw.write("\n");
+			bw.write("; 自動行頭字下げ\n");
+			bw.write("enable_auto_indent = false\n");
+			bw.write("\n");
+			bw.write("; 改ページ直後の見出し化\n");
+			bw.write("enable_enchant_midashi = true\n");
+			bw.write("\n");
+			bw.write("; かぎ括弧の開閉チェック（警告のみ）\n");
+			bw.write("enable_inspect_invalid_openclose_brackets = true\n");
+			bw.write("\n");
+			bw.write("; === 追加変換処理 ===\n");
+			bw.write("\n");
+			bw.write("; 分数変換 (1/2 → 2分の1)\n");
+			bw.write("enable_transform_fraction = false\n");
+			bw.write("\n");
+			bw.write("; 日付変換 (2024/1/1 → 2024年1月1日)\n");
+			bw.write("enable_transform_date = false\n");
+			bw.write("\n");
+			bw.write("; 日付フォーマット\n");
+			bw.write("date_format = %Y年%m月%d日\n");
+			bw.write("\n");
+			bw.write("; 三点リーダー変換 (・・・ → ……)\n");
+			bw.write("enable_convert_horizontal_ellipsis = false\n");
+			bw.write("\n");
+			bw.write("; 濁点フォント処理\n");
+			bw.write("enable_dakuten_font = false\n");
+			bw.write("\n");
+			bw.write("; 長音記号の変換 (ーー → ――)\n");
+			bw.write("enable_prolonged_sound_mark_to_dash = false\n");
+			bw.write("\n");
+			bw.write("; なろう独自タグの処理 ([newpage] → ［＃改ページ］)\n");
+			bw.write("enable_narou_tag = true\n");
 		}
 	}
 }

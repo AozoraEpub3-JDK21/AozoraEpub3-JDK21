@@ -161,7 +161,7 @@ Messages: 0 fatals / 0 errors / 0 warnings / 0 infos
   - 各種EPUB設定をGUIから簡単に変更可能
 
 - **Windows向けランチャーバッチファイル**:
-  - `AozoraEpub3起動.bat` (日本語版、Shift_JIS)
+  - `AozoraEpub3.bat`
   - `AozoraEpub3.bat` (英語版、ASCII)
   - Windows 11の.jar ダブルクリック問題を回避
   - javaw.exeを使用してコンソールなしで起動
