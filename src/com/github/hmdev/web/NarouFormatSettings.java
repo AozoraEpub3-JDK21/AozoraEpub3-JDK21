@@ -8,6 +8,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * narou.rb互換のフォーマット設定を管理するクラス。
@@ -101,6 +103,11 @@ public class NarouFormatSettings {
 	/** なろう独自タグの処理 ([newpage] → ［＃改ページ］) */
 	private boolean enableNarouTag = true;
 
+	// === テキスト置換パターン (replace_narourb.txt) ===
+
+	/** narou.rb互換のテキスト置換パターン（検索文字列→置換文字列のペア） */
+	private List<String[]> textReplacePatterns = new ArrayList<>();
+
 	// === Getters / Setters ===
 
 	public String getAuthorCommentStyle() { return authorCommentStyle; }
@@ -187,6 +194,28 @@ public class NarouFormatSettings {
 
 	public boolean isEnableNarouTag() { return enableNarouTag; }
 	public void setEnableNarouTag(boolean v) { this.enableNarouTag = v; }
+
+	public List<String[]> getTextReplacePatterns() { return textReplacePatterns; }
+
+	/**
+	 * narou.rb互換のreplace.txtを読み込む。
+	 * フォーマット: タブ区切りで「検索文字列\t置換文字列」、`;`始まりはコメント。
+	 */
+	public void loadReplacePatterns(File file) throws IOException {
+		textReplacePatterns.clear();
+		if (!file.exists()) return;
+		try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				line = line.replaceAll("[\\r\\n]+$", "");
+				if (line.isEmpty() || line.charAt(0) == ';' || line.charAt(0) == '#') continue;
+				String[] pair = line.split("\t", 2);
+				if (pair.length == 2 && pair[0].length() > 0) {
+					textReplacePatterns.add(new String[]{pair[0], pair[1]});
+				}
+			}
+		}
+	}
 
 	/** 字下げの文字数を返す (横書き:1字、縦書き:3字) */
 	public String getIndent() {

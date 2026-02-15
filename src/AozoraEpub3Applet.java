@@ -4132,9 +4132,11 @@ public class AozoraEpub3Applet extends JApplet
 
 				// narou.rb互換フォーマット設定を読み込み
 				File settingFile = new File("setting_narourb.ini");
+				File replaceFile = new File("replace_narourb.txt");
 				try {
 					com.github.hmdev.web.NarouFormatSettings.generateDefaultIfMissing(settingFile);
 					webConverter.loadFormatSettings(settingFile);
+					webConverter.getFormatSettings().loadReplacePatterns(replaceFile);
 					// GUI選択を設定に反映
 					String styleIndex = (String)jComboAuthorCommentStyle.getSelectedItem();
 					if (styleIndex != null) {

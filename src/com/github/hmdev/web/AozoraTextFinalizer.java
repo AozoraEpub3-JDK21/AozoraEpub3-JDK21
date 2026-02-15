@@ -90,12 +90,27 @@ public class AozoraTextFinalizer {
 			content = enchantMidashi(content);
 		}
 
-		// 5. かぎ括弧の開閉チェック（警告のみ）
+		// 5. かぎ括弧内の自動連結（<br>タグ由来の改行にも対応）
+		if (settings.isEnableAutoJoinInBrackets()) {
+			content = autoJoinInBrackets(content);
+		}
+
+		// 6. 行末読点での自動連結（<br>タグ由来の改行にも対応）
+		if (settings.isEnableAutoJoinLine()) {
+			content = autoJoinLine(content);
+		}
+
+		// 7. かぎ括弧の開閉チェック（警告のみ）
 		if (settings.isEnableInspectInvalidOpenCloseBrackets()) {
 			inspectBrackets(content);
 		}
 
-		// 6. ファイルに書き戻す
+		// 8. replace.txt によるテキスト置換（最後に適用）
+		if (!settings.getTextReplacePatterns().isEmpty()) {
+			content = applyReplacePatterns(content);
+		}
+
+		// 9. ファイルに書き戻す
 		writeFile(txtFile, content);
 
 		LogAppender.println("ファイナライズ処理が完了しました");
@@ -324,5 +339,57 @@ public class AozoraTextFinalizer {
 
 			lineNumber++;
 		}
+	}
+
+	/**
+	 * かぎ括弧内の自動連結（ファイナライズ版）
+	 *
+	 * narou.rb互換: converterbase.rb:520-609
+	 *
+	 * printText()のTextNodeレベル処理では対応できない
+	 * &lt;br&gt;タグ由来の改行を含む、行をまたいだかぎ括弧内の連結を行う。
+	 */
+	private String autoJoinInBrackets(String text) {
+		// 「」内と『』内の改行を全角スペースに置換（繰り返し適用）
+		boolean changed = true;
+		while (changed) {
+			String before = text;
+			// 「...」内の改行を検出して全角スペースに置換
+			text = text.replaceAll("「([^「」]*)\n([^「」]*)」", "「$1　$2」");
+			// 『...』内の改行も処理
+			text = text.replaceAll("『([^『』]*)\n([^『』]*)』", "『$1　$2』");
+			changed = !text.equals(before);
+		}
+		return text;
+	}
+
+	/**
+	 * 行末読点での自動連結（ファイナライズ版）
+	 *
+	 * narou.rb互換: converterbase.rb:611-667
+	 *
+	 * printText()のTextNodeレベル処理では対応できない
+	 * &lt;br&gt;タグ由来の改行を含む、行末読点後の改行を削除する。
+	 */
+	private String autoJoinLine(String text) {
+		text = text.replace("、\n", "、");
+		return text;
+	}
+
+	/**
+	 * replace.txt によるテキスト置換
+	 *
+	 * narou.rb互換: converterbase.rb:1436-1445
+	 *
+	 * ユーザー定義の置換ルール（タブ区切りの検索文字列→置換文字列ペア）を
+	 * テキスト全体に順次適用する。
+	 */
+	private String applyReplacePatterns(String text) {
+		List<String[]> patterns = settings.getTextReplacePatterns();
+		LogAppender.println("replace.txt: " + patterns.size() + "件の置換ルールを適用");
+		for (String[] pair : patterns) {
+			text = text.replace(pair[0], pair[1]);
+		}
+		return text;
 	}
 }

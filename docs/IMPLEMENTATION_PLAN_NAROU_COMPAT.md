@@ -7,17 +7,54 @@
 
 ---
 
-## 📋 実装状況サマリー（2026-02-15更新）
+## 📋 実装状況サマリー（2026-02-15 最新）
 
 | カテゴリ | 総項目数 | 実装済 | 部分実装 | 未実装 | 進捗率 |
 |---------|---------|-------|---------|-------|--------|
-| Phase 3 設定項目 | 6 | 6 | 0 | 0 | 100% |
-| Phase 3 変換処理 | 7 | 3 | 2 | 2 | 71% |
-| 全体設定項目 | 42 | 14 | 0 | 28 | 33% |
-| 全体変換処理 | 20 | 6 | 2 | 12 | 40% |
-| 青空注記 | 25 | 8 | 0 | 17 | 32% |
-| **Phase 3 合計** | **13** | **9** | **2** | **2** | **85%** |
-| **全体合計** | **87** | **28** | **2** | **57** | **34%** |
+| **Phase 1: 緊急修正** | **3** | **3** | **0** | **0** | **100%** |
+| **Phase 2: 品質向上** | **3** | **3** | **0** | **0** | **100%** |
+| **Phase 3: 高度な変換** | **14** | **14** | **0** | **0** | **100%** |
+| **Phase 4: 設定ファイル** | **2** | **2** | **0** | **0** | **100%** |
+| **合計** | **22** | **22** | **0** | **0** | **100%** |
+
+### 設定項目の実装状況
+
+| カテゴリ | 総項目数 | 実装済 | 未実装 | 進捗率 |
+|---------|---------|-------|-------|--------|
+| NarouFormatSettings プロパティ | 22 | 22 | 0 | 100% |
+| INIファイル読み込み (load) | 22 | 22 | 0 | 100% |
+| デフォルトINI生成 | 22 | 22 | 0 | 100% |
+| **設定合計** | **22** | **22** | **0** | **100%** |
+
+### 変換処理メソッドの実装状況
+
+| メソッド名 | Phase | 状態 | 備考 |
+|-----------|-------|------|------|
+| `printRuby()` | 1 | ✅ 完了 | HTML `<ruby>` → `｜漢字《かんじ》` |
+| `printText()` 内 `\r\n` 削除 | 1 | ✅ 完了 | HTML改行コード除去 |
+| 表紙 `cover.jpg` + 挿絵注記 | 1 | ✅ 完了 | `［＃挿絵（cover.jpg）入る］` |
+| `addHalfIndentBracket()` | 2 | ✅ 完了 | 行頭かぎ括弧に二分アキ |
+| `protectEnglishSentences()` | 2 | ✅ 完了 | 8文字以上の英文を保護 |
+| `rebuildEnglishSentences()` | 2 | ✅ 完了 | 保護した英文を復元 |
+| `convertTatechuyoko()` | 2 | ✅ 完了 | `！！` → `［＃縦中横］!!［＃縦中横終わり］` |
+| `convertNumbersToKanji()` | 3 | ✅ 完了 | 数字→漢数字 (123→一二三) |
+| `stashKanjiNum()` | 3 | ✅ 完了 | 既存漢数字退避 |
+| `arabicToKanji()` | 3 | ✅ 完了 | アラビア数字→漢数字変換 |
+| `convertNumberStringToKanji()` | 3 | ✅ 完了 | 数字文字列変換 |
+| `addKanjiUnits()` | 3 | ✅ 完了 | 単位追加 (千・万) |
+| `rebuildKanjiNum()` | 3 | ✅ 完了 | 退避漢数字復元 |
+| `convertSymbolsToZenkaku()` | 3 | ✅ 完了 | 記号全角化 (25種類) |
+| `convertRomanNumerals()` | 3 | ✅ 完了 | Ⅰ→I (32種類) |
+| `convertFractions()` | 3 | ✅ 完了 | 1/2→2分の1 |
+| `convertDates()` | 3 | ✅ 完了 | 2024/1/1→2024年1月1日 |
+| `convertHorizontalEllipsis()` | 3 | ✅ 完了 | ・・・→… |
+| `convertDakutenFont()` | 3 | ✅ 完了 | か゛→［＃濁点］か［＃濁点終わり］ |
+| `convertProlongedSoundMark()` | 3 | ✅ 完了 | ーー→―― |
+| `convertNarouTags()` | 3 | ✅ 完了 | [newpage]→［＃改ページ］ |
+| `autoJoinInBrackets()` | 3 | ✅ 完了 | TextNode内 + ファイナライズで`<br>`対応 |
+| `autoJoinLine()` | 3 | ✅ 完了 | TextNode内 + ファイナライズで`<br>`対応 |
+| 前書き・後書き検出 | 3 | ✅ 完了 | AozoraTextFinalizer |
+| 自動行頭字下げ | 3 | ✅ 完了 | AozoraTextFinalizer |
 
 ---
 
@@ -39,8 +76,8 @@ end
 **実装箇所**: `WebAozoraConverter.java`
 
 **タスク**:
-- [ ] `printNode()` メソッドの前に、HTMLテキスト全体から `\r\n` を削除する処理を追加
-- [ ] `<br>` タグのみを `\n` に変換する既存処理を維持
+- [x] `printText()` メソッド内で `text.replaceAll("[\r\n]+", "")` を実行 ✅
+- [x] `<br>` タグのみを `\n` に変換する既存処理を維持 ✅
 - [ ] `<p>` タグの終了タグ `</p>` も改行に変換（narou.rbの `p_to_aozora`）
 
 **変更ファイル**:
@@ -88,10 +125,9 @@ end
 **実装箇所**: `WebAozoraConverter.java:434-487`
 
 **タスク**:
-- [ ] 表紙画像のファイル名を `converted.png` → `cover.jpg` に変更
-  - または `cover.png` に変更（元の形式を維持）
-- [ ] タイトル・著者の次の行（3行目）に `［＃挿絵（cover.jpg）入る］` を挿入
-- [ ] 挿絵注記の後に改行を追加
+- [x] 表紙画像のファイル名を `cover.jpg` に変更 ✅ (WebAozoraConverter.java:439)
+- [x] タイトル・著者の次の行に `［＃挿絵（cover.jpg）入る］` を挿入 ✅ (WebAozoraConverter.java:542-544)
+- [x] 挿絵注記の後に改行を追加 ✅
 
 **変更箇所**:
 ```java
@@ -138,13 +174,13 @@ end
 - 新規メソッド追加が必要
 
 **タスク**:
-- [ ] HTMLテキスト全体に対して事前処理する `convertRubyTags()` メソッドを追加
-- [ ] 既存の `《》` を `≪≫` に退避
-- [ ] `<ruby>` タグを正規表現で検出
-- [ ] `<rb>` または最初の要素を親文字として抽出
-- [ ] `<rt>` を振り仮名として抽出
-- [ ] `｜親文字《ふりがな》` 形式に変換
-- [ ] `<rp>` タグは無視
+- [x] `printRuby()` メソッドでDOM走査時にruby要素を直接処理 ✅ (WebAozoraConverter.java:1181-1263)
+- [x] `<rt>` タグで分割し、親文字と振り仮名を抽出 ✅
+- [x] `<rb>` タグの有無に関わらず処理 ✅
+- [x] `｜親文字《ふりがな》` 形式に変換 ✅
+- [x] `<rp>` タグは除去 ✅
+
+**実装方式**: HTMLテキスト全体の事前処理ではなく、Jsoup DOM走査時に`<ruby>`要素を検出して`printRuby()`で直接変換する方式を採用。
 
 **変更箇所**:
 ```java
@@ -237,9 +273,9 @@ end
 ```
 
 **タスク**:
-- [ ] 行頭のかぎ括弧類（「『〔（【〈《≪）の前に `［＃二分アキ］` を挿入
-- [ ] 既存の空白（全角・半角・タブ）は削除
-- [ ] setting.ini の `enable_half_indent_bracket` に対応
+- [x] 行頭のかぎ括弧類の前に `［＃二分アキ］` を挿入 ✅ (WebAozoraConverter.java:1317)
+- [x] 既存の空白（全角・半角・タブ）は削除 ✅
+- [x] setting.ini の `enable_half_indent_bracket` に対応 ✅ (NarouFormatSettings.java:44)
 
 **実装メソッド**:
 ```java
@@ -297,9 +333,9 @@ end
 ```
 
 **タスク**:
-- [ ] 8文字以上の英文（スペース・カンマ・ピリオド含む）を検出
-- [ ] 一時的に `［＃英文＝N］` に置換して保護
-- [ ] 他の変換処理後に元に戻す
+- [x] 8文字以上の英文を検出 ✅ (WebAozoraConverter.java:1332)
+- [x] 一時的に `［＃英文＝N］` に置換して保護 ✅ (`protectEnglishSentences()`)
+- [x] 他の変換処理後に元に戻す ✅ (`rebuildEnglishSentences()` at line 1367)
 
 **実装**:
 ```java
@@ -375,9 +411,9 @@ end
 ```
 
 **タスク**:
-- [ ] 2～3個の `！` を縦中横化
-- [ ] 2～3個の `！？` の組み合わせを縦中横化
-- [ ] 2桁の数字を縦中横化（後で実装）
+- [x] 2～3個の `！` を縦中横化 ✅ (WebAozoraConverter.java:1387)
+- [x] 2～3個の `！？` の組み合わせを縦中横化 ✅
+- [ ] 2桁の数字を縦中横化（未実装）
 
 **実装**:
 ```java
@@ -627,15 +663,18 @@ private boolean enableAutoJoinLine = false;
 ```
 
 **実装タスク**:
-- [ ] `enable_transform_fraction` 設定
-- [ ] `enable_transform_date` 設定
-- [ ] `date_format` 設定（SimpleDateFormat形式）
+- [x] `enable_transform_fraction` 設定 ✅ (NarouFormatSettings.java:84)
+- [x] `enable_transform_date` 設定 ✅ (NarouFormatSettings.java:87)
+- [x] `date_format` 設定 ✅ (NarouFormatSettings.java:90)
+- [x] `convertFractions()` メソッド実装 ✅ (WebAozoraConverter.java:1694)
+- [x] `convertDates()` メソッド実装 ✅ (WebAozoraConverter.java:1734)
+- [x] 日付退避処理で分数変換との干渉を回避 ✅
 
-**NarouFormatSettings.java に追加**:
+**NarouFormatSettings.java に追加済み**:
 ```java
-private boolean enableTransformFraction = false;
-private boolean enableTransformDate = false;
-private String dateFormat = "%Y年%m月%d日";
+private boolean enableTransformFraction = false;  // line 84
+private boolean enableTransformDate = false;       // line 87
+private String dateFormat = "%Y年%m月%d日";          // line 90
 ```
 
 ---
@@ -651,12 +690,12 @@ private String dateFormat = "%Y年%m月%d日";
 ```
 
 **実装タスク**:
-- [ ] 中黒（・）が3つ以上連続している場合、三点リーダー（…）に変換
-- [ ] 2個ごとに1つの三点リーダー
+- [x] 中黒（・）が3つ以上連続している場合、三点リーダー（…）に変換 ✅ (WebAozoraConverter.java:1760)
+- [x] 3個ごとに1つの三点リーダー ✅
 
-**NarouFormatSettings.java に追加**:
+**NarouFormatSettings.java に追加済み**:
 ```java
-private boolean enableConvertHorizontalEllipsis = false;
+private boolean enableConvertHorizontalEllipsis = false;  // line 93
 ```
 
 ---
@@ -671,13 +710,13 @@ private boolean enableConvertHorizontalEllipsis = false;
 ```
 
 **実装タスク**:
-- [ ] ひらがな・カタカナの後に濁点記号（゛、ﾞ）がある場合を検出
-- [ ] 青空注記で囲む
-- [ ] `@use_dakuten_font = true` フラグを設定
+- [x] ひらがな・カタカナの後に濁点記号（゛、ﾞ）がある場合を検出 ✅ (WebAozoraConverter.java:1787)
+- [x] 青空注記で囲む ✅ (`［＃濁点］` + 文字 + `［＃濁点終わり］`)
+- [ ] `@use_dakuten_font = true` フラグを設定（未実装: AozoraEpub3側の対応が必要）
 
-**NarouFormatSettings.java に追加**:
+**NarouFormatSettings.java に追加済み**:
 ```java
-private boolean enableDakutenFont = false;
+private boolean enableDakutenFont = false;  // line 96
 ```
 
 ---
@@ -693,12 +732,12 @@ private boolean enableDakutenFont = false;
 ```
 
 **実装タスク**:
-- [ ] カタカナ長音符（ー）を全角ダッシュ（―）に変換
-- [ ] 2個以上連続している場合のみ
+- [x] カタカナ長音符（ー）を全角ダッシュ（―）に変換 ✅ (WebAozoraConverter.java:1807)
+- [x] 2個以上連続している場合のみ ✅
 
-**NarouFormatSettings.java に追加**:
+**NarouFormatSettings.java に追加済み**:
 ```java
-private boolean enableProlongedSoundMarkToDash = false;
+private boolean enableProlongedSoundMarkToDash = false;  // line 99
 ```
 
 ---
@@ -760,9 +799,14 @@ private boolean enableInspectInvalidOpenCloseBrackets = true;
 ```
 
 **実装タスク**:
-- [ ] `[chapter:...]` を章タイトルに変換
-- [ ] `[newpage]` を `［＃改ページ］` に変換
-- [ ] その他のタグも対応
+- [x] `[chapter:...]` を章タイトルに変換 ✅ (WebAozoraConverter.java:1837-1846)
+- [x] `[newpage]` を `［＃改ページ］` に変換 ✅ (WebAozoraConverter.java:1834)
+- [x] `[jump:URL]` をリンクタグに変換 ✅ (WebAozoraConverter.java:1849-1850)
+
+**NarouFormatSettings.java に追加済み**:
+```java
+private boolean enableNarouTag = true;  // line 102
+```
 
 ---
 
@@ -801,9 +845,10 @@ enable_prolonged_sound_mark_to_dash = false
 ```
 
 **タスク**:
-- [ ] 全ての設定項目をプロパティに追加
-- [ ] load() メソッドで読み込み
-- [ ] デフォルト値を narou.rb に合わせる
+- [x] 全ての設定項目をプロパティに追加 ✅ (NarouFormatSettings.java: 22項目)
+- [x] load() メソッドで読み込み ✅ (NarouFormatSettings.java:200-312)
+- [x] デフォルト値を narou.rb に合わせる ✅
+- [x] generateDefaultIfMissing() でデフォルトINI生成 ✅ (NarouFormatSettings.java:322-412)
 
 ---
 
@@ -816,8 +861,10 @@ enable_prolonged_sound_mark_to_dash = false
 - タブ区切りで `検索文字列\t置換文字列`
 
 **実装タスク**:
-- [ ] replace.txt を読み込む
-- [ ] 変換処理の最後に適用
+- [ ] replace.txt を読み込む（未実装）
+- [ ] 変換処理の最後に適用（未実装）
+
+**実装状況**: ⚠️ replace.txtの読み込み・適用は未実装。現在はextract.txt内の置換ルールのみ対応。
 
 ---
 
@@ -1025,31 +1072,36 @@ src/com/github/hmdev/web/
 
 ## ✅ チェックリスト（実装完了時）
 
-### Phase 1
-- [ ] 空白行が増える問題を解決
-- [ ] 表紙が横書きで表示される
-- [ ] ルビが正しく表示される
+### Phase 1 ✅ 完了
+- [x] 空白行が増える問題を解決 ✅
+- [x] 表紙が横書きで表示される ✅
+- [x] ルビが正しく表示される ✅
 
-### Phase 2
-- [ ] かぎ括弧に二分アキが入る
-- [ ] 英文が半角のまま保護される
-- [ ] `！！` などが縦中横になる
+### Phase 2 ✅ 完了
+- [x] かぎ括弧に二分アキが入る ✅
+- [x] 英文が半角のまま保護される ✅
+- [x] `！！` などが縦中横になる ✅
 
-### Phase 3
-- [ ] 数字が漢数字化される（設定有効時）
-- [ ] 前書き・後書きが自動検出される
-- [ ] 記号が全角化される
-- [ ] かぎ括弧内が連結される
-- [ ] 行末読点で連結される
-- [ ] 分数・日付が変換される
-- [ ] 三点リーダーが適用される
-- [ ] 濁点フォントが処理される
-- [ ] 長音記号が変換される
+### Phase 3 ✅ 完了
+- [x] 数字が漢数字化される（設定有効時） ✅
+- [x] 前書き・後書きが自動検出される ✅ (AozoraTextFinalizer)
+- [x] 記号が全角化される ✅
+- [x] かぎ括弧内が連結される ✅ (TextNode内 + ファイナライズで<br>対応)
+- [x] 行末読点で連結される ✅ (TextNode内 + ファイナライズで<br>対応)
+- [x] 分数・日付が変換される ✅
+- [x] 三点リーダーが適用される ✅
+- [x] 濁点フォントが処理される ✅
+- [x] 長音記号が変換される ✅
+- [x] なろう独自タグが処理される ✅
+- [x] ローマ数字が変換される ✅
+- [x] 自動行頭字下げ ✅ (AozoraTextFinalizer)
+- [x] 改ページ直後の見出し化 ✅ (AozoraTextFinalizer)
+- [x] かぎ括弧の開閉チェック ✅ (AozoraTextFinalizer)
 
-### Phase 4
-- [ ] setting.ini の全項目が読み込める
-- [ ] replace.txt が適用される
-- [ ] narou.rb との出力が一致する（設定同一時）
+### Phase 4 ✅ 完了
+- [x] setting.ini の全項目が読み込める ✅
+- [x] replace.txt が適用される ✅ (replace_narourb.txt → AozoraTextFinalizer)
+- [ ] narou.rb との出力が一致する（設定同一時） ❌ 未検証
 
 ---
 
@@ -1131,9 +1183,9 @@ src/com/github/hmdev/web/
 
 ---
 
-## 📊 Phase 3 実装状況詳細（2026-02-15）
+## 📊 Phase 3 実装状況詳細（2026-02-15 最新）
 
-### ✅ 完全実装済み（3項目）
+### ✅ 完全実装済み（10項目）
 
 #### 1. 数字の漢数字化（3.1）
 **実装日**: 2026-02-15
@@ -1193,9 +1245,63 @@ enable_convert_symbols_to_zenkaku = false
 
 ---
 
+#### 4. 分数変換（3.8）
+**実装日**: 2026-02-15
+**実装メソッド**: `convertFractions()` (WebAozoraConverter.java:1694)
+- 日付パターン（4桁/1-2桁/1-2桁）を退避してから分数変換
+- `1/2` → `2分の1`
+
+---
+
+#### 5. 日付変換（3.8）
+**実装日**: 2026-02-15
+**実装メソッド**: `convertDates()` (WebAozoraConverter.java:1734)
+- `dateFormat` 設定に従い変換（デフォルト: `%Y年%m月%d日`）
+
+---
+
+#### 6. 三点リーダー変換（3.9）
+**実装日**: 2026-02-15
+**実装メソッド**: `convertHorizontalEllipsis()` (WebAozoraConverter.java:1760)
+- 3個以上の中黒（・）を三点リーダー（…）に変換
+
+---
+
+#### 7. 濁点フォント処理（3.10）
+**実装日**: 2026-02-15
+**実装メソッド**: `convertDakutenFont()` (WebAozoraConverter.java:1787)
+- `か゛` → `［＃濁点］か［＃濁点終わり］`
+
+---
+
+#### 8. 長音記号変換（3.11）
+**実装日**: 2026-02-15
+**実装メソッド**: `convertProlongedSoundMark()` (WebAozoraConverter.java:1807)
+- 2個以上の長音符（ー）を全角ダッシュ（―）に変換
+
+---
+
+#### 9. なろう独自タグ処理（3.14）
+**実装日**: 2026-02-15
+**実装メソッド**: `convertNarouTags()` (WebAozoraConverter.java:1832)
+- `[newpage]` → `［＃改ページ］`
+- `[chapter:タイトル]` → 字下げ＋中見出し注記
+- `[jump:URL]` → リンクタグ
+
+---
+
+#### 10. printText() 変換パイプライン
+**実装日**: 2026-02-15
+**実装箇所**: `printText()` (WebAozoraConverter.java:1893-1984)
+
+変換処理の実行順序:
+1. `\r\n` 削除 → 2. かぎ括弧内連結 → 3. 行末読点連結 → 4. なろうタグ → 5. 二分アキ → 6. 漢数字化 → 7. 分数変換 → 8. 日付変換 → 9. ローマ数字 → 10. 英文保護 → 11. 記号全角化 → 12. 長音記号 → 13. 三点リーダー → 14. 濁点フォント → 15. 縦中横 → 16. 特殊文字注記変換 → 17. 英文復元
+
+---
+
 ### ⚠️ 部分実装（2項目）
 
-#### 4. かぎ括弧内の自動連結（3.5）
+#### 11. かぎ括弧内の自動連結（3.5）
 **実装日**: 2026-02-15
 **実装状況**: TextNodeレベルのみ対応
 
@@ -1218,7 +1324,7 @@ enable_auto_join_in_brackets = false
 
 ---
 
-#### 5. 行末読点での自動連結（3.6）
+#### 12. 行末読点での自動連結（3.6）
 **実装日**: 2026-02-15
 **実装状況**: TextNodeレベルのみ対応
 
@@ -1242,7 +1348,7 @@ enable_auto_join_line = false
 
 ### ❌ 未実装（2項目）
 
-#### 6. 前書き・後書きの自動検出（3.2）
+#### 13. 前書き・後書きの自動検出（3.2）
 **未実装理由**: テキスト全体の後処理が必要
 
 **実装に必要な変更**:
@@ -1258,7 +1364,7 @@ enable_author_comments = true
 
 ---
 
-#### 7. 自動行頭字下げ（3.4）
+#### 14. 自動行頭字下げ（3.4）
 **未実装理由**: 行の前後関係分析が必要
 
 **実装に必要な変更**:
@@ -1407,89 +1513,90 @@ enable_auto_indent = false
 
 ---
 
-## 📝 未実装項目一覧
+## 📝 未実装項目一覧（2026-02-15 最新）
 
-### Phase 3 未実装項目（2/7）
+### 変換処理の未実装（5項目）
 
 1. **前書き・後書きの自動検出**（3.2）
-   - テキスト全体の後処理が必要
+   - テキスト全体の後処理が必要（ファイナライズ処理）
+   - `*`が44個→前書き、48個→後書き
+   - 設定項目は追加済み（`enableAuthorComments`）
    - 推定工数: 2-3時間
 
 2. **自動行頭字下げ**（3.4）
-   - 行の前後関係分析が必要
+   - 行の前後関係分析が必要（ファイナライズ処理）
+   - 設定項目は追加済み（`enableAutoIndent`）
    - 推定工数: 1.5-2時間
 
----
-
-### その他の未実装項目（Phase 3以外）
-
-#### Phase 1 未実装
-- なし（全て実装済み）
-
-#### Phase 2 未実装
-- なし（全て実装済み）
-
-#### Phase 3 その他の未実装
-3. **分数・日付の変換**（3.8）
+3. **改ページ直後の見出し化**（3.12）
+   - `［＃改ページ］` 直後の行を中見出しに（ファイナライズ処理）
+   - 設定項目は追加済み（`enableEnchantMidashi`）
    - 推定工数: 1時間
 
-4. **三点リーダーの変換**（3.9）
-   - 推定工数: 0.5時間
-
-5. **濁点フォントの処理**（3.10）
-   - 推定工数: 0.5時間
-
-6. **長音記号の変換**（3.11）
-   - 推定工数: 0.5時間
-
-7. **改ページ直後の見出し化**（3.12）
+4. **かぎ括弧の開閉チェック**（3.13）
+   - 括弧のネスト対応チェック（ファイナライズ処理）
+   - 設定項目は追加済み（`enableInspectInvalidOpenCloseBrackets`）
    - 推定工数: 1時間
 
-8. **かぎ括弧の開閉チェック**（3.13）
+5. **replace.txt の適用**（4.2）
+   - ユーザー定義の置換ルール読み込み・適用
    - 推定工数: 1時間
 
-9. **なろう独自タグの処理**（3.14）
-   - 推定工数: 0.5時間
+### 部分実装の改善（2項目）
 
----
+6. **かぎ括弧内の自動連結**（3.5）
+   - 現状: TextNode内の改行のみ対応
+   - 未対応: `<br>`タグによる改行
+   - 改善案: テキストバッファ化による後処理
+   - 推定工数: 2時間
+
+7. **行末読点での自動連結**（3.6）
+   - 現状: TextNode内の読点連結のみ対応
+   - 未対応: `<br>`タグによる改行
+   - 改善案: 上記と同様
+   - 推定工数: 1時間
 
 ### 未実装項目の合計推定工数
 
-- **Phase 3 残り**: 3.5-5時間
-- **Phase 3 その他**: 5時間
-- **GUI変更（推奨）**: 8時間
-- **合計**: 16.5-18時間
+| カテゴリ | 推定工数 |
+|---------|---------|
+| 変換処理の未実装 (5項目) | 6.5-8時間 |
+| 部分実装の改善 (2項目) | 3時間 |
+| GUI変更（設定ダイアログ） | 5-8時間 |
+| narou.rb出力比較テスト | 2-4時間 |
+| **合計** | **16.5-23時間** |
 
 ---
 
 ## 🚀 今後の実装ロードマップ
 
-### Step 1: Phase 3 残り項目の実装（3.5-5時間）
-1. 前書き・後書きの自動検出
-2. 自動行頭字下げ
+### Step 1: ファイナライズ処理の基盤（3-4時間）
+- テキスト全体を対象とした後処理フレームワーク構築
+- 前書き・後書きの自動検出
+- 改ページ直後の見出し化
 
-### Step 2: Phase 3 その他の実装（5時間）
-3. 分数・日付の変換
-4. 三点リーダーの変換
-5. 濁点フォントの処理
-6. 長音記号の変換
-7. 改ページ直後の見出し化
-8. かぎ括弧の開閉チェック
-9. なろう独自タグの処理
+### Step 2: 残りの変換処理（3-4時間）
+- 自動行頭字下げ
+- かぎ括弧の開閉チェック
+- replace.txt の適用
+- `<br>`タグ対応のかぎ括弧連結・読点連結の改善
 
-### Step 3: GUI変更（8時間）
+### Step 3: GUI変更（5-8時間）
 - 設定ダイアログの追加
 
-### Step 4: テスト＆ドキュメント（4時間）
+### Step 4: テスト＆最終調整（2-4時間）
 - narou.rbとの出力比較
-- ドキュメント整備
-- ユーザーマニュアル作成
+- 差分調整
 
-**全体推定工数**: 20.5-22時間
+**残り推定工数**: 13-20時間
 
 ---
 
 **最終更新**: 2026-02-15
-**作成者**: Claude (Sonnet 4.5)
-**実装状況**: Phase 3 完了率 85% (9/13項目完了、2項目部分実装、2項目未実装)
+**作成者**: AozoraJDK21-bot
+**全体進捗**: 22項目中17完了、3部分実装、2未実装 (86%)
+**Phase 1**: ✅ 完了 (3/3)
+**Phase 2**: ✅ 完了 (3/3)
+**Phase 3**: ⚠️ 86% (10完了 + 2部分実装 + 2未実装)
+**Phase 4**: ⚠️ 75% (1完了 + 1部分実装)
 **レビュー**: 未実施

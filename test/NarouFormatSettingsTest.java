@@ -5,7 +5,6 @@ import java.io.File;
 import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
 import java.io.FileOutputStream;
-import java.nio.charset.StandardCharsets;
 
 import com.github.hmdev.web.NarouFormatSettings;
 

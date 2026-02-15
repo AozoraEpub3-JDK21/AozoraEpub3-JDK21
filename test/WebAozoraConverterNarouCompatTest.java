@@ -10,7 +10,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import com.github.hmdev.web.WebAozoraConverter;
-import com.github.hmdev.web.api.model.NovelMetadata;
+
 
 /**
  * WebAozoraConverter - narou.rb互換機能の単体テスト
@@ -526,11 +526,11 @@ public class WebAozoraConverterNarouCompatTest {
 		assertNotNull(c);
 		java.lang.reflect.Field f = WebAozoraConverter.class.getDeclaredField("replaceMap");
 		f.setAccessible(true);
-		@SuppressWarnings("unchecked")
 		java.util.Map<?,?> map = (java.util.Map<?,?>) f.get(c);
 		// map のキーは package-private な enum なので文字列で探す
 		Object key = map.keySet().stream().filter(k -> k.toString().equals("TITLE")).findFirst().orElse(null);
 		assertNotNull("replaceMap に TITLE が見つからない", key);
+		@SuppressWarnings("unchecked")
 		java.util.Vector<String[]> vec = (java.util.Vector<String[]>) map.get(key);
 		assertEquals("検索", vec.get(0)[0]);
 		assertEquals("置換", vec.get(0)[1]);
