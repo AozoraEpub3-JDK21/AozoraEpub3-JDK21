@@ -1351,14 +1351,25 @@ public class WebAozoraConverter
 		return result.toString();
 	}
 
+	/** 英文保護の最小文字数 */
+	private static final int ENGLISH_SENTENCES_MIN_LENGTH = 8;
+
 	/**
-	 * 英文かどうかを判定
-	 * 条件: 8文字以上、2文字以上の英字を含む、スペースまたはカンマ/ピリオドを含む
+	 * 英文として保護すべきかを判定（narou.rb互換）
+	 * 参考: narou-3.9.1/lib/converterbase.rb:504-511
+	 *
+	 * 条件（いずれか）:
+	 * - 英文: スペース区切りで2単語以上
+	 * - 長い英単語: 一定文字数以上でアルファベットを含む
 	 */
 	private boolean isEnglishSentence(String str) {
-		if (str.length() < 8) return false;
-		return str.matches(".*[a-zA-Z]{2,}.*") &&
-		       str.matches(".*[\\s.,].*");
+		// narou.rb: sentence? → split(" ").size >= 2
+		if (str.split(" ").length >= 2) {
+			return true;
+		}
+		// narou.rb: should_word_be_hankaku? → 一定長以上かつアルファベット含む
+		return str.length() >= ENGLISH_SENTENCES_MIN_LENGTH &&
+		       str.matches(".*[a-zA-Z].*");
 	}
 
 	/**
@@ -1644,43 +1655,37 @@ public class WebAozoraConverter
 	 * ユニコードのローマ数字を通常のアルファベットに変換
 	 * 例: Ⅰ → I, Ⅱ → II, ⅲ → iii
 	 */
+	/** ローマ数字変換: アルファベット表記 → Unicodeローマ数字 (narou.rb互換) */
+	private static final String[][] ROME_NUM_PAIRS = {
+		// narou.rb: ROME_NUM_ALPHABET → ROME_NUM
+		// 長いパターンを先に処理（IIIをIIより先に）
+		{"VIII", "Ⅷ"}, {"VII", "Ⅶ"}, {"III", "Ⅲ"},
+		{"II", "Ⅱ"}, {"IV", "Ⅳ"}, {"VI", "Ⅵ"}, {"IX", "Ⅸ"},
+		{"viii", "ⅷ"}, {"vii", "ⅶ"}, {"iii", "ⅲ"},
+		{"ii", "ⅱ"}, {"iv", "ⅳ"}, {"vi", "ⅵ"}, {"ix", "ⅸ"},
+	};
+
+	/**
+	 * ローマ数字っぽいアルファベットをUnicodeローマ数字に変換（narou.rb互換）
+	 * 参考: narou-3.9.1/lib/converterbase.rb:324-335
+	 *
+	 * 非アルファベット文字に囲まれた "II", "III" 等のアルファベットを
+	 * 対応するUnicodeローマ数字 Ⅱ, Ⅲ 等に変換する。
+	 * 縦書き表示でローマ数字が正しく表示されるようにするための処理。
+	 *
+	 * 注: alphabet_to_zenkaku の前に実行する必要あり
+	 */
 	private String convertRomanNumerals(String text) {
-		// 大文字のローマ数字（U+2160 - U+216F）
-		text = text.replace("Ⅰ", "I");
-		text = text.replace("Ⅱ", "II");
-		text = text.replace("Ⅲ", "III");
-		text = text.replace("Ⅳ", "IV");
-		text = text.replace("Ⅴ", "V");
-		text = text.replace("Ⅵ", "VI");
-		text = text.replace("Ⅶ", "VII");
-		text = text.replace("Ⅷ", "VIII");
-		text = text.replace("Ⅸ", "IX");
-		text = text.replace("Ⅹ", "X");
-		text = text.replace("Ⅺ", "XI");
-		text = text.replace("Ⅻ", "XII");
-		text = text.replace("Ⅼ", "L");
-		text = text.replace("Ⅽ", "C");
-		text = text.replace("Ⅾ", "D");
-		text = text.replace("Ⅿ", "M");
-
-		// 小文字のローマ数字（U+2170 - U+217F）
-		text = text.replace("ⅰ", "i");
-		text = text.replace("ⅱ", "ii");
-		text = text.replace("ⅲ", "iii");
-		text = text.replace("ⅳ", "iv");
-		text = text.replace("ⅴ", "v");
-		text = text.replace("ⅵ", "vi");
-		text = text.replace("ⅶ", "vii");
-		text = text.replace("ⅷ", "viii");
-		text = text.replace("ⅸ", "ix");
-		text = text.replace("ⅹ", "x");
-		text = text.replace("ⅺ", "xi");
-		text = text.replace("ⅻ", "xii");
-		text = text.replace("ⅼ", "l");
-		text = text.replace("ⅽ", "c");
-		text = text.replace("ⅾ", "d");
-		text = text.replace("ⅿ", "m");
-
+		for (String[] pair : ROME_NUM_PAIRS) {
+			String alpha = pair[0];
+			String roman = pair[1];
+			// 非アルファベット文字に囲まれた場合のみ変換
+			// narou.rb: /([^a-zA-Z])#{rome}([^a-zA-Z])/
+			text = text.replaceAll(
+				"(^|[^a-zA-Z])" + Pattern.quote(alpha) + "([^a-zA-Z]|$)",
+				"$1" + Matcher.quoteReplacement(roman) + "$2"
+			);
+		}
 		return text;
 	}
 
@@ -1853,6 +1858,74 @@ public class WebAozoraConverter
 	}
 
 	/**
+	 * 感嘆符・疑問符の直後に全角アキを挿入（narou.rb互換）
+	 * 参考: narou-3.9.1/lib/converterbase.rb:300-313
+	 *
+	 * 例: 「すごい！あれは」 → 「すごい！　あれは」
+	 * ただし閉じ括弧・全角ダッシュ等の直前では挿入しない
+	 */
+	private String insertSeparateSpace(String text) {
+		// 閉じ括弧・特殊記号の直前では全角アキを挿入しない
+		// narou.rb: /([!?！？]+)([^!?！？])/ で後続文字を判定
+		Pattern pattern = Pattern.compile("([!?！？]+)([^!?！？])");
+		Matcher matcher = pattern.matcher(text);
+		StringBuffer sb = new StringBuffer();
+		while (matcher.find()) {
+			String marks = matcher.group(1);
+			String next = matcher.group(2);
+			// 閉じ括弧・全角スペース・ダッシュ等の前では挿入しない
+			if (next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
+				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + next));
+			} else if (next.matches("[ 、。]")) {
+				// スペース・句読点は全角スペースに置換
+				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + "　"));
+			} else {
+				// その他の文字の前に全角アキを挿入
+				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + "　" + next));
+			}
+		}
+		matcher.appendTail(sb);
+		return sb.toString();
+	}
+
+	/**
+	 * 小説ルールに沿う変換（narou.rb互換）
+	 * 参考: narou-3.9.1/lib/converterbase.rb:488-502
+	 *
+	 * 1. 閉じ括弧の直前の句点を削除: 。」 → 」
+	 * 2. 省略記号（…, ‥）を偶数個に補正
+	 */
+	private String convertNovelRule(String text) {
+		// 閉じ括弧の直前の句点を削除
+		text = text.replaceAll("。([」』）])", "$1");
+
+		// 省略記号を偶数個に補正（奇数個なら+1して偶数に）
+		Pattern ellipsis = Pattern.compile("…+");
+		Matcher em = ellipsis.matcher(text);
+		StringBuffer sb1 = new StringBuffer();
+		while (em.find()) {
+			int len = em.group().length();
+			if (len % 2 != 0) len++;
+			em.appendReplacement(sb1, Matcher.quoteReplacement("…".repeat(len)));
+		}
+		em.appendTail(sb1);
+		text = sb1.toString();
+
+		Pattern doubleDot = Pattern.compile("‥+");
+		Matcher dm = doubleDot.matcher(text);
+		StringBuffer sb2 = new StringBuffer();
+		while (dm.find()) {
+			int len = dm.group().length();
+			if (len % 2 != 0) len++;
+			dm.appendReplacement(sb2, Matcher.quoteReplacement("‥".repeat(len)));
+		}
+		dm.appendTail(sb2);
+		text = sb2.toString();
+
+		return text;
+	}
+
+	/**
 	 * かぎ括弧内の自動連結（narou.rb互換）
 	 * 参考: narou-3.8.2/lib/converterbase.rb:520-609
 	 *
@@ -1958,6 +2031,12 @@ public class WebAozoraConverter
 		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
 		// 注: 記号の全角化後に実行するため、全角の！？を対象とする
 		text = convertTatechuyoko(text);
+
+		// narou.rb互換: 感嘆符・疑問符の後に全角アキを挿入
+		text = insertSeparateSpace(text);
+
+		// narou.rb互換: 小説ルール変換（閉じ括弧前の句点削除、省略記号の偶数化）
+		text = convertNovelRule(text);
 
 		// 特殊文字を青空注記に変換
 		StringBuilder sb = new StringBuilder();

@@ -2296,6 +2296,42 @@ public class AozoraEpub3Applet extends JApplet
 		panel.add(Box.createHorizontalGlue());
 
 		////////////////////////////////
+		// narou.rb互換 詳細設定ボタン
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setBorder(new NarrowTitledBorder("narou.rb互換 テキスト変換設定"));
+		tabPanel.add(panel);
+
+		JButton jButtonNarouSettings = new JButton("詳細設定を開く...");
+		jButtonNarouSettings.setToolTipText("<html>narou.rb互換の詳細なテキスト変換設定を編集します<br>" +
+			"（数字の漢数字化、記号の全角化、かぎ括弧処理など）</html>");
+		jButtonNarouSettings.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				File settingFile = new File("setting_narourb.ini");
+				try {
+					com.github.hmdev.web.NarouFormatSettings.generateDefaultIfMissing(settingFile);
+				} catch (Exception ex) {
+					// 無視
+				}
+				com.github.hmdev.web.NarouFormatSettings tempSettings = new com.github.hmdev.web.NarouFormatSettings();
+				try {
+					tempSettings.load(settingFile);
+				} catch (Exception ex) {
+					LogAppender.println("設定読み込みエラー: " + ex.getMessage());
+				}
+				com.github.hmdev.swing.NarouFormatSettingsDialog dialog =
+					new com.github.hmdev.swing.NarouFormatSettingsDialog(
+						jFrameParent.getIconImage(), tempSettings, settingFile);
+				dialog.setVisible(true);
+				if (dialog.isSaved()) {
+					LogAppender.println("narou.rb互換設定を保存しました: " + settingFile.getAbsolutePath());
+				}
+			}
+		});
+		panel.add(jButtonNarouSettings);
+		panel.add(Box.createHorizontalGlue());
+
+		////////////////////////////////
 		//キャッシュ保存先
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));

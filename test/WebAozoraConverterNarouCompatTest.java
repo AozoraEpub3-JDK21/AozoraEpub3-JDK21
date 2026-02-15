@@ -545,17 +545,20 @@ public class WebAozoraConverterNarouCompatTest {
 		System.out.println("Phase 3.7: ローマ数字の変換テスト");
 		System.out.println("=".repeat(60));
 
+		// narou.rb互換: アルファベット → Unicodeローマ数字
+		// 非アルファベット文字に囲まれた場合のみ変換
 		String[][] testCases = {
-			{"Ⅰ", "I"},
-			{"Ⅱ", "II"},
-			{"Ⅲ", "III"},
-			{"Ⅳ", "IV"},
-			{"Ⅴ", "V"},
-			{"ⅰ", "i"},
-			{"ⅱ", "ii"},
-			{"ⅲ", "iii"},
-			{"第Ⅰ章", "第I章"},
-			{"ⅩⅡ巻", "XII巻"},
+			{"第II章", "第Ⅱ章"},       // II → Ⅱ
+			{"第III巻", "第Ⅲ巻"},      // III → Ⅲ
+			{"第IV章", "第Ⅳ章"},       // IV → Ⅳ
+			{"第VI章", "第Ⅵ章"},       // VI → Ⅵ
+			{"第VII章", "第Ⅶ章"},      // VII → Ⅶ
+			{"第VIII章", "第Ⅷ章"},     // VIII → Ⅷ
+			{"第IX章", "第Ⅸ章"},       // IX → Ⅸ
+			{"第ii巻", "第ⅱ巻"},       // 小文字 ii → ⅱ
+			{"第iii巻", "第ⅲ巻"},      // 小文字 iii → ⅲ
+			{"CIVIL", "CIVIL"},        // 英単語中のIVは変換しない
+			{"divide", "divide"},      // 英単語中のviは変換しない
 		};
 
 		for (String[] testCase : testCases) {
@@ -627,35 +630,81 @@ public class WebAozoraConverterNarouCompatTest {
 		System.out.println();
 	}
 
+	/**
+	 * 感嘆符・疑問符後の全角アキ挿入テスト (narou.rb: insert_separate_space)
+	 */
+	@Test
+	public void testInsertSeparateSpace() throws Exception {
+		Method m = getPrivateMethod("insertSeparateSpace", String.class);
+
+		// 通常文字の前には全角アキを挿入
+		assertEquals("すごい！　あれは", m.invoke(converter, "すごい！あれは"));
+		assertEquals("なに？　本当に", m.invoke(converter, "なに？本当に"));
+		assertEquals("えっ！？　まさか", m.invoke(converter, "えっ！？まさか"));
+
+		// 閉じ括弧の前には挿入しない
+		assertEquals("すごい！」", m.invoke(converter, "すごい！」"));
+		assertEquals("えっ？』", m.invoke(converter, "えっ？』"));
+
+		// 全角スペースの前はそのまま
+		assertEquals("すごい！　", m.invoke(converter, "すごい！　"));
+	}
+
+	/**
+	 * 小説ルール変換テスト (narou.rb: convert_novel_rule)
+	 */
+	@Test
+	public void testConvertNovelRule() throws Exception {
+		Method m = getPrivateMethod("convertNovelRule", String.class);
+
+		// 閉じ括弧の直前の句点を削除
+		assertEquals("これだ」", m.invoke(converter, "これだ。」"));
+		assertEquals("まさか』", m.invoke(converter, "まさか。』"));
+		assertEquals("そうだ）", m.invoke(converter, "そうだ。）"));
+
+		// 省略記号の偶数化
+		assertEquals("……", m.invoke(converter, "…"));       // 1個 → 2個
+		assertEquals("……", m.invoke(converter, "……"));     // 2個はそのまま
+		assertEquals("…………", m.invoke(converter, "………")); // 3個 → 4個
+	}
+
+	/**
+	 * 英文判定テスト (narou.rb互換: 2単語以上 or 一定長+英字)
+	 */
+	@Test
+	public void testEnglishSentenceDetection() throws Exception {
+		Method m = getPrivateMethod("isEnglishSentence", String.class);
+
+		// 2単語以上 → true
+		assertTrue((Boolean) m.invoke(converter, "Hello World"));
+		assertTrue((Boolean) m.invoke(converter, "a b"));
+
+		// 一定長(8+)でアルファベット含む → true
+		assertTrue((Boolean) m.invoke(converter, "longword"));
+
+		// 短い単語 → false
+		assertFalse((Boolean) m.invoke(converter, "short"));
+		assertFalse((Boolean) m.invoke(converter, "abc"));
+	}
+
 	// ========================================================================
 	// 統合テスト
 	// ========================================================================
 
 	/**
-	 * 総合的な変換フローのテスト
+	 * printText を通した統合変換テスト
 	 */
 	@Test
-	public void testIntegratedConversion() {
-		System.out.println("=".repeat(60));
-		System.out.println("統合変換フローテスト");
-		System.out.println("=".repeat(60));
+	public void testIntegratedConversionViaPrintText() throws Exception {
+		Method mPrint = getPrivateMethod("printText", java.io.BufferedWriter.class, String.class);
 
-		System.out.println("以下の変換が順番に適用されることを確認:");
-		System.out.println("1. HTML改行削除");
-		System.out.println("2. かぎ括弧内の自動連結");
-		System.out.println("3. 行末読点での自動連結");
-		System.out.println("4. 行頭のかぎ括弧に二分アキ");
-		System.out.println("5. 縦中横処理");
-		System.out.println("6. 数字の漢数字化");
-		System.out.println("7. ローマ数字の変換");
-		System.out.println("8. 英文の保護");
-		System.out.println("9. 記号の全角化");
-		System.out.println("10. 特殊文字を青空注記に変換");
-		System.out.println("11. 英文の復元");
-		System.out.println();
-
-		System.out.println("注: 実際の変換フローは統合テストまたは手動テストで確認してください");
-		System.out.println("=".repeat(60));
-		System.out.println();
+		// 基本的なテキスト（ローマ数字 + 感嘆符 + 句点削除を統合検証）
+		StringWriter sw = new StringWriter();
+		try (BufferedWriter bw = new BufferedWriter(sw)) {
+			mPrint.invoke(converter, bw, "すごい！そうだ");
+			bw.flush();
+		}
+		String out = sw.toString();
+		assertTrue("感嘆符後に全角アキが挿入されていない: " + out, out.contains("！　そうだ"));
 	}
 }

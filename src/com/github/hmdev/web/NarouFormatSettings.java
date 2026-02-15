@@ -439,4 +439,59 @@ public class NarouFormatSettings {
 			bw.write("enable_narou_tag = true\n");
 		}
 	}
+
+	/**
+	 * 現在の設定をINI形式でファイルに保存する。
+	 */
+	public void save(File file) throws IOException {
+		try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
+			bw.write("; AozoraEpub3-JDK21 narou.rb互換フォーマット設定\n");
+			bw.write("; このファイルはGUI設定ダイアログから自動生成されます\n");
+			bw.write("\n");
+			writeEntry(bw, "author_comment_style", "\"" + authorCommentStyle + "\"", "前書き・後書きのスタイル");
+			writeEntry(bw, "enable_yokogaki", enableYokogaki, "横書きモード");
+			writeEntry(bw, "enable_display_end_of_book", enableDisplayEndOfBook, "本の終了マーカー表示");
+			writeEntry(bw, "chapter_use_center_page", chapterUseCenterPage, "章中表紙のページ中央");
+			writeEntry(bw, "chapter_use_hashira", chapterUseHashira, "章中表紙の柱表示");
+			writeEntry(bw, "include_story", includeStory, "あらすじを表紙に含める");
+			writeEntry(bw, "include_toc_url", includeTocUrl, "掲載URLを表紙に含める");
+			writeEntry(bw, "show_post_date", showPostDate, "更新日時を各話に表示");
+			bw.write("\n");
+			writeEntry(bw, "enable_half_indent_bracket", enableHalfIndentBracket, "行頭かぎ括弧に二分アキ");
+			writeEntry(bw, "enable_convert_num_to_kanji", enableConvertNumToKanji, "数字の漢数字化");
+			writeEntry(bw, "enable_kanji_num_with_units", enableKanjiNumWithUnits, "漢数字の単位化");
+			writeEntry(bw, "kanji_num_with_units_lower_digit_zero", kanjiNumWithUnitsLowerDigitZero, "単位化の下位桁ゼロ数");
+			writeEntry(bw, "enable_convert_symbols_to_zenkaku", enableConvertSymbolsToZenkaku, "記号の全角化");
+			writeEntry(bw, "enable_auto_join_in_brackets", enableAutoJoinInBrackets, "かぎ括弧内の自動連結");
+			writeEntry(bw, "enable_auto_join_line", enableAutoJoinLine, "行末読点での自動連結");
+			bw.write("\n");
+			writeEntry(bw, "enable_author_comments", enableAuthorComments, "前書き・後書きの自動検出");
+			writeEntry(bw, "enable_auto_indent", enableAutoIndent, "自動行頭字下げ");
+			writeEntry(bw, "enable_enchant_midashi", enableEnchantMidashi, "改ページ直後の見出し化");
+			writeEntry(bw, "enable_inspect_invalid_openclose_brackets", enableInspectInvalidOpenCloseBrackets, "かぎ括弧の開閉チェック");
+			bw.write("\n");
+			writeEntry(bw, "enable_transform_fraction", enableTransformFraction, "分数変換");
+			writeEntry(bw, "enable_transform_date", enableTransformDate, "日付変換");
+			writeEntry(bw, "date_format", dateFormat, "日付フォーマット");
+			writeEntry(bw, "enable_convert_horizontal_ellipsis", enableConvertHorizontalEllipsis, "三点リーダー変換");
+			writeEntry(bw, "enable_dakuten_font", enableDakutenFont, "濁点フォント処理");
+			writeEntry(bw, "enable_prolonged_sound_mark_to_dash", enableProlongedSoundMarkToDash, "長音記号の変換");
+			writeEntry(bw, "enable_narou_tag", enableNarouTag, "なろう独自タグの処理");
+		}
+	}
+
+	private static void writeEntry(BufferedWriter bw, String key, boolean value, String comment) throws IOException {
+		bw.write("; " + comment + "\n");
+		bw.write(key + " = " + value + "\n");
+	}
+
+	private static void writeEntry(BufferedWriter bw, String key, int value, String comment) throws IOException {
+		bw.write("; " + comment + "\n");
+		bw.write(key + " = " + value + "\n");
+	}
+
+	private static void writeEntry(BufferedWriter bw, String key, String value, String comment) throws IOException {
+		bw.write("; " + comment + "\n");
+		bw.write(key + " = " + value + "\n");
+	}
 }
