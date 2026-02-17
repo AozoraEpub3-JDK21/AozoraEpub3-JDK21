@@ -1989,9 +1989,29 @@ public class WebAozoraConverter
 		}
 		text = out.toString();
 
-		// [jump:URL] → リンク注記
-		Pattern jumpPattern = Pattern.compile("\\[jump:([^\\]]+)\\]");
-		text = jumpPattern.matcher(text).replaceAll("<a href=\"$1\">$1</a>");
+		// [jump:URL] → リンク注記（ReDoS回避のため手動スキャン）
+		StringBuilder out2 = new StringBuilder();
+		idx = 0;
+		String jkey = "[jump:";
+		while (true) {
+			int jstart = text.indexOf(jkey, idx);
+			if (jstart == -1) {
+				out2.append(text, idx, text.length());
+				break;
+			}
+			out2.append(text, idx, jstart);
+			int urlStart = jstart + jkey.length();
+			int jend = text.indexOf(']', urlStart);
+			if (jend == -1) {
+				out2.append(text, jstart, text.length());
+				break;
+			}
+			String url = text.substring(urlStart, jend);
+			String anchor = "<a href=\"" + url + "\">" + url + "</a>";
+			out2.append(anchor);
+			idx = jend + 1;
+		}
+		text = out2.toString();
 
 		return text;
 	}

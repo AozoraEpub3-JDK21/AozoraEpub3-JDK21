@@ -263,6 +263,60 @@ public class WebAozoraConverterNarouCompatTest {
         assertTrue(replaced.contains("テスト章"));
     }
 
+    @Test
+    public void testConvertNarouTags_EdgeCases() throws Exception {
+        Method m = getPrivateMethod("convertNarouTags", String.class);
+
+        // multiple chapters
+        String multi = "前文 [chapter:第一章] 中間 [chapter:第二章] 後文";
+        String outMulti = restorePH((String) m.invoke(converter, multi));
+        assertTrue(outMulti.contains("第一章"));
+        assertTrue(outMulti.contains("第二章"));
+        assertTrue(outMulti.contains("中見出し"));
+
+        // unclosed tag should be left intact (no exception, no hang)
+        String unclosed = "先頭 [chapter:未閉じの章名";
+        String outUnclosed = restorePH((String) m.invoke(converter, unclosed));
+        assertTrue(outUnclosed.contains("[chapter:未閉じの章名"));
+
+        // nested bracket inside title: behavior == regex-based (stop at first ])
+        String nested = "[chapter:外側 [内側] タイトル]";
+        String outNested = restorePH((String) m.invoke(converter, nested));
+        // title expected to include text up to the first closing bracket after key
+        assertTrue(outNested.contains("外側 [内側"));
+
+        // [jump:...] basic and edge cases
+        String jump = "[jump:https://example.com]";
+        String outJump = (String) m.invoke(converter, jump);
+        assertTrue(outJump.contains("<a href=\"https://example.com\">https://example.com</a>"));
+
+        String multiJump = "リンク [jump:http://a] と [jump:http://b]";
+        String outMultiJump = (String) m.invoke(converter, multiJump);
+        assertTrue(outMultiJump.contains("<a href=\"http://a\">http://a</a>"));
+        assertTrue(outMultiJump.contains("<a href=\"http://b\">http://b</a>"));
+
+        // unclosed jump should remain intact
+        String unclosedJump = "リンク [jump:http://x";
+        String outUnclosedJump = (String) m.invoke(converter, unclosedJump);
+        assertTrue(outUnclosedJump.contains("[jump:http://x"));
+    }
+
+    /** Ensure large/malicious-like input does not hang (ReDoS check) */
+    @Test(timeout = 1000)
+    public void testConvertNarouTags_Performance() throws Exception {
+        Method m = getPrivateMethod("convertNarouTags", String.class);
+
+        // large input containing many '[' but no closing ']' — should return quickly
+        StringBuilder sb = new StringBuilder();
+        sb.append("prefix ");
+        for (int i = 0; i < 200000; i++) sb.append('[');
+        sb.append(" chapter");
+        String large = sb.toString();
+
+        String out = (String) m.invoke(converter, large);
+        assertNotNull(out);
+        assertTrue(out.startsWith("prefix "));
+    }
     /** 分数・日付変換 */
     @Test
     public void testConvertFractionsAndDates() throws Exception {
