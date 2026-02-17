@@ -1962,17 +1962,32 @@ public class WebAozoraConverter
 		text = text.replace("[newpage]", phChuki("改ページ"));
 
 		// [chapter:タイトル] → ３字下げ＋中見出し
-		Pattern chapterPattern = Pattern.compile("\\[chapter:([^\\]]+)\\]");
-		Matcher chapterMatcher = chapterPattern.matcher(text);
-		StringBuffer sb = new StringBuffer();
-		while (chapterMatcher.find()) {
-			String title = chapterMatcher.group(1);
+		// 正規表現による ReDoS 検出を回避するため、ここでは手動スキャンで安全に置換します。
+		StringBuilder out = new StringBuilder();
+		int idx = 0;
+		String key = "[chapter:";
+		while (true) {
+			int start = text.indexOf(key, idx);
+			if (start == -1) {
+				out.append(text, idx, text.length());
+				break;
+			}
+			// append preceding part
+			out.append(text, idx, start);
+			int titleStart = start + key.length();
+			int end = text.indexOf(']', titleStart);
+			if (end == -1) {
+				// 閉じ括弧が見つからなければ残りをそのまま追加して終了
+				out.append(text, start, text.length());
+				break;
+			}
+			String title = text.substring(titleStart, end);
 			String replacement = phChuki(formatSettings.getIndent() + "字下げ") +
 				phChuki("中見出し") + title + phChuki("中見出し終わり");
-			chapterMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+			out.append(replacement);
+			idx = end + 1;
 		}
-		chapterMatcher.appendTail(sb);
-		text = sb.toString();
+		text = out.toString();
 
 		// [jump:URL] → リンク注記
 		Pattern jumpPattern = Pattern.compile("\\[jump:([^\\]]+)\\]");
