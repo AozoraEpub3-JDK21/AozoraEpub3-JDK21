@@ -1379,6 +1379,9 @@ public class WebAozoraConverter
 	/** 英文保護の最小文字数（narou.rb: should_word_be_hankaku? のしきい値） */
 	private static final int ENGLISH_SENTENCES_MIN_LENGTH = 8;
 
+	// 英字検出用パターン（事前コンパイルして ReDoS を回避）
+	private static final java.util.regex.Pattern ASCII_LETTER_PATTERN = java.util.regex.Pattern.compile("[a-zA-Z]");
+
 	/**
 	 * 複数単語の英文かを判定（narou.rb互換: sentence?）
 	 * スペース区切りで2単語以上ならtrue
@@ -1395,8 +1398,11 @@ public class WebAozoraConverter
 	 * 一定文字数以上でアルファベットを含む場合はtrue
 	 */
 	private boolean shouldKeepHankaku(String str) {
+		// 長さ条件を満たし、文字列内に英字が含まれるかを事前コンパイル済みの
+		// パターンで判定することで、パターンの再コンパイルやバックトラッキング
+		// による ReDoS のリスクを排除します。
 		return str.length() >= ENGLISH_SENTENCES_MIN_LENGTH &&
-		       str.matches(".*[a-zA-Z].*");
+		       ASCII_LETTER_PATTERN.matcher(str).find();
 	}
 
 	/**
