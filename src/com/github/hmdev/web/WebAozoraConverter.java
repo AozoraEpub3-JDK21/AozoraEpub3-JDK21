@@ -1322,12 +1322,17 @@ public class WebAozoraConverter
 		// 行頭の空白（全角・半角・タブ）+ かぎ括弧類
 		// 空白を削除して［＃二分アキ］に置換
 		Pattern pattern = Pattern.compile("^[ 　\\t]*([「『〔（【〈《≪〝])", Pattern.MULTILINE);
-		return pattern.matcher(text).replaceAll("［＃二分アキ］$1");
+		return pattern.matcher(text).replaceAll(phChuki("二分アキ") + "$1");
 	}
 
 	/**
-	 * 英文（8文字以上）を保護（narou.rb互換）
-	 * 将来の記号全角化処理に備えて、長い英文を一時的にマーカーに置換
+	 * 英文保護 + 短い英単語の全角化（narou.rb互換）
+	 * 参考: narou-3.9.1/lib/converterbase.rb:496-520 alphabet_to_zenkaku
+	 *
+	 * 3分岐:
+	 * 1. 複数単語（スペース区切り2語以上）→ プレースホルダーで保護
+	 * 2. 長い単語（8文字以上でアルファベット含む）→ 半角のまま保持
+	 * 3. それ以外 → アルファベットを全角化
 	 */
 	private String protectEnglishSentences(String text) {
 		Pattern pattern = Pattern.compile("[\\w.,!?'\" &:;_-]+");
@@ -1336,38 +1341,60 @@ public class WebAozoraConverter
 
 		while (matcher.find()) {
 			String match = matcher.group();
-			if (isEnglishSentence(match)) {
-				// 英文として判定された場合は保護
+			if (isMultiWordEnglish(match)) {
+				// 複数単語の英文 → プレースホルダーで保護（半角のまま）
 				englishSentences.add(match);
 				matcher.appendReplacement(result,
-					"［＃英文＝" + (englishSentences.size() - 1) + "］");
-			} else {
-				// 短い英単語はそのまま（将来は全角化）
+					Matcher.quoteReplacement(phChuki("英文＝" + (englishSentences.size() - 1))));
+			} else if (shouldKeepHankaku(match)) {
+				// 長い英単語 → 半角のまま保持（変換も保護もしない）
 				matcher.appendReplacement(result,
 					java.util.regex.Matcher.quoteReplacement(match));
+			} else {
+				// 短い英単語 → アルファベットを全角化
+				String zenkaku = alphabetToZenkaku(match);
+				matcher.appendReplacement(result,
+					java.util.regex.Matcher.quoteReplacement(zenkaku));
 			}
 		}
 		matcher.appendTail(result);
 		return result.toString();
 	}
 
-	/** 英文保護の最小文字数 */
+	/** 半角アルファベットを全角に変換 */
+	private String alphabetToZenkaku(String text) {
+		StringBuilder sb = new StringBuilder();
+		for (char c : text.toCharArray()) {
+			if (c >= 'a' && c <= 'z') {
+				sb.append((char) ('ａ' + (c - 'a')));
+			} else if (c >= 'A' && c <= 'Z') {
+				sb.append((char) ('Ａ' + (c - 'A')));
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	/** 英文保護の最小文字数（narou.rb: should_word_be_hankaku? のしきい値） */
 	private static final int ENGLISH_SENTENCES_MIN_LENGTH = 8;
 
 	/**
-	 * 英文として保護すべきかを判定（narou.rb互換）
-	 * 参考: narou-3.9.1/lib/converterbase.rb:504-511
-	 *
-	 * 条件（いずれか）:
-	 * - 英文: スペース区切りで2単語以上
-	 * - 長い英単語: 一定文字数以上でアルファベットを含む
+	 * 複数単語の英文かを判定（narou.rb互換: sentence?）
+	 * スペース区切りで2単語以上ならtrue
+	 * Ruby の split(" ") は先頭・末尾の空白を無視するため、trim() して判定
 	 */
-	private boolean isEnglishSentence(String str) {
-		// narou.rb: sentence? → split(" ").size >= 2
-		if (str.split(" ").length >= 2) {
-			return true;
-		}
-		// narou.rb: should_word_be_hankaku? → 一定長以上かつアルファベット含む
+	private boolean isMultiWordEnglish(String str) {
+		String trimmed = str.trim();
+		if (trimmed.isEmpty()) return false;
+		return trimmed.split("\\s+").length >= 2;
+	}
+
+	/**
+	 * 半角のまま保持すべきかを判定（narou.rb互換: should_word_be_hankaku?）
+	 * 一定文字数以上でアルファベットを含む場合はtrue
+	 */
+	private boolean shouldKeepHankaku(String str) {
 		return str.length() >= ENGLISH_SENTENCES_MIN_LENGTH &&
 		       str.matches(".*[a-zA-Z].*");
 	}
@@ -1377,7 +1404,7 @@ public class WebAozoraConverter
 	 */
 	private String rebuildEnglishSentences(String text) {
 		for (int i = 0; i < englishSentences.size(); i++) {
-			text = text.replace("［＃英文＝" + i + "］", englishSentences.get(i));
+			text = text.replace(phChuki("英文＝" + i), englishSentences.get(i));
 		}
 		return text;
 	}
@@ -1396,6 +1423,9 @@ public class WebAozoraConverter
 	 * - ！？の2～3個の組み合わせ: 特定パターンのみ
 	 */
 	private String convertTatechuyoko(String text) {
+		String tcyOpen = phChuki("縦中横");
+		String tcyClose = phChuki("縦中横終わり");
+
 		// ！の連続（4個以上の場合は2個ずつ縦中横化）
 		Pattern pattern4Plus = Pattern.compile("！{4,}");
 		Matcher matcher = pattern4Plus.matcher(text);
@@ -1407,7 +1437,7 @@ public class WebAozoraConverter
 			// 2個ずつ縦中横化
 			StringBuilder result = new StringBuilder();
 			for (int i = 0; i < len / 2; i++) {
-				result.append("［＃縦中横］!!［＃縦中横終わり］");
+				result.append(tcyOpen).append("!!").append(tcyClose);
 			}
 			matcher.appendReplacement(sb, Matcher.quoteReplacement(result.toString()));
 		}
@@ -1415,7 +1445,7 @@ public class WebAozoraConverter
 		text = sb.toString();
 
 		// ！が3個（4個以上の処理後に実行）
-		text = text.replaceAll("！{3}", "［＃縦中横］!!!［＃縦中横終わり］");
+		text = text.replaceAll("！{3}", Matcher.quoteReplacement(tcyOpen + "!!!" + tcyClose));
 
 		// ？の連続（4個以上の場合は2個ずつ縦中横化）
 		Pattern pattern4PlusQ = Pattern.compile("？{4,}");
@@ -1426,7 +1456,7 @@ public class WebAozoraConverter
 			if (len % 2 == 1) len++;
 			StringBuilder result = new StringBuilder();
 			for (int i = 0; i < len / 2; i++) {
-				result.append("［＃縦中横］??［＃縦中横終わり］");
+				result.append(tcyOpen).append("??").append(tcyClose);
 			}
 			matcherQ.appendReplacement(sbQ, Matcher.quoteReplacement(result.toString()));
 		}
@@ -1434,17 +1464,17 @@ public class WebAozoraConverter
 		text = sbQ.toString();
 
 		// ？が3個（4個以上の処理後に実行）
-		text = text.replaceAll("？{3}", "［＃縦中横］???［＃縦中横終わり］");
+		text = text.replaceAll("？{3}", Matcher.quoteReplacement(tcyOpen + "???" + tcyClose));
 
 		// 3個の混合組み合わせ（特定パターンのみ）
-		text = text.replaceAll("！！？", "［＃縦中横］!!?［＃縦中横終わり］");
-		text = text.replaceAll("？！！", "［＃縦中横］?!!［＃縦中横終わり］");
+		text = text.replaceAll("！！？", Matcher.quoteReplacement(tcyOpen + "!!?" + tcyClose));
+		text = text.replaceAll("？！！", Matcher.quoteReplacement(tcyOpen + "?!!" + tcyClose));
 
 		// 2個の組み合わせ
-		text = text.replaceAll("！{2}", "［＃縦中横］!!［＃縦中横終わり］");
-		text = text.replaceAll("！？", "［＃縦中横］!?［＃縦中横終わり］");
-		text = text.replaceAll("？！", "［＃縦中横］?!［＃縦中横終わり］");
-		text = text.replaceAll("？{2}", "［＃縦中横］??［＃縦中横終わり］");
+		text = text.replaceAll("！{2}", Matcher.quoteReplacement(tcyOpen + "!!" + tcyClose));
+		text = text.replaceAll("！？", Matcher.quoteReplacement(tcyOpen + "!?" + tcyClose));
+		text = text.replaceAll("？！", Matcher.quoteReplacement(tcyOpen + "?!" + tcyClose));
+		text = text.replaceAll("？{2}", Matcher.quoteReplacement(tcyOpen + "??" + tcyClose));
 
 		return text;
 	}
@@ -1465,7 +1495,9 @@ public class WebAozoraConverter
 		text = stashKanjiNum(text);
 
 		// 2. カンマ区切りの数字は半角保護（全角化対策）
-		text = text.replaceAll("([0-9]{1,3}(?:,[0-9]{3})+)", "［＃半角数字＝$1］");
+		text = text.replaceAll("([0-9]{1,3}(?:,[0-9]{3})+)",
+			Matcher.quoteReplacement(String.valueOf(PH_BRACKET_OPEN) + PH_HASH + "半角数字＝") + "$1" +
+			Matcher.quoteReplacement(String.valueOf(PH_BRACKET_CLOSE)));
 
 		// 3. アラビア数字を漢数字に変換
 		text = arabicToKanji(text);
@@ -1487,8 +1519,9 @@ public class WebAozoraConverter
 	 */
 	private String stashKanjiNum(String text) {
 		// 漢数字のパターン（一、二、三...）
+		// プレースホルダー内の漢数字は除外（PH_HASH直後の位置をスキップ）
 		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-			"[一二三四五六七八九十百千万億兆]+"
+			"(?<!" + Pattern.quote(String.valueOf(PH_HASH)) + ")[一二三四五六七八九十百千万億兆]+"
 		);
 		java.util.regex.Matcher matcher = pattern.matcher(text);
 		StringBuffer result = new StringBuffer();
@@ -1497,7 +1530,7 @@ public class WebAozoraConverter
 			String kanjiNum = matcher.group();
 			kanjiNumbers.add(kanjiNum);
 			matcher.appendReplacement(result,
-				"［＃漢数字＝" + (kanjiNumbers.size() - 1) + "］");
+				Matcher.quoteReplacement(phChuki("漢数字＝" + (kanjiNumbers.size() - 1))));
 		}
 		matcher.appendTail(result);
 		return result.toString();
@@ -1508,17 +1541,35 @@ public class WebAozoraConverter
 	 * 例: 123 → 一二三
 	 */
 	private String arabicToKanji(String text) {
-		// 数字のパターン（連続する数字）
-		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[0-9]+");
-		java.util.regex.Matcher matcher = pattern.matcher(text);
-		StringBuffer result = new StringBuffer();
-
-		while (matcher.find()) {
-			String numStr = matcher.group();
-			String kanjiStr = convertNumberStringToKanji(numStr);
-			matcher.appendReplacement(result, java.util.regex.Matcher.quoteReplacement(kanjiStr));
+		// プレースホルダー内の数字を変換しないよう、PH領域をスキップしつつ数字を変換
+		// PH_BRACKET_OPEN...PH_BRACKET_CLOSE の範囲はそのまま保持
+		StringBuilder result = new StringBuilder();
+		int i = 0;
+		int len = text.length();
+		while (i < len) {
+			char ch = text.charAt(i);
+			if (ch == PH_BRACKET_OPEN) {
+				// プレースホルダー領域をスキップ（閉じ括弧まで）
+				int end = text.indexOf(PH_BRACKET_CLOSE, i);
+				if (end >= 0) {
+					result.append(text, i, end + 1);
+					i = end + 1;
+				} else {
+					result.append(ch);
+					i++;
+				}
+			} else if (ch >= '0' && ch <= '9') {
+				// 連続する数字を漢数字に変換
+				int start = i;
+				while (i < len && text.charAt(i) >= '0' && text.charAt(i) <= '9') {
+					i++;
+				}
+				result.append(convertNumberStringToKanji(text.substring(start, i)));
+			} else {
+				result.append(ch);
+				i++;
+			}
 		}
-		matcher.appendTail(result);
 		return result.toString();
 	}
 
@@ -1553,45 +1604,111 @@ public class WebAozoraConverter
 	 * kanji_num_with_units_lower_digit_zero の設定により、
 	 * 下位桁ゼロ数で単位化の閾値を決定。
 	 */
+	/** 漢数字→数字変換テーブル */
+	private static final String KANJI_NUM_STR = "〇一二三四五六七八九";
+
+	/** 位の配列（1の位, 10の位, 100の位, 1000の位） */
+	private static final String[] KANJI_KURAI = {"", "十", "百", "千"};
+
+	/** 万以上の単位 */
+	private static final String[] KANJI_MAN_UNITS = {"", "万", "億", "兆", "京"};
+
+	/**
+	 * 漢数字に単位を追加する（narou.rb互換）
+	 * 参考: narou-3.8.2/lib/converterbase.rb:212-243
+	 *
+	 * 漢数字文字列を一度整数に変換し、4桁区切りで
+	 * 千・万・億等の単位を付与して再構築する。
+	 */
 	private String addKanjiUnits(String text) {
 		int lowerDigitZero = formatSettings.getKanjiNumWithUnitsLowerDigitZero();
 
-		// 4桁（千）の単位化
-		if (lowerDigitZero <= 3) {
-			// 一〇〇〇 → 千
-			text = text.replaceAll("一〇〇〇", "千");
-			text = text.replaceAll("二〇〇〇", "二千");
-			text = text.replaceAll("三〇〇〇", "三千");
-			text = text.replaceAll("四〇〇〇", "四千");
-			text = text.replaceAll("五〇〇〇", "五千");
-			text = text.replaceAll("六〇〇〇", "六千");
-			text = text.replaceAll("七〇〇〇", "七千");
-			text = text.replaceAll("八〇〇〇", "八千");
-			text = text.replaceAll("九〇〇〇", "九千");
+		Pattern kanjiNumPattern = Pattern.compile("[〇一二三四五六七八九]+");
+		Matcher matcher = kanjiNumPattern.matcher(text);
+		StringBuffer result = new StringBuffer();
+
+		while (matcher.find()) {
+			String kanjiStr = matcher.group();
+			String converted = convertKanjiNumWithUnit(kanjiStr, lowerDigitZero);
+			matcher.appendReplacement(result, Matcher.quoteReplacement(converted));
+		}
+		matcher.appendTail(result);
+		return result.toString();
+	}
+
+	/**
+	 * 漢数字文字列を単位付き表現に変換する。
+	 * narou.rb の convert_kanji_num_with_unit のコアロジック。
+	 */
+	private String convertKanjiNumWithUnit(String kanjiStr, int lowerDigitZero) {
+		// 漢数字を整数に変換
+		long total = kanjiToLong(kanjiStr);
+		if (total < 0) return kanjiStr; // 変換不能
+
+		// 整数を漢数字文字列に（〇一二...形式）
+		String numStr = String.valueOf(total);
+		StringBuilder kanjiDigits = new StringBuilder();
+		for (char c : numStr.toCharArray()) {
+			kanjiDigits.append(KANJI_NUM_STR.charAt(c - '0'));
+		}
+		String m1 = kanjiDigits.toString();
+
+		// 末尾のゼロ数がlowerDigitZero未満なら単位化しない
+		int trailingZeros = 0;
+		for (int i = m1.length() - 1; i >= 0; i--) {
+			if (m1.charAt(i) == '〇') trailingZeros++;
+			else break;
+		}
+		if (trailingZeros < lowerDigitZero) {
+			return kanjiStr; // 元のまま
 		}
 
-		// 5桁（万）の単位化
-		if (lowerDigitZero <= 4) {
-			// 一〇〇〇〇 → 一万
-			text = text.replaceAll("([一二三四五六七八九千])〇〇〇〇", "$1万");
-			text = text.replaceAll("一〇〇〇〇", "一万");
+		// 4桁区切りで単位を付ける
+		// 下の桁から4桁ずつ区切る
+		java.util.List<String> digits = new java.util.ArrayList<>();
+		for (int i = m1.length(); i > 0; i -= 4) {
+			int start = Math.max(0, i - 4);
+			digits.add(0, m1.substring(start, i));
 		}
 
-		// 3桁（百）の単位化
-		if (lowerDigitZero <= 2) {
-			// 一〇〇 → 百
-			text = text.replaceAll("一〇〇", "百");
-			text = text.replaceAll("二〇〇", "二百");
-			text = text.replaceAll("三〇〇", "三百");
-			text = text.replaceAll("四〇〇", "四百");
-			text = text.replaceAll("五〇〇", "五百");
-			text = text.replaceAll("六〇〇", "六百");
-			text = text.replaceAll("七〇〇", "七百");
-			text = text.replaceAll("八〇〇", "八百");
-			text = text.replaceAll("九〇〇", "九百");
+		int keta = digits.size() - 1;
+		if (keta >= KANJI_MAN_UNITS.length) return kanjiStr; // 京以上は未対応
+
+		StringBuilder sb = new StringBuilder();
+		for (int ketaI = 0; ketaI < digits.size(); ketaI++) {
+			String nums = digits.get(ketaI);
+			StringBuilder fourDigit = new StringBuilder();
+			for (int di = 0; di < nums.length(); di++) {
+				char d = nums.charAt(di);
+				if (d == '〇') continue;
+				int kurai = nums.length() - di - 1; // 0=一の位, 1=十, 2=百, 3=千
+				String kuraiStr = KANJI_KURAI[kurai];
+				String dStr = String.valueOf(d);
+				if (d == '一') {
+					// 4桁の千の前は一は不要、5桁以上の千の前には一をつける
+					if (!kuraiStr.isEmpty() && !(keta > 0 && "千".equals(kuraiStr))) {
+						dStr = "";
+					}
+				}
+				fourDigit.append(dStr).append(kuraiStr);
+			}
+			if (fourDigit.length() > 0) {
+				sb.append(fourDigit).append(KANJI_MAN_UNITS[keta - ketaI]);
+			}
 		}
 
-		return text;
+		return sb.length() > 0 ? sb.toString() : kanjiStr;
+	}
+
+	/** 漢数字（〇一二...）のみの文字列を整数に変換 */
+	private long kanjiToLong(String kanjiStr) {
+		long result = 0;
+		for (char c : kanjiStr.toCharArray()) {
+			int idx = KANJI_NUM_STR.indexOf(c);
+			if (idx < 0) return -1;
+			result = result * 10 + idx;
+		}
+		return result;
 	}
 
 	/**
@@ -1599,7 +1716,7 @@ public class WebAozoraConverter
 	 */
 	private String rebuildKanjiNum(String text) {
 		for (int i = 0; i < kanjiNumbers.size(); i++) {
-			text = text.replace("［＃漢数字＝" + i + "］", kanjiNumbers.get(i));
+			text = text.replace(phChuki("漢数字＝" + i), kanjiNumbers.get(i));
 		}
 		return text;
 	}
@@ -1641,9 +1758,9 @@ public class WebAozoraConverter
 		text = text.replace("\\", "￥");  // バックスラッシュ → 円記号
 
 		// 特殊な記号の変換
-		text = text.replace("≪", "※［＃始め二重山括弧］");
-		text = text.replace("≫", "※［＃終わり二重山括弧］");
-		text = text.replace("※※", "※［＃米印、1-2-8］");
+		text = text.replace("≪", PH_KOME + phChuki("始め二重山括弧"));
+		text = text.replace("≫", PH_KOME + phChuki("終わり二重山括弧"));
+		text = text.replace("※※", PH_KOME + phChuki("米印、1-2-8"));
 
 		return text;
 	}
@@ -1796,7 +1913,7 @@ public class WebAozoraConverter
 		StringBuffer sb = new StringBuffer();
 		while (matcher.find()) {
 			String base = matcher.group(1);
-			String replacement = "［＃濁点］" + base + "［＃濁点終わり］";
+			String replacement = phChuki("濁点") + base + phChuki("濁点終わり");
 			matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
 		}
 		matcher.appendTail(sb);
@@ -1836,7 +1953,7 @@ public class WebAozoraConverter
 	 */
 	private String convertNarouTags(String text) {
 		// [newpage] → ［＃改ページ］
-		text = text.replace("[newpage]", "［＃改ページ］");
+		text = text.replace("[newpage]", phChuki("改ページ"));
 
 		// [chapter:タイトル] → ３字下げ＋中見出し
 		Pattern chapterPattern = Pattern.compile("\\[chapter:([^\\]]+)\\]");
@@ -1844,7 +1961,8 @@ public class WebAozoraConverter
 		StringBuffer sb = new StringBuffer();
 		while (chapterMatcher.find()) {
 			String title = chapterMatcher.group(1);
-			String replacement = "［＃" + formatSettings.getIndent() + "字下げ］［＃中見出し］" + title + "［＃中見出し終わり］";
+			String replacement = phChuki(formatSettings.getIndent() + "字下げ") +
+				phChuki("中見出し") + title + phChuki("中見出し終わり");
 			chapterMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
 		}
 		chapterMatcher.appendTail(sb);
@@ -1962,6 +2080,27 @@ public class WebAozoraConverter
 		return text;
 	}
 
+	// パイプライン生成注記のプレースホルダー文字列
+	// 特殊文字変換で壊れないよう、ユニコード私用領域の文字を使用
+	private static final char PH_BRACKET_OPEN = '\uE000';   // ［ の代替
+	private static final char PH_BRACKET_CLOSE = '\uE001';  // ］ の代替
+	private static final char PH_HASH = '\uE002';           // ＃ の代替
+	private static final char PH_KOME = '\uE003';           // ※ の代替
+
+	/** パイプライン内で生成する注記用のプレースホルダー付き文字列を構築 */
+	static String phChuki(String content) {
+		return String.valueOf(PH_BRACKET_OPEN) + PH_HASH + content +
+			String.valueOf(PH_BRACKET_CLOSE);
+	}
+
+	/** プレースホルダーを実際の全角文字に復元 */
+	private static String restorePlaceholders(String text) {
+		return text.replace(PH_BRACKET_OPEN, '［')
+		           .replace(PH_BRACKET_CLOSE, '］')
+		           .replace(PH_HASH, '＃')
+		           .replace(PH_KOME, '※');
+	}
+
 	/** 文字を出力 特殊文字は注記に変換 */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
@@ -1987,7 +2126,13 @@ public class WebAozoraConverter
 		// narou.rb互換: 行頭のかぎ括弧に二分アキを追加
 		text = addHalfIndentBracket(text);
 
-		// narou.rb互換: 数字の漢数字化
+		// narou.rb互換: ローマ数字の変換（英文保護の前に実行）
+		text = convertRomanNumerals(text);
+
+		// narou.rb互換: 英文を保護 + 短い英単語を全角化（漢数字変換の前に実行）
+		text = protectEnglishSentences(text);
+
+		// narou.rb互換: 数字の漢数字化（英文保護の後に実行）
 		if (formatSettings.isEnableConvertNumToKanji()) {
 			text = convertNumbersToKanji(text);
 		}
@@ -2001,12 +2146,6 @@ public class WebAozoraConverter
 		if (formatSettings.isEnableTransformDate()) {
 			text = convertDates(text);
 		}
-
-		// narou.rb互換: ローマ数字の変換
-		text = convertRomanNumerals(text);
-
-		// narou.rb互換: 英文を保護（記号全角化処理のため）
-		text = protectEnglishSentences(text);
 
 		// narou.rb互換: 記号の全角化（縦中横処理の前に実行）
 		if (formatSettings.isEnableConvertSymbolsToZenkaku()) {
@@ -2028,37 +2167,35 @@ public class WebAozoraConverter
 			text = convertDakutenFont(text);
 		}
 
-		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
-		// 注: 記号の全角化後に実行するため、全角の！？を対象とする
-		text = convertTatechuyoko(text);
-
-		// narou.rb互換: 感嘆符・疑問符の後に全角アキを挿入
+		// narou.rb互換: 感嘆符・疑問符の後に全角アキを挿入（縦中横の前に実行）
 		text = insertSeparateSpace(text);
+
+		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
+		// 注: 記号の全角化と全角アキ挿入の後に実行するため、全角の！？を対象とする
+		text = convertTatechuyoko(text);
 
 		// narou.rb互換: 小説ルール変換（閉じ括弧前の句点削除、省略記号の偶数化）
 		text = convertNovelRule(text);
 
-		// 特殊文字を青空注記に変換
+		// 特殊文字を青空注記に変換（narou.rb の convert_double_angle_quotation_to_gaiji 相当）
+		// narou.rb は《》のみ変換し、JIS座標を付けない。［］は変換しない。
 		StringBuilder sb = new StringBuilder();
 		char[] chars = text.toCharArray();
 		for (char ch : chars) {
 			switch (ch) {
-			case '《': sb.append("※［＃始め二重山括弧、1-1-52］"); break;
-			case '》': sb.append("※［＃終わり二重山括弧、1-1-53］"); break;
-			case '［': sb.append("※［＃始め角括弧、1-1-46］"); break;
-			case '］': sb.append("※［＃終わり角括弧、1-1-47］"); break;
-			case '〔': sb.append("※［＃始め亀甲括弧、1-1-44］"); break;
-			case '〕': sb.append("※［＃終わり亀甲括弧、1-1-45］"); break;
-			case '｜': sb.append("※［＃縦線、1-1-35］"); break;
-			case '＃': sb.append("※［＃井げた、1-1-84］"); break;
+			case '《': sb.append("※［＃始め二重山括弧］"); break;
+			case '》': sb.append("※［＃終わり二重山括弧］"); break;
 			case '※': sb.append("※［＃米印、1-2-8］"); break;
 			case '\t': sb.append(' '); break;
 			default: sb.append(ch);
 			}
 		}
 
-		// narou.rb互換: 保護した英文を復元
+		// narou.rb互換: 保護した英文を復元（プレースホルダー復元前に実行）
 		String result = rebuildEnglishSentences(sb.toString());
+
+		// プレースホルダーを実際の注記文字に復元
+		result = restorePlaceholders(result);
 		bw.append(result);
 	}
 	

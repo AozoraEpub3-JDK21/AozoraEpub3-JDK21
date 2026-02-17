@@ -55,6 +55,12 @@ public class WebAozoraConverterNarouCompatTest {
 		return method;
 	}
 
+	/** プレースホルダーを実際の注記文字に復元（テスト用ヘルパー） */
+	private String restorePH(String text) throws Exception {
+		Method m = getPrivateMethod("restorePlaceholders", String.class);
+		return (String) m.invoke(null, text);
+	}
+
 	// ========================================================================
 	// Phase 1: 緊急修正テスト
 	// ========================================================================
@@ -108,7 +114,7 @@ public class WebAozoraConverterNarouCompatTest {
 		for (String[] testCase : testCases) {
 			String input = testCase[0];
 			String expected = testCase[1];
-			String actual = (String) addHalfIndentBracketMethod.invoke(converter, input);
+			String actual = restorePH((String) addHalfIndentBracketMethod.invoke(converter, input));
 
 			System.out.println("入力: " + input);
 			System.out.println("期待: " + expected);
@@ -148,7 +154,7 @@ public class WebAozoraConverterNarouCompatTest {
 		for (String[] testCase : testCases) {
 			String input = testCase[0];
 			String expected = testCase[1];
-			String actual = (String) convertTatechuyokoMethod.invoke(converter, input);
+			String actual = restorePH((String) convertTatechuyokoMethod.invoke(converter, input));
 
 			System.out.println("入力: " + input);
 			System.out.println("期待: " + expected);
@@ -248,11 +254,11 @@ public class WebAozoraConverterNarouCompatTest {
     public void testConvertNarouTags() throws Exception {
         Method m = getPrivateMethod("convertNarouTags", String.class);
 
-        String np = (String) m.invoke(converter, "[newpage]");
+        String np = restorePH((String) m.invoke(converter, "[newpage]"));
         assertEquals("［＃改ページ］", np);
 
         String chapter = "[chapter:テスト章]";
-        String replaced = (String) m.invoke(converter, chapter);
+        String replaced = restorePH((String) m.invoke(converter, chapter));
         assertTrue(replaced.contains("中見出し"));
         assertTrue(replaced.contains("テスト章"));
     }
@@ -481,7 +487,7 @@ public class WebAozoraConverterNarouCompatTest {
 	@Test
 	public void testConvertDakutenFont() throws Exception {
 		Method m = getPrivateMethod("convertDakutenFont", String.class);
-		String out = (String) m.invoke(converter, "か゛");
+		String out = restorePH((String) m.invoke(converter, "か゛"));
 		assertTrue(out.contains("［＃濁点］か［＃濁点終わり］"));
 	}
 
@@ -610,14 +616,14 @@ public class WebAozoraConverterNarouCompatTest {
 			String expectedProtected = testCase[1];
 
 			// 保護処理
-			String protected_ = (String) protectEnglishSentencesMethod.invoke(converter, input);
+			String protected_ = restorePH((String) protectEnglishSentencesMethod.invoke(converter, input));
 
 			System.out.println("入力: " + input);
 			System.out.println("保護後: " + protected_);
 			System.out.println("期待: " + expectedProtected);
 
-			// 8文字以上の場合のみ保護されるかチェック
-			boolean shouldProtect = input.length() >= 8 && input.matches(".*[a-zA-Z]{2,}.*") && input.matches(".*[\\s.,].*");
+			// 複数単語の英文（スペース区切り2語以上）の場合のみ保護されるかチェック
+			boolean shouldProtect = input.trim().split("\\s+").length >= 2;
 			if (shouldProtect) {
 				assertTrue("英文が保護されていない", protected_.startsWith("［＃英文＝"));
 			}
@@ -669,22 +675,30 @@ public class WebAozoraConverterNarouCompatTest {
 	}
 
 	/**
-	 * 英文判定テスト (narou.rb互換: 2単語以上 or 一定長+英字)
+	 * 英文判定テスト (narou.rb互換)
+	 * isMultiWordEnglish: 2単語以上 → 保護
+	 * shouldKeepHankaku: 8文字以上+英字 → 半角保持
 	 */
 	@Test
 	public void testEnglishSentenceDetection() throws Exception {
-		Method m = getPrivateMethod("isEnglishSentence", String.class);
+		Method mMulti = getPrivateMethod("isMultiWordEnglish", String.class);
+		Method mHankaku = getPrivateMethod("shouldKeepHankaku", String.class);
 
-		// 2単語以上 → true
-		assertTrue((Boolean) m.invoke(converter, "Hello World"));
-		assertTrue((Boolean) m.invoke(converter, "a b"));
+		// 2単語以上 → isMultiWordEnglish = true
+		assertTrue((Boolean) mMulti.invoke(converter, "Hello World"));
+		assertTrue((Boolean) mMulti.invoke(converter, "a b"));
 
-		// 一定長(8+)でアルファベット含む → true
-		assertTrue((Boolean) m.invoke(converter, "longword"));
+		// 1単語 → isMultiWordEnglish = false
+		assertFalse((Boolean) mMulti.invoke(converter, "longword"));
+		assertFalse((Boolean) mMulti.invoke(converter, "short"));
 
-		// 短い単語 → false
-		assertFalse((Boolean) m.invoke(converter, "short"));
-		assertFalse((Boolean) m.invoke(converter, "abc"));
+		// 一定長(8+)でアルファベット含む → shouldKeepHankaku = true
+		assertTrue((Boolean) mHankaku.invoke(converter, "longword"));
+		assertTrue((Boolean) mHankaku.invoke(converter, "Chapter "));
+
+		// 短い単語 → shouldKeepHankaku = false
+		assertFalse((Boolean) mHankaku.invoke(converter, "short"));
+		assertFalse((Boolean) mHankaku.invoke(converter, "abc"));
 	}
 
 	// ========================================================================

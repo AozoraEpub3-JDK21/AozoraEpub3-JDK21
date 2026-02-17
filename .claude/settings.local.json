@@ -14,7 +14,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(javac:*)",
-      "Bash(./gradlew test:*)"
+      "Bash(./gradlew test:*)",
+      "Bash(narou version:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(ruby test_data/narou_compat/generate_expected.rb:*)"
     ]
   }
 }
