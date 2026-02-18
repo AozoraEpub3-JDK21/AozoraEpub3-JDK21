@@ -318,6 +318,16 @@ task validate(dependsOn: [test, codeQualityCheck]) {
 // デフォルトタスク
 defaultTasks 'validate'
 
+task runRealTest(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'AozoraRealTest'
+}
+
+task runFullFlowTest(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+    mainClass = 'AozoraFullFlowTest'
+}
+
 // ============================
 // Local epubcheck integration
 // ============================

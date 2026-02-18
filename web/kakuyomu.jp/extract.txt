@@ -1,0 +1,80 @@
+################################
+### カクヨム
+### https://kakuyomu.jp/
+################################
+### 対応URL例:
+###   目次: https://kakuyomu.jp/works/WORK_ID
+###   本文: https://kakuyomu.jp/works/WORK_ID/episodes/EPISODE_ID
+###
+### 調査日: 2026-02-19 (実機確認済み)
+### HTMLエンジン: Next.js + Apollo GraphQL
+###
+### 【HTML構造の現状】
+###   カクヨムはNext.js SPAのため、エピソードリンクの大半は
+###   <script id="__NEXT_DATA__"> JSON に格納されており、
+###   HTMLには最初の数話 (<a> タグ) のみが存在する。
+###   WebAozoraConverter は __NEXT_DATA__ JSON フォールバックで
+###   全エピソードリストを取得する。
+###
+### 【TOC ページ確認済みセレクタ】
+###   <title>タグ          → タイトル
+###   script#__NEXT_DATA__ → JSON: activityName, introduction
+###   a[href*="/episodes/"]→ 一部エピソードリンク (HTMLには7件程度のみ)
+###                          完全リストは __NEXT_DATA__ JSON フォールバック
+###
+### 【エピソードページ確認済みセレクタ (2026-02-19 実機確認)】
+###   p.widget-episodeTitle  → 話タイトル (クラス名変更なし)
+###   div.widget-episodeBody → 本文コンテナ (クラス名変更なし)
+###   #contentMain-header-author → 著者名 (エピソードページ側)
+################################
+
+################################
+## 一覧ページの抽出設定
+
+## タイトル
+## <title>タグから " - カクヨム" 末尾を除去
+## 例: "タイトル（著者名） - カクヨム" → "タイトル（著者名）"
+TITLE	title:0	^(.*?) - カクヨム.*	$1
+
+## 著者
+## __NEXT_DATA__ JSON の activityName フィールド (最初の出現 = 作者)
+## 注: 後続に他ユーザーの activityName が続くが最初のみ取得
+AUTHOR	script#__NEXT_DATA__:0	.*?"activityName":"([^"]+)".*	$1
+
+## あらすじ
+## __NEXT_DATA__ JSON の introduction フィールド
+## 注: JSON内 \n は文字列として残る (改行は失われる)
+DESCRIPTION	script#__NEXT_DATA__:0	.*?"introduction":"([^"]+)".*	$1
+
+################
+## 各話へのリンク
+## HTMLには最初の数話 (<a> タグ) のみ存在する。
+## 全エピソードは WebAozoraConverter の __NEXT_DATA__ JSON フォールバックで取得。
+## このセレクタは部分的なフォールバック用 (フォールバック失敗時のみ使用)。
+HREF	a[href*="/episodes/"]	^/works/\d+/episodes/\d+$
+
+## 一覧に記載されている各話の更新日時 (更新チェック用)
+## カクヨムの現行HTMLには対応する要素がないため省略。
+## __NEXT_DATA__ JSON の publishedAt を将来的に利用予定 (Phase 2)
+##SUB_UPDATE
+
+################################
+### 各話の抽出設定
+
+## 章見出し (大見出し)
+## エピソードページには章タイトルが存在しないため Phase 2 対応
+##CONTENT_CHAPTER
+
+## 話タイトル (中見出し)
+## p.widget-episodeTitle クラスは現行エピソードページで動作確認済み
+CONTENT_SUBTITLE	p.widget-episodeTitle:0
+
+## 本文
+## div.widget-episodeBody クラスは現行エピソードページで動作確認済み
+CONTENT_ARTICLE	div.widget-episodeBody:0,.widget-episode-inner:0
+
+## 前書き (カクヨムでは通常なし)
+##CONTENT_PREAMBLE
+
+## 後書き (カクヨムでは通常なし)
+##CONTENT_APPENDIX

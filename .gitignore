@@ -54,6 +54,9 @@ kindlegen.exe
 ## テストデータ
 test_results/
 
+## ダウンロードキャッシュ
+.cache/
+
 ## 個人情報・機密情報
 *.key
 *.pem

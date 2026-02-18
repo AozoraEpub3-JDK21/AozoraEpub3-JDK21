@@ -380,6 +380,13 @@ public class WebAozoraConverter
 	public File convertToAozoraText(String urlString, File cachePath, int interval, float modifiedExpire,
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter) throws IOException
 	{
+		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
+	}
+	
+	/** 変換実行 (ファイル名指定あり) */
+	public File convertToAozoraText(String urlString, File cachePath, int interval, float modifiedExpire,
+		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
+	{
 		this.canceled = false;
 		//日付一覧が取得できない場合は常に更新
 		this.updated = true;
@@ -434,7 +441,94 @@ public class WebAozoraConverter
 		this.dstPath = cachePath.getAbsolutePath()+"/";
 		if (isPath) this.dstPath += urlParentPath;
 		else this.dstPath += urlFilePath+"_converted/";
-		File txtFile = new File(this.dstPath+"converted.txt");
+		
+		//urlStringのファイルをキャッシュ
+		File cacheFile = new File(cachePath.getAbsolutePath()+"/"+urlFilePath);
+		
+		// なろうAPI処理: メタデータ取得を試行
+		NovelMetadata apiMetadata = null;
+		if (useApi) {
+			String ncode = extractNcode(urlString);
+			if (ncode != null) {
+				LogAppender.println("なろうAPI: Nコード検出 - " + ncode);
+				apiMetadata = fetchAndCacheMetadata(ncode, new File(this.dstPath).getParentFile(), urlString);
+				
+				if (apiMetadata == null && !apiFallbackEnabled) {
+					LogAppender.println("なろうAPI: 取得失敗（フォールバック無効）");
+					return null;
+				}
+			} else {
+				LogAppender.println("なろうAPI: Nコード未検出、HTML取得を継続");
+			}
+		}
+		
+		try {
+			LogAppender.append(urlString);
+			cacheFile(urlString, cacheFile, null);
+			LogAppender.println(" : List Loaded.");
+		} catch (Exception e) {
+			e.printStackTrace();
+			LogAppender.println("一覧ページの取得に失敗しました。 ");
+			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
+			if (!cacheFile.exists()) return null;
+			
+			LogAppender.println("キャッシュファイルを利用します。");
+		}
+		
+		//パスならlist.txtの情報を元にキャッシュ後に青空txt変換して改ページで繋げて出力
+		Document doc = Jsoup.parse(cacheFile, null);
+		
+		//タイトル
+		boolean hasTitle = false;
+		String series = getExtractText(doc, this.queryMap.get(ExtractId.SERIES));
+		// APIメタデータがあればタイトルを優先使用
+		String title;
+		if (apiMetadata != null && apiMetadata.getTitle() != null && !apiMetadata.getTitle().isEmpty()) {
+			title = apiMetadata.getTitle();
+			LogAppender.println("なろうAPI: タイトル使用 - " + title);
+		} else {
+			title = getExtractText(doc, this.queryMap.get(ExtractId.TITLE));
+		}
+		if (title != null) {
+			hasTitle = true;
+			// 作品タイトルを保存 (章見出しの柱で使用)
+			this.bookTitle = title;
+		}
+		if (!hasTitle && series != null) {
+			title = series;
+			hasTitle = true;
+		}
+		if (!hasTitle) {
+			LogAppender.println("SERIES/TITLE : タイトルがありません");
+			return null;
+		}
+
+		//著者
+		// APIメタデータがあれば著者を優先使用
+		String author;
+		if (apiMetadata != null && apiMetadata.getWriter() != null && !apiMetadata.getWriter().isEmpty()) {
+			author = apiMetadata.getWriter();
+			LogAppender.println("なろうAPI: 著者使用 - " + author);
+		} else {
+			author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
+		}
+		
+		String fileName = outFileName;
+		if (fileName == null) {
+			fileName = "converted.txt";
+			if (title != null && !title.isEmpty()) {
+				String safeTitle = title.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
+				if (author != null && !author.isEmpty()) {
+					String safeAuthor = author.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
+					fileName = "[" + safeAuthor + "] " + safeTitle + ".txt";
+				} else {
+					fileName = safeTitle + ".txt";
+				}
+			}
+		} else {
+			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
+		}
+		File txtFile = new File(this.dstPath + fileName);
 		//表紙画像（narou.rb互換: cover.jpg で保存）
 		File coverImageFile = new File(this.dstPath+"cover.jpg");
 		//更新情報格納先
@@ -449,74 +543,19 @@ public class WebAozoraConverter
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(txtFile), "UTF-8"));
 		try {
 			
-			//urlStringのファイルをキャッシュ
-			File cacheFile = new File(cachePath.getAbsolutePath()+"/"+urlFilePath);
-			
-			// なろうAPI処理: メタデータ取得を試行
-			NovelMetadata apiMetadata = null;
-			if (useApi) {
-				String ncode = extractNcode(urlString);
-				if (ncode != null) {
-					LogAppender.println("なろうAPI: Nコード検出 - " + ncode);
-					apiMetadata = fetchAndCacheMetadata(ncode, parentFile, urlString);
-					
-					if (apiMetadata == null && !apiFallbackEnabled) {
-						LogAppender.println("なろうAPI: 取得失敗（フォールバック無効）");
-						return null;
-					}
-				} else {
-					LogAppender.println("なろうAPI: Nコード未検出、HTML取得を継続");
-				}
-			}
-			
-			try {
-				LogAppender.append(urlString);
-				cacheFile(urlString, cacheFile, null);
-				LogAppender.println(" : List Loaded.");
-			} catch (Exception e) {
-				e.printStackTrace();
-				LogAppender.println("一覧ページの取得に失敗しました。 ");
-			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
-				if (!cacheFile.exists()) return null;
-				
-				LogAppender.println("キャッシュファイルを利用します。");
-			}
-			
-			//パスならlist.txtの情報を元にキャッシュ後に青空txt変換して改ページで繋げて出力
-			Document doc = Jsoup.parse(cacheFile, null);
-			
 			//表紙画像
 			Elements images = getExtractElements(doc, this.queryMap.get(ExtractId.COVER_IMG));
 			if (images != null) {
 				printImage(null, images.get(0), coverImageFile);
 			}
 			
-			//タイトル
-			boolean hasTitle = false;
-			String series = getExtractText(doc, this.queryMap.get(ExtractId.SERIES));
 			if (series != null) {
 				printText(bw, series);
 				bw.append('\n');
-				hasTitle = true;
-			}
-			// APIメタデータがあればタイトルを優先使用
-			String title;
-			if (apiMetadata != null && apiMetadata.getTitle() != null && !apiMetadata.getTitle().isEmpty()) {
-				title = apiMetadata.getTitle();
-				LogAppender.println("なろうAPI: タイトル使用 - " + title);
-			} else {
-				title = getExtractText(doc, this.queryMap.get(ExtractId.TITLE));
 			}
 			if (title != null) {
 				printText(bw, title);
 				bw.append('\n');
-				hasTitle = true;
-				// 作品タイトルを保存 (章見出しの柱で使用)
-				this.bookTitle = title;
-			}
-			if (!hasTitle) {
-				LogAppender.println("SERIES/TITLE : タイトルがありません");
-				return null;
 			}
 
 			// APIメタデータから全話数をログ出力
@@ -525,15 +564,6 @@ public class WebAozoraConverter
 					+ (apiMetadata.getEnd() == 0 ? "（連載中）" : "（完結）"));
 			}
 
-			//著者
-			// APIメタデータがあれば著者を優先使用
-			String author;
-			if (apiMetadata != null && apiMetadata.getWriter() != null && !apiMetadata.getWriter().isEmpty()) {
-				author = apiMetadata.getWriter();
-				LogAppender.println("なろうAPI: 著者使用 - " + author);
-			} else {
-				author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
-			}
 			if (author != null) {
 				printText(bw, author);
 			}
@@ -697,6 +727,15 @@ public class WebAozoraConverter
 				}
 			}
 			
+
+			// __NEXT_DATA__ JSON 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ: HTML縺ｮhrefs莉ｶ謨ｰ繧医ｊ螟壹＞蝣ｴ蜷医↓菴ｿ逕ｨ (繧ｫ繧ｯ繝ｨ繝縺ｪ縺ｩ Next.js 繧ｵ繧､繝亥ｯｾ蠢・
+			List<String> nextDataEpisodes = extractEpisodesFromNextData(doc, urlString);
+			if (nextDataEpisodes != null && nextDataEpisodes.size() > chapterHrefs.size()) {
+				LogAppender.println("__NEXT_DATA__ JSON 縺九ｉ繧ｨ繝斐た繝ｼ繝我ｸ隕ｧ蜿門ｾ・ " + nextDataEpisodes.size() + "隧ｱ");
+				chapterHrefs.clear();
+				chapterHrefs.addAll(nextDataEpisodes);
+			}
+	
 			if (chapterHrefs.size() > 0) {
 				//全話で更新や追加があるかチェック
 				updated = false;
@@ -1364,13 +1403,13 @@ public class WebAozoraConverter
 	/** 半角アルファベットを全角に変換 */
 	private String alphabetToZenkaku(String text) {
 		StringBuilder sb = new StringBuilder();
-		for (char c : text.toCharArray()) {
-			if (c >= 'a' && c <= 'z') {
-				sb.append((char) ('ａ' + (c - 'a')));
-			} else if (c >= 'A' && c <= 'Z') {
-				sb.append((char) ('Ａ' + (c - 'A')));
+		for (char textChar : text.toCharArray()) {
+			if (textChar >= 'a' && textChar <= 'z') {
+				sb.append((char) ('ａ' + (textChar - 'a')));
+			} else if (textChar >= 'A' && textChar <= 'Z') {
+				sb.append((char) ('Ａ' + (textChar - 'A')));
 			} else {
-				sb.append(c);
+				sb.append(textChar);
 			}
 		}
 		return sb.toString();
@@ -1747,7 +1786,7 @@ public class WebAozoraConverter
 		text = text.replace("&", "＆");   // アンパサンド
 		text = text.replace("!", "！");   // エクスクラメーション
 		text = text.replace("?", "？");   // クエスチョン
-		text = text.replace("<", "〈");   // 小なり → 始め山括弧
+		text = text.replace("<", "〈");   // 小なり →始め山括弧
 		text = text.replace(">", "〉");   // 大なり → 終わり山括弧
 		text = text.replace("(", "（");   // 左丸括弧
 		text = text.replace(")", "）");   // 右丸括弧
@@ -1792,18 +1831,13 @@ public class WebAozoraConverter
 	 * ローマ数字っぽいアルファベットをUnicodeローマ数字に変換（narou.rb互換）
 	 * 参考: narou-3.9.1/lib/converterbase.rb:324-335
 	 *
-	 * 非アルファベット文字に囲まれた "II", "III" 等のアルファベットを
-	 * 対応するUnicodeローマ数字 Ⅱ, Ⅲ 等に変換する。
-	 * 縦書き表示でローマ数字が正しく表示されるようにするための処理。
-	 *
-	 * 注: alphabet_to_zenkaku の前に実行する必要あり
+	 * 非アルファベット文字に囲まれた場合のみ変換
+	 * narou.rb: /([^a-zA-Z])#{rome}([^a-zA-Z])/
 	 */
 	private String convertRomanNumerals(String text) {
 		for (String[] pair : ROME_NUM_PAIRS) {
 			String alpha = pair[0];
 			String roman = pair[1];
-			// 非アルファベット文字に囲まれた場合のみ変換
-			// narou.rb: /([^a-zA-Z])#{rome}([^a-zA-Z])/
 			text = text.replaceAll(
 				"(^|[^a-zA-Z])" + Pattern.quote(alpha) + "([^a-zA-Z]|$)",
 				"$1" + Matcher.quoteReplacement(roman) + "$2"
@@ -1815,12 +1849,8 @@ public class WebAozoraConverter
 	/**
 	 * 分数変換（narou.rb互換）
 	 * 参考: narou-3.8.2/lib/converterbase.rb:265-329
-	 *
-	 * 例: 1/2 → 2分の1, 3/4 → 4分の3
-	 * ただし日付パターン (YYYY/M/D) は除外
 	 */
 	private String convertFractions(String text) {
-		// 日付パターンを先に退避（4桁/1-2桁/1-2桁）
 		Pattern datePattern = Pattern.compile("(\\d{4})/(\\d{1,2})/(\\d{1,2})");
 		java.util.ArrayList<String> dates = new java.util.ArrayList<>();
 		Matcher dateMatcher = datePattern.matcher(text);
@@ -1832,32 +1862,26 @@ public class WebAozoraConverter
 		dateMatcher.appendTail(dateSb);
 		text = dateSb.toString();
 
-		// 分数変換: 分子/分母 → 分母分の分子
 		Pattern fractionPattern = Pattern.compile("(\\d+)/(\\d+)");
 		Matcher fractionMatcher = fractionPattern.matcher(text);
 		StringBuffer fractionSb = new StringBuffer();
 		while (fractionMatcher.find()) {
-			String numerator = fractionMatcher.group(1);   // 分子
-			String denominator = fractionMatcher.group(2); // 分母
+			String numerator = fractionMatcher.group(1);
+			String denominator = fractionMatcher.group(2);
 			fractionMatcher.appendReplacement(fractionSb,
 				Matcher.quoteReplacement(denominator + "分の" + numerator));
 		}
 		fractionMatcher.appendTail(fractionSb);
 		text = fractionSb.toString();
 
-		// 日付を復元
 		for (int i = 0; i < dates.size(); i++) {
 			text = text.replace("［＃日付退避＝" + i + "］", dates.get(i));
 		}
-
 		return text;
 	}
 
 	/**
 	 * 日付変換（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:265-329
-	 *
-	 * 例: 2024/1/1 → 2024年1月1日
 	 */
 	private String convertDates(String text) {
 		String fmt = formatSettings.getDateFormat();
@@ -1880,19 +1904,14 @@ public class WebAozoraConverter
 
 	/**
 	 * 三点リーダー変換（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:1032-1053
-	 *
-	 * 中黒（・）が3つ以上連続 → 三点リーダー（…）に変換
-	 * 2個ごとに1つの三点リーダー、奇数の場合は末尾を調整
 	 */
 	private String convertHorizontalEllipsis(String text) {
-		// 3個以上の連続する中黒を三点リーダーに変換
 		Pattern pattern = Pattern.compile("・{3,}");
 		Matcher matcher = pattern.matcher(text);
 		StringBuffer sb = new StringBuffer();
 		while (matcher.find()) {
 			int len = matcher.group().length();
-			int ellipsisCount = len / 3; // 3個で1つの…
+			int ellipsisCount = len / 3;
 			if (ellipsisCount < 1) ellipsisCount = 1;
 			StringBuilder replacement = new StringBuilder();
 			for (int i = 0; i < ellipsisCount; i++) {
@@ -1906,14 +1925,8 @@ public class WebAozoraConverter
 
 	/**
 	 * 濁点フォントの処理（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:470-476
-	 *
-	 * ひらがな・カタカナの後に濁点記号（゛、ﾞ）がある場合を検出し、
-	 * 青空注記で囲む。
-	 * 例: か゛ → ［＃濁点付き片仮名か、1-86-12］
 	 */
 	private String convertDakutenFont(String text) {
-		// ひらがな・カタカナ + 濁点記号
 		Pattern pattern = Pattern.compile("([\\u3040-\\u309F\\u30A0-\\u30FF])[゛ﾞ]");
 		Matcher matcher = pattern.matcher(text);
 		StringBuffer sb = new StringBuffer();
@@ -1928,12 +1941,8 @@ public class WebAozoraConverter
 
 	/**
 	 * 長音記号の変換（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:478-486
-	 *
-	 * カタカナ長音符（ー）が2個以上連続 → 全角ダッシュ（―）に変換
 	 */
 	private String convertProlongedSoundMark(String text) {
-		// 2個以上連続するカタカナ長音符を全角ダッシュに変換
 		Pattern pattern = Pattern.compile("ー{2,}");
 		Matcher matcher = pattern.matcher(text);
 		StringBuffer sb = new StringBuffer();
@@ -1951,18 +1960,9 @@ public class WebAozoraConverter
 
 	/**
 	 * なろう独自タグの処理（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:488-518
-	 *
-	 * [newpage] → ［＃改ページ］
-	 * [chapter:タイトル] → 章タイトルとして処理
-	 * [jump:url] → リンクとして処理
 	 */
 	private String convertNarouTags(String text) {
-		// [newpage] → ［＃改ページ］
 		text = text.replace("[newpage]", phChuki("改ページ"));
-
-		// [chapter:タイトル] → ３字下げ＋中見出し
-		// 正規表現による ReDoS 検出を回避するため、ここでは手動スキャンで安全に置換します。
 		StringBuilder out = new StringBuilder();
 		int idx = 0;
 		String key = "[chapter:";
@@ -1972,12 +1972,10 @@ public class WebAozoraConverter
 				out.append(text, idx, text.length());
 				break;
 			}
-			// append preceding part
 			out.append(text, idx, start);
 			int titleStart = start + key.length();
 			int end = text.indexOf(']', titleStart);
 			if (end == -1) {
-				// 閉じ括弧が見つからなければ残りをそのまま追加して終了
 				out.append(text, start, text.length());
 				break;
 			}
@@ -1989,7 +1987,6 @@ public class WebAozoraConverter
 		}
 		text = out.toString();
 
-		// [jump:URL] → リンク注記（ReDoS回避のため手動スキャン）
 		StringBuilder out2 = new StringBuilder();
 		idx = 0;
 		String jkey = "[jump:";
@@ -2012,34 +2009,24 @@ public class WebAozoraConverter
 			idx = jend + 1;
 		}
 		text = out2.toString();
-
 		return text;
 	}
 
 	/**
 	 * 感嘆符・疑問符の直後に全角アキを挿入（narou.rb互換）
-	 * 参考: narou-3.9.1/lib/converterbase.rb:300-313
-	 *
-	 * 例: 「すごい！あれは」 → 「すごい！　あれは」
-	 * ただし閉じ括弧・全角ダッシュ等の直前では挿入しない
 	 */
 	private String insertSeparateSpace(String text) {
-		// 閉じ括弧・特殊記号の直前では全角アキを挿入しない
-		// narou.rb: /([!?！？]+)([^!?！？])/ で後続文字を判定
 		Pattern pattern = Pattern.compile("([!?！？]+)([^!?！？])");
 		Matcher matcher = pattern.matcher(text);
 		StringBuffer sb = new StringBuffer();
 		while (matcher.find()) {
 			String marks = matcher.group(1);
 			String next = matcher.group(2);
-			// 閉じ括弧・全角スペース・ダッシュ等の前では挿入しない
 			if (next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + next));
 			} else if (next.matches("[ 、。]")) {
-				// スペース・句読点は全角スペースに置換
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + "　"));
 			} else {
-				// その他の文字の前に全角アキを挿入
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + "　" + next));
 			}
 		}
@@ -2049,16 +2036,9 @@ public class WebAozoraConverter
 
 	/**
 	 * 小説ルールに沿う変換（narou.rb互換）
-	 * 参考: narou-3.9.1/lib/converterbase.rb:488-502
-	 *
-	 * 1. 閉じ括弧の直前の句点を削除: 。」 → 」
-	 * 2. 省略記号（…, ‥）を偶数個に補正
 	 */
 	private String convertNovelRule(String text) {
-		// 閉じ括弧の直前の句点を削除
 		text = text.replaceAll("。([」』）])", "$1");
-
-		// 省略記号を偶数個に補正（奇数個なら+1して偶数に）
 		Pattern ellipsis = Pattern.compile("…+");
 		Matcher em = ellipsis.matcher(text);
 		StringBuffer sb1 = new StringBuffer();
@@ -2069,7 +2049,6 @@ public class WebAozoraConverter
 		}
 		em.appendTail(sb1);
 		text = sb1.toString();
-
 		Pattern doubleDot = Pattern.compile("‥+");
 		Matcher dm = doubleDot.matcher(text);
 		StringBuffer sb2 = new StringBuffer();
@@ -2080,28 +2059,17 @@ public class WebAozoraConverter
 		}
 		dm.appendTail(sb2);
 		text = sb2.toString();
-
 		return text;
 	}
 
 	/**
 	 * かぎ括弧内の自動連結（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:520-609
-	 *
-	 * かぎ括弧「」内の改行を全角スペースに置換
-	 * 例: 「これは\n　テストです」 → 「これは　テストです」
-	 *
-	 * ネストした括弧にも対応
 	 */
 	private String autoJoinInBrackets(String text) {
-		// かぎ括弧「」内の改行を全角スペースに置換
-		// ネストに対応するため、繰り返し処理
 		boolean changed = true;
 		while (changed) {
 			String before = text;
-			// 「...」内の改行を検出して置換
 			text = text.replaceAll("「([^「」]*)\n([^「」]*)」", "「$1　$2」");
-			// 『...』内の改行も処理
 			text = text.replaceAll("『([^『』]*)\n([^『』]*)』", "『$1　$2』");
 			changed = !text.equals(before);
 		}
@@ -2110,31 +2078,23 @@ public class WebAozoraConverter
 
 	/**
 	 * 行末読点での自動連結（narou.rb互換）
-	 * 参考: narou-3.8.2/lib/converterbase.rb:611-667
-	 *
-	 * 行末が読点（、）で終わる行を次の行と連結
-	 * 例: 「これはテストです、\n次の行に続きます。」 → 「これはテストです、次の行に続きます。」
 	 */
 	private String autoJoinLine(String text) {
-		// 行末が読点で終わる場合、次の行と連結
 		text = text.replaceAll("、\n", "、");
 		return text;
 	}
 
 	// パイプライン生成注記のプレースホルダー文字列
-	// 特殊文字変換で壊れないよう、ユニコード私用領域の文字を使用
-	private static final char PH_BRACKET_OPEN = '\uE000';   // ［ の代替
-	private static final char PH_BRACKET_CLOSE = '\uE001';  // ］ の代替
-	private static final char PH_HASH = '\uE002';           // ＃ の代替
-	private static final char PH_KOME = '\uE003';           // ※ の代替
+	private static final char PH_BRACKET_OPEN = '\uE000';
+	private static final char PH_BRACKET_CLOSE = '\uE001';
+	private static final char PH_HASH = '\uE002';
+	private static final char PH_KOME = '\uE003';
 
-	/** パイプライン内で生成する注記用のプレースホルダー付き文字列を構築 */
 	static String phChuki(String content) {
 		return String.valueOf(PH_BRACKET_OPEN) + PH_HASH + content +
 			String.valueOf(PH_BRACKET_CLOSE);
 	}
 
-	/** プレースホルダーを実際の全角文字に復元 */
 	private static String restorePlaceholders(String text) {
 		return text.replace(PH_BRACKET_OPEN, '［')
 		           .replace(PH_BRACKET_CLOSE, '］')
@@ -2145,81 +2105,24 @@ public class WebAozoraConverter
 	/** 文字を出力 特殊文字は注記に変換 */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
-		// narou.rb互換: HTML改行コード（\r\n）を削除
-		// HTMLの整形用改行を除去し、brタグのみを改行として扱う
 		text = text.replaceAll("[\r\n]+", "");
-
-		// narou.rb互換: かぎ括弧内の自動連結（改行があれば処理）
-		if (formatSettings.isEnableAutoJoinInBrackets()) {
-			text = autoJoinInBrackets(text);
-		}
-
-		// narou.rb互換: 行末読点での自動連結
-		if (formatSettings.isEnableAutoJoinLine()) {
-			text = autoJoinLine(text);
-		}
-
-		// narou.rb互換: なろう独自タグの処理
-		if (formatSettings.isEnableNarouTag()) {
-			text = convertNarouTags(text);
-		}
-
-		// narou.rb互換: 行頭のかぎ括弧に二分アキを追加
+		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
+		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
+		if (formatSettings.isEnableNarouTag()) text = convertNarouTags(text);
 		text = addHalfIndentBracket(text);
-
-		// narou.rb互換: ローマ数字の変換（英文保護の前に実行）
 		text = convertRomanNumerals(text);
-
-		// narou.rb互換: 英文を保護 + 短い英単語を全角化（漢数字変換の前に実行）
 		text = protectEnglishSentences(text);
-
-		// narou.rb互換: 数字の漢数字化（英文保護の後に実行）
-		if (formatSettings.isEnableConvertNumToKanji()) {
-			text = convertNumbersToKanji(text);
-		}
-
-		// narou.rb互換: 分数変換（日付変換より先に実行）
-		if (formatSettings.isEnableTransformFraction()) {
-			text = convertFractions(text);
-		}
-
-		// narou.rb互換: 日付変換
-		if (formatSettings.isEnableTransformDate()) {
-			text = convertDates(text);
-		}
-
-		// narou.rb互換: 記号の全角化（縦中横処理の前に実行）
-		if (formatSettings.isEnableConvertSymbolsToZenkaku()) {
-			text = convertSymbolsToZenkaku(text);
-		}
-
-		// narou.rb互換: 長音記号の変換（記号全角化の後に実行）
-		if (formatSettings.isEnableProlongedSoundMarkToDash()) {
-			text = convertProlongedSoundMark(text);
-		}
-
-		// narou.rb互換: 三点リーダー変換
-		if (formatSettings.isEnableConvertHorizontalEllipsis()) {
-			text = convertHorizontalEllipsis(text);
-		}
-
-		// narou.rb互換: 濁点フォント処理
-		if (formatSettings.isEnableDakutenFont()) {
-			text = convertDakutenFont(text);
-		}
-
-		// narou.rb互換: 感嘆符・疑問符の後に全角アキを挿入（縦中横の前に実行）
+		if (formatSettings.isEnableConvertNumToKanji()) text = convertNumbersToKanji(text);
+		if (formatSettings.isEnableTransformFraction()) text = convertFractions(text);
+		if (formatSettings.isEnableTransformDate()) text = convertDates(text);
+		if (formatSettings.isEnableConvertSymbolsToZenkaku()) text = convertSymbolsToZenkaku(text);
+		if (formatSettings.isEnableProlongedSoundMarkToDash()) text = convertProlongedSoundMark(text);
+		if (formatSettings.isEnableConvertHorizontalEllipsis()) text = convertHorizontalEllipsis(text);
+		if (formatSettings.isEnableDakutenFont()) text = convertDakutenFont(text);
 		text = insertSeparateSpace(text);
-
-		// narou.rb互換: 縦中横処理（感嘆符・疑問符の組み合わせ）
-		// 注: 記号の全角化と全角アキ挿入の後に実行するため、全角の！？を対象とする
 		text = convertTatechuyoko(text);
-
-		// narou.rb互換: 小説ルール変換（閉じ括弧前の句点削除、省略記号の偶数化）
 		text = convertNovelRule(text);
 
-		// 特殊文字を青空注記に変換（narou.rb の convert_double_angle_quotation_to_gaiji 相当）
-		// narou.rb は《》のみ変換し、JIS座標を付けない。［］は変換しない。
 		StringBuilder sb = new StringBuilder();
 		char[] chars = text.toCharArray();
 		for (char ch : chars) {
@@ -2231,19 +2134,13 @@ public class WebAozoraConverter
 			default: sb.append(ch);
 			}
 		}
-
-		// narou.rb互換: 保護した英文を復元（プレースホルダー復元前に実行）
 		String result = rebuildEnglishSentences(sb.toString());
-
-		// プレースホルダーを実際の注記文字に復元
 		result = restorePlaceholders(result);
 		bw.append(result);
 	}
 	
 	////////////////////////////////////////////////////////////////
 	
-	/** Element内のinnerHTMLを取得
-	 * 間にあるダグは無視 置換設定があれば置換してから返す */
 	String getExtractText(Document doc, ExtractInfo[] extractInfos)
 	{
 		return getExtractText(doc, extractInfos, true);
@@ -2265,7 +2162,7 @@ public class WebAozoraConverter
 				for (int i=0; i<extractInfo.idx.length; i++) {
 					if (elements.size() > extractInfo.idx[i]) {
 						int pos = extractInfo.idx[i];
-						if (pos < 0) pos = elements.size()+pos;//負の値なら後ろから
+						if (pos < 0) pos = elements.size()+pos;
 						if (pos >= 0 && elements.size() > pos) {
 							String html = elements.get(pos).html();
 							if (html != null) buf.append(" ").append(replaceHtmlText(html, replace?extractInfo:null));
@@ -2274,10 +2171,7 @@ public class WebAozoraConverter
 				}
 				if (buf.length() > 0) text = buf.deleteCharAt(0).toString();
 			}
-			//置換指定ならreplaceして返す
-			if (text != null && text.length() > 0) {
-				return text;
-			}
+			if (text != null && text.length() > 0) return text;
 		}
 		return null;
 	}
@@ -2298,7 +2192,7 @@ public class WebAozoraConverter
 				for (int i=0; i<extractInfo.idx.length; i++) {
 					if (elements.size() > extractInfo.idx[i]) {
 						int pos = extractInfo.idx[i];
-						if (pos < 0) pos = elements.size()+pos;//負の値なら後ろから
+						if (pos < 0) pos = elements.size()+pos;
 						if (pos >= 0 && elements.size() > pos) {
 							String html = elements.get(pos).html();
 							if (html != null) vecString.add(replaceHtmlText(html, replace?extractInfo:null));
@@ -2311,7 +2205,6 @@ public class WebAozoraConverter
 		return null;
 	}
 	
-	/** cssQueryに対応するノード内の文字列を取得 */
 	String getQueryText(Document doc, String[] queries)
 	{
 		if (queries == null) return null;
@@ -2322,7 +2215,6 @@ public class WebAozoraConverter
 		return null;
 	}
 	
-	/** cssQueryに対応するノードを取得 前のQueryを優先 */
 	Elements getExtractElements(Document doc, ExtractInfo[] extractInfos)
 	{
 		if (extractInfos == null) return null;
@@ -2333,7 +2225,7 @@ public class WebAozoraConverter
 			Elements e2 = new Elements();
 			for (int i=0; i<extractInfo.idx.length; i++) {
 				int pos = extractInfo.idx[i];
-				if (pos < 0) pos = elements.size()+pos;//負の値なら後ろから
+				if (pos < 0) pos = elements.size()+pos;
 				if (pos >= 0 && elements.size() > pos) e2.add(elements.get(pos));
 			}
 			if (e2.size() >0) return e2;
@@ -2355,7 +2247,6 @@ public class WebAozoraConverter
 		return null;
 	}
 	
-	/** タグの直下の最初のテキストを取得 */
 	String getFirstText(Element elem)
 	{
 		if (elem != null) {
@@ -2373,34 +2264,54 @@ public class WebAozoraConverter
 		return null;
 	}
 	
-	////////////////////////////////////////////////////////////////
-	
+
+	/**
+	 * __NEXT_DATA__ JSON からエピソードURLリストを抽出する (カクヨムなど Next.js サイト対応)
+	 * Apollo GraphQL キャッシュの "Episode:ID" エントリを出現順・重複なしで収集する
+	 */
+	private List<String> extractEpisodesFromNextData(Document doc, String urlString) {
+		Elements scripts = doc.select("script#__NEXT_DATA__");
+		if (scripts.isEmpty()) return null;
+		String json = scripts.get(0).html();
+		// URLから作品IDを取得
+		Pattern workPattern = Pattern.compile("/works/(\\d+)");
+		Matcher workMatcher = workPattern.matcher(urlString);
+		if (!workMatcher.find()) return null;
+		String workId = workMatcher.group(1);
+		// "Episode:ID" を出現順・重複なしで収集
+		Pattern epPattern = Pattern.compile("\"Episode:(\\d+)\"");
+		Matcher epMatcher = epPattern.matcher(json);
+		Vector<String> result = new Vector<String>();
+		HashSet<String> seen = new HashSet<String>();
+		while (epMatcher.find()) {
+			String epId = epMatcher.group(1);
+			if (seen.add(epId)) {
+				result.add(this.baseUri + "/works/" + workId + "/episodes/" + epId);
+			}
+		}
+		return result.isEmpty() ? null : result;
+	}
+
 	String replaceHtmlText(String text, ExtractInfo extractInfo) {
 		text = text.replaceAll("[\n|\r]", "").replaceAll("\t", " ");
 		if (extractInfo != null) text = extractInfo.replace(text);
 		return Jsoup.parse(removeTag(text)).text();
 	}
 	
-	/** タグを除去 rt内の文字は非表示 */
 	String removeTag(String text)
 	{
 		return text.replaceAll("<br ?/?>", " ").replaceAll("<rt>.+?</rt>", "").replaceAll("<[^>]+>", "");
 	}
 	
-	////////////////////////////////////////////////////////////////
-	/** htmlをキャッシュ すでにあれば何もしない */
 	private boolean cacheFile(String urlString, File cacheFile, String referer) throws IOException
 	{
-		//if (!replace && cacheFile.exists()) return false;
-		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) {} //空のディレクトリなら消す
+		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) {}
 		if (cacheFile.isDirectory()) { LogAppender.println("フォルダがあるためキャッシュできません : "+cacheFile.getAbsolutePath()); }
-		//フォルダ以外がすでにあったら削除
 		File parentFile = cacheFile.getParentFile();
 		if (parentFile.exists() && !parentFile.isDirectory()) {
 			parentFile.delete();
 		}
 		cacheFile.getParentFile().mkdirs();
-		//ダウンロード
 		URLConnection conn;
 		try {
 			conn = new java.net.URI(urlString).toURL().openConnection();
@@ -2411,8 +2322,7 @@ public class WebAozoraConverter
 		if (cookie != null && cookie.length > 0) conn.setRequestProperty("Cookie", cookie[0].query);
 		if (referer != null) conn.setRequestProperty("Referer", referer);
 		conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
-		conn.setConnectTimeout(10000);//10秒
-		// HTTPレスポンスコードをログ出力
+		conn.setConnectTimeout(10000);
 		if (conn instanceof java.net.HttpURLConnection) {
 			int responseCode = ((java.net.HttpURLConnection)conn).getResponseCode();
 			LogAppender.println("HTTP Response Code: " + responseCode);
