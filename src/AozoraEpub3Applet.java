@@ -413,7 +413,11 @@ public class AozoraEpub3Applet extends JApplet
 	JCheckBox jCheckUseNarouApi;
 	JCheckBox jCheckApiFallback;
 	JLabel jLabelApiStatus;
-	
+
+	//narou.rb互換フォーマット設定
+	JComboBox<String> jComboAuthorCommentStyle;
+	JLabel jLabelAuthorCommentStyle;
+
 	//テキストエリア
 	//JScrollPane jScrollPane;
 	JTextArea jTextArea;
@@ -2269,7 +2273,64 @@ public class AozoraEpub3Applet extends JApplet
 		jLabelApiStatus.setForeground(Color.GRAY);
 		jLabelApiStatus.setBorder(padding2);
 		panel.add(jLabelApiStatus);
-		
+
+		////////////////////////////////
+		//narou.rb互換フォーマット設定
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setBorder(new NarrowTitledBorder("EPUB出力フォーマット設定"));
+		tabPanel.add(panel);
+
+		jLabelAuthorCommentStyle = new JLabel("前書き/後書きスタイル:");
+		jLabelAuthorCommentStyle.setBorder(padding2);
+		panel.add(jLabelAuthorCommentStyle);
+
+		jComboAuthorCommentStyle = new JComboBox<>(new String[]{"css (デフォルト)", "simple (Kobo推奨)", "plain (シンプル)"});
+		jComboAuthorCommentStyle.setToolTipText("<html>前書き・後書きの表示スタイル<br>" +
+			"css: ［＃ここから前書き/後書き］マーカーで囲む (CSSで装飾)<br>" +
+			"simple: 8字下げ＋2段階小さな文字 (Kobo等の互換性が高い)<br>" +
+			"plain: 区切り線で本文と分離するだけ</html>");
+		jComboAuthorCommentStyle.setMaximumSize(new Dimension(250, jComboAuthorCommentStyle.getPreferredSize().height));
+		panel.add(jComboAuthorCommentStyle);
+
+		panel.add(Box.createHorizontalGlue());
+
+		////////////////////////////////
+		// narou.rb互換 詳細設定ボタン
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setBorder(new NarrowTitledBorder("narou.rb互換 テキスト変換設定"));
+		tabPanel.add(panel);
+
+		JButton jButtonNarouSettings = new JButton("詳細設定を開く...");
+		jButtonNarouSettings.setToolTipText("<html>narou.rb互換の詳細なテキスト変換設定を編集します<br>" +
+			"（数字の漢数字化、記号の全角化、かぎ括弧処理など）</html>");
+		jButtonNarouSettings.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				File settingFile = new File("setting_narourb.ini");
+				try {
+					com.github.hmdev.web.NarouFormatSettings.generateDefaultIfMissing(settingFile);
+				} catch (Exception ex) {
+					// 無視
+				}
+				com.github.hmdev.web.NarouFormatSettings tempSettings = new com.github.hmdev.web.NarouFormatSettings();
+				try {
+					tempSettings.load(settingFile);
+				} catch (Exception ex) {
+					LogAppender.println("設定読み込みエラー: " + ex.getMessage());
+				}
+				com.github.hmdev.swing.NarouFormatSettingsDialog dialog =
+					new com.github.hmdev.swing.NarouFormatSettingsDialog(
+						jFrameParent.getIconImage(), tempSettings, settingFile);
+				dialog.setVisible(true);
+				if (dialog.isSaved()) {
+					LogAppender.println("narou.rb互換設定を保存しました: " + settingFile.getAbsolutePath());
+				}
+			}
+		});
+		panel.add(jButtonNarouSettings);
+		panel.add(Box.createHorizontalGlue());
+
 		////////////////////////////////
 		//キャッシュ保存先
 		panel = new JPanel();
@@ -4104,7 +4165,29 @@ public class AozoraEpub3Applet extends JApplet
 				// なろうAPI設定を反映
 				webConverter.setUseApi(jCheckUseNarouApi.isSelected());
 				webConverter.setApiFallbackEnabled(jCheckApiFallback.isSelected());
-				
+
+				// narou.rb互換フォーマット設定を読み込み
+				File settingFile = new File("setting_narourb.ini");
+				File replaceFile = new File("replace_narourb.txt");
+				try {
+					com.github.hmdev.web.NarouFormatSettings.generateDefaultIfMissing(settingFile);
+					webConverter.loadFormatSettings(settingFile);
+					webConverter.getFormatSettings().loadReplacePatterns(replaceFile);
+					// GUI選択を設定に反映
+					String styleIndex = (String)jComboAuthorCommentStyle.getSelectedItem();
+					if (styleIndex != null) {
+						if (styleIndex.startsWith("css")) {
+							webConverter.getFormatSettings().setAuthorCommentStyle("css");
+						} else if (styleIndex.startsWith("simple")) {
+							webConverter.getFormatSettings().setAuthorCommentStyle("simple");
+						} else if (styleIndex.startsWith("plain")) {
+							webConverter.getFormatSettings().setAuthorCommentStyle("plain");
+						}
+					}
+				} catch (Exception e) {
+					LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
+				}
+
 				int interval = 500;
 				try { interval = (int)(Float.parseFloat(jTextWebInterval.getText())*1000); } catch (Exception e) {}
 				int beforeChapter = 0;
@@ -4745,6 +4828,17 @@ public class AozoraEpub3Applet extends JApplet
 		setPropsSelected(jCheckUseNarouApi, props, "UseNarouApi");
 		setPropsSelected(jCheckApiFallback, props, "ApiFallback");
 		updateApiStatusLabel();
+
+		//narou.rb互換フォーマット
+		propValue = props.getProperty("AuthorCommentStyle");
+		if (propValue != null) {
+			try {
+				int styleIndex = Integer.parseInt(propValue);
+				if (styleIndex >= 0 && styleIndex < jComboAuthorCommentStyle.getItemCount()) {
+					jComboAuthorCommentStyle.setSelectedIndex(styleIndex);
+				}
+			} catch (NumberFormatException e) {}
+		}
 	}
 	
 	/** アプレットの設定状態をpropsに保存 */
@@ -4902,7 +4996,10 @@ public class AozoraEpub3Applet extends JApplet
 		//なろうAPI
 		props.setProperty("UseNarouApi", this.jCheckUseNarouApi.isSelected()?"1":"");
 		props.setProperty("ApiFallback", this.jCheckApiFallback.isSelected()?"1":"");
-		
+
+		//narou.rb互換フォーマット
+		props.setProperty("AuthorCommentStyle", String.valueOf(this.jComboAuthorCommentStyle.getSelectedIndex()));
+
 		//確認ダイアログの元画像を残す
 		props.setProperty("ReplaceCover", this.jConfirmDialog.jCheckReplaceCover.isSelected()?"1":"");
 		

@@ -1,6 +1,8 @@
 ---
 layout: default
+lang: ja
 title: 開発者向けガイド - AozoraEpub3
+description: AozoraEpub3の開発者向けガイドです。JDK 21環境のセットアップ、Gradleによるビルド・テスト実行、プロジェクト構造、Velocityテンプレートの仕組みと編集方法、EPUB 3.3準拠の実装方針、GitHub Actions CIの設定、コントリビュートのガイドラインを解説します。
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">

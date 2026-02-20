@@ -1,6 +1,8 @@
 ---
 layout: default
+lang: en
 title: Development Guide - AozoraEpub3
+description: AozoraEpub3 developer guide: JDK 21 setup, Gradle build commands, project structure, Velocity templates, EPUB 3.3 implementation, and contributing guidelines.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">

@@ -1,0 +1,57 @@
+################################################################
+### 青空文庫 (aozora.gr.jp) 抽出ルール 草案
+###
+### 注意: これは草案です。代表的な青空文庫ページのHTMLを収集して
+### 実ページで検証・調整してください。
+### フォーマットは web/extract_sample.txt を参照。
+################################################################
+
+## シリーズタイトル（存在する場合）
+SERIES	h1.site-title:0,.title:0,#title:0
+## タイトル
+TITLE	.title:0,h1:0,#title:0
+## 著者
+AUTHOR	.author:0,h2:0,#author:0,.writer:0
+## 説明（あらすじ等）
+DESCRIPTION	#description:0,.description:0,.catchcopy:0
+## 表紙画像
+COVER_IMG	img.cover:0,.cover img:0,#main img:0
+## 表紙リンク（画像がリンクされている場合）
+#COVER_HREF	.cover a:0
+
+## 更新日時（一覧ページで利用する場合）
+#UPDATE	.updated:0,.update:0
+
+################
+## 目次→各話へのリンク（HREF）
+## 青空文庫では作品ページ内に複数の.htmlファイルへのリンクが並ぶことが多い
+## ここでは単純に「.html」リンクを拾う（必要に応じて絞る）
+HREF	a	^.*\.html$
+
+## 目次側の各話タイトル（一覧で使われている場合）
+SUBTITLE_LIST	#index a:0,.index_list a:0,ul li a:0
+
+## 一覧に記載されている各話の更新日時チェック用にタグ全体の文字列を利用
+SUB_UPDATE	.time, .date
+
+################
+## 各話の抽出設定
+## 本文開始/終了の厳密指定はページにより差があるため複数候補を指定
+CONTENT_ARTICLE	.main_text:0,#main:0,#honbun:0,#main_text:0,.honbun:0,#content:0,.content:0,pre:0,body:0
+
+## 本文内の章見出し（ある場合）
+CONTENT_SUBTITLE	h2.chapter_title:0,h3.chapter_title:0
+
+## 本文内の画像（本文外にある挿絵がある場合）
+CONTENT_IMG	img
+
+## 本文の前書き等（存在する場合）
+#CONTENT_PREAMBLE_START	.preamble:0
+#CONTENT_PREAMBLE_END	.preamble_end:-1
+
+################################################################
+# 備考:
+# - このファイルは最初の草案です。実ページで `WebAozoraConverter.createWebAozoraConverter` を使いながら
+#   セレクタや正規表現を調整してください。
+# - 必要なら replace.txt を作り、ページ固有のノイズ除去ルールを追加します。
+################################################################

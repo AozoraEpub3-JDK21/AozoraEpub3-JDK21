@@ -2,7 +2,7 @@
 layout: default
 lang: ja
 title: 使い方 - AozoraEpub3-JDK21
-description: AozoraEpub3-JDK21の使い方ガイド：GUI操作、コマンドライン実行、設定項目の詳細説明
+description: AozoraEpub3-JDK21の使い方ガイドです。GUIでのファイル選択・デバイスプリセット設定・変換実行、コマンドライン（CLI）の全オプション、Kobo・Kindle向けプリセット、縦書き・ルビ・外字の変換設定、Velocityテンプレートのカスタマイズ方法、よくあるトラブルシューティングを解説します。
 ---
 
 <div style="text-align: right; margin-bottom: 1em;">
@@ -36,7 +36,7 @@ description: AozoraEpub3-JDK21の使い方ガイド：GUI操作、コマンド�
 ### 基本的な流れ
 
 1. **アプリケーション起動**
-   - Windows: `AozoraEpub3起動.bat` をダブルクリック（推奨）
+   - Windows: `AozoraEpub3.bat` をダブルクリック（推奨）
    - Unix/Linux/macOS: `AozoraEpub3.sh` を実行
    - または: `java -jar AozoraEpub3.jar`
    
@@ -280,7 +280,7 @@ java -Xmx2g -jar AozoraEpub3.jar input.txt
 ### 既知の問題
 
 - iOS版Kindleで表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。現状は端末依存のため回避策はなく、必要に応じて「表題ページ出力を無効にする」「カスタム表紙のみ出力する」設定をご検討ください。
-- Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3起動.bat` の使用を推奨します。
+- Windows 11で `.jar` ダブルクリックが無反応になる場合があります。FAT版に同梱の `AozoraEpub3.bat` の使用を推奨します。
 - GUIフォントについて: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
 
 ---

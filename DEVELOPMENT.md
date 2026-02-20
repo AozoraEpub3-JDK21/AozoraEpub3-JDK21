@@ -188,7 +188,7 @@ area.setFont(new Font(getPreferredJapaneseFontName(), Font.PLAIN, 13));
 
 ### Windows 配布時の起動
 
-- `.jar` ダブルクリックが動作しないケースがあるため、FAT版 ZIP に `AozoraEpub3起動.bat` を同梱
+- `.jar` ダブルクリックが動作しないケースがあるため、FAT版 ZIP に `AozoraEpub3.bat` を同梱
 - `javaw.exe` を用いてコンソール無しで起動
 - Shift_JIS エンコーディング対応で日本語パスにも対応
 

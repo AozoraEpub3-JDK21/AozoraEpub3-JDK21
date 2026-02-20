@@ -171,28 +171,7 @@ start "" javaw -jar "%SCRIPT_DIR%AozoraEpub3.jar"
 endlocal
 '''
         
-        // 日本語版ランチャー（Windows Shift_JIS）
-        def launcherBatJa = file('build/distributions/AozoraEpub3起動.bat')
-        def batContent = '@echo off\r\n' +
-            'rem AozoraEpub3 GUI' + 'ランチャー（Windows用）\r\n' +
-            'rem ' + 'このバッチファイルはjavaw.exe' + 'を使ってAozoraEpub3.jar' + 'を起動します\r\n\r\n' +
-            'setlocal\r\n\r\n' +
-            'rem ' + 'バッチファイルの場所を取得\r\n' +
-            'set "SCRIPT_DIR=%~dp0"\r\n\r\n' +
-            'rem Java' + 'が利用可能か確認\r\n' +
-            'where javaw >nul 2>&1\r\n' +
-            'if %ERRORLEVEL% neq 0 (\r\n' +
-            '    echo ' + 'エラー: javaw.exe' + 'がPATH' + 'に見つかりません。\r\n' +
-            '    echo Java 21' + '以降をインストールしてください。\r\n' +
-            '    pause\r\n' +
-            '    exit /b 1\r\n' +
-            ')\r\n\r\n' +
-            'rem AozoraEpub3.jar' + 'をjavaw' + 'で起動（コンソールなし）\r\n' +
-            'start "" javaw -jar "%SCRIPT_DIR%AozoraEpub3.jar"\r\n\r\n' +
-            'endlocal\r\n'
-        launcherBatJa.withWriter('Windows-31J') { writer ->
-            writer.write(batContent)  // Shift_JIS (Windows-31J)
-        }
+        // 日本語専用バッチは廃止。英語版 `AozoraEpub3.bat` の1本に統合します。
         
         def launcherSh = file('build/distributions/AozoraEpub3.sh')
         launcherSh.text = '''#!/bin/bash
@@ -226,7 +205,8 @@ task zipDistribution(type: Zip, dependsOn: [build, createLauncher]) {
         include '*.jar'
     }
     from('build/distributions') {
-        include 'AozoraEpub3.bat', 'AozoraEpub3起動.bat', 'AozoraEpub3.sh'
+        // ZIP (Windows-oriented) - include only the Windows batch launcher
+        include 'AozoraEpub3.bat'
     }
     from('.') {
         include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
@@ -264,7 +244,8 @@ task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
         include '*.jar'
     }
     from('build/distributions') {
-        include 'AozoraEpub3.bat', 'AozoraEpub3起動.bat', 'AozoraEpub3.sh'
+        // TAR (Unix-oriented) - include only the Unix shell launcher
+        include 'AozoraEpub3.sh'
         filePermissions {
             unix(0755)  // Unix実行権限を設定
         }
@@ -336,6 +317,16 @@ task validate(dependsOn: [test, codeQualityCheck]) {
 
 // デフォルトタスク
 defaultTasks 'validate'
+
+task runRealTest(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'AozoraRealTest'
+}
+
+task runFullFlowTest(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+    mainClass = 'AozoraFullFlowTest'
+}
 
 // ============================
 // Local epubcheck integration
