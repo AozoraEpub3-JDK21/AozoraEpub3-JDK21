@@ -2,7 +2,7 @@
 layout: default
 lang: en
 title:  AozoraEpub3-JDK21 Download
-description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/25 compatible on Windows, macOS, and Linux. Supports narou.rb and EpubCheck 5.x.
+description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/25 compatible on Windows, macOS, and Linux. Supports narou.rb, EpubCheck 5.x, and GUI/CLI.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">

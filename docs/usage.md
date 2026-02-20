@@ -2,7 +2,7 @@
 layout: default
 lang: ja
 title: 使い方 - AozoraEpub3-JDK21
-description: AozoraEpub3-JDK21の使い方ガイド：GUI操作、コマンドライン実行、設定項目の詳細説明
+description: AozoraEpub3-JDK21の使い方ガイドです。GUIでのファイル選択・デバイスプリセット設定・変換実行、コマンドライン（CLI）の全オプション、Kobo・Kindle向けプリセット、縦書き・ルビ・外字の変換設定、Velocityテンプレートのカスタマイズ方法、よくあるトラブルシューティングを解説します。
 ---
 
 <div style="text-align: right; margin-bottom: 1em;">

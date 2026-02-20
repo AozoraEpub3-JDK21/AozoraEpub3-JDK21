@@ -2,7 +2,7 @@
 layout: default
 lang: ja
 title: ダウンロード
-description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換するツールです。Java 21/25対応、Windows・macOS・Linux対応。narou.rb連携やEpubCheck 5.x検証もサポート。ダウンロードとセットアップ手順はこちら。
+description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換するツールです。Java 21/25対応でWindows・macOS・Linux上で動作。GUIとCLIの両モード搭載、縦書き・ルビ・外字・画像に対応。narou.rb連携やEpubCheck 5.x検証もサポート。最新版はこちら。
 ---
 
 <div style="text-align: right; margin-bottom:  1em;">

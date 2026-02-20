@@ -1,6 +1,8 @@
 ---
 layout: default
+lang: en
 title: Usage Guide - AozoraEpub3
+description: AozoraEpub3-JDK21 usage: GUI and CLI conversion, device presets for Kobo and Kindle, vertical text, ruby, image settings, Velocity template customization.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
