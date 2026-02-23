@@ -4069,7 +4069,7 @@ public class AozoraEpub3Applet extends JApplet
 		try {
 			if (kindlegen != null) {
 				long time = System.currentTimeMillis();
-				String outFileName = outFile.getAbsolutePath();
+				String outFileName = outFile.getCanonicalPath();
 				LogAppender.println("kindlegenを実行します : "+kindlegen.getName()+" \""+outFileName+"\"");
 				ProcessBuilder pb = new ProcessBuilder(kindlegen.getAbsolutePath(), "-locale", "en","-verbose", outFileName);
 				this.kindleProcess = pb.start();
@@ -4282,7 +4282,10 @@ public class AozoraEpub3Applet extends JApplet
 	private boolean isCacheFile(File file)
 	{
 		try {
-			return file.getCanonicalPath().startsWith(this.getCachePath().getCanonicalPath());
+			String cacheCanonicalPath = this.getCachePath().getCanonicalPath();
+			String fileCanonicalPath = file.getCanonicalPath();
+			return fileCanonicalPath.equals(cacheCanonicalPath) ||
+			       fileCanonicalPath.startsWith(cacheCanonicalPath + File.separator);
 		} catch (IOException e) {
 		}
 		return false;
