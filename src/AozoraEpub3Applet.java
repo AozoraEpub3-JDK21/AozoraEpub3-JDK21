@@ -3949,7 +3949,12 @@ public class AozoraEpub3Applet extends JApplet
 		//Kindleは一旦tmpファイルに出力
 		File outFileOrg = null;
 		if (kindlegen != null) {
-			outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, autoFileName, ".epub");
+			try {
+				outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, autoFileName, ".epub");
+			} catch (IOException e) {
+				LogAppender.println("[ERROR] 出力パスエラー: " + e.getMessage());
+				return;
+			}
 			File mobiFile = new File(outFile.getAbsolutePath().substring(0, outFile.getAbsolutePath().length()-4)+"mobi");
 			if (!overWrite && (mobiFile.exists() || (outExt.endsWith(".epub") && outFile.exists()))) {
 				LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
@@ -3966,8 +3971,12 @@ public class AozoraEpub3Applet extends JApplet
 				outFileOrg = null;
 			}
 		} else {
-			outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
-			//上書き確認
+			try {
+				outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
+			} catch (IOException e) {
+				LogAppender.println("[ERROR] 出力パスエラー: " + e.getMessage());
+				return;
+			}
 			if (!overWrite &&  outFile.exists()) {
 				LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 				LogAppender.println("ファイルが存在します: "+outFile.getAbsolutePath());

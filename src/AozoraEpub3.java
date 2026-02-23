@@ -374,7 +374,7 @@ public class AozoraEpub3
 	}
 	
 	/** 出力ファイルを生成 */
-	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt)
+	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) throws IOException
 	{
 		//出力ファイル
 		if (dstPath == null) dstPath = srcFile.getAbsoluteFile().getParentFile();
@@ -395,7 +395,13 @@ public class AozoraEpub3
 		}
 		if (outExt.length() == 0) outExt = ".epub";
 		File outFile = new File(outFileName + outExt);
-		//書き込み許可設定
+		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証
+		File canonicalDst = dstPath.getCanonicalFile();
+		File canonicalOut = outFile.getCanonicalFile();
+		if (!canonicalOut.getPath().startsWith(canonicalDst.getPath() + File.separator)) {
+			throw new IOException("出力パスが許可されたディレクトリ外です: " + canonicalOut);
+		}
+		outFile = canonicalOut;
 		outFile.setWritable(true);
 		
 		return outFile;

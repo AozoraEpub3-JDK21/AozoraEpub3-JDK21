@@ -51,13 +51,25 @@ public class AozoraTextFinalizer {
 		this.settings = settings;
 	}
 
+	/** 单一引数の後方互換オーバーロード。baseDir には txtFile の親ディレクトリを使用。 */
+	public void finalize(File txtFile) throws IOException {
+		finalize(txtFile, txtFile.getParentFile());
+	}
+
 	/**
 	 * メイン処理: converted.txt を読み込み、後処理を適用して書き戻す
 	 *
 	 * @param txtFile 変換済みテキストファイル
 	 * @throws IOException ファイル読み書きエラー
 	 */
-	public void finalize(File txtFile) throws IOException {
+	public void finalize(File txtFile, File baseDir) throws IOException {
+		// パストラバーサル対策: baseDir 配下にあることを検証
+		File canonicalBase = baseDir.getCanonicalFile();
+		File canonicalTxt = txtFile.getCanonicalFile();
+		if (!canonicalTxt.getPath().startsWith(canonicalBase.getPath() + File.separator)) {
+			throw new IOException("ファイルパスが許可されたディレクトリ外です: " + canonicalTxt);
+		}
+		txtFile = canonicalTxt;
 		// ファイルサイズチェック
 		long fileSizeBytes = txtFile.length();
 		long maxSizeBytes = settings.getMaxFinalizableFileSizeMB() * 1024L * 1024L;
