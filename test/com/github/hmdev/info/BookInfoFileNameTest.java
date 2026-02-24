@@ -149,7 +149,23 @@ public class BookInfoFileNameTest {
         BookInfo.getFileTitleCreator(fileName);
     }
 
-    // Alert #9: [\\[|［](.+?)[\\]|］][ |　]*+(.*+)[ |　]*$ — 大量スペース
+    // Alert #65: [\\[|Ａ](.+?)[\\]|Ａ] — 閉じ括弧なしの長い文字列 (possessive negated class で修正)
+
+    @Test
+    public void testReDoSAlert65_UnclosedSquareBracket() {
+        // '[' の後に閉じ括弧がない長い文字列 (旧 (.+?) でタイムアウトする)
+        String fileName = "[" + "a".repeat(10000) + ".txt";
+        BookInfo.getFileTitleCreator(fileName); // タイムアウトしなければOK
+    }
+
+    @Test
+    public void testReDoSAlert65_UnclosedZenSquareBracket() {
+        // 全角 '［' (U+FF3B) の後に閉じ括弧がない長い文字列
+        String fileName = "\uFF3B" + "a".repeat(10000) + ".txt";
+        BookInfo.getFileTitleCreator(fileName);
+    }
+
+    // Alert #9: [\\[|Ａ](.+?)[\\]|Ａ][ |　]*+(.*+)[ |　]*$ — 大量スペース
 
     @Test
     public void testReDoSLine794_LargeSpacesAfterBracket() {

@@ -791,7 +791,9 @@ public class BookInfo
 		noExtName = noExtName.replaceAll("\\(青空[^)]*+\\)", "");
 		noExtName = noExtName.replaceAll("\\([^)]*+(?:校正|軽量|表紙|挿絵|補正|修正|ルビ|Rev|rev)[^)]*+\\)", "");
 
-		Matcher m = Pattern.compile("[\\[|［](.+?)[\\]|］][ |　]*+(.*+)[ |　]*$").matcher(noExtName);
+		// Alert #65 (java/polynomial-redos): (.+?) をpossessive+否定文字クラスに変更。
+		// closing bracket文字（]・|・］）を除外することで、バックトラックなしの O(n) マッチを保証。
+		Matcher m = Pattern.compile("[\\[|［]([^\\]|\uFF3D]*+)[\\]|］][ |　]*+(.*+)[ |　]*$").matcher(noExtName);
 		if (m.find()) {
 			titleCreator[0] = m.group(2);
 			titleCreator[1] = m.group(1);
