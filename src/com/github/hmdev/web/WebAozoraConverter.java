@@ -110,6 +110,8 @@ public class WebAozoraConverter
 	private NarouFormatSettings formatSettings = new NarouFormatSettings();
 	/** 作品タイトル (章見出しで柱に使用) */
 	private String bookTitle = null;
+	/** __NEXT_DATA__ JSON から構築したエピソードURL→章タイトルマップ (カクヨムPhase 2-1) */
+	private HashMap<String, String> nextDataEpisodeChapterMap = null;
 	/** 英文保護用リスト（記号全角化処理で使用） */
 	private java.util.ArrayList<String> englishSentences = new java.util.ArrayList<>();
 	/** 漢数字退避用リスト（数字の漢数字化処理で使用） */
@@ -624,7 +626,20 @@ public class WebAozoraConverter
 						bw.append("あらすじ：\n");
 						bw.append("［＃ここから２字下げ］\n");
 						bw.append("［＃ここから２字上げ］\n");
-						printNode(bw, description, true);
+						if ("script".equals(description.tagName())) {
+							// script要素は正規表現でテキスト抽出後、JSON \n エスケープを改行に変換して出力
+							// (カクヨムなど __NEXT_DATA__ JSON ベースの説明取得に対応)
+							String descText = getExtractText(doc, this.queryMap.get(ExtractId.DESCRIPTION));
+							if (descText != null && !descText.isEmpty()) {
+								descText = descText.replace("\\r\\n", "\n").replace("\\r", "\n").replace("\\n", "\n");
+								for (String line : descText.split("\n", -1)) {
+									printText(bw, line);
+									bw.append('\n');
+								}
+							}
+						} else {
+							printNode(bw, description, true);
+						}
 						bw.append('\n');
 						bw.append("［＃ここで字上げ終わり］\n");
 						bw.append("［＃ここで字下げ終わり］\n");
@@ -863,6 +878,10 @@ public class WebAozoraConverter
 						//シリーズタイトルを出力
 						Document chapterDoc = Jsoup.parse(chapterCacheFile, null);
 						String chapterTitle = getExtractText(chapterDoc, this.queryMap.get(ExtractId.CONTENT_CHAPTER));
+						// nextDataEpisodeChapterMap をフォールバックとして使用 (Phase 2-1: カクヨム章構造対応)
+						if (chapterTitle == null && this.nextDataEpisodeChapterMap != null) {
+							chapterTitle = this.nextDataEpisodeChapterMap.get(chapterHref);
+						}
 						boolean newChapter = false;
 						if (chapterTitle != null && !preChapterTitle.equals(chapterTitle)) {
 							newChapter = true;
@@ -1237,6 +1256,10 @@ public class WebAozoraConverter
 					bw.append("［＃下付き小文字］");
 					_printNode(bw, node); //子を出力
 					bw.append("［＃下付き小文字終わり］");
+				} else if ("em".equals(elem.tagName()) && elem.hasClass("emphasisDots")) {
+					bw.append("［＃傍点］");
+					_printNode(bw, node); //子を出力
+					bw.append("［＃傍点終わり］");
 				} else if ("strike".equals(elem.tagName()) || "s".equals(elem.tagName()) ) {
 					bw.append("［＃取消線］");
 					_printNode(bw, node); //子を出力
@@ -2289,7 +2312,54 @@ public class WebAozoraConverter
 				result.add(this.baseUri + "/works/" + workId + "/episodes/" + epId);
 			}
 		}
+		// 章-エピソードマッピングを構築 (Phase 2-1)
+		HashMap<String, String> chapterIdMap = buildEpisodeChapterMapFromNextData(json, workId);
+		if (!chapterIdMap.isEmpty()) {
+			this.nextDataEpisodeChapterMap = new HashMap<String, String>();
+			for (HashMap.Entry<String, String> e : chapterIdMap.entrySet()) {
+				this.nextDataEpisodeChapterMap.put(this.baseUri + "/works/" + workId + "/episodes/" + e.getKey(), e.getValue());
+			}
+			LogAppender.println("__NEXT_DATA__ JSON から章マッピング構築: " + this.nextDataEpisodeChapterMap.size() + "エピソード");
+		}
 		return result.isEmpty() ? null : result;
+	}
+
+	/**
+	 * __NEXT_DATA__ JSON から章-エピソード対応マップを構築する (Phase 2-1)
+	 * "TableOfContentsChapter" エントリと各話のepIdの対応を解析する
+	 * @return epId → chapterTitle マップ (章なし作品では空マップ)
+	 */
+	private HashMap<String, String> buildEpisodeChapterMapFromNextData(String json, String workId) {
+		HashMap<String, String> result = new HashMap<String, String>();
+		// "TableOfContentsChapter:ID": エントリを検索
+		Pattern chapterKeyPat = Pattern.compile("\"TableOfContentsChapter:\\d+\":");
+		// キャプチャーグループ内のエピソード参照パターン
+		Pattern epRefPat = Pattern.compile("\"__ref\":\"Episode:(\\d+)\"");
+		// 章タイトルパターン (拡張文字を除いたシンプルなマッチ)
+		Pattern titlePat = Pattern.compile("\"title\":\"([^\"]*+)\"");
+		// 全チャプターキーの位置を収集
+		java.util.List<Integer> positions = new java.util.ArrayList<Integer>();
+		Matcher chMatcher = chapterKeyPat.matcher(json);
+		while (chMatcher.find()) { positions.add(chMatcher.start()); }
+		if (positions.isEmpty()) return result;
+		for (int i = 0; i < positions.size(); i++) {
+			int start = positions.get(i);
+			int end = (i + 1 < positions.size()) ? positions.get(i + 1) : json.length();
+			String block = json.substring(start, end);
+			// 章タイトル抽出
+			Matcher titleM = titlePat.matcher(block);
+			if (!titleM.find()) continue;
+			String chTitle = titleM.group(1)
+				.replace("\\n", "\n").replace("\\r", "\r")
+				.replace("\\\"", "\"").replace("\\\\", "\\");
+			// エピソード参照を収集
+			Matcher refM = epRefPat.matcher(block);
+			while (refM.find()) {
+				String epId = refM.group(1);
+				if (!result.containsKey(epId)) result.put(epId, chTitle);
+			}
+		}
+		return result;
 	}
 
 	String replaceHtmlText(String text, ExtractInfo extractInfo) {
