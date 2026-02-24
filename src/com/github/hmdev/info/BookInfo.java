@@ -793,7 +793,8 @@ public class BookInfo
 
 		// Alert #65 (java/polynomial-redos): (.+?) をpossessive+否定文字クラスに変更。
 		// closing bracket文字（]・|・］）を除外することで、バックトラックなしの O(n) マッチを保証。
-		Matcher m = Pattern.compile("[\\[|［]([^\\]|\uFF3D]*+)[\\]|］][ |　]*+(.*+)[ |　]*$").matcher(noExtName);
+		// 末尾の [ |　]*$ も possessive (*+) に変更し、バックトラックを完全排除。
+		Matcher m = Pattern.compile("[\\[|［]([^\\]|\uFF3D]*+)[\\]|］][ |　]*+(.*+)[ |　]*+$").matcher(noExtName);
 		if (m.find()) {
 			titleCreator[0] = m.group(2);
 			titleCreator[1] = m.group(1);

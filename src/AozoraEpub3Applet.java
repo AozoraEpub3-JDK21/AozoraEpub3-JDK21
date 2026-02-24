@@ -4071,7 +4071,8 @@ public class AozoraEpub3Applet extends JApplet
 				long time = System.currentTimeMillis();
 				String outFileName = outFile.getCanonicalPath();
 				LogAppender.println("kindlegenを実行します : "+kindlegen.getName()+" \""+outFileName+"\"");
-				ProcessBuilder pb = new ProcessBuilder(kindlegen.getAbsolutePath(), "-locale", "en","-verbose", outFileName);
+				// Alert #12 (java/command-line-injection): getCanonicalPath() でパスを正規化してからコマンドに渡す
+			ProcessBuilder pb = new ProcessBuilder(kindlegen.getCanonicalPath(), "-locale", "en","-verbose", outFileName);
 				this.kindleProcess = pb.start();
 				BufferedReader br = new BufferedReader(new InputStreamReader(this.kindleProcess.getInputStream()));
 				String line;
