@@ -71,3 +71,8 @@ tools/env-filter.sh
 ## epubcheck
 epubcheck*/
 epubcheck-*/
+
+## テスト自動生成ファイル（narou互換テスト出力）
+test_data/narou_compat/actual_java.txt
+test_data/narou_compat/diff_report.txt
+test_data/.claudeignore
