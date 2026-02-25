@@ -112,6 +112,8 @@ public class WebAozoraConverter
 	private String bookTitle = null;
 	/** __NEXT_DATA__ JSON から構築したエピソードURL→章タイトルマップ (カクヨムPhase 2-1) */
 	private HashMap<String, String> nextDataEpisodeChapterMap = null;
+	/** __NEXT_DATA__ JSON から構築したエピソードURL→更新日時マップ (カクヨムPhase 2-2) */
+	private HashMap<String, String> nextDataEpisodeDateMap = null;
 	/** 英文保護用リスト（記号全角化処理で使用） */
 	private java.util.ArrayList<String> englishSentences = new java.util.ArrayList<>();
 	/** 漢数字退避用リスト（数字の漢数字化処理で使用） */
@@ -749,6 +751,10 @@ public class WebAozoraConverter
 				LogAppender.println("__NEXT_DATA__ JSON 縺九ｉ繧ｨ繝斐た繝ｼ繝我ｸ隕ｧ蜿門ｾ・ " + nextDataEpisodes.size() + "隧ｱ");
 				chapterHrefs.clear();
 				chapterHrefs.addAll(nextDataEpisodes);
+				// Phase 2-2: 更新日時マップが構築されていれば更新チェックに使用 (カクヨム SUB_UPDATE対応)
+				if (this.nextDataEpisodeDateMap != null) {
+					noUpdateUrls = createNoUpdateUrlsFromNextData(updateInfoFile, urlString, contentsUpdate);
+				}
 			}
 	
 			if (chapterHrefs.size() > 0) {
@@ -1055,6 +1061,62 @@ public class WebAozoraConverter
 		return noUpdateUrls;
 	}
 	
+	/**
+	 * __NEXT_DATA__ JSON の publishedAt から更新なしURLセットを構築する (Phase 2-2: カクヨム SUB_UPDATE対応)
+	 * nextDataEpisodeDateMap (URL → publishedAt) を使い、前回保存した日時と比較して更新なしURLを返す
+	 */
+	private HashSet<String> createNoUpdateUrlsFromNextData(File updateInfoFile, String urlString, String contentsUpdate) throws IOException {
+		HashMap<String, String> savedUpdateMap = new HashMap<String, String>();
+		// 前回の更新情報を読み込む
+		if (updateInfoFile.exists()) {
+			BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(updateInfoFile), "UTF-8"));
+			try {
+				String line;
+				while ((line = br.readLine()) != null) {
+					int idx = line.indexOf("\t");
+					if (idx > 0) {
+						savedUpdateMap.put(line.substring(0, idx), line.substring(idx + 1));
+					}
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			} finally {
+				br.close();
+			}
+		}
+		// 現在の更新情報を書き出す
+		BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(updateInfoFile), "UTF-8"));
+		try {
+			if (contentsUpdate != null) {
+				updateBw.append(urlString);
+				updateBw.append('\t');
+				updateBw.append(contentsUpdate);
+				updateBw.append('\n');
+			}
+			for (HashMap.Entry<String, String> e : this.nextDataEpisodeDateMap.entrySet()) {
+				updateBw.append(e.getKey());
+				updateBw.append('\t');
+				updateBw.append(e.getValue());
+				updateBw.append('\n');
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			updateBw.close();
+		}
+		// publishedAt が前回と同じURLは更新不要
+		HashSet<String> noUpdateUrls = new HashSet<String>();
+		for (HashMap.Entry<String, String> e : this.nextDataEpisodeDateMap.entrySet()) {
+			String url = e.getKey();
+			String currentDate = e.getValue();
+			String savedDate = savedUpdateMap.get(url);
+			if (savedDate != null && savedDate.equals(currentDate)) {
+				noUpdateUrls.add(url);
+			}
+		}
+		return noUpdateUrls;
+	}
+
 	/** 一覧から更新日時を取得 */
 	private String[] getPostDateList(Document doc, ExtractInfo[] extractInfos)
 	{
@@ -2321,6 +2383,15 @@ public class WebAozoraConverter
 			}
 			LogAppender.println("__NEXT_DATA__ JSON から章マッピング構築: " + this.nextDataEpisodeChapterMap.size() + "エピソード");
 		}
+		// 更新日時マップを構築 (Phase 2-2: SUB_UPDATE対応)
+		HashMap<String, String> dateIdMap = buildEpisodeDateMapFromNextData(json);
+		if (!dateIdMap.isEmpty()) {
+			this.nextDataEpisodeDateMap = new HashMap<String, String>();
+			for (HashMap.Entry<String, String> e : dateIdMap.entrySet()) {
+				this.nextDataEpisodeDateMap.put(this.baseUri + "/works/" + workId + "/episodes/" + e.getKey(), e.getValue());
+			}
+			LogAppender.println("__NEXT_DATA__ JSON から更新日時マップ構築: " + this.nextDataEpisodeDateMap.size() + "エピソード");
+		}
 		return result.isEmpty() ? null : result;
 	}
 
@@ -2357,6 +2428,36 @@ public class WebAozoraConverter
 			while (refM.find()) {
 				String epId = refM.group(1);
 				if (!result.containsKey(epId)) result.put(epId, chTitle);
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * __NEXT_DATA__ JSON からエピソード更新日時マップを構築する (Phase 2-2)
+	 * Apollo GraphQL キャッシュの "Episode:ID":{ ... } エントリから publishedAt を抽出する
+	 * @return epId → publishedAt マップ (publishedAt がないエピソードは除外)
+	 */
+	private HashMap<String, String> buildEpisodeDateMapFromNextData(String json) {
+		HashMap<String, String> result = new HashMap<String, String>();
+		// "Episode:ID":{ の実オブジェクトエントリを検索 ("__ref":"Episode:ID" の参照値は : の後が { でないため除外)
+		Pattern epKeyPat = Pattern.compile("\"Episode:(\\d+)\"\\s*:\\s*\\{");
+		Pattern datePat = Pattern.compile("\"publishedAt\":\"([^\"]*+)\"");
+		java.util.List<Integer> positions = new java.util.ArrayList<Integer>();
+		java.util.List<String> epIds = new java.util.ArrayList<String>();
+		Matcher epMatcher = epKeyPat.matcher(json);
+		while (epMatcher.find()) {
+			positions.add(epMatcher.start());
+			epIds.add(epMatcher.group(1));
+		}
+		for (int i = 0; i < positions.size(); i++) {
+			int start = positions.get(i);
+			int end = (i + 1 < positions.size()) ? positions.get(i + 1) : json.length();
+			// 先頭600文字以内に publishedAt があるはずなのでそこだけ走査
+			String block = json.substring(start, Math.min(start + 600, end));
+			Matcher dateM = datePat.matcher(block);
+			if (dateM.find()) {
+				result.put(epIds.get(i), dateM.group(1));
 			}
 		}
 		return result;
