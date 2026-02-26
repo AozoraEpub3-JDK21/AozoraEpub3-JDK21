@@ -788,15 +788,18 @@ public class BookInfo
 		String noExtName = fileName.replaceAll("\\.([A-Z]|[a-z]|[0-9])+$", "").replaceAll("\\.([A-Z]|[a-z]|[0-9])+$", "");
 		//後ろの括弧から校正情報等を除外
 		noExtName = noExtName.replaceAll("（","\\(").replaceAll("）","\\)");
-		noExtName = noExtName.replaceAll("\\(青空[^\\)]*\\)", "");
-		noExtName = noExtName.replaceAll("\\([^\\)]*(校正|軽量|表紙|挿絵|補正|修正|ルビ|Rev|rev)[^\\)]*\\)", "");
-		
-		Matcher m = Pattern.compile("[\\[|［](.+?)[\\]|］][ |　]*(.*)[ |　]*$").matcher(noExtName);
+		noExtName = noExtName.replaceAll("\\(青空[^)]*+\\)", "");
+		noExtName = noExtName.replaceAll("\\([^)]*+(?:校正|軽量|表紙|挿絵|補正|修正|ルビ|Rev|rev)[^)]*+\\)", "");
+
+		// Alert #65 (java/polynomial-redos): (.+?) をpossessive+否定文字クラスに変更。
+		// closing bracket文字（]・|・］）を除外することで、バックトラックなしの O(n) マッチを保証。
+		// 末尾の [ |　]*$ も possessive (*+) に変更し、バックトラックを完全排除。
+		Matcher m = Pattern.compile("[\\[|［]([^\\]|\uFF3D]*+)[\\]|］][ |　]*+(.*+)[ |　]*+$").matcher(noExtName);
 		if (m.find()) {
 			titleCreator[0] = m.group(2);
 			titleCreator[1] = m.group(1);
 		} else {
-			m = Pattern.compile("^(.*?)( |　)*(\\(|（)").matcher(noExtName);
+			m = Pattern.compile("^([^(（]*+)[ 　]*(\\(|（)").matcher(noExtName);
 			if (m.find()) {
 				titleCreator[0] = m.group(1);
 			} else {

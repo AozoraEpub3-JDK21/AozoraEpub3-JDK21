@@ -83,6 +83,17 @@ public class ImageInfoReader
 	{
 		return new File(this.srcParentPath+fileName);
 	}
+
+	/** パストラバーサルを防止して画像ファイルを取得 (srcParentPath 配下にあることを検証) */
+	public File getImageFileSafe(String fileName) throws IOException
+	{
+		File base = new File(this.srcParentPath).getCanonicalFile();
+		File resolved = new File(this.srcParentPath + fileName).getCanonicalFile();
+		if (!resolved.getPath().startsWith(base.getPath() + File.separator)) {
+			throw new IOException("画像パスが許可されたディレクトリ外です: " + fileName);
+		}
+		return resolved;
+	}
 	
 	/** 画像出力順にImageInfoを格納 zipの場合は後で並び替える */
 	public void addImageFileName(String imageFileName)

@@ -1034,7 +1034,13 @@ public class Epub3Writer
 					if (imageInfo == null) {
 						LogAppender.println("[WARN] 画像ファイルなし: "+srcImageFileName);
 					} else {
-						File imageFile = imageInfoReader.getImageFile(srcImageFileName);
+						File imageFile;
+						try {
+							imageFile = imageInfoReader.getImageFileSafe(srcImageFileName);
+						} catch (IOException e) {
+							LogAppender.println("[WARN] 画像パスが不正のためスキップ: " + srcImageFileName);
+							continue;
+						}
 						if (imageFile.exists()) {
 							try (FileInputStream fis = new FileInputStream(imageFile)) {
 								zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));

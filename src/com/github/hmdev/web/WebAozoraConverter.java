@@ -386,6 +386,17 @@ public class WebAozoraConverter
 	{
 		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
 	}
+
+	/** dstPath 配下にあることを検証して File を返す（パストラバーサル対策） */
+	private File safeDstFile(String fileName) throws IOException {
+		File base = new File(this.dstPath).getCanonicalFile();
+		File resolved = new File(this.dstPath + fileName).getCanonicalFile();
+		if (!resolved.getPath().startsWith(base.getPath() + File.separator)
+				&& !resolved.equals(base)) {
+			throw new IOException("安全でないパス: " + resolved);
+		}
+		return resolved;
+	}
 	
 	/** 変換実行 (ファイル名指定あり) */
 	public File convertToAozoraText(String urlString, File cachePath, int interval, float modifiedExpire,
@@ -532,7 +543,7 @@ public class WebAozoraConverter
 		} else {
 			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
 		}
-		File txtFile = new File(this.dstPath + fileName);
+		File txtFile = safeDstFile(fileName);
 		//表紙画像（narou.rb互換: cover.jpg で保存）
 		File coverImageFile = new File(this.dstPath+"cover.jpg");
 		//更新情報格納先
@@ -972,7 +983,7 @@ public class WebAozoraConverter
 		// (前書き・後書き検出、自動字下げ、改ページ後見出し化、括弧チェック)
 		try {
 			AozoraTextFinalizer finalizer = new AozoraTextFinalizer(this.formatSettings);
-			finalizer.finalize(txtFile);
+			finalizer.finalize(txtFile, new File(this.dstPath));
 		} catch (IOException e) {
 			LogAppender.println("警告: ファイナライズ処理中にエラーが発生しました: " + e.getMessage());
 			e.printStackTrace();
