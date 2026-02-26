@@ -1,8 +1,8 @@
 # マルチサイト対応 実装計画書
 
 **作成日:** 2026-02-18
-**最終更新:** 2026-02-19
-**ステータス:** Phase 1 完了 ✅ (カクヨム対応リリース可能)
+**最終更新:** 2026-02-25
+**ステータス:** Phase 3 完了 ✅ (Phase 1/2/3 全フェーズ実装済み)
 
 ---
 
@@ -181,46 +181,92 @@ if (nextDataEpisodes != null && nextDataEpisodes.size() > chapterHrefs.size()) {
 
 ---
 
-### Phase 2: カクヨム固有の課題対応 (将来対応)
+### Phase 2: カクヨム固有の課題対応 ✅ **全完了 (2026-02-25)**
 
-#### 2-1. エピソード章構造 (`CONTENT_CHAPTER`) の対応
+#### 2-1. エピソード章構造 (`CONTENT_CHAPTER`) の対応 ✅ **完了 (2026-02-24)**
 
 - **課題**: 章区切り情報はエピソードページに存在しない。TOC の `__NEXT_DATA__` JSON には `TableOfContentsChapter` エントリがあり、各エピソードの章タイトルは取得可能。
-- **現状**: 章見出しなしでエピソードがフラット出力される。
-- **対策案**: `extractEpisodesFromNextData()` を拡張し、章タイトルと対応エピソードのマッピングを取得。各エピソード変換時に章タイトルを先行出力する (Java 変更が必要)。
+- **実装内容**:
+  - `extractEpisodesFromNextData()` 内で `buildEpisodeChapterMapFromNextData()` を呼び出し
+  - `buildEpisodeChapterMapFromNextData()`: JSON 内の `"TableOfContentsChapter:ID":` ブロックを走査し、各チャプターの `"title"` と `"__ref":"Episode:ID"` を収集、epId → chapterTitle のマップを構築
+  - インスタンスフィールド `HashMap<String, String> nextDataEpisodeChapterMap` にエピソードURL → 章タイトルを格納
+  - エピソード処理ループで `CONTENT_CHAPTER` が null の場合に `nextDataEpisodeChapterMap` をフォールバックとして使用
+- **動作原理**:
+  - 章なし作品: `TableOfContentsChapter` エントリなし → `nextDataEpisodeChapterMap` null → 従来通りフラット出力
+  - 章あり作品: 章タイトルが変わったときに `［＃大見出し］` を出力 (既存の `CONTENT_CHAPTER` 処理ロジックを流用)
 
-#### 2-2. 更新日時 (`SUB_UPDATE`) の対応
+#### 2-2. 更新日時 (`SUB_UPDATE`) の対応 ✅ **完了 (2026-02-25)**
 
 - **課題**: TOC HTML に更新日時の `<span>` 等が存在しない。`__NEXT_DATA__` JSON の `"publishedAt"` が利用可能。
-- **対策案**: `extractEpisodesFromNextData()` を拡張し、`publishedAt` をエピソードURLとセットで返す。
+- **実装内容**:
+  - `buildEpisodeDateMapFromNextData(json)`: `"Episode:ID":{` パターンでエピソードオブジェクトを検出し、`"publishedAt":"DATE"` を抽出。epId → publishedAt マップを返す。
+  - `extractEpisodesFromNextData()` 内で上記メソッドを呼び出し、`nextDataEpisodeDateMap` (URL → publishedAt) を構築。
+  - `createNoUpdateUrlsFromNextData(updateInfoFile, urlString, contentsUpdate)`: `nextDataEpisodeDateMap` と保存済み `update.txt` を比較し、`publishedAt` が変化していないエピソードURLを `noUpdateUrls` セットとして返す。
+  - `__NEXT_DATA__` フォールバックで `chapterHrefs` を更新した後、`nextDataEpisodeDateMap` が null でなければ `createNoUpdateUrlsFromNextData()` を呼び出して `noUpdateUrls` を設定。
+- **動作原理**:
+  - 初回実行: `update.txt` なし → 全エピソードをダウンロード → `update.txt` に URL + publishedAt を保存
+  - 2回目以降: `publishedAt` が変化したエピソードのみ再ダウンロード (unchanged → `noUpdateUrls` に追加)
+  - 非 Next.js サイト: `nextDataEpisodeDateMap` が null → 従来の `noUpdateUrls = null` のまま (変更なし)
 
-#### 2-3. カクヨム固有のテキスト変換
+#### 2-3. カクヨム固有のテキスト変換 ✅ **完了 (2026-02-24)**
 
 - **課題**: `<em class="emphasisDots">` による傍点表現がテキストとして失われる。
-- **現状調査**:
-  - `_printNode` の `else` ブランチで `<em>` タグはテキストのみ出力 (傍点失われる)
-  - `WebAozoraConverter.replaceMap` は `web/<FQDN>/replace.txt` から読み込まれるが、変換ロジックで **未使用** (dead code)
-  - → `replace.txt` による後処理は現状では機能しない
-- **対策案**:
-  - `_printNode` に `em` タグ処理を追加 (Java 変更が必要)
-  - 優先度: 低 (テキストは読めるため機能への影響は最小限)
+- **実装内容**: `_printNode()` に `em.emphasisDots` ハンドラを追加:
+  ```java
+  } else if ("em".equals(elem.tagName()) && elem.hasClass("emphasisDots")) {
+      bw.append("［＃傍点］");
+      _printNode(bw, node);
+      bw.append("［＃傍点終わり］");
+  ```
+- `<em>` 以外の一般タグ (class なし等) は既存の `else` ブランチでテキストのみ出力 (変更なし)
 
-#### 2-4. あらすじ内の改行復元
+#### 2-4. あらすじ script 要素対応 + JSON 改行復元 ✅ **完了 (2026-02-24)**
 
-- **課題**: `__NEXT_DATA__` JSON の `introduction` フィールドの `\n` エスケープがそのまま残る。
-- **対策案**: `replaceHtmlText()` でのデコード処理追加、または extract.txt の正規表現対応。
-- **優先度**: 低
+- **課題1**: `getExtractFirstElement()` が `<script>` 要素を返すと `printNode()` が DataNode (スクリプト内容) を処理できず、あらすじが空になる。
+- **課題2**: `__NEXT_DATA__` JSON の `introduction` フィールドの `\n` エスケープが改行として表示されない。
+- **実装内容**: DESCRIPTION 処理コードで `description.tagName()` が `"script"` の場合に分岐:
+  - `getExtractText()` でテキスト取得 (正規表現を適用して JSON から introduction を抽出)
+  - `.replace("\\r\\n", "\n").replace("\\r", "\n").replace("\\n", "\n")` で JSON エスケープを実改行に変換
+  - 改行で分割して行ごとに `printText()` + `bw.append('\n')` で出力
+  - `<script>` 以外の通常 HTML 要素は従来通り `printNode()` を使用
 
 ---
 
 ### Phase 3: 既存サイト定義の更新 (任意)
 
-#### 3-1. ハーメルン (`novel.syosetu.org`) の extract.txt 更新
-- **課題**: 現行の extract.txt が古い HTML 構造に基づいている可能性
-- **作業**: 現行サイトの HTML を確認し、必要に応じてセレクタを更新
+#### 3-1. ハーメルン (`novel.syosetu.org`) の extract.txt 更新 ✅ **完了 (2026-02-25)**
 
-#### 3-2. 閉鎖・変更サイトの整理
-- **作業**: 各サイトの現行稼働状況を確認し、閉鎖済みサイトの extract.txt にコメント追記
+- **調査結果 (2026-02-25 実機確認)**:
+  - `id="maind"` / `class="ss"` は現行も健在 ✅
+  - `<font>` タグは廃止 → `<span style="font-size:...">` に移行 (TITLE/CONTENT_SUBTITLE が壊れていた)
+  - 著者: `<a>` タグではなく `<span itemprop="author">` に変更 (AUTHOR が壊れていた)
+  - 本文: `<div id="honbun">` に集約 (CONTENT_ARTICLE で直接指定可能に)
+  - SUB_UPDATE の `<NOBR>` タグは健在 ✅
+- **修正内容**:
+  | セレクタ | 旧 | 新 | 理由 |
+  |---------|----|----|------|
+  | `TITLE` | `title:0,#maind .ss font:0,...` | `#maind span[itemprop=name]:0,title:0` + regex ` - ハ.*` → `$1` | `<font>` 廃止、タイトルにサイト名が残っていたバグ修正 |
+  | `AUTHOR` | `#maind .ss a:0` | `#maind span[itemprop=author]:0` | 著者が `<a>` → `<span itemprop>` に変更 |
+  | `CONTENT_SUBTITLE` | `#maind .ss font-size:1` | `#maind .ss span[style]:1` | `<font>` 廃止; `.ss` 内の2番目スタイル付き `<span>` が話タイトル |
+  | `CONTENT_ARTICLE` | `#maind .ss:0` | `#honbun` | `#honbun` に本文が集約、より正確 |
+  | `CONTENT_ARTICLE_START/END` | `font-size:1` / `div:-2` | 削除 | `#honbun` 直接指定で不要 |
+
+#### 3-2. 閉鎖・変更サイトの整理 ✅ **完了 (2026-02-25)**
+
+- **調査結果 (2026-02-25)**:
+
+  | サイト | ドメイン | 状態 |
+  |--------|---------|------|
+  | novelist.jp | novelist.jp | 稼働中 ✅ |
+  | novelist.jp (二次創作) | 2.novelist.jp | 稼働中 ✅ |
+  | 暁 | www.akatsuki-novels.com | 稼働中 ✅ |
+  | FC2小説 | novel.fc2.com | 稼働中 ✅ |
+  | 青空文庫 | aozora.gr.jp / www.aozora.gr.jp | 稼働中 ✅ |
+  | **dNoVeLs** | **www.dnovels.net** | **閉鎖済み** (2017年、GMW運営) |
+  | **NEWVEL-LIBRARY** | **www.newvel.jp** | **事実上閉鎖** (2015年頃から更新停止) |
+  | **Arcadia** | **www.mai-net.net** | **休眠状態** (管理者不在、2013年頃から機能不全) |
+
+- **修正内容**: 閉鎖・休眠サイト3件の extract.txt ファイル先頭に警告コメントを追記
 
 ---
 
@@ -322,12 +368,12 @@ HTML の hrefs より件数が多い場合にフォールバックとして使�
 | **1-2** | `web/kakuyomu.jp/extract.txt` 作成 | 不要 | ✅ 完了 |
 | **1-3** | `__NEXT_DATA__` フォールバック実装 | 必要 | ✅ 完了 |
 | **1-4** | 動作テスト (154話 実機確認) | 不要 | ✅ 完了 |
-| **2-1** | 章構造 (`CONTENT_CHAPTER`) 対応 | 必要 | ⏳ Phase 2 |
-| **2-2** | 更新日時 (`SUB_UPDATE`) 対応 | 必要 | ⏳ Phase 2 |
-| **2-3** | 傍点 (`em.emphasisDots`) テキスト変換 | 必要 | ⏳ Phase 2 |
-| **2-4** | あらすじ改行復元 | 不要 | ⏳ Phase 2 |
-| **3-1** | ハーメルン extract.txt 更新 | 不要 | ⏳ Phase 3 |
-| **3-2** | 閉鎖サイト整理 | 不要 | ⏳ Phase 3 |
+| **2-1** | 章構造 (`CONTENT_CHAPTER`) 対応 | 必要 | ✅ 完了 (2026-02-24) |
+| **2-2** | 更新日時 (`SUB_UPDATE`) 対応 | 必要 | ✅ 完了 (2026-02-25) |
+| **2-3** | 傍点 (`em.emphasisDots`) テキスト変換 | 必要 | ✅ 完了 (2026-02-24) |
+| **2-4** | あらすじ改行復元 + script 要素対応 | 必要 | ✅ 完了 (2026-02-24) |
+| **3-1** | ハーメルン extract.txt 更新 | 不要 | ✅ 完了 (2026-02-25) |
+| **3-2** | 閉鎖サイト整理 | 不要 | ✅ 完了 (2026-02-25) |
 
 ---
 

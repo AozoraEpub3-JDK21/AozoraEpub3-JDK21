@@ -1,52 +1,88 @@
 ################################
 ## HAMELN ハーメルン
-## http://syosetu.org/
+## https://syosetu.org/
+## (入力URLは https://novel.syosetu.org/WORK_ID/ を使用)
+################################
+## 対応URL例:
+##   目次: https://novel.syosetu.org/402358/
+##   本文: https://novel.syosetu.org/402358/1.html
+##
+## 調査日: 2026-02-25 (実機確認済み)
+## HTML形式: HTML4 Transitional (非SPA)
+##
+## 【URL挙動】
+##   novel.syosetu.org/WORK_ID/ → 301 → syosetu.org/novel/WORK_ID/
+##   AozoraEpub3はFQDN=novel.syosetu.org でこのextract.txtを使用する
+##
+## 【HTML構造 (2026-02-25 確認)】
+##   id="maind" は現行も健在
+##   class="ss" は現行も健在 (div.ss が複数存在)
+##     .ss[0]: タイトル・著者・ジャンル等
+##     .ss[1]: あらすじ
+##     .ss[2]: 話一覧テーブル
+##     .ss[3]: Twitterシェアリンク等
+##   <font> タグは廃止済み → <span style="font-size:..."> に移行
+##   著者は <span itemprop="author"> (旧: <a> タグ)
+##   タイトルは <span itemprop="name"> (旧: <font> タグ)
+##   エピソード本文は <div id="honbun"> に集約
+##   更新日時は <NOBR><time datetime="...">...</time></NOBR> (NOBR健在)
 ################################
 
 ## 変換対象URLパターン
 ##PAGE_REGEX	^\/Novel/\d+/$
 
 ################################
-##一覧ページの抽出設定
-## シリーズタイトル
-#SERIES	
+## 一覧ページの抽出設定
+
 ## タイトル
-TITLE	title:0,#maind .ss font:0,#maind .ss font a:0
+## <span itemprop="name"> から取得 (サフィックスなし)
+## title:0 フォールバック時は " - ハーメルン" を正規表現で除去
+TITLE	#maind span[itemprop=name]:0,title:0	^(.*?) - ハ.+	$1
+
 ## 著者
-AUTHOR	#maind .ss a:0
-## 説明
+## <span itemprop="author"> から取得 (旧: <a> タグは廃止)
+AUTHOR	#maind span[itemprop=author]:0
+
+## あらすじ
+## .ss[1] (2番目の .ss div) がある場合
 DESCRIPTION	#maind .ss:1
 
-## 各話へのリンク cssQuery
+## 各話へのリンク
+## .ss テーブル内の <a> タグ (エピソードリンク)
 HREF	#maind .ss table a
 
-##一覧に記載されている各話の更新日時
+## 一覧に記載されている各話の更新日時 (更新チェック用)
+## <NOBR> タグは現行も健在
 SUB_UPDATE	#maind .ss table nobr
 
-##一覧ページのタイトル (本文側に無ければこれを利用)
+## 一覧ページのタイトル (本文側に無ければこれを利用)
 SUBTITLE_LIST	#maind .ss td a
 
 ################################
-###各話の抽出設定
+## 各話の抽出設定
 
-## 各話 Chapter 先頭の章のみ大見出しで出力
-#CONTENT_CHAPTER	
-## 各話 タイトル 中見出しで出力
-CONTENT_SUBTITLE	#maind .ss font-size:1
+## 章見出し
+#CONTENT_CHAPTER
 
-## 各話 本文
-CONTENT_ARTICLE	#maind .ss:0
+## 話タイトル
+## .ss 内の style 属性付き span の 2番目 (index=1)
+## index=0: <span style="font-size:120%"><a>作品タイトル</a></span>
+## index=1: <span style="font-size:120%">N.話タイトル</span>  ← これ
+CONTENT_SUBTITLE	#maind .ss span[style]:1
 
-## 本文抽出開始 このタグの次から
-CONTENT_ARTICLE_START	#maind .ss font-size:1
+## 本文
+## <div id="honbun"> に本文段落 <p id="N"> が集約されている
+CONTENT_ARTICLE	#honbun
 
-## 本文抽出終了 このタグの前まで
-CONTENT_ARTICLE_END	#maind .ss div:-2
+## 本文抽出開始・終了 (#honbun 直接指定のため不要)
+##CONTENT_ARTICLE_START
+##CONTENT_ARTICLE_END
 
-##前書き
-#CONTENT_PREAMBLE	
-## 補足
-#CONTENT_APPENDIX	
+## 前書き
+#CONTENT_PREAMBLE
 
-##本文タグ外に画像がある場合本文の前に出力
-#CONTENT_IMG	
+## 後書き
+#CONTENT_APPENDIX
+
+## 本文タグ外に画像がある場合
+#CONTENT_IMG

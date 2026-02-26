@@ -4069,10 +4069,20 @@ public class AozoraEpub3Applet extends JApplet
 		try {
 			if (kindlegen != null) {
 				long time = System.currentTimeMillis();
+				// Alert #67 (java/command-line-injection): 実行ファイル名と出力パスを検証してからコマンドに渡す
+				String kindlegenName = kindlegen.getName();
+				if (!kindlegenName.equals("kindlegen") && !kindlegenName.equals("kindlegen.exe")) {
+					LogAppender.println("kindlegen の実行ファイル名が不正です: "+kindlegenName);
+					return;
+				}
+				String kindlegenPath = kindlegen.getCanonicalPath();
 				String outFileName = outFile.getCanonicalPath();
-				LogAppender.println("kindlegenを実行します : "+kindlegen.getName()+" \""+outFileName+"\"");
-				// Alert #12 (java/command-line-injection): getCanonicalPath() でパスを正規化してからコマンドに渡す
-			ProcessBuilder pb = new ProcessBuilder(kindlegen.getCanonicalPath(), "-locale", "en","-verbose", outFileName);
+				if (!outFileName.endsWith(".epub") || outFileName.startsWith("-")) {
+					LogAppender.println("出力ファイルパスが不正です: "+outFileName);
+					return;
+				}
+				LogAppender.println("kindlegenを実行します : "+kindlegenName+" \""+outFileName+"\"");
+				ProcessBuilder pb = new ProcessBuilder(kindlegenPath, "-locale", "en","-verbose", outFileName);
 				this.kindleProcess = pb.start();
 				BufferedReader br = new BufferedReader(new InputStreamReader(this.kindleProcess.getInputStream()));
 				String line;
