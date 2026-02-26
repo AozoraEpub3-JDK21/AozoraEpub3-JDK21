@@ -29,6 +29,9 @@ HREF	.subtitle a
 ##一覧に記載されている各話の更新日時
 SUB_UPDATE	.long_update
 
+## TOC ページネーション: 101話以上の作品で2ページ目以降の目次を取得
+PAGE_URL	a[href*="?p="]:-1	(\?p=)\d+\t(\d+)	$1$2
+
 ##本文に日付が無い場合 公開・更新日時の文字列に利用
 CONTENT_UPDATE_LIST	.long_update	^([^<]+)(<span title=\"([^"]+)\".*)?$	$1 公開　$3
 

@@ -28,6 +28,11 @@ HREF	.p-eplist__subtitle,.subtitle a
 ##一覧に記載されている各話の更新日時 (新クラス: p-eplist__update)
 SUB_UPDATE	.p-eplist__update,.long_update
 
+## TOC ページネーション: 101話以上の作品で2ページ目以降の目次を取得
+## 最後のページリンク (href に ?p=N) から総ページ数を算出し各ページURLを生成
+## 例: href=/nXXXX/?p=4, pageIdx=2 → "/nXXXX/?p=2"
+PAGE_URL	a[href*="?p="]:-1	(\?p=)\d+\t(\d+)	$1$2
+
 ##本文に日付が無い場合 公開・更新日時の文字列に利用
 CONTENT_UPDATE_LIST	.p-eplist__update,.long_update	^([^<]+)(<span title=\"([^"]+)\".*)?$	$1 公開　$3
 

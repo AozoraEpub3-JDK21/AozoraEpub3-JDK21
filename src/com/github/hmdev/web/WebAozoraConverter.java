@@ -729,6 +729,44 @@ public class WebAozoraConverter
 				if (updates == null && this.queryMap.containsKey(ExtractId.SUB_UPDATE)) {
 					LogAppender.println("SUB_UPDATE : 更新確認情報が取得できません");
 				}
+				// TOC ページネーション: PAGE_URL が定義されていれば最後のページリンクから総ページ数を取得して残りの目次ページを収集 (101蹰以上対応)
+				if (this.queryMap.containsKey(ExtractId.PAGE_URL)) {
+					Element tocPageUrlElem = getExtractFirstElement(doc, this.queryMap.get(ExtractId.PAGE_URL));
+					if (tocPageUrlElem != null) {
+						java.util.regex.Matcher pm = java.util.regex.Pattern.compile("[?&]p=(\\d+)").matcher(tocPageUrlElem.attr("href"));
+						int tocTotalPages = -1;
+						try { if (pm.find()) tocTotalPages = Integer.parseInt(pm.group(1)); } catch (NumberFormatException e) {}
+						if (tocTotalPages > 1) {
+							ExtractInfo tocPageUrlInfo = this.queryMap.get(ExtractId.PAGE_URL)[0];
+							for (int pageIdx = 2; pageIdx <= tocTotalPages; pageIdx++) {
+								String nextTocUrl = tocPageUrlInfo.replace(tocPageUrlElem.attr("href") + "	" + pageIdx);
+								if (!nextTocUrl.startsWith("http")) {
+									if (nextTocUrl.charAt(0) == '/') nextTocUrl = baseUri + nextTocUrl;
+									else nextTocUrl = listBaseUrl + nextTocUrl;
+								}
+								LogAppender.println("目次ページ " + pageIdx + "/" + tocTotalPages + " 取得: " + nextTocUrl);
+								File tocPageFile = File.createTempFile("tocpage", ".html", cachePath);
+								try {
+									cacheFile(nextTocUrl, tocPageFile, urlString);
+									Document tocPageDoc = Jsoup.parse(tocPageFile, null);
+									Elements nextHrefs = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.HREF));
+									if (nextHrefs != null) {
+										hrefs.addAll(nextHrefs);
+										if (updates != null) {
+											Elements nextUpdates = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.SUB_UPDATE));
+											if (nextUpdates != null) updates.addAll(nextUpdates);
+											else updates = null; // サイズ不一致防止
+										}
+									}
+								} catch (Exception e) {
+									LogAppender.println("目次ページ " + pageIdx + " 取得エラー: " + e.getMessage());
+								} finally {
+									tocPageFile.delete();
+								}
+							}
+						}
+					}
+				}
 				if (updates != null) {
 					//更新しないURLのチェック用
 					noUpdateUrls = createNoUpdateUrls(updateInfoFile, urlString, listBaseUrl, contentsUpdate, hrefs, updates);
