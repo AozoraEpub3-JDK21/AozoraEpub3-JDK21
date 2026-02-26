@@ -1,5 +1,51 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.7-jdk21
+
+**リリース日**: 2026年2月26日
+
+### 新機能
+
+- **カクヨム (kakuyomu.jp) 対応**
+  - `web/kakuyomu.jp/extract.txt` を新規追加
+  - Next.js SPA の `__NEXT_DATA__` JSON からエピソード全件取得（HTML の `<a>` タグが数件しかない問題を解決）
+  - 章構造（`CONTENT_CHAPTER`）: `TableOfContentsChapter` エントリから章タイトルを抽出して `［＃大見出し］` を出力
+  - 更新日時差分（`SUB_UPDATE`）: `publishedAt` を使って変更なしエピソードをスキップ
+  - 傍点（`<em class="emphasisDots">`）: `［＃傍点］…［＃傍点終わり］` に変換
+  - あらすじ: `__NEXT_DATA__` JSON の `introduction` フィールドから取得、`\n` エスケープを改行に復元
+  - 実機確認: 154話作品でタイトル・著者・全話・本文・話タイトル取得確認済み
+
+- **ハーメルン (syosetu.org) extract.txt 更新**
+  - `<font>` タグ廃止に対応 → `span[itemprop]` / `#honbun` セレクタに変更
+  - TITLE: `span[itemprop=name]` + サイト名除去 regex
+  - AUTHOR: `span[itemprop=author]`
+  - CONTENT_SUBTITLE: `span[style]:1`（`.ss` 内2番目スタイル付き `<span>`）
+  - CONTENT_ARTICLE: `#honbun`（本文要素が集約されているため正確に取得可能）
+
+### セキュリティ修正
+
+- **CodeQL アラート全件対応**
+  - `java/path-injection` 30件: `getCanonicalFile()` + `startsWith()` でパス検証を強化
+  - `java/polynomial-redos` (#8–11, #65): `BookInfo.java` の正規表現を possessive quantifier に修正
+  - `java/command-line-injection` (#12, #67): kindlegen 実行ファイル名検証 + `getCanonicalPath()` 正規化
+  - `java/partial-path-traversal` (#13): `isCacheFile()` の `startsWith` 修正
+
+### その他
+
+- 閉鎖・休眠サイト (dNoVeLs / NEWVEL-LIBRARY / Arcadia) の `extract.txt` に警告コメントを追記
+- `test_data/` 自動生成ファイル・`.claude/settings.local.json` を `.gitignore` に追加
+
+### 検証結果
+
+```
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ 全テスト成功
+Distributions: ✓ ZIP/TAR.GZ 生成済み
+カクヨム実機: ✓ 154話取得・変換確認
+```
+
+---
+
 ## バージョン: 1.2.6-jdk21（安定リリース）
 
 **リリース日**: 2026年1月24日

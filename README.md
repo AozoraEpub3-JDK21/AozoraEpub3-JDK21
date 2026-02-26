@@ -69,12 +69,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.2.6-jdk21.zip
+AozoraEpub3-1.2.7-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.2.6-jdk21.tar.gz
+AozoraEpub3-1.2.7-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -123,11 +123,12 @@ cd AozoraEpub3-JDK21
 
 ---
 
-## 最近の変更（1.2.6-jdk21）
+## 最近の変更（1.2.7-jdk21）
 
-- 依存ライブラリを最新安定版へ更新: commons-cli 1.11.0、commons-collections4 4.5.0、commons-compress 1.28.0、commons-lang3 3.20.0、jsoup 1.22.1、junrar 7.5.7、batik-transcoder 1.19
-- CLIヘルプAPIの非推奨警告を解消（`org.apache.commons.cli.help.HelpFormatter` と新シグネチャに移行）
-- 依存更新レポート用ワークフローを追加し、Artifactsにレポートを保存
+- **カクヨム (kakuyomu.jp) 対応**: `__NEXT_DATA__` JSON からエピソード全件取得・章構造・更新差分・傍点・あらすじに対応
+- **ハーメルン extract.txt 更新**: `<font>` 廃止対応（`span[itemprop]` / `#honbun`）
+- **セキュリティ修正**: CodeQL アラート全件対応（path-injection 30件、ReDoS #8–11/#65、command-injection #12/#67、partial-path-traversal #13）
+- 閉鎖・休眠サイト (dNoVeLs / NEWVEL-LIBRARY / Arcadia) に警告コメントを追記
 
 ---
 
@@ -156,7 +157,9 @@ cd AozoraEpub3-JDK21
 
 ### Web小説サイトから直接変換
 
-Web小説サイト（ニコニコ小説、小説家になろう など）のURLまたはURLショートカット（`.url`）をドラッグ&ドロップで取得・変換できます。（`web/` 以下に定義ファイルがあるサイトのみ）
+Web小説サイトのURLまたはURLショートカット（`.url`）をドラッグ&ドロップで取得・変換できます。（`web/` 以下に定義ファイルがあるサイトのみ）
+
+**対応サイト**: 小説家になろう / 小説家になろう R18 / カクヨム / ハーメルン / 暁 / novelist.jp / FC2小説 など
 
 **注意事項:**
 - **レート制限**: サイトへの負荷を避けるため、各話取得時に1.5秒の間隔を設けています
