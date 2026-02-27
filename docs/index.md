@@ -22,17 +22,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.2.6-jdk21 (2026年1月24日) | 
+  <p><strong>最新版:</strong> v1.2.9-jdk21 (2026年2月27日) |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">リリースノート</a></p>
-  
+
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.6-jdk21/AozoraEpub3-1.2.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.9-jdk21/AozoraEpub3-1.2.9-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.6-jdk21/AozoraEpub3-1.2.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.9-jdk21/AozoraEpub3-1.2.9-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.6-jdk21/AozoraEpub3-1.2.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.9-jdk21/AozoraEpub3-1.2.9-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -89,10 +89,10 @@ Java をお持ちでない場合は、[Eclipse Temurin](https://adoptium.net/tem
 
 1. 上記の **Windows版ダウンロード** ボタンから最新の ZIP ファイルをダウンロードします
 2. 任意のフォルダに展開します
-3. `AozoraEpub3.bat` をダブルクリックして起動します
+3. `AozoraEpub3.exe` をダブルクリックして起動します
 4. GUI が表示されたらセットアップ完了です
 
-> **注意**: JAR ファイルのダブルクリックが機能しない場合は BAT ファイルを使用してください。
+> **注意**: JAR ファイルのダブルクリックが機能しない場合は EXE ファイルを使用してください。
 
 ---
 
@@ -128,7 +128,7 @@ GUI を起動する場合は引数なしで実行します: `java -jar AozoraEpu
 ## トラブルシューティング
 
 - **Java がインストールされていない場合** — [Temurin](https://adoptium.net/temurin/releases/) から Java 25 をダウンロードしインストールしてください（Java 21以降であれば動作します）。
-- **Windows で JAR ファイルが開かない場合** — BAT ファイルを使用するか、コマンドプロンプトから `java -jar AozoraEpub3.jar` で起動してください。
+- **Windows で JAR ファイルが開かない場合** — EXE ファイルを使用するか、コマンドプロンプトから `java -jar AozoraEpub3.jar` で起動してください。
 - **Linux/macOS で permission denied エラー** — `chmod +x AozoraEpub3.sh` を実行し、再度起動してください。
 - **その他の問題** — [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues) でご報告ください。
 

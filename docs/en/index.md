@@ -19,17 +19,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/2
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.2.6-jdk21 (January 24, 2026) | 
+  <p><strong>Latest: </strong> v1.2.9-jdk21 (February 27, 2026) |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">Release Notes</a></p>
-   
+
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.6-jdk21/AozoraEpub3-1.2.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.9-jdk21/AozoraEpub3-1.2.9-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.6-jdk21/AozoraEpub3-1.2.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.9-jdk21/AozoraEpub3-1.2.9-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.6-jdk21/AozoraEpub3-1.2.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.9-jdk21/AozoraEpub3-1.2.9-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -86,10 +86,10 @@ If you don't have Java installed, download [Eclipse Temurin](https://adoptium.ne
 
 1. Download the latest ZIP file from [Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases)
 2. Extract to any folder
-3. Double-click `AozoraEpub3.bat` to launch
+3. Double-click `AozoraEpub3.exe` to launch
 4. The GUI will open when ready
 
-> **Note**: If double-clicking the JAR file doesn't work, use the BAT file instead.
+> **Note**: If double-clicking the JAR file doesn't work, use the EXE file instead.
 
 ---
 
@@ -119,7 +119,7 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 ## Troubleshooting
 
 - **Java is not installed** — Download Java 25 from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
-- **JAR file won't open on Windows** — Use the BAT file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
+- **JAR file won't open on Windows** — Use the EXE file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
 - **Permission denied on Linux/macOS** — Run `chmod +x AozoraEpub3.sh` and try again.
 - **Other issues** — Report on [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues).
 
