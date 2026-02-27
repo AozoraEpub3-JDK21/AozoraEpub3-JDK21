@@ -2132,21 +2132,17 @@ public class AozoraEpub3Applet extends JApplet
 		panel.add(jRadioPageMarginUnit1);
 		group.add(jRadioPageMarginUnit1);
 		
-		////////////////////////////////
-			jCheckTocPage = new JCheckBox(I18n.t("ui.label.toc"));
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder("テキスト余白 (html margin) Reader用"));
 		panelH.add(panel);
 		jTextBodyMargins = new JTextField[4];
 		for (int i=0; i<jTextBodyMargins.length; i++) {
 			label = new JLabel(marginLabels[i]);
-			jRadioTocV = new JRadioButton(I18n.t("ui.label.verticalShort"), true);
 			panel.add(label);
 			JTextField jTextField = new JTextField("0");
 			jTextBodyMargins[i] = jTextField;
 			jTextField.setHorizontalAlignment(JTextField.RIGHT);
 			jTextField.addFocusListener(new TextSelectFocusListener(jTextField));
-			jRadioTocH = new JRadioButton(I18n.t("ui.label.horizontalShort"));
 			jTextField.setMaximumSize(text3);
 			jTextField.setPreferredSize(text3);
 			panel.add(jTextField);
