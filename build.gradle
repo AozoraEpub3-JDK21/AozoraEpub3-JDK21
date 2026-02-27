@@ -5,7 +5,7 @@ plugins {
     id 'com.github.ben-manes.versions' version '0.52.0'
 }
 
-version = '1.2.7-jdk21'
+version = '1.2.8-jdk21'
 
 // Gradle Wrapper を生成するためのタスク
 wrapper {
@@ -213,6 +213,7 @@ task zipDistribution(type: Zip, dependsOn: [build, createLauncher]) {
         include 'THIRD-PARTY-NOTICES.txt'
         include 'chuki_*.txt'
         include 'AozoraEpub3.ico'
+        include 'AozoraEpub3.ini', 'setting_narourb.ini'
     }
     from('gaiji') {
         into 'gaiji'
@@ -255,6 +256,7 @@ task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
         include 'THIRD-PARTY-NOTICES.txt'
         include 'chuki_*.txt'
         include 'AozoraEpub3.ico'
+        include 'AozoraEpub3.ini', 'setting_narourb.ini'
     }
     from('gaiji') {
         into 'gaiji'
@@ -499,6 +501,7 @@ distributions {
                 include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
                 include 'chuki_*.txt'
                 include 'AozoraEpub3.ico'
+                include 'AozoraEpub3.ini', 'setting_narourb.ini'
             }
             from('presets') {
                 into 'presets'

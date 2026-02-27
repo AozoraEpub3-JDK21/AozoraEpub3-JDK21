@@ -977,13 +977,17 @@ public class AozoraEpub3Applet extends JApplet
 				if (!"".equals(listPath)) jComboDstPath.addItem(listPath);
 			}
 		}
-		if (dstPath!=null && !dstPath.equals("")) {
+		//DstPathが未設定なら jarPath+"epub" をデフォルト出力先に
+		if (dstPath==null || dstPath.isEmpty()) {
+			dstPath = this.jarPath + "epub";
+		}
+		if (!dstPath.isEmpty()) {
 			jComboDstPath.setSelectedItem(dstPath);
 		}
 		panel.add(jComboDstPath);
 		new DropTarget(jComboDstPath.getEditor().getEditorComponent(), DnDConstants.ACTION_COPY_OR_MOVE, new DropDstPathListener(), true);
-		//選択解除
-		if ("".equals(props.getProperty("SamePath"))) jCheckSamePath.setSelected(false);
+		//SamePath: "1"が明示的に保存されている場合のみON（初回起動はOFF）
+		if (!"1".equals(props.getProperty("SamePath"))) jCheckSamePath.setSelected(false);
 		
 		jButtonDstPath = new JButton("選択");
 		jButtonDstPath.setBorder(padding3);

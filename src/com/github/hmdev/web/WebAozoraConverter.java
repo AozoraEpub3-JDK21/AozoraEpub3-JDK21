@@ -1389,6 +1389,7 @@ public class WebAozoraConverter
 	/** 前がブロック注記かどうか */
 	private boolean isBlockNode(Node node)
 	{
+		if (node instanceof TextNode && ((TextNode)node).getWholeText().trim().isEmpty()) return true;
 		if (node instanceof Element) {
 			Element elem = (Element)node;
 			String tagName = elem.tagName();
