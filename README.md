@@ -61,7 +61,7 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 配布パッケージには以下が含まれます：
 - **FAT JAR**（依存関係込みの単一JAR）
-- 起動スクリプト（`.bat` / `.sh`）
+- 起動スクリプト（`.exe` / `.sh`）
 - テンプレートファイル（`template/`）
 - プリセット設定（`presets/`）
 - 外字定義（`gaiji/`）
@@ -82,11 +82,11 @@ AozoraEpub3-1.2.7-jdk21.tar.gz
 1. 上記リンクからお使いのOS向けファイルをダウンロード
 2. ファイルを任意のフォルダに解凍
 3. GUI起動方法（以下のいずれか）：
-   - **Windows**: `AozoraEpub3.bat` をダブルクリック（推奨）
+   - **Windows**: `AozoraEpub3.exe` をダブルクリック（推奨）
    - **Unix/Linux/macOS**: `AozoraEpub3.sh` を実行
    - **直接実行**: `java -jar AozoraEpub3.jar`
 
-**注意**: Windows 11では `.jar` ファイルのダブルクリックが動作しないことがあります。その場合は `.bat` ファイルをご利用ください。
+**注意**: Windows 11では `.jar` ファイルのダブルクリックが動作しないことがあります。その場合は `.exe` ファイルをご利用ください。
 
 ### 方法 2: ソースからビルド
 
@@ -118,7 +118,7 @@ cd AozoraEpub3-JDK21
 ## 既知の問題
 
 - **iOS版Kindle**: 表題ページ（title.xhtml）のレイアウトが画面比率によって上下位置ずれ・改ページすることがあります。端末依存の制限のため、必要に応じて「表題ページ出力を無効にする」または「カスタム表紙のみ出力する」設定をご検討ください。
-- **Windows 11**: `.jar` ファイルのダブルクリックが無反応になる場合があります。配布パッケージに同梱の `AozoraEpub3.bat` の使用を推奨します。
+- **Windows 11**: `.jar` ファイルのダブルクリックが無反応になる場合があります。配布パッケージに同梱の `AozoraEpub3.exe` の使用を推奨します。
 - **GUI フォント**: OSが英語設定の場合、日本語字形が環境依存フォントにマップされることがあります。本GUIは OS 別に日本語フォント候補（Windows: Yu Gothic UI/Meiryo）を優先適用することで違和感を軽減しています。
 
 ---
@@ -137,7 +137,7 @@ cd AozoraEpub3-JDK21
 ### 基本的な流れ
 
 1. **アプリケーション起動**
-   - Windows: `AozoraEpub3.bat` をダブルクリック（推奨）
+   - Windows: `AozoraEpub3.exe` をダブルクリック（推奨）
    - Unix/Linux/macOS: `AozoraEpub3.sh` を実行
    - または: `java -jar AozoraEpub3.jar`
    

@@ -3,9 +3,11 @@ plugins {
     id 'application'
     // 依存関係の更新可否チェック用プラグイン
     id 'com.github.ben-manes.versions' version '0.52.0'
+    // Windows .exe ランチャー生成（Smart App Control 対策）
+    id 'edu.sc.seis.launch4j' version '4.0.0'
 }
 
-version = '1.2.8-jdk21'
+version = '1.2.9-jdk21'
 
 // Gradle Wrapper を生成するためのタスク
 wrapper {
@@ -139,40 +141,31 @@ jar {
     }
 }
 
-// ランチャーバッチファイルを生成（Windows用）
+// Windows .exe ランチャー生成（Smart App Control 対策）
+// narou.rb は java -cp AozoraEpub3.jar AozoraEpub3 を直接呼ぶため影響なし
+launch4j {
+    outfile       = 'AozoraEpub3.exe'
+    mainClassName = 'AozoraEpub3Applet'
+    headerType    = 'gui'                         // コンソールウィンドウなし
+    icon          = "${projectDir}/AozoraEpub3.ico"
+    jreMinVersion = '21'
+    chdir         = '.'                            // .exe のあるフォルダを作業ディレクトリにする
+    dontWrapJar   = true                           // JAR は別ファイルのまま（AozoraEpub3.jar と同じフォルダ）
+    // v4.0.0: jar プロパティは廃止。Fat JAR のみ指定（依存JARは fat JAR 内に含まれるため不要）
+    jarFiles      = files(tasks.jar.archiveFile)
+    libraryDir    = '.'                            // .exe と同じフォルダの AozoraEpub3.jar を参照
+}
+createExe.dependsOn jar
+
+// Unix ランチャーシェルスクリプトを生成
 task createLauncher {
     doLast {
         // ディレクトリが存在しない場合は作成
         def distDir = file('build/distributions')
         distDir.mkdirs()
-        
-        def launcherBat = file('build/distributions/AozoraEpub3.bat')
-        launcherBat.text = '''@echo off
-rem AozoraEpub3 GUI Launcher for Windows
-rem This batch file launches AozoraEpub3.jar with javaw.exe
 
-setlocal
+        // Windows 向けは Launch4j で .exe を生成するため .bat は廃止
 
-rem Get the directory where this batch file is located
-set "SCRIPT_DIR=%~dp0"
-
-rem Check if java is available
-where javaw >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo Error: javaw.exe not found in PATH.
-    echo Please install Java 21 or later.
-    pause
-    exit /b 1
-)
-
-rem Launch AozoraEpub3.jar with javaw (no console window)
-start "" javaw -jar "%SCRIPT_DIR%AozoraEpub3.jar"
-
-endlocal
-'''
-        
-        // 日本語専用バッチは廃止。英語版 `AozoraEpub3.bat` の1本に統合します。
-        
         def launcherSh = file('build/distributions/AozoraEpub3.sh')
         launcherSh.text = '''#!/bin/bash
 # AozoraEpub3 GUI Launcher for Unix/Linux/macOS
@@ -195,18 +188,18 @@ java -jar "$SCRIPT_DIR/AozoraEpub3.jar"
 }
 
 // 配布用の ZIP アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
-task zipDistribution(type: Zip, dependsOn: [build, createLauncher]) {
+task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
     destinationDirectory = file('build/distributions')
     preserveFileTimestamps = true
     reproducibleFileOrder = false
-    
+
     from('build/libs') {
         include '*.jar'
     }
-    from('build/distributions') {
-        // ZIP (Windows-oriented) - include only the Windows batch launcher
-        include 'AozoraEpub3.bat'
+    from("${buildDir}/launch4j") {
+        // ZIP (Windows-oriented) - .exe launcher（.bat から .exe に変更）
+        include 'AozoraEpub3.exe'
     }
     from('.') {
         include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
