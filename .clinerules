@@ -1,0 +1,144 @@
+# AozoraEpub3-JDK21 開発規約 (.clinerules)
+#
+# このファイルは Cline / GitHub Copilot CLI が自動的に読み込む開発規約です。
+# Ollama MCP 開発パートナーとの連携ワークフローを含みます。
+
+---
+
+## プロジェクト概要
+
+- **目的**: 青空文庫テキスト → EPUB 3.3 変換ツール（Java 21 / Gradle 9.2.1）
+- **Java バージョン**: 21（Java 25 互換）
+- **テストフレームワーク**: JUnit 4.13（`org.junit.Test`）
+- **テンプレートエンジン**: Apache Velocity（`template/` 以下の `.vm` ファイル）
+
+---
+
+## ディレクトリ構成
+
+```
+AozoraEpub3/
+├── src/                    # Javaソース（メインロジック）
+├── test/                   # JUnit テスト
+├── test_data/              # テスト用フィクスチャ
+├── template/               # Velocity テンプレート（XHTML/CSS）
+├── presets/                # デバイスプリセット INI ファイル
+├── build.gradle            # Gradle ビルド定義
+└── .clinerules             # このファイル
+```
+
+---
+
+## コーディング規約
+
+### 全般
+- 変更は最小限・精確に行うこと（不要なリファクタリング禁止）
+- 既存のコーディングスタイルに合わせること
+- グローバル状態の導入を避けること
+- `public` API を安定させること（破壊的変更には承認が必要）
+
+### Java
+- Java 21 の機能（Records, sealed classes, pattern matching）を積極活用
+- null チェックは早期 fail-fast で行う
+- Windows パス区切りは避け、`Paths` API / フォワードスラッシュを使う
+
+### テスト
+- JUnit 4 スタイル: `@Test` アノテーション、`import static org.junit.Assert.*`
+- テストデータは `test_data/` に配置: `Paths.get("test_data", "xxx")`
+- テストクラス名: `<対象クラス名>Test.java`
+- エンドツーエンドテストには `@Ignore` を付けてスキップ可にする
+
+### Velocity テンプレート
+- テンプレートは `template/` 以下に配置し、絶対パスをハードコードしない
+- `VelocityEngine` のインスタンスは DIで受け取ること（コンストラクタ内での init 禁止）
+- プレゼンテーションとビジネスロジックを混在させない
+
+### INI / プリセット
+- 新しい INI キーを追加した場合、以下を必ず更新:
+  1. パース・バリデーションロジック
+  2. `Epub3Writer`/コンバータのコンテキスト生成
+  3. 対応する `.vm` テンプレート
+  4. ユニットテスト
+
+---
+
+## ビルド・テストコマンド
+
+```powershell
+# テスト実行
+.\gradlew.bat test
+
+# FAT JAR ビルド
+.\gradlew.bat jar
+# → build/libs/AozoraEpub3.jar
+
+# 配布パッケージ作成
+.\gradlew.bat dist
+# → build/distributions/AozoraEpub3-<version>.zip / .tar.gz
+
+# CLI 実行例
+java -jar build/libs/AozoraEpub3.jar -of -d out input.txt
+```
+
+---
+
+## Git コミット規約
+
+- **コミットメッセージは必ず日本語で書く**
+- 形式: `<変更の要約>\n\n<詳細（任意）>`
+- Co-authored-by トレーラーを末尾に付ける:
+  ```
+  Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+  ```
+
+---
+
+## Ollama MCP 開発パートナー連携
+
+このプロジェクトは `D:\git\mult-agent\` の Ollama MCP サーバーと連携して開発を行います。
+
+### ツール一覧（`python tools/mcp_call.py <tool> <args>`）
+
+| ツール | 用途 | 例 |
+|---|---|---|
+| `code_review` | コードレビュー（日本語） | `python tools/mcp_call.py code_review src/com/.../Foo.java` |
+| `generate_tests` | JUnit 4 テスト自動生成 | `python tools/mcp_call.py generate_tests src/com/.../Foo.java` |
+| `design_advice` | 設計相談・パターン提案 | `python tools/mcp_call.py design_advice "○○を分割したい"` |
+| `search_code` | セマンティック検索 | `python tools/mcp_call.py search_code "ルビ処理の実装"` |
+| `run_build` | Gradleビルド実行 | `python tools/mcp_call.py run_build test` |
+| `read_file` | ファイル内容取得 | `python tools/mcp_call.py read_file src/com/.../Foo.java` |
+| `list_files` | ディレクトリ一覧 | `python tools/mcp_call.py list_files src/com/github/hmdev` |
+
+### MCPサーバー起動方法
+
+```powershell
+# D:\git\mult-agent\ で実行
+$env:AOZORA_PROJECT_ROOT = "D:\git\AozoraEpub3\AozoraEpub3"
+$env:PYTHONIOENCODING = "utf-8"
+python tools/ollama_dev_mcp.py
+# → http://localhost:8765/mcp/ で待機
+```
+
+### 標準ワークフロー（Copilot PM/PL + Ollama 開発担当）
+
+```
+1. タスク入力（ユーザー or GitHub Issue）
+2. Copilot がタスク分解・実装方針を決定
+3. search_code → 関連ファイル特定
+4. read_file → 対象ファイル確認
+5. generate_tests → 修正前テスト生成（TDD）
+6. 実装（人間 / Cline / Copilot）
+7. code_review → レビューコメント取得
+8. run_build test → テスト実行確認
+9. Copilot が最終承認 → 日本語コミットメッセージでコミット
+```
+
+---
+
+## よくある落とし穴
+
+- **Velocity リソース解決エラー**: `FileResourceLoader` を `template/` 指定で設定すること
+- **大ファイル（JisConverter.java 82KB）**: nomic-embed-text の入力制限に注意（インデックス除外済み）
+- **Windows パス区切り**: Python 側では `Path` API を使うこと
+- **ZIP パッケージング**: `mimetype` は非圧縮かつ先頭に配置（EPUB仕様）
+- **deepseek-r1:14b**: tool calling 非対応のため generate API で直接呼ぶこと
