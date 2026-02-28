@@ -1,5 +1,30 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.12-jdk21
+
+**リリース日**: 2026年2月28日
+
+### 新機能
+
+- **多言語対応 UI（日本語 / 英語）**
+  - GUIの全タブ（詳細設定・目次・スタイル・Web・ログ）のUI文字列を `I18n.t()` に置換
+  - `narou.rb互換 フォーマット設定` ダイアログも完全対応
+  - デフォルト言語: 日本語（`Locale.forLanguageTag("ja")`）
+  - 英語UIへの切り替えは `AozoraEpub3.ini` の `ui_lang=en` で変更可能
+  - 対象ファイル:
+    - `AozoraEpub3Applet.java`: ~200箇所を `I18n.t()` に置換
+    - `NarouFormatSettingsDialog.java`: 全文字列を `I18n.t()` に置換
+    - `messages_ja.properties` / `messages_en.properties`: 約340キーを追加
+
+### 検証結果
+
+```
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ 全テスト成功 (154テスト)
+```
+
+---
+
 ## バージョン: 1.2.11-jdk21
 
 **リリース日**: 2026年2月28日
