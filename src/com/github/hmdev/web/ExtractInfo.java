@@ -32,11 +32,19 @@ public class ExtractInfo
 	public ExtractInfo(String queryString, Pattern patter, String replaceString)
 	{
 		String[] values = queryString.split(":");
-		this.query = values[0];
-		if (values.length > 1) {
-			this.idx = new int [values.length-1];
-			for (int i=0; i<this.idx.length; i++)
-				this.idx[i] = Integer.parseInt(values[i+1]);
+		// 末尾から数値インデックスを収集（:not()等のCSS疑似クラスと区別するため末尾走査）
+		int idxCount = 0;
+		for (int i = values.length - 1; i >= 1; i--) {
+			try { Integer.parseInt(values[i]); idxCount++; }
+			catch (NumberFormatException e) { break; }
+		}
+		if (idxCount > 0) {
+			this.query = String.join(":", java.util.Arrays.copyOfRange(values, 0, values.length - idxCount));
+			this.idx = new int[idxCount];
+			for (int i = 0; i < idxCount; i++)
+				this.idx[i] = Integer.parseInt(values[values.length - idxCount + i]);
+		} else {
+			this.query = queryString;
 		}
 		this.pattern = patter;
 		//改行コード \n は改行文字に

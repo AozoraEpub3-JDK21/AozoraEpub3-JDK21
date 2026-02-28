@@ -934,6 +934,22 @@ public class WebAozoraConverter
 						File chapterCacheFile = new File(cachePath.getAbsolutePath()+"/"+chapterPath+(chapterPath.endsWith("/")?"index.html":""));
 						//シリーズタイトルを出力
 						Document chapterDoc = Jsoup.parse(chapterCacheFile, null);
+						// キャッシュファイルに本文が無い場合（ダウンロード失敗・エラーページ等）は再ダウンロード
+						{
+							Elements contentCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+							if ((contentCheck == null || contentCheck.size() == 0) && this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) {
+								LogAppender.println("本文が取得できないためキャッシュを削除して再ダウンロードします: " + chapterHref);
+								chapterCacheFile.delete();
+								try {
+									sleepForDownload();
+									cacheFile(chapterHref, chapterCacheFile, urlString);
+									chapterDoc = Jsoup.parse(chapterCacheFile, null);
+								} catch (Exception e) {
+									e.printStackTrace();
+									LogAppender.println("再ダウンロードできませんでした: " + chapterHref);
+								}
+							}
+						}
 						String chapterTitle = getExtractText(chapterDoc, this.queryMap.get(ExtractId.CONTENT_CHAPTER));
 						// nextDataEpisodeChapterMap をフォールバックとして使用 (Phase 2-1: カクヨム章構造対応)
 						if (chapterTitle == null && this.nextDataEpisodeChapterMap != null) {
