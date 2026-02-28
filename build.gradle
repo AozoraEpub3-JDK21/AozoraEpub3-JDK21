@@ -47,7 +47,7 @@ dependencies {
         implementation 'org.jsoup:jsoup:1.22.1'
     
     // Junrar を最新版に
-        implementation 'com.github.junrar:junrar:7.5.7'
+        implementation 'com.github.junrar:junrar:7.5.8'
     
     // Velocity を最新版に
         implementation 'org.apache.velocity:velocity-engine-core:2.4.1'
