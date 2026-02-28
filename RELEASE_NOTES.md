@@ -1,5 +1,23 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.9-jdk21
+
+**リリース日**: 2026年2月28日
+
+### 新機能
+
+- **Web小説 各話の更新日時・初回公開日 GUI ON/OFF 機能**
+  - 「narou.rb互換 フォーマット設定」ダイアログに2つのチェックボックスを追加
+    - **更新日時を各話に表示** (`show_post_date`): 各話の最終更新日時を本文末に表示（初期値: OFF）
+    - **初回公開日を各話に表示** (`show_publish_date`): 改稿済の話の初回公開日を更新日時と別行で表示（初期値: OFF）
+  - 表示形式: `2024/01/10 公開` / `2024/01/20 更新` の形式で別行出力
+  - `setting_narourb.ini` に保存、narou.rb `setting.ini` とキー互換
+  - 小説家になろう (`ncode.syosetu.com` / `novel18.syosetu.com`) の `extract.txt` を更新:
+    - `CONTENT_UPDATE_LIST`: 更新日時のみ抽出するよう正規表現を修正
+    - `CONTENT_PUBLISH_LIST` を新規追加（`span[title]` 属性から初回公開日を取得）
+
+---
+
 ## バージョン: 1.2.7-jdk21
 
 **リリース日**: 2026年2月26日

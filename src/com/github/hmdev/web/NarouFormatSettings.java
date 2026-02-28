@@ -40,10 +40,10 @@ public class NarouFormatSettings {
 	private boolean includeTocUrl = true;
 
 	/** 更新日時を各話に表示 */
-	private boolean showPostDate = true;
+	private boolean showPostDate = false;
 
 	/** 初回公開日を各話に表示 */
-	private boolean showPublishDate = true;
+	private boolean showPublishDate = false;
 
 	/** 行頭のかぎ括弧に二分アキを挿入 */
 	private boolean enableHalfIndentBracket = true;
@@ -387,10 +387,10 @@ public class NarouFormatSettings {
 			bw.write("include_toc_url = true\n");
 			bw.write("\n");
 			bw.write("; 更新日時を各話に表示\n");
-			bw.write("show_post_date = true\n");
+			bw.write("show_post_date = false\n");
 			bw.write("\n");
 			bw.write("; 初回公開日を各話に表示\n");
-			bw.write("show_publish_date = true\n");
+			bw.write("show_publish_date = false\n");
 			bw.write("\n");
 			bw.write("; 行頭のかぎ括弧に二分アキを挿入 (縦書き時の見た目改善)\n");
 			bw.write("enable_half_indent_bracket = true\n");
