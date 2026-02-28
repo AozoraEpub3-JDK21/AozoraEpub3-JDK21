@@ -80,6 +80,8 @@ public class WebAozoraConverter
 	int beforeChapter = 0;
 	/** この時間前までに取得された追加更新話を変換する */
 	float modifiedExpire = 24;
+	/** 本文内挿絵のダウンロードをスキップする（表紙は除く） */
+	public boolean skipImages = false;
 	
 	////////////////////////////////
 	//キャンセルリクエストされたらtrue
@@ -1530,12 +1532,20 @@ public class WebAozoraConverter
 	{
 		String src = img.attr("src");
 		if (src == null || src.length() == 0) return;
+		// 挿絵スキップ設定: 本文内画像(imageOutFile==null)のみスキップ、表紙は除く
+		if (this.skipImages && imageOutFile == null) return;
 		
 		String imagePath = null;
 		int idx = src.indexOf("//");
 		if (idx > 0) {
+			// 絶対URL (http:// or https://)
 			imagePath = CharUtils.escapeUrlToFile(src.substring(idx+2));
+		} else if (idx == 0) {
+			// プロトコル相対URL (//domain/path) → baseUri のプロトコルを補完
+			imagePath = CharUtils.escapeUrlToFile(src.substring(2));
+			src = this.baseUri.substring(0, this.baseUri.indexOf("//")) + src;
 		} else if (src.charAt(0) == '/') {
+			// 同ホスト絶対パス (/path)
 			imagePath = "_"+CharUtils.escapeUrlToFile(src);
 			src = this.baseUri+src;
 		}

@@ -408,6 +408,7 @@ public class AozoraEpub3Applet extends JApplet
 	JCheckBox jCheckWebModifiedOnly;
 	JCheckBox jCheckWebModifiedTail;
 	JTextField jTextWebModifiedExpire;
+	JCheckBox jCheckWebSkipImages;
 	
 	//なろうAPI
 	JCheckBox jCheckUseNarouApi;
@@ -2411,7 +2412,12 @@ public class AozoraEpub3Applet extends JApplet
 		jCheckWebModifiedTail.setBorder(padding2);
 		panel.add(jCheckWebModifiedTail);
 		panel.add(new JLabel(")"));
-		
+		jCheckWebSkipImages = new JCheckBox(I18n.t("ui.chk.webSkipImages"));
+		jCheckWebSkipImages.setToolTipText(I18n.t("ui.tooltip.webSkipImages"));
+		jCheckWebSkipImages.setFocusPainted(false);
+		jCheckWebSkipImages.setBorder(padding2);
+		panel.add(jCheckWebSkipImages);
+
 		////////////////////////////////////////////////////////////////
 		//テキストエリア
 		////////////////////////////////////////////////////////////////
@@ -4222,6 +4228,7 @@ public class AozoraEpub3Applet extends JApplet
 					return;
 				}
 				
+				webConverter.skipImages = this.jCheckWebSkipImages.isSelected();
 				File srcFile = webConverter.convertToAozoraText(urlString, this.cachePath, interval, modifiedExpire,
 					this.jCheckWebConvertUpdated.isSelected(), this.jCheckWebModifiedOnly.isSelected(), jCheckWebModifiedTail.isSelected(),
 					beforeChapter);
@@ -4842,6 +4849,7 @@ public class AozoraEpub3Applet extends JApplet
 		setPropsSelected(jCheckWebModifiedTail, props, "WebModifiedTail");
 		setPropsSelected(jCheckWebBeforeChapter, props, "WebBeforeChapter");
 		setPropsIntText(jTextWebBeforeChapterCount, props, "WebBeforeChapterCount");
+		setPropsSelected(jCheckWebSkipImages, props, "WebSkipImages");
 		
 		//なろうAPI
 		setPropsSelected(jCheckUseNarouApi, props, "UseNarouApi");
@@ -5011,6 +5019,7 @@ public class AozoraEpub3Applet extends JApplet
 		props.setProperty("WebModifiedTail", this.jCheckWebModifiedTail.isSelected()?"1":"");
 		props.setProperty("WebBeforeChapter", this.jCheckWebBeforeChapter.isSelected()?"1":"");
 		props.setProperty("WebBeforeChapterCount", this.jTextWebBeforeChapterCount.getText());
+		props.setProperty("WebSkipImages", this.jCheckWebSkipImages.isSelected()?"1":"");
 		
 		//なろうAPI
 		props.setProperty("UseNarouApi", this.jCheckUseNarouApi.isSelected()?"1":"");
