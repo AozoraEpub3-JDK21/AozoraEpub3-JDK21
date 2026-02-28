@@ -7,7 +7,7 @@ plugins {
     id 'edu.sc.seis.launch4j' version '4.0.0'
 }
 
-version = '1.2.14-jdk21'
+version = '1.2.15-jdk21'
 
 // Gradle Wrapper を生成するためのタスク
 wrapper {

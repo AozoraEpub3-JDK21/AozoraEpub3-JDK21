@@ -15,6 +15,7 @@ import java.net.URI;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -321,6 +322,7 @@ public class WebAozoraConverter
 	 * メタデータをJSONファイルとして保存
 	 */
 	private void saveMetadataToCache(NovelMetadata metadata, File file) {
+		file.getParentFile().mkdirs();
 		try (BufferedWriter writer = new BufferedWriter(
 			new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
 			
@@ -808,6 +810,7 @@ public class WebAozoraConverter
 				}
 			}
 	
+			List<String> failedHrefs = new ArrayList<>();
 			if (chapterHrefs.size() > 0) {
 				//全話で更新や追加があるかチェック
 				updated = false;
@@ -927,11 +930,26 @@ public class WebAozoraConverter
 				chapterIdx = 0;
 				for (String chapterHref : chapterHrefs) {
 					if (this.canceled) return null;
-					
+
 					if (modifiedChapterIdx == null || modifiedChapterIdx.contains(chapterIdx)) {
 						//キャッシュファイル取得
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
 						File chapterCacheFile = new File(cachePath.getAbsolutePath()+"/"+chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+						//ダウンロード失敗でキャッシュが存在しない場合は再試行
+						if (!chapterCacheFile.exists()) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、再ダウンロードを試みます: "+chapterHref);
+							try {
+								try { Thread.sleep(3000); } catch (InterruptedException e2) { }
+								cacheFile(chapterHref, chapterCacheFile, urlString);
+								this.updated = true;
+							} catch (Exception e) {
+								e.printStackTrace();
+								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
+								failedHrefs.add(chapterHref);
+								chapterIdx++;
+								continue;
+							}
+						}
 						//シリーズタイトルを出力
 						Document chapterDoc = Jsoup.parse(chapterCacheFile, null);
 						// キャッシュファイルに本文が無い場合（ダウンロード失敗・エラーページ等）は再ダウンロード
@@ -1015,6 +1033,18 @@ public class WebAozoraConverter
 					if (idxConnected) buf.append("-"+(preIdx+1));
 					LogAppender.println(buf+"話を変換します");
 				}
+			}
+			//ダウンロード失敗話の報告
+			if (!failedHrefs.isEmpty()) {
+				File failedFile = new File(this.dstPath, "failed_downloads.txt");
+				try (BufferedWriter fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(failedFile), "UTF-8"))) {
+					for (String href : failedHrefs) fw.write(href + "\n");
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				LogAppender.println("警告: "+failedHrefs.size()+"話のダウンロードに失敗しました。失敗した話はスキップしてePubを作成しました。");
+				LogAppender.println("【再ダウンロード方法】GUIのテキスト欄に元のURLを貼り付けて変換を再実行すると、失敗した話のみ自動で再ダウンロードしてePubを再作成します。");
+				LogAppender.println("失敗したURL一覧: "+failedFile.getAbsolutePath());
 			}
 			//底本にURL追加
 			bw.append("\n［＃改ページ］\n");
