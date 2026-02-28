@@ -1,5 +1,29 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.2.11-jdk21
+
+**リリース日**: 2026年2月28日
+
+### バグ修正
+
+- **Web小説 各話欠落の修正**（小説家になろう）
+  - **根本原因**: 前書きdivが `class="js-novel-text p-novel__text p-novel__text--preface"` を持つため、`CONTENT_ARTICLE` セレクターが前書きを本文として誤マッチし、本文がスキップされていた。
+  - **修正1**: `ncode.syosetu.com/extract.txt` の `CONTENT_ARTICLE` セレクターに `:not(.p-novel__text--preface)` を追加して前書きを除外
+  - **修正2**: `ExtractInfo.java` のセレクターパース処理を改修 — `:not()` 等のCSS疑似クラスを含むセレクター文字列でも末尾の数値インデックス（`:0` 等）を正しく分離して解析できるよう対応
+  - **修正3**: キャッシュファイルに本文が存在しない話を検出した場合、自動でキャッシュ削除・再ダウンロードするフォールバック処理を追加
+  - 実機確認: `n7673ff` ep29/ep31 が正常取得できることを確認（15KB超の本文）
+
+### 検証結果
+
+```
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ 全テスト成功 (154テスト)
+EPUBCheck 5.1.0: ✓ 0 fatals / 0 errors / 0 warnings / 0 infos
+実機テスト: ✓ n7673ff 332話 正常変換確認
+```
+
+---
+
 ## バージョン: 1.2.10-jdk21
 
 **リリース日**: 2026年2月28日

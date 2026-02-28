@@ -69,12 +69,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.2.7-jdk21.zip
+AozoraEpub3-1.2.11-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.2.7-jdk21.tar.gz
+AozoraEpub3-1.2.11-jdk21.tar.gz
 ```
 
 ### インストール手順
