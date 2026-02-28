@@ -46,8 +46,8 @@ CONTENT_CHAPTER	.p-eplist__chapter-title:0,.chapter_title:0
 ## 各話 章タイトル 中見出しで出力 (新クラス: p-novel__title)
 CONTENT_SUBTITLE	.p-novel__title:0,.novel_subtitle:0	(（改稿版）)|(^.*</div>)
 
-## 各話 本文 (新クラス: p-novel__text)
-CONTENT_ARTICLE	.js-novel-text.p-novel__text:0,#novel_honbun:0
+## 各話 本文 (新クラス: p-novel__text, --prefaceクラスを除外)
+CONTENT_ARTICLE	.js-novel-text.p-novel__text:not(.p-novel__text--preface):0,#novel_honbun:0
 
 ##本文タグ外に画像がある場合本文の前に出力
 #CONTENT_IMG
