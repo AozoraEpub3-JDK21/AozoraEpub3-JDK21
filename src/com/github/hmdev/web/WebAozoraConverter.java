@@ -685,6 +685,7 @@ public class WebAozoraConverter
 			//nullならキャッシュ更新無しで、空ならすべて更新される
 			HashSet<String> noUpdateUrls = null;
 			String[] postDateList = null;
+			String[] publishDateList = null;
 			if (hrefs == null) {
 				//ページ番号取得
 				String pageNumString = getExtractText(doc, this.queryMap.get(ExtractId.PAGE_NUM));
@@ -717,7 +718,7 @@ public class WebAozoraConverter
 					Elements contentDivs = getExtractElements(doc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
 					if (contentDivs != null) {
 						//一覧のリンクはないが本文がある場合
-						docToAozoraText(bw, doc, false, null, null);
+						docToAozoraText(bw, doc, false, null, null, null);
 					} else {
 						LogAppender.println("一覧のURLが取得できませんでした");
 						return null;
@@ -791,6 +792,7 @@ public class WebAozoraConverter
 				if (postDateList == null && this.queryMap.containsKey(ExtractId.CONTENT_UPDATE_LIST)) {
 					LogAppender.println("CONTENT_UPDATE_LIST : 一覧ページの更新日時情報が取得できません");
 				}
+				publishDateList = getPublishDateList(doc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST));
 			}
 			
 
@@ -956,15 +958,19 @@ public class WebAozoraConverter
 							bw.append("［＃大見出し終わり］\n");
 							bw.append('\n');
 						}
-						//更新日時を一覧から取得
+							//更新日時・初回公開日を一覧から取得
 						String postDate = null;
 						if (postDateList != null && postDateList.length > chapterIdx) {
 							postDate = postDateList[chapterIdx];
 						}
+						String publishDate = null;
+						if (publishDateList != null && publishDateList.length > chapterIdx) {
+							publishDate = publishDateList[chapterIdx];
+						}
 						String subTitle = null;
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
-						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate);
+						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate, publishDate);
 					}
 					chapterIdx++;
 				}
@@ -1181,10 +1187,32 @@ public class WebAozoraConverter
 		}
 		return null;
 	}
+
+	/** 一覧から初回公開日を取得 (span[title]属性から抽出) */
+	private String[] getPublishDateList(Document doc, ExtractInfo[] extractInfos)
+	{
+		if (extractInfos == null) return null;
+		for (ExtractInfo extractInfo : extractInfos) {
+			Elements elements = doc.select(extractInfo.query);
+			if (elements == null || elements.size() == 0) continue;
+			String[] publishDateList = new String[elements.size()];
+			boolean hasAny = false;
+			for (int i = 0; i < publishDateList.length; i++) {
+				org.jsoup.nodes.Element span = elements.get(i).selectFirst("span[title]");
+				if (span != null) {
+					publishDateList[i] = span.attr("title");
+					if (!publishDateList[i].isEmpty()) hasAny = true;
+				}
+			}
+			return hasAny ? publishDateList : null;
+		}
+		return null;
+	}
+
 	
 	/** 各話のHTMLの変換
 	 * @param listSubTitle 一覧側で取得したタイトル */
-	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate) throws IOException
+	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate, String publishDate) throws IOException
 	{
 		// 英文保護リストをクリア（各話ごとに初期化）
 		englishSentences.clear();
@@ -1204,15 +1232,23 @@ public class WebAozoraConverter
 				printText(bw, subTitle);
 				bw.append("［＃中見出し終わり］\n");
 			}
-			//公開日付
-			// narou.rb互換: show_post_date設定で制御
-			if (formatSettings.isShowPostDate()) {
+			//公開日付・更新日付
+			// narou.rb互換: show_post_date / show_publish_date設定で制御
+			{
 				String coutentUpdate = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_UPDATE));
 				if (coutentUpdate != null && coutentUpdate.length() > 0) postDate = coutentUpdate;
-				if (postDate != null) {
+				boolean showPost = formatSettings.isShowPostDate() && postDate != null && postDate.trim().length() > 0;
+				boolean showPublish = formatSettings.isShowPublishDate() && publishDate != null && !publishDate.isEmpty();
+				if (showPost || showPublish) {
 					bw.append("［＃ここから地から１字上げ］\n［＃ここから１段階小さな文字］\n");
-					printText(bw, postDate);
-					bw.append('\n');
+					if (showPublish) {
+						printText(bw, publishDate);
+						bw.append(" 公開\n");
+					}
+					if (showPost) {
+						printText(bw, postDate.trim());
+						bw.append(" 更新\n");
+					}
 					bw.append("［＃ここで小さな文字終わり］\n［＃ここで字上げ終わり］\n");
 				}
 			}

@@ -32,8 +32,10 @@ SUB_UPDATE	.long_update
 ## TOC ページネーション: 101話以上の作品で2ページ目以降の目次を取得
 PAGE_URL	a[href*="?p="]:-1	(\?p=)\d+\t(\d+)	$1$2
 
-##本文に日付が無い場合 公開・更新日時の文字列に利用
-CONTENT_UPDATE_LIST	.long_update	^([^<]+)(<span title=\"([^"]+)\".*)?$	$1 公開　$3
+##本文に日付が無い場合 更新日時の文字列に利用 (初回公開日はCONTENT_PUBLISH_LISTで別取得)
+CONTENT_UPDATE_LIST	.long_update	^([^<]+)(?:<[\s\S]*)?$	$1
+##初回公開日 (改稿済の場合 span title属性から取得)
+CONTENT_PUBLISH_LIST	.long_update
 
 ################################
 ###各話の抽出設定

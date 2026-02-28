@@ -42,6 +42,9 @@ public class NarouFormatSettings {
 	/** 更新日時を各話に表示 */
 	private boolean showPostDate = true;
 
+	/** 初回公開日を各話に表示 */
+	private boolean showPublishDate = true;
+
 	/** 行頭のかぎ括弧に二分アキを挿入 */
 	private boolean enableHalfIndentBracket = true;
 
@@ -137,6 +140,9 @@ public class NarouFormatSettings {
 
 	public boolean isShowPostDate() { return showPostDate; }
 	public void setShowPostDate(boolean v) { this.showPostDate = v; }
+
+	public boolean isShowPublishDate() { return showPublishDate; }
+	public void setShowPublishDate(boolean v) { this.showPublishDate = v; }
 
 	public boolean isEnableHalfIndentBracket() { return enableHalfIndentBracket; }
 	public void setEnableHalfIndentBracket(boolean v) { this.enableHalfIndentBracket = v; }
@@ -272,6 +278,9 @@ public class NarouFormatSettings {
 			case "show_post_date":
 				showPostDate = toBoolean(value);
 				break;
+			case "show_publish_date":
+				showPublishDate = toBoolean(value);
+				break;
 			case "enable_half_indent_bracket":
 				enableHalfIndentBracket = toBoolean(value);
 				break;
@@ -380,6 +389,9 @@ public class NarouFormatSettings {
 			bw.write("; 更新日時を各話に表示\n");
 			bw.write("show_post_date = true\n");
 			bw.write("\n");
+			bw.write("; 初回公開日を各話に表示\n");
+			bw.write("show_publish_date = true\n");
+			bw.write("\n");
 			bw.write("; 行頭のかぎ括弧に二分アキを挿入 (縦書き時の見た目改善)\n");
 			bw.write("enable_half_indent_bracket = true\n");
 			bw.write("\n");
@@ -456,6 +468,7 @@ public class NarouFormatSettings {
 			writeEntry(bw, "include_story", includeStory, "あらすじを表紙に含める");
 			writeEntry(bw, "include_toc_url", includeTocUrl, "掲載URLを表紙に含める");
 			writeEntry(bw, "show_post_date", showPostDate, "更新日時を各話に表示");
+			writeEntry(bw, "show_publish_date", showPublishDate, "初回公開日を各話に表示");
 			bw.write("\n");
 			writeEntry(bw, "enable_half_indent_bracket", enableHalfIndentBracket, "行頭かぎ括弧に二分アキ");
 			writeEntry(bw, "enable_convert_num_to_kanji", enableConvertNumToKanji, "数字の漢数字化");

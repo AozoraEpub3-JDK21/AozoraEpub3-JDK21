@@ -69,6 +69,7 @@ public class NarouFormatSettingsDialog extends JDialog {
 	private JCheckBox chkIncludeStory;
 	private JCheckBox chkIncludeTocUrl;
 	private JCheckBox chkShowPostDate;
+	private JCheckBox chkShowPublishDate;
 	private JCheckBox chkDisplayEndOfBook;
 
 	public NarouFormatSettingsDialog(Image iconImage, NarouFormatSettings settings, File settingsFile) {
@@ -230,7 +231,9 @@ public class NarouFormatSettingsDialog extends JDialog {
 		chkIncludeTocUrl = addCheckBox(panel, gbc, "掲載URLを表紙に含める",
 			"小説の掲載URLを表紙ページに表示します");
 		chkShowPostDate = addCheckBox(panel, gbc, "更新日時を各話に表示",
-			"各話の投稿日時を表示します");
+			"各話の最終更新日時を表示します");
+		chkShowPublishDate = addCheckBox(panel, gbc, "初回公開日を各話に表示",
+			"各話の初回公開日を表示します（改稿済の話のみ更新日時と別に表示）");
 		chkDisplayEndOfBook = addCheckBox(panel, gbc, "本の終了マーカーを表示",
 			"最終ページに「この本はここで終わりです」を表示します");
 
@@ -307,6 +310,7 @@ public class NarouFormatSettingsDialog extends JDialog {
 		chkIncludeStory.setSelected(settings.isIncludeStory());
 		chkIncludeTocUrl.setSelected(settings.isIncludeTocUrl());
 		chkShowPostDate.setSelected(settings.isShowPostDate());
+		chkShowPublishDate.setSelected(settings.isShowPublishDate());
 		chkDisplayEndOfBook.setSelected(settings.isEnableDisplayEndOfBook());
 	}
 
@@ -334,6 +338,7 @@ public class NarouFormatSettingsDialog extends JDialog {
 		settings.setIncludeStory(chkIncludeStory.isSelected());
 		settings.setIncludeTocUrl(chkIncludeTocUrl.isSelected());
 		settings.setShowPostDate(chkShowPostDate.isSelected());
+		settings.setShowPublishDate(chkShowPublishDate.isSelected());
 		settings.setEnableDisplayEndOfBook(chkDisplayEndOfBook.isSelected());
 	}
 
