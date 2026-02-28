@@ -19,17 +19,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/2
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.2.13-jdk21 (February 28, 2026) |
+  <p><strong>Latest: </strong> v1.2.14-jdk21 (February 28, 2026) |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.13-jdk21/AozoraEpub3-1.2.13-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.14-jdk21/AozoraEpub3-1.2.14-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.13-jdk21/AozoraEpub3-1.2.13-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.14-jdk21/AozoraEpub3-1.2.14-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.13-jdk21/AozoraEpub3-1.2.13-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.2.14-jdk21/AozoraEpub3-1.2.14-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
