@@ -88,6 +88,29 @@ jobs:
           # Make it available for subsequent steps
           echo "JAR_FILE=$JAR_FILE" >> $GITHUB_ENV
 
+      - name: GUI smoke test (exe/jar startup check)
+        run: |
+          set -e
+          JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
+          [ -z "$JAR_FILE" ] && (echo "JAR not found"; exit 1)
+          echo "Testing GUI startup with: $JAR_FILE"
+          # Install Xvfb for headless GUI rendering
+          sudo apt-get update -y >/dev/null 2>&1 || true
+          sudo apt-get install -y xvfb >/dev/null 2>&1 || true
+          # Launch GUI in background via Xvfb; crash on startup exits immediately
+          xvfb-run --auto-servernum java -jar "$JAR_FILE" &
+          GUI_PID=$!
+          sleep 5
+          if kill -0 $GUI_PID 2>/dev/null; then
+            echo "GUI smoke test PASSED: process running after 5s"
+            kill $GUI_PID || true
+          else
+            wait $GUI_PID
+            EXIT=$?
+            echo "GUI smoke test FAILED: process exited with code $EXIT (likely NullPointerException or startup crash)"
+            exit 1
+          fi
+
       - name: Generate sample EPUBs
         run: |
           set -e
