@@ -1110,6 +1110,8 @@ public class AozoraEpub3Applet extends JApplet
 		label.setBorder(padding2H);
 		panel.add(label);
 		label = new JLabel(I18n.t("ui.label.screen.h"));
+		panel.add(label);
+		jTextDispH = new JTextField("800");
 		jTextDispH.setHorizontalAlignment(JTextField.RIGHT);
 		jTextDispH.setMaximumSize(text4);
 		jTextDispH.setPreferredSize(text4);
