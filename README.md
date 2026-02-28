@@ -69,12 +69,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.2.12-jdk21.zip
+AozoraEpub3-1.2.15-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.2.12-jdk21.tar.gz
+AozoraEpub3-1.2.15-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -123,12 +123,11 @@ cd AozoraEpub3-JDK21
 
 ---
 
-## 最近の変更（1.2.7-jdk21）
+## 最近の変更（1.2.15-jdk21）
 
-- **カクヨム (kakuyomu.jp) 対応**: `__NEXT_DATA__` JSON からエピソード全件取得・章構造・更新差分・傍点・あらすじに対応
-- **ハーメルン extract.txt 更新**: `<font>` 廃止対応（`span[itemprop]` / `#honbun`）
-- **セキュリティ修正**: CodeQL アラート全件対応（path-injection 30件、ReDoS #8–11/#65、command-injection #12/#67、partial-path-traversal #13）
-- 閉鎖・休眠サイト (dNoVeLs / NEWVEL-LIBRARY / Arcadia) に警告コメントを追記
+- **変換中断バグ修正**: なろう等で特定の話のダウンロードが失敗した場合に変換全体が中断される問題を修正。失敗した話はスキップして残りの話でePubを作成するように変更
+- **メタデータキャッシュエラー修正**: なろうAPIメタデータのキャッシュ保存時に親ディレクトリが未作成でエラーになる問題を修正
+- **ダウンロード失敗時の救済案内**: 失敗した話のURLを `failed_downloads.txt` に保存し、GUIのテキスト欄に元URLを再貼り付けして再実行すると失敗分のみ自動再ダウンロードしてePubを再作成できる旨を案内
 
 ---
 
