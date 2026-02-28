@@ -5,52 +5,52 @@ layout: null
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/usage.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/development.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/epub33-ja.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/en/index.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/en/usage.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/en/development.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/en/epub33.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/narou-setup.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/en/narou-setup.html</loc>
-    <lastmod>2026-02-27</lastmod>
+    <lastmod>2026-02-28</lastmod>
     <priority>0.5</priority>
   </url>
 </urlset>

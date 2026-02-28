@@ -104,6 +104,30 @@ Select optimized settings for your e-reader:
 5. Progress bar shows conversion status
 6. EPUB file is saved to output directory
 
+### Web Novel Direct Conversion
+
+Drag & drop a web novel URL or `.url` shortcut file to fetch and convert directly from supported sites.
+
+**Supported sites**: Shōsetsuka ni Narō / Narō R18 / Kakuyomu / Hameln / Akatsuki / novelist.jp / FC2 Novel, etc.
+
+**narou.rb-Compatible Format Settings**: Open "Web Novel Settings" from the GUI menu to configure:
+
+| Setting | INI Key | Description | Default |
+|---------|---------|-------------|---------|
+| Show update date per chapter | `show_post_date` | Display last update date at end of each chapter | OFF |
+| Show initial publish date per chapter | `show_publish_date` | Display original publish date for revised chapters | OFF |
+| Auto-detect author comments | `enable_author_comments` | Detect foreword/afterword by `*44`/`*48` patterns | ON |
+| Auto indent | `enable_auto_indent` | Automatically insert line-leading indentation | OFF |
+| Heading after page break | `enable_enchant_midashi` | Convert first line after page break to heading | ON |
+
+Settings are saved in `setting_narourb.ini` and are compatible with narou.rb's `setting.ini` keys.
+
+**Notes:**
+- **Rate limiting**: 1.5-second delay between chapter fetches to avoid server overload
+- **HTML structure changes**: May break if the target site redesigns (especially Narō)
+- **Long novels**: 100 chapters takes ~3 minutes
+- **Recommendation**: This is an experimental feature; manual download is more reliable
+
 ---
 
 ## Command Line Interface
