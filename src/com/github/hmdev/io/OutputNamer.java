@@ -9,10 +9,17 @@ import com.github.hmdev.info.BookInfo;
  * creator/title-based naming and basic sanitization.
  */
 public final class OutputNamer {
+	private static final int    MAX_CREATOR_LENGTH  = 64;
+	private static final int    MAX_FILENAME_LENGTH = 250;
+	private static final String DEFAULT_EXTENSION   = ".epub";
+
 	private OutputNamer() {
 	}
 
 	public static File generateOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) {
+		if (srcFile == null) {
+			throw new IllegalArgumentException("srcFile must not be null");
+		}
 		if (dstPath == null) {
 			dstPath = srcFile.getAbsoluteFile().getParentFile();
 		}
@@ -23,16 +30,16 @@ public final class OutputNamer {
 			builder.append(dstPath.getAbsolutePath()).append("/");
 			if (hasText(bookInfo.creator)) {
 				String creator = sanitize(bookInfo.creator);
-				if (creator.length() > 64) {
-					creator = creator.substring(0, 64);
+				if (creator.length() > MAX_CREATOR_LENGTH) {
+					creator = creator.substring(0, MAX_CREATOR_LENGTH);
 				}
 				builder.append("[").append(creator).append("] ");
 			}
 			if (bookInfo.title != null) {
 				builder.append(sanitize(bookInfo.title));
 			}
-			if (builder.length() > 250) {
-				builder.setLength(250);
+			if (builder.length() > MAX_FILENAME_LENGTH) {
+				builder.setLength(MAX_FILENAME_LENGTH);
 			}
 			outFileName = builder.toString();
 		} else {
@@ -40,7 +47,7 @@ public final class OutputNamer {
 		}
 
 		if (outExt == null || outExt.length() == 0) {
-			outExt = ".epub";
+			outExt = DEFAULT_EXTENSION;
 		}
 
 		File outFile = new File(outFileName + outExt);
