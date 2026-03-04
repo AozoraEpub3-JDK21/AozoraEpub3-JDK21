@@ -66,6 +66,13 @@ dependencies {
     testImplementation 'xerces:xercesImpl:2.12.2'
 }
 
+// テスト実行時にも chuki_*.txt をクラスパスリソースとして参照可能にする
+tasks.named('processResources') {
+    from('.') {
+        include 'chuki_*.txt'
+    }
+}
+
 sourceSets {
     main {
         java {
