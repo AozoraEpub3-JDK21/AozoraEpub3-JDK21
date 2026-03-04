@@ -18,6 +18,8 @@ import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.pipeline.WriterConfigurator;
+import com.github.hmdev.web.NarouFormatSettings;
+import com.github.hmdev.web.WebAozoraConverter;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
 
@@ -71,6 +73,10 @@ public class AozoraEpub3
 			//options.addOption("cp", false, "表紙画像ページ追加");
 			options.addOption("hor", false, "横書き (指定がなければ縦書き)");
 			options.addOption("device", true, "端末種別(指定した端末向けの例外処理を行う)\n[kindle]");
+			options.addOption("url", true, "変換するURL (複数指定可)");
+			options.addOption("interval", true, "ページ取得間隔(秒) [1.0] (デフォルト)");
+			options.addOption("cache", true, "キャッシュパス [.cache]");
+			options.addOption("narou", false, "narou.rb互換フォーマット設定(setting_narourb.ini)を適用");
 
 			CommandLine commandLine;
 			try {
@@ -81,7 +87,7 @@ public class AozoraEpub3
 			}
 			//オプションの後ろをファイル名に設定
 			String[] fileNames = commandLine.getArgs();
-			if (fileNames.length == 0) {
+			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return;
 			}
@@ -236,6 +242,81 @@ public class AozoraEpub3
 					chapterNumOnly, chapterNumTitle, chapterNumParen, chapterNumParenTitle,
 					chapterPattern);
 			
+			////////////////////////////////
+			//URL変換処理
+			////////////////////////////////
+			if (commandLine.hasOption("url")) {
+				String[] urls = commandLine.getOptionValues("url");
+				File cachePath = new File(jarPath + ".cache");
+				if (commandLine.hasOption("cache")) cachePath = new File(commandLine.getOptionValue("cache"));
+				cachePath.mkdirs();
+
+				int interval = 1000;
+				if (commandLine.hasOption("interval")) {
+					try { interval = (int)(Float.parseFloat(commandLine.getOptionValue("interval")) * 1000); } catch (Exception e) {}
+				}
+
+				File webConfigPath = new File(jarPath + "web");
+
+				for (String urlString : urls) {
+					LogAppender.println("--------");
+					LogAppender.append(urlString);
+					LogAppender.println(" を読み込みます");
+					try {
+						WebAozoraConverter webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
+						if (webConverter == null) {
+							LogAppender.append(urlString);
+							LogAppender.println(" は変換できませんでした");
+							continue;
+						}
+
+						if (commandLine.hasOption("narou")) {
+							File settingFile = new File(jarPath + "setting_narourb.ini");
+							File replaceFile = new File(jarPath + "replace_narourb.txt");
+							NarouFormatSettings.generateDefaultIfMissing(settingFile);
+							webConverter.loadFormatSettings(settingFile);
+							webConverter.getFormatSettings().loadReplacePatterns(replaceFile);
+						}
+
+						File srcFile = webConverter.convertToAozoraText(
+							urlString, cachePath, interval, 0f, false, false, false, 0);
+
+						if (srcFile == null) {
+							LogAppender.append(urlString);
+							LogAppender.println(" は変換できませんでした");
+							continue;
+						}
+
+						ImageInfoReader imageInfoReader = new ImageInfoReader(true, srcFile);
+						BookInfo bookInfo = AozoraEpub3.getBookInfo(
+							srcFile, "txt", 0, imageInfoReader, aozoraConverter, "UTF-8",
+							BookInfo.TitleType.indexOf(titleIndex), false);
+						if (bookInfo == null) {
+							LogAppender.println("BookInfo取得失敗: " + urlString);
+							continue;
+						}
+						bookInfo.vertical = vertical;
+						bookInfo.insertTocPage = tocPage;
+						bookInfo.setTocVertical(tocVertical);
+						bookInfo.insertTitleToc = insertTitleToc;
+						bookInfo.titlePageType = titlePage;
+						bookInfo.insertCoverPageToc = coverPageToc;
+						bookInfo.insertCoverPage = coverPage;
+						aozoraConverter.vertical = vertical;
+						if (!bookInfo.insertTitleToc && bookInfo.titleLine >= 0) {
+							bookInfo.removeChapterLineInfo(bookInfo.titleLine);
+						}
+
+						File urlDstPath = (dstPath != null) ? dstPath : srcFile.getAbsoluteFile().getParentFile();
+						File outFile = getOutFile(srcFile, urlDstPath, bookInfo, autoFileName, outExt);
+						AozoraEpub3.convertFile(srcFile, "txt", outFile, aozoraConverter, epub3Writer, "UTF-8", bookInfo, imageInfoReader, 0);
+					} catch (Exception e) {
+						e.printStackTrace();
+						LogAppender.println("エラーが発生しました : " + e.getMessage());
+					}
+				}
+			}
+
 			////////////////////////////////
 			//各ファイルを変換処理
 			////////////////////////////////

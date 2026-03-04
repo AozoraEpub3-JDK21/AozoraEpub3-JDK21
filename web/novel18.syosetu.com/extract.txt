@@ -12,19 +12,19 @@ COOKIE	over18=yes
 ################################
 ##一覧ページの抽出設定
 ## シリーズタイトル
-SERIES	.series a:0
+SERIES	.p-novel__series-link:0,.series a:0
 ## タイトル
-TITLE	.novel_title:0,.novel_subtitle:0	(^.*</div>)	
+TITLE	.p-novel__title:0,.novel_title:0,.novel_subtitle:0	(^.*</div>)
 ## 著者
-AUTHOR	.novel_writername a:0,.novel_writername:0	作者：	
+AUTHOR	.p-novel__author a:0,.novel_writername a:0,.novel_writername:0	作者：
 ## 説明
-DESCRIPTION	#novel_ex:0
+DESCRIPTION	.p-novel__summary:0,#novel_ex:0
 ##表紙画像
 COVER_IMG	.novel_img img:0
 
 ################
 ## 各話へのリンク
-HREF	.subtitle a
+HREF	.p-eplist__subtitle,.subtitle a
 ##HREF	a	\/n\d+\w*\/\d+\/
 ##一覧に記載されている各話の更新日時
 SUB_UPDATE	.long_update

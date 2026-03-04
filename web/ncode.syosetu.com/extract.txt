@@ -3,21 +3,21 @@
 ### https://ncode.syosetu.com/
 ################################
 ### 2024年サイトリニューアル対応版
-### 新しいHTMLクラス名 (p-eplist__, p-novel__, p-infotop-) に対応
+### 新しいHTMLクラス名 (p-eplist__, p-novel__) に対応
 
 ## 変換対象URLパターン
 ##PAGE_REGEX		.*/n\d+[^\/]*/$
 
 ################################
 ##一覧ページの抽出設定
-## シリーズタイトル
-SERIES	.series a:0
-## タイトル (新クラス: p-infotop-title)
-TITLE	p-infotop-title a:0,.novel_title:0,.novel_subtitle:0	(^.*</div>)
-## 著者 (新クラス: p-infotop-data__value)
-AUTHOR	.p-infotop-data__value a:0,.novel_writername a:0,.novel_writername:0	作者：
-## 説明 (新クラス: p-infotop-data__value)
-DESCRIPTION	.p-infotop-data__value:0,#novel_ex:0
+## シリーズタイトル (新クラス: p-novel__series-link)
+SERIES	.p-novel__series-link:0,.series a:0
+## タイトル (新クラス: p-novel__title)
+TITLE	.p-novel__title:0,.novel_title:0,.novel_subtitle:0	(^.*</div>)
+## 著者 (新クラス: p-novel__author)
+AUTHOR	.p-novel__author a:0,.p-infotop-data__value a:0,.novel_writername a:0,.novel_writername:0	作者：
+## 説明
+DESCRIPTION	.p-novel__summary:0,#novel_ex:0,.p-infotop-data__value:0
 ##表紙画像
 COVER_IMG	.novel_img img:0
 
