@@ -89,6 +89,58 @@ This project uses custom build tasks:
 - End-to-end tests calling the CLI can be flaky in Gradle workers due to path/resource differences. If unavoidable, run in a temporary directory and assert on produced `.epub` contents.
 - Use `epubcheck` in CI for final validation; no network calls in tests.
 
+## narou.rb Integration – Observed Behavior
+
+This section records the **actual runtime settings** that narou.rb applies when calling AozoraEpub3, verified by comparing narou.rb-generated EPUBs against Java CLI output under controlled conditions (cross-validated via a .NET port of this tool that achieves byte-identical EPUB output for the same inputs).
+
+### Settings narou.rb uses by default
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| `vertical` | `true` | 縦書き（right-to-left spine） |
+| `insertTocPage` | `true` | TOC xhtml page inserted |
+| `titlePageType` | `TITLE_HORIZONTAL` | Horizontal title page layout |
+| `dakutenType` | `2` (font mode) | Dakuten rendered via per-glyph TTF fonts (not CSS span overlay) |
+| `spaceHyphenation` | `1` | Single-space hyphenation enabled |
+
+### dakuten/gaiji font mode (dakutenType=2)
+
+When `dakutenType=2` (the narou.rb default), AozoraEpub3 embeds per-character TTF fonts from `gaiji/dakuten/` to render combined kana+dakuten glyphs (e.g., あ゛→ `<span class="glyph u3042-u3099">あ</span>`).
+
+Key points for Copilot:
+- The `gaiji/dakuten/` directory ships **222 TTF files** (naming: `u{codepoint}-u{dakuten}.ttf`, e.g. `u3042-u3099.ttf`).
+- `Epub3Writer.addGaijiFont(className, file)` collects fonts used during a conversion; `getGaijiFontPath()` resolves the base directory.
+- The Velocity template `template/OPS/css/vertical_text.vm` generates `@font-face` + `.className` rules for each collected font.
+- `template/OPS/package.vm` emits `<item>` manifest entries for each font file under `OPS/gaiji/`.
+- If `dakutenType != 2` or the `gaiji/dakuten/` directory is absent, the tool silently falls back to `<span class="dakuten">` overlay — **no error is thrown**. This fallback produces different EPUB output than narou.rb.
+- When writing tests that compare against narou.rb-generated EPUBs, set `dakutenType=2` and ensure `gaiji/dakuten/` is on the font path.
+
+### Aozora Bunko zip URL patterns
+
+When downloading source texts from `www.aozora.gr.jp`, both URL patterns exist:
+- Standard: `files/{id1}_{id2}.zip` (e.g., `1567_14913.zip`)
+- Ruby-annotated: `files/{id1}_ruby_{id2}.zip` (e.g., `1567_ruby_4948.zip`)
+
+Any code or script that scrapes the catalog page for a `.zip` link must match both forms. A regex like `href="([^"]*\d+[^"]*\.zip)"` is sufficient; `href="([^"]*\d+_\d+\.zip)"` will miss the `_ruby_` variant.
+
+### setting_narourb.ini
+
+`setting_narourb.ini` (project root) is applied when AozoraEpub3 downloads directly (not via narou.rb). When narou.rb calls AozoraEpub3, **narou.rb's own `setting.ini` takes precedence** — `setting_narourb.ini` is not read in that path. Keep this file as documentation of the expected defaults, but do not rely on it being read during narou.rb-driven conversions.
+
+### EPUB compatibility test reference
+
+The .NET port (https://github.com/AozoraEpub3-JDK21/aozoraepub3-dotnet, maintained in parallel) runs byte-identical comparison tests against Java-generated EPUBs. Test cases and their confirmed-passing status as of 2026-03-04:
+
+| Test case | Encoding | Notes |
+|-----------|----------|-------|
+| n9623lp (小説家になろう) | UTF-8 | PASS – full byte match |
+| n8005ls (小説家になろう) | UTF-8 | PASS – full byte match |
+| n0063lr (小説家になろう) | UTF-8 | PASS – full byte match |
+| kakuyomu_822139840468926025 | UTF-8 | PASS – requires dakutenType=2 + gaiji fonts |
+| aozora_1567_14913 (走れメロス) | MS932 | PASS – Aozora Bunko Shift-JIS input |
+
+If Java output changes (template edits, new INI keys, format changes), re-running the .NET comparison tests is a reliable way to detect regressions in EPUB structure.
+
 ## Common Pitfalls
 - Velocity resource resolution failing under tests: configure a FileResourceLoader pointing to `template/` and avoid double-initializing Velocity.
 - Referencing files like `chuki_latin.txt` relative to the working directory: prefer resolving via project root or classpath resources.
