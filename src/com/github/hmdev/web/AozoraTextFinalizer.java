@@ -367,31 +367,63 @@ public class AozoraTextFinalizer {
 				result.add(line);
 				continue;
 			}
+			// URL含有行・変換日時行はスキップ (漢数字化すると不自然)
+			if (line.contains("://") || line.startsWith("変換日時")) {
+				result.add(line);
+				continue;
+			}
 			result.add(convertNumToKanjiLine(line));
 		}
 		return String.join("\n", result);
 	}
 
 	private String convertNumToKanjiLine(String line) {
-		// 全角数字を半角に統一してから変換
+		// 注記 ［＃...］ 内の数字は変換しない
 		StringBuilder sb = new StringBuilder();
-		Matcher m = Pattern.compile("[\\d０-９,，]+").matcher(line);
+		int pos = 0;
+		while (pos < line.length()) {
+			// 注記の開始を検出
+			int chukiStart = line.indexOf("［＃", pos);
+			if (chukiStart < 0) {
+				// 残り全体を変換
+				sb.append(convertNumsInSegment(line.substring(pos)));
+				break;
+			}
+			// 注記の前を変換
+			if (chukiStart > pos) {
+				sb.append(convertNumsInSegment(line.substring(pos, chukiStart)));
+			}
+			// 注記の終了を検出
+			int chukiEnd = line.indexOf("］", chukiStart);
+			if (chukiEnd < 0) {
+				// 閉じ注記がない場合、残り全体をそのまま
+				sb.append(line.substring(chukiStart));
+				pos = line.length();
+				break;
+			}
+			// 注記部分をそのまま出力
+			sb.append(line, chukiStart, chukiEnd + 1);
+			pos = chukiEnd + 1;
+		}
+		return sb.toString();
+	}
+
+	private String convertNumsInSegment(String segment) {
+		StringBuilder sb = new StringBuilder();
+		Matcher m = Pattern.compile("[\\d０-９,，]+").matcher(segment);
 		int lastEnd = 0;
 		while (m.find()) {
-			sb.append(line, lastEnd, m.start());
+			sb.append(segment, lastEnd, m.start());
 			String match = m.group();
-			// 全角数字を半角に変換
 			match = zenkakuNumToHankaku(match);
 			if (match.contains(",") || match.contains("，")) {
-				// カンマ含有 → 全角数字化のみ
 				sb.append(hankakuNumToZenkaku(match.replace("，", ",")));
 			} else {
-				// 漢数字に変換
 				sb.append(hankakuToKanji(match));
 			}
 			lastEnd = m.end();
 		}
-		sb.append(line, lastEnd, line.length());
+		sb.append(segment, lastEnd, segment.length());
 		return sb.toString();
 	}
 
@@ -448,29 +480,58 @@ public class AozoraTextFinalizer {
 				result.add(line);
 				continue;
 			}
+			// URL含有行はスキップ (全角化するとリンクが壊れる)
+			if (line.contains("://")) {
+				result.add(line);
+				continue;
+			}
 			result.add(alphabetToZenkakuLine(line, force));
 		}
 		return String.join("\n", result);
 	}
 
 	private String alphabetToZenkakuLine(String line, boolean force) {
-		Matcher m = ENGLISH_SENTENCES_PATTERN.matcher(line);
+		// 注記 ［＃...］ 内の英字は変換しない
+		StringBuilder sb = new StringBuilder();
+		int pos = 0;
+		while (pos < line.length()) {
+			int chukiStart = line.indexOf("［＃", pos);
+			if (chukiStart < 0) {
+				sb.append(convertAlphaInSegment(line.substring(pos), force));
+				break;
+			}
+			if (chukiStart > pos) {
+				sb.append(convertAlphaInSegment(line.substring(pos, chukiStart), force));
+			}
+			int chukiEnd = line.indexOf("］", chukiStart);
+			if (chukiEnd < 0) {
+				sb.append(line.substring(chukiStart));
+				pos = line.length();
+				break;
+			}
+			sb.append(line, chukiStart, chukiEnd + 1);
+			pos = chukiEnd + 1;
+		}
+		return sb.toString();
+	}
+
+	private String convertAlphaInSegment(String segment, boolean force) {
+		Matcher m = ENGLISH_SENTENCES_PATTERN.matcher(segment);
 		StringBuilder sb = new StringBuilder();
 		int lastEnd = 0;
 		while (m.find()) {
-			sb.append(line, lastEnd, m.start());
+			sb.append(segment, lastEnd, m.start());
 			String match = m.group();
 			if (force) {
 				sb.append(alphaToZenkaku(match));
 			} else if (isSentence(match) || shouldWordBeHankaku(match)) {
-				// 英文または長い英単語 → 半角のまま
 				sb.append(match);
 			} else {
 				sb.append(alphaToZenkaku(match));
 			}
 			lastEnd = m.end();
 		}
-		sb.append(line, lastEnd, line.length());
+		sb.append(segment, lastEnd, segment.length());
 		return sb.toString();
 	}
 

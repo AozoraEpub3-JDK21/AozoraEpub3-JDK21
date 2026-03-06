@@ -1061,11 +1061,7 @@ public class WebAozoraConverter
 			bw.append(dateFormat.format(new Date()));
 			bw.append('\n');
 
-			// narou.rb互換: 本の終了マーカー
-			if (formatSettings.isEnableDisplayEndOfBook()) {
-				bw.append("\n");
-				bw.append("［＃ここから地付き］［＃小書き］（本を読み終わりました）［＃小書き終わり］［＃ここで地付き終わり］\n");
-			}
+			// 読了表示は AozoraTextFinalizer.appendEndOfBook() に統一
 
 		} finally {
 			bw.close();
