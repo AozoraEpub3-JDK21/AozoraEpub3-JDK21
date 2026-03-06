@@ -659,6 +659,15 @@
 ここから９字上げ	<div class="pb9">		1
 ここから１０字上げ	<div class="pb10">		1
 
+####二分アキ (narou.rb互換)
+二分アキ	<span class="half_em_space"> </span>
+
+####前書き・後書き (narou.rb互換)
+ここから前書き	<div class="introduction">		1
+ここで前書き終わり	</div><div class="clear"></div>		1
+ここから後書き	<div class="postscript">		1
+ここで後書き終わり	</div><div class="clear"></div>		1
+
 ################################################################
 ####その他
 ルビ開始	<ruby>

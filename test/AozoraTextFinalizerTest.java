@@ -35,6 +35,16 @@ public class AozoraTextFinalizerTest {
 	@Before
 	public void setUp() throws Exception {
 		settings = new NarouFormatSettings();
+		// テスト安定性のため新機能をデフォルト無効化（個別テストで有効化する）
+		settings.setEnableAutoIndent(false);
+		settings.setEnablePackBlankLine(false);
+		settings.setEnableHalfIndentBracket(false);
+		settings.setEnableConvertNumToKanji(false);
+		settings.setEnableAlphabetToZenkaku(false);
+		settings.setEnableDisplayEndOfBook(false);
+		settings.setEnableAutoJoinInBrackets(false);
+		settings.setEnableAutoJoinLine(false);
+		settings.setEnableConvertHorizontalEllipsis(false);
 		finalizer = new AozoraTextFinalizer(settings);
 
 		// テスト用の一時ファイル
@@ -308,12 +318,14 @@ public class AozoraTextFinalizerTest {
 
 	@Test
 	public void testApplyAutoIndent() throws Exception {
-		String input = "タイトル\n\n" +
+		// narou.rb互換: 50%以上の行が未字下げの場合に字下げを適用
+		// この入力は「タイトル」「段落の最初です。」「続きの行」「次の段落です。」が未字下げ
+		String input = "タイトル\n" +
 				"段落の最初です。\n" +
-				"続きの行\n\n" +
+				"続きの行\n" +
 				"　すでに字下げされた行\n" +
 				"「かぎ括弧で始まる行」\n" +
-				"［＃挿絵（images/foo）入る］\n\n" +
+				"［＃挿絵（images/foo）入る］\n" +
 				"次の段落です。\n";
 
 		writeTestFile(input);
@@ -323,18 +335,134 @@ public class AozoraTextFinalizerTest {
 
 		String result = readTestFile();
 
-		// 段落開始行は字下げされる
-		assertTrue(result.contains("　段落の最初です。"));
-		// 続きの行は字下げされない
-		assertFalse(result.contains("　続きの行"));
+		// 未字下げ行が50%以上なので字下げが適用される
+		assertTrue("タイトルが字下げされる", result.contains("　タイトル"));
+		assertTrue("段落の最初が字下げされる", result.contains("　段落の最初です。"));
+		assertTrue("続きの行が字下げされる", result.contains("　続きの行"));
 		// すでに字下げされた行はそのまま
-		assertTrue(result.contains("　すでに字下げされた行"));
-		// かぎ括弧で始まる行は字下げされない
-		assertTrue(result.contains("「かぎ括弧で始まる行」"));
-		// 挿絵注記行は字下げされない
-		assertTrue(result.contains("［＃挿絵（images/foo）入る］"));
-		// 次の段落は字下げされる
-		assertTrue(result.contains("　次の段落です。"));
+		assertTrue("既存字下げは維持", result.contains("　すでに字下げされた行"));
+		// かぎ括弧で始まる行は字下げされない (AUTO_INDENT_IGNORE)
+		assertTrue("かぎ括弧は字下げしない", result.contains("「かぎ括弧で始まる行」"));
+		// 注記行は字下げされない
+		assertTrue("注記行は字下げしない", result.contains("［＃挿絵（images/foo）入る］"));
+		// 次の段落も字下げされる
+		assertTrue("次の段落が字下げされる", result.contains("　次の段落です。"));
+	}
+
+	// ========================================================================
+	// 空行圧縮テスト
+	// ========================================================================
+
+	@Test
+	public void testPackBlankLine() throws Exception {
+		String input = "段落1\n\n\n\n段落2\n\n段落3\n";
+
+		writeTestFile(input);
+		settings.setEnablePackBlankLine(true);
+		finalizer.finalize(tempFile);
+
+		String result = readTestFile();
+
+		// 4行連続空行 → 圧縮される
+		assertFalse("連続空行が残っている", result.contains("\n\n\n\n"));
+		assertTrue("段落1がある", result.contains("段落1"));
+		assertTrue("段落2がある", result.contains("段落2"));
+		assertTrue("段落3がある", result.contains("段落3"));
+	}
+
+	// ========================================================================
+	// 二分アキテスト
+	// ========================================================================
+
+	@Test
+	public void testHalfIndentBracket() throws Exception {
+		String input = "「会話文です」\n" +
+				"　「字下げ済み会話」\n" +
+				"『二重かぎ括弧』\n" +
+				"（括弧文）\n" +
+				"地の文です。\n";
+
+		writeTestFile(input);
+		settings.setEnableHalfIndentBracket(true);
+		finalizer.finalize(tempFile);
+
+		String result = readTestFile();
+
+		assertTrue("二分アキが挿入されていない", result.contains("［＃二分アキ］「会話文です」"));
+		assertTrue("字下げ済み会話にも二分アキ", result.contains("［＃二分アキ］「字下げ済み会話」"));
+		assertTrue("二重かぎ括弧に二分アキ", result.contains("［＃二分アキ］『二重かぎ括弧』"));
+		assertTrue("丸括弧に二分アキ", result.contains("［＃二分アキ］（括弧文）"));
+		assertFalse("地の文に二分アキなし", result.contains("［＃二分アキ］地の文"));
+	}
+
+	// ========================================================================
+	// 漢数字変換テスト
+	// ========================================================================
+
+	@Test
+	public void testConvertNumToKanji() throws Exception {
+		String input = "第1話\n" +
+				"彼は3人いた。\n" +
+				"1,234個\n" +
+				"［＃３字下げ］注記行\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		finalizer.finalize(tempFile);
+
+		String result = readTestFile();
+
+		assertTrue("1→一", result.contains("第一話"));
+		assertTrue("3→三", result.contains("三人"));
+		// カンマ付き数字は全角化のみ
+		assertTrue("1,234→１，２３４", result.contains("１，２３４"));
+		// 注記行はスキップ
+		assertTrue("注記行は変換しない", result.contains("［＃３字下げ］注記行"));
+	}
+
+	// ========================================================================
+	// 英字全角化テスト
+	// ========================================================================
+
+	@Test
+	public void testAlphabetToZenkaku() throws Exception {
+		String input = "Hello World\n" +       // 英文（2語以上）→半角保持
+				"HP\n" +                        // 短い英単語→全角
+				"JavaScript\n" +                // 8文字以上→半角保持
+				"OK\n";                         // 短い英単語→全角
+
+		writeTestFile(input);
+		settings.setEnableAlphabetToZenkaku(true);
+		finalizer.finalize(tempFile);
+
+		String result = readTestFile();
+
+		// 英文は半角保持
+		assertTrue("英文は半角保持", result.contains("Hello World"));
+		// 短い英単語は全角化
+		assertTrue("HP→ＨＰ", result.contains("ＨＰ"));
+		// 8文字以上は半角保持
+		assertTrue("JavaScript半角保持", result.contains("JavaScript"));
+		// 短い英単語は全角化
+		assertTrue("OK→ＯＫ", result.contains("ＯＫ"));
+	}
+
+	// ========================================================================
+	// 読了表示テスト
+	// ========================================================================
+
+	@Test
+	public void testDisplayEndOfBook() throws Exception {
+		String input = "本文です。\n";
+
+		writeTestFile(input);
+		settings.setEnableDisplayEndOfBook(true);
+		finalizer.finalize(tempFile);
+
+		String result = readTestFile();
+
+		assertTrue("読了表示がない",
+				result.contains("［＃ここから地付き］［＃小書き］（本を読み終わりました）［＃小書き終わり］［＃ここで地付き終わり］"));
 	}
 
 	// ========================================================================

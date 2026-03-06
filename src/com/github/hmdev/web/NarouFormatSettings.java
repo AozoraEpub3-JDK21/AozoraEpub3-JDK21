@@ -25,7 +25,7 @@ public class NarouFormatSettings {
 	private boolean enableYokogaki = false;
 
 	/** 本の終了マーカー表示 */
-	private boolean enableDisplayEndOfBook = false;
+	private boolean enableDisplayEndOfBook = true;
 
 	/** 章中表紙で「ページの左右中央」を使用 */
 	private boolean chapterUseCenterPage = true;
@@ -49,22 +49,31 @@ public class NarouFormatSettings {
 	private boolean enableHalfIndentBracket = true;
 
 	/** 数字の漢数字化 (123 → 一二三) */
-	private boolean enableConvertNumToKanji = false;
+	private boolean enableConvertNumToKanji = true;
 
 	/** 漢数字の単位化 (1000 → 千、10000 → 一万) */
-	private boolean enableKanjiNumWithUnits = false;
+	private boolean enableKanjiNumWithUnits = true;
 
-	/** 単位化する際の下位桁ゼロ数 (デフォルト2: 100以上で単位化) */
-	private int kanjiNumWithUnitsLowerDigitZero = 2;
+	/** 単位化する際の下位桁ゼロ数 (デフォルト3: 1000以上で単位化) */
+	private int kanjiNumWithUnitsLowerDigitZero = 3;
+
+	/** 空行圧縮 (連続空行を削減) */
+	private boolean enablePackBlankLine = true;
+
+	/** 英字の全角化 (短い英単語を全角に) */
+	private boolean enableAlphabetToZenkaku = true;
+
+	/** 英字強制全角 (全英字を全角化、falseなら英文は半角保持) */
+	private boolean enableAlphabetForceZenkaku = false;
 
 	/** 記号の全角化 (- → －、< → 〈など) */
 	private boolean enableConvertSymbolsToZenkaku = false;
 
 	/** かぎ括弧内の自動連結 (改行を全角スペースに) */
-	private boolean enableAutoJoinInBrackets = false;
+	private boolean enableAutoJoinInBrackets = true;
 
 	/** 行末読点での自動連結 */
-	private boolean enableAutoJoinLine = false;
+	private boolean enableAutoJoinLine = true;
 
 	// === ファイナライズ処理関連の設定 ===
 
@@ -72,7 +81,7 @@ public class NarouFormatSettings {
 	private boolean enableAuthorComments = true;
 
 	/** 自動行頭字下げ */
-	private boolean enableAutoIndent = false;
+	private boolean enableAutoIndent = true;
 
 	/** 改ページ直後の見出し化 */
 	private boolean enableEnchantMidashi = true;
@@ -95,7 +104,7 @@ public class NarouFormatSettings {
 	private String dateFormat = "%Y年%m月%d日";
 
 	/** 三点リーダー変換 (・・・ → ……) */
-	private boolean enableConvertHorizontalEllipsis = false;
+	private boolean enableConvertHorizontalEllipsis = true;
 
 	/** 濁点フォント処理 (か゛ → ［＃濁点付き片仮名か、1-86-12］) */
 	private boolean enableDakutenFont = false;
@@ -155,6 +164,15 @@ public class NarouFormatSettings {
 
 	public int getKanjiNumWithUnitsLowerDigitZero() { return kanjiNumWithUnitsLowerDigitZero; }
 	public void setKanjiNumWithUnitsLowerDigitZero(int v) { this.kanjiNumWithUnitsLowerDigitZero = v; }
+
+	public boolean isEnablePackBlankLine() { return enablePackBlankLine; }
+	public void setEnablePackBlankLine(boolean v) { this.enablePackBlankLine = v; }
+
+	public boolean isEnableAlphabetToZenkaku() { return enableAlphabetToZenkaku; }
+	public void setEnableAlphabetToZenkaku(boolean v) { this.enableAlphabetToZenkaku = v; }
+
+	public boolean isEnableAlphabetForceZenkaku() { return enableAlphabetForceZenkaku; }
+	public void setEnableAlphabetForceZenkaku(boolean v) { this.enableAlphabetForceZenkaku = v; }
 
 	public boolean isEnableConvertSymbolsToZenkaku() { return enableConvertSymbolsToZenkaku; }
 	public void setEnableConvertSymbolsToZenkaku(boolean v) { this.enableConvertSymbolsToZenkaku = v; }
@@ -297,6 +315,15 @@ public class NarouFormatSettings {
 					// デフォルト値を維持
 				}
 				break;
+			case "enable_pack_blank_line":
+				enablePackBlankLine = toBoolean(value);
+				break;
+			case "enable_alphabet_to_zenkaku":
+				enableAlphabetToZenkaku = toBoolean(value);
+				break;
+			case "enable_alphabet_force_zenkaku":
+				enableAlphabetForceZenkaku = toBoolean(value);
+				break;
 			case "enable_convert_symbols_to_zenkaku":
 				enableConvertSymbolsToZenkaku = toBoolean(value);
 				break;
@@ -374,7 +401,7 @@ public class NarouFormatSettings {
 			bw.write("enable_yokogaki = false\n");
 			bw.write("\n");
 			bw.write("; 本の終了マーカー表示\n");
-			bw.write("enable_display_end_of_book = false\n");
+			bw.write("enable_display_end_of_book = true\n");
 			bw.write("\n");
 			bw.write("; 章中表紙のレイアウト\n");
 			bw.write("chapter_use_center_page = true\n");
@@ -396,22 +423,31 @@ public class NarouFormatSettings {
 			bw.write("enable_half_indent_bracket = true\n");
 			bw.write("\n");
 			bw.write("; 数字の漢数字化 (123 → 一二三)\n");
-			bw.write("enable_convert_num_to_kanji = false\n");
+			bw.write("enable_convert_num_to_kanji = true\n");
 			bw.write("\n");
 			bw.write("; 漢数字の単位化 (1000 → 千、10000 → 一万)\n");
-			bw.write("enable_kanji_num_with_units = false\n");
+			bw.write("enable_kanji_num_with_units = true\n");
 			bw.write("\n");
-			bw.write("; 単位化する際の下位桁ゼロ数 (2: 100以上で単位化)\n");
-			bw.write("kanji_num_with_units_lower_digit_zero = 2\n");
+			bw.write("; 単位化する際の下位桁ゼロ数 (3: 1000以上で単位化)\n");
+			bw.write("kanji_num_with_units_lower_digit_zero = 3\n");
+			bw.write("\n");
+			bw.write("; 空行圧縮 (連続空行を削減)\n");
+			bw.write("enable_pack_blank_line = true\n");
+			bw.write("\n");
+			bw.write("; 英字の全角化 (短い英単語を全角に、英文は半角保持)\n");
+			bw.write("enable_alphabet_to_zenkaku = true\n");
+			bw.write("\n");
+			bw.write("; 英字強制全角 (全英字を全角化)\n");
+			bw.write("enable_alphabet_force_zenkaku = false\n");
 			bw.write("\n");
 			bw.write("; 記号の全角化 (- → －、< → 〈など)\n");
 			bw.write("enable_convert_symbols_to_zenkaku = false\n");
 			bw.write("\n");
 			bw.write("; かぎ括弧内の自動連結 (改行を全角スペースに)\n");
-			bw.write("enable_auto_join_in_brackets = false\n");
+			bw.write("enable_auto_join_in_brackets = true\n");
 			bw.write("\n");
 			bw.write("; 行末読点での自動連結\n");
-			bw.write("enable_auto_join_line = false\n");
+			bw.write("enable_auto_join_line = true\n");
 			bw.write("\n");
 			bw.write("; === ファイナライズ処理 ===\n");
 			bw.write("\n");
@@ -419,7 +455,7 @@ public class NarouFormatSettings {
 			bw.write("enable_author_comments = true\n");
 			bw.write("\n");
 			bw.write("; 自動行頭字下げ\n");
-			bw.write("enable_auto_indent = false\n");
+			bw.write("enable_auto_indent = true\n");
 			bw.write("\n");
 			bw.write("; 改ページ直後の見出し化\n");
 			bw.write("enable_enchant_midashi = true\n");
@@ -439,7 +475,7 @@ public class NarouFormatSettings {
 			bw.write("date_format = %Y年%m月%d日\n");
 			bw.write("\n");
 			bw.write("; 三点リーダー変換 (・・・ → ……)\n");
-			bw.write("enable_convert_horizontal_ellipsis = false\n");
+			bw.write("enable_convert_horizontal_ellipsis = true\n");
 			bw.write("\n");
 			bw.write("; 濁点フォント処理\n");
 			bw.write("enable_dakuten_font = false\n");
@@ -474,7 +510,10 @@ public class NarouFormatSettings {
 			writeEntry(bw, "enable_convert_num_to_kanji", enableConvertNumToKanji, "数字の漢数字化");
 			writeEntry(bw, "enable_kanji_num_with_units", enableKanjiNumWithUnits, "漢数字の単位化");
 			writeEntry(bw, "kanji_num_with_units_lower_digit_zero", kanjiNumWithUnitsLowerDigitZero, "単位化の下位桁ゼロ数");
-			writeEntry(bw, "enable_convert_symbols_to_zenkaku", enableConvertSymbolsToZenkaku, "記号の全角化");
+			writeEntry(bw, "enable_pack_blank_line", enablePackBlankLine, "空行圧縮");
+		writeEntry(bw, "enable_alphabet_to_zenkaku", enableAlphabetToZenkaku, "英字の全角化");
+		writeEntry(bw, "enable_alphabet_force_zenkaku", enableAlphabetForceZenkaku, "英字強制全角");
+		writeEntry(bw, "enable_convert_symbols_to_zenkaku", enableConvertSymbolsToZenkaku, "記号の全角化");
 			writeEntry(bw, "enable_auto_join_in_brackets", enableAutoJoinInBrackets, "かぎ括弧内の自動連結");
 			writeEntry(bw, "enable_auto_join_line", enableAutoJoinLine, "行末読点での自動連結");
 			bw.write("\n");

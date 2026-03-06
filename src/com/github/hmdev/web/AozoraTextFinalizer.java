@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.hmdev.util.LogAppender;
@@ -41,6 +42,26 @@ public class AozoraTextFinalizer {
 
 	/** かぎ括弧の種類（閉じ括弧） */
 	private static final String CLOSE_BRACKETS = "」』〕）】〉》≫";
+
+	/** 二分アキ対象の行頭括弧 (narou.rb: HALF_INDENT_TARGET) */
+	private static final Pattern HALF_INDENT_TARGET = Pattern.compile(
+		"^[ \u3000\\t]*+([〔「『(（【〈《≪〝])");
+
+	/** 字下げ判定の除外文字 (narou.rb: IGNORE_INDENT_CHAR) */
+	private static final String IGNORE_INDENT_CHARS = "(（「『〈《≪【〔―・※［〝\n";
+
+	/** 字下げ対象外文字 (・を除外) */
+	private static final String AUTO_INDENT_IGNORE = "(（「『〈《≪【〔―※［〝\n";
+
+	/** 英文判定の最小長 (narou.rb: ENGLISH_SENTENCES_MIN_LENGTH) */
+	private static final int ENGLISH_SENTENCES_MIN_LENGTH = 8;
+
+	/** 英文候補の正規表現 (narou.rb: ENGLISH_SENTENCES_CHARACTERS) */
+	private static final Pattern ENGLISH_SENTENCES_PATTERN = Pattern.compile(
+		"[\\w.,!?'\" &:;-]+");
+
+	/** 漢数字テーブル */
+	private static final char[] KANJI_NUM = "〇一二三四五六七八九".toCharArray();
 
 	/**
 	 * コンストラクタ
@@ -87,42 +108,62 @@ public class AozoraTextFinalizer {
 		// 1. ファイル全体を読み込み
 		String content = readFile(txtFile);
 
-		// 2. 前書き・後書きの自動検出
+		// 2. 空行圧縮
+		if (settings.isEnablePackBlankLine()) {
+			content = packBlankLine(content);
+		}
+
+		// 3. 前書き・後書きの自動検出
 		if (settings.isEnableAuthorComments()) {
 			content = detectAndMarkAuthorComments(content);
 		}
 
-		// 3. 自動行頭字下げ
-		if (settings.isEnableAutoIndent()) {
-			content = applyAutoIndent(content);
+		// 4. 漢数字変換
+		if (settings.isEnableConvertNumToKanji()) {
+			content = convertNumToKanji(content);
 		}
 
-		// 4. 改ページ直後の見出し化
+		// 5. 英字全角化
+		if (settings.isEnableAlphabetToZenkaku()) {
+			content = alphabetToZenkaku(content, settings.isEnableAlphabetForceZenkaku());
+		}
+
+		// 6. 二分アキ挿入 + 自動行頭字下げ
+		if (settings.isEnableHalfIndentBracket() || settings.isEnableAutoIndent()) {
+			content = halfIndentBracketAndAutoIndent(content);
+		}
+
+		// 7. 改ページ直後の見出し化
 		if (settings.isEnableEnchantMidashi()) {
 			content = enchantMidashi(content);
 		}
 
-		// 5. かぎ括弧内の自動連結（<br>タグ由来の改行にも対応）
+		// 8. かぎ括弧内の自動連結（<br>タグ由来の改行にも対応）
 		if (settings.isEnableAutoJoinInBrackets()) {
 			content = autoJoinInBrackets(content);
 		}
 
-		// 6. 行末読点での自動連結（<br>タグ由来の改行にも対応）
+		// 9. 行末読点での自動連結（<br>タグ由来の改行にも対応）
 		if (settings.isEnableAutoJoinLine()) {
 			content = autoJoinLine(content);
 		}
 
-		// 7. かぎ括弧の開閉チェック（警告のみ）
+		// 10. かぎ括弧の開閉チェック（警告のみ）
 		if (settings.isEnableInspectInvalidOpenCloseBrackets()) {
 			inspectBrackets(content);
 		}
 
-		// 8. replace.txt によるテキスト置換（最後に適用）
+		// 11. replace.txt によるテキスト置換（最後に適用）
 		if (!settings.getTextReplacePatterns().isEmpty()) {
 			content = applyReplacePatterns(content);
 		}
 
-		// 9. ファイルに書き戻す
+		// 12. 読了表示
+		if (settings.isEnableDisplayEndOfBook()) {
+			content = appendEndOfBook(content);
+		}
+
+		// 13. ファイルに書き戻す
 		writeFile(txtFile, content);
 
 		LogAppender.println("ファイナライズ処理が完了しました");
@@ -215,63 +256,259 @@ public class AozoraTextFinalizer {
 	}
 
 	/**
-	 * 自動行頭字下げ
+	 * 空行圧縮
 	 *
-	 * narou.rb互換: converterbase.rb:1031-1094
-	 *
-	 * 段落の開始を検出し、字下げを適用する。
-	 * ただし、既に字下げされている場合や特殊な行（見出し、注記など）は対象外。
+	 * narou.rb互換: converterbase.rb:28-31
+	 * 連続する空行を削減して縦書きの読みやすさを改善する。
 	 */
-	private String applyAutoIndent(String text) {
+	private String packBlankLine(String text) {
+		// \n\n → \n (連続空行を1行に)
+		text = text.replace("\n\n", "\n");
+		// 3行以上の連続改行のみ行を2行に削減
+		text = text.replaceAll("(?m)(^\\n){3,}", "\n\n");
+		return text;
+	}
+
+	/**
+	 * 二分アキ挿入 + 自動行頭字下げ（統合処理）
+	 *
+	 * narou.rb互換: converterbase.rb:605-636
+	 *
+	 * 1. 行頭の開き括弧の前に ［＃二分アキ］ を挿入
+	 * 2. 字下げが必要な行に全角スペースを挿入
+	 */
+	private String halfIndentBracketAndAutoIndent(String text) {
 		String[] lines = text.split("\n", -1);
+		boolean doHalfIndent = settings.isEnableHalfIndentBracket();
+		boolean doAutoIndent = settings.isEnableAutoIndent();
+
+		// 字下げ判定: 50%以上の行が未字下げなら字下げを適用 (narou.rb: inspect_indent)
+		boolean shouldIndent = false;
+		if (doAutoIndent) {
+			shouldIndent = inspectIndent(lines);
+		}
+
 		List<String> result = new ArrayList<>();
-
-		for (int i = 0; i < lines.length; i++) {
-			String line = lines[i];
-
-			// 空行はそのまま
+		for (String line : lines) {
 			if (line.isEmpty()) {
 				result.add(line);
 				continue;
 			}
 
-			// 既に字下げされている行はスキップ
-			if (line.startsWith("　") || line.startsWith(" ")) {
-				result.add(line);
-				continue;
+			// 二分アキ: 行頭空白を除去し開き括弧の前に ［＃二分アキ］ を挿入
+			if (doHalfIndent) {
+				Matcher m = HALF_INDENT_TARGET.matcher(line);
+				if (m.find()) {
+					line = "［＃二分アキ］" + m.group(1) + line.substring(m.end());
+					result.add(line);
+					continue;
+				}
 			}
 
-			// 注記行はスキップ（［＃...］で始まる行）
+			// 自動字下げ
+			if (shouldIndent) {
+				char firstChar = line.charAt(0);
+				// ダッシュ行: ――で始まる行は「　――」にする
+				if (line.startsWith("――")) {
+					line = "　" + line;
+				}
+				// 注記行・字下げ対象外文字で始まる行はスキップ
+				else if (AUTO_INDENT_IGNORE.indexOf(firstChar) < 0
+						&& firstChar != '　' && firstChar != ' ' && firstChar != '\t'
+						&& firstChar != '［') {
+					// 中黒1文字のみの場合はスキップ (三点リーダー代替対策)
+					if (firstChar == '・' && (line.length() < 2 || line.charAt(1) != '・')) {
+						// スキップ
+					} else {
+						line = "　" + line;
+					}
+				}
+			}
+
+			result.add(line);
+		}
+
+		return String.join("\n", result);
+	}
+
+	/**
+	 * 字下げ判定 (narou.rb: Inspector#inspect_indent)
+	 *
+	 * 判定除外文字で始まる行を除き、50%以上が未字下げなら true を返す。
+	 */
+	private boolean inspectIndent(String[] lines) {
+		int targetCount = 0;
+		int noIndentCount = 0;
+		for (String line : lines) {
+			if (line.isEmpty()) continue;
+			char first = line.charAt(0);
+			if (IGNORE_INDENT_CHARS.indexOf(first) >= 0) continue;
+			if (first == '［') continue; // 注記行
+			targetCount++;
+			if (first != '　' && first != ' ' && first != '\t') {
+				noIndentCount++;
+			}
+		}
+		return targetCount > 0 && (double) noIndentCount / targetCount > 0.5;
+	}
+
+	/**
+	 * 漢数字変換
+	 *
+	 * narou.rb互換: converterbase.rb:104-133
+	 * 半角・全角数字を漢数字に変換する。カンマ含有数字列はそのまま全角化。
+	 */
+	private String convertNumToKanji(String text) {
+		String[] lines = text.split("\n", -1);
+		List<String> result = new ArrayList<>();
+		for (String line : lines) {
+			// 注記行はスキップ
 			if (line.startsWith("［＃")) {
 				result.add(line);
 				continue;
 			}
+			result.add(convertNumToKanjiLine(line));
+		}
+		return String.join("\n", result);
+	}
 
-			// かぎ括弧で始まる行はスキップ（二分アキが入る可能性があるため）
-			char firstChar = line.charAt(0);
-			if (OPEN_BRACKETS.indexOf(firstChar) >= 0) {
-				result.add(line);
-				continue;
-			}
-
-			// 見出し・区切り線・挿絵などの特殊行はスキップ
-			if (line.contains("［＃中見出し］") || line.contains("［＃大見出し］")
-				|| line.contains("［＃区切り線］") || line.contains("［＃挿絵")
-				|| line.contains("［＃改ページ］")) {
-				result.add(line);
-				continue;
-			}
-
-			// 前の行が空行（段落の開始）の場合のみ字下げ
-			boolean isParagraphStart = (i == 0) || (i > 0 && lines[i - 1].isEmpty());
-			if (isParagraphStart) {
-				result.add("　" + line);
+	private String convertNumToKanjiLine(String line) {
+		// 全角数字を半角に統一してから変換
+		StringBuilder sb = new StringBuilder();
+		Matcher m = Pattern.compile("[\\d０-９,，]+").matcher(line);
+		int lastEnd = 0;
+		while (m.find()) {
+			sb.append(line, lastEnd, m.start());
+			String match = m.group();
+			// 全角数字を半角に変換
+			match = zenkakuNumToHankaku(match);
+			if (match.contains(",") || match.contains("，")) {
+				// カンマ含有 → 全角数字化のみ
+				sb.append(hankakuNumToZenkaku(match.replace("，", ",")));
 			} else {
-				result.add(line);
+				// 漢数字に変換
+				sb.append(hankakuToKanji(match));
+			}
+			lastEnd = m.end();
+		}
+		sb.append(line, lastEnd, line.length());
+		return sb.toString();
+	}
+
+	private String zenkakuNumToHankaku(String s) {
+		StringBuilder sb = new StringBuilder();
+		for (char c : s.toCharArray()) {
+			if (c >= '０' && c <= '９') {
+				sb.append((char) (c - '０' + '0'));
+			} else {
+				sb.append(c);
 			}
 		}
+		return sb.toString();
+	}
 
+	private String hankakuNumToZenkaku(String s) {
+		StringBuilder sb = new StringBuilder();
+		for (char c : s.toCharArray()) {
+			if (c >= '0' && c <= '9') {
+				sb.append((char) (c - '0' + '０'));
+			} else if (c == ',') {
+				sb.append('，');
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	private String hankakuToKanji(String s) {
+		StringBuilder sb = new StringBuilder();
+		for (char c : s.toCharArray()) {
+			if (c >= '0' && c <= '9') {
+				sb.append(KANJI_NUM[c - '0']);
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	/**
+	 * 英字全角化
+	 *
+	 * narou.rb互換: converterbase.rb:521-536
+	 * 短い英単語は全角化、英文(2語以上)と長い英単語(8文字以上)は半角保持。
+	 */
+	private String alphabetToZenkaku(String text, boolean force) {
+		String[] lines = text.split("\n", -1);
+		List<String> result = new ArrayList<>();
+		for (String line : lines) {
+			// 注記行はスキップ
+			if (line.startsWith("［＃")) {
+				result.add(line);
+				continue;
+			}
+			result.add(alphabetToZenkakuLine(line, force));
+		}
 		return String.join("\n", result);
+	}
+
+	private String alphabetToZenkakuLine(String line, boolean force) {
+		Matcher m = ENGLISH_SENTENCES_PATTERN.matcher(line);
+		StringBuilder sb = new StringBuilder();
+		int lastEnd = 0;
+		while (m.find()) {
+			sb.append(line, lastEnd, m.start());
+			String match = m.group();
+			if (force) {
+				sb.append(alphaToZenkaku(match));
+			} else if (isSentence(match) || shouldWordBeHankaku(match)) {
+				// 英文または長い英単語 → 半角のまま
+				sb.append(match);
+			} else {
+				sb.append(alphaToZenkaku(match));
+			}
+			lastEnd = m.end();
+		}
+		sb.append(line, lastEnd, line.length());
+		return sb.toString();
+	}
+
+	private boolean isSentence(String match) {
+		return match.split(" ").length >= 2;
+	}
+
+	private boolean shouldWordBeHankaku(String word) {
+		return word.length() >= ENGLISH_SENTENCES_MIN_LENGTH && word.matches(".*[a-zA-Z].*");
+	}
+
+	private String alphaToZenkaku(String s) {
+		StringBuilder sb = new StringBuilder();
+		for (char c : s.toCharArray()) {
+			if (c >= 'a' && c <= 'z') {
+				sb.append((char) (c - 'a' + 'ａ'));
+			} else if (c >= 'A' && c <= 'Z') {
+				sb.append((char) (c - 'A' + 'Ａ'));
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	/**
+	 * 読了表示の追加
+	 *
+	 * narou.rb互換: template/novel.txt.erb:90-92
+	 * テキスト末尾に「（本を読み終わりました）」を追加する。
+	 */
+	private String appendEndOfBook(String text) {
+		// 末尾の改行を保持しつつ追加
+		if (!text.endsWith("\n")) {
+			text += "\n";
+		}
+		text += "\n［＃ここから地付き］［＃小書き］（本を読み終わりました）［＃小書き終わり］［＃ここで地付き終わり］\n";
+		return text;
 	}
 
 	/**
