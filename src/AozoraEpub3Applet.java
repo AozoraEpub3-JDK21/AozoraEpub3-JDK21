@@ -2425,10 +2425,7 @@ public class AozoraEpub3Applet extends JApplet
 		lowerPane.setLayout(new BoxLayout(lowerPane, BoxLayout.Y_AXIS));
 		jSplitPane.add(lowerPane);
 		
-		jTextArea = new JTextArea("AozoraEpub3: "+AozoraEpub3.VERSION);
-		jTextArea.append("  ( Java "+System.getProperty("java.version"));
-		jTextArea.append("  /  "+System.getProperty("os.name"));
-		jTextArea.append(" )\n対応ファイル: 青空文庫txt(txt,zip,rar), 画像(zip,rar,cbz), URLショートカット(url)\n");
+		jTextArea = new JTextArea("対応ファイル: 青空文庫txt(txt,zip,rar), 画像(zip,rar,cbz), URLショートカット(url)\n");
 		jTextArea.append("ファイルまたはURL文字列をここにドラッグ＆ドロップ／ペーストで変換します。\n");
 		jTextArea.setEditable(false);
 		// 推奨日本語フォントを優先して適用（可読性改善のため13pt）

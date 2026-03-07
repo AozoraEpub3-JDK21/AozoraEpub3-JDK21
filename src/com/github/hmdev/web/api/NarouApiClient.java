@@ -227,6 +227,7 @@ public class NarouApiClient {
 					case 't': result.append('\t'); i++; break;
 					case '"': result.append('"'); i++; break;
 					case '\\': result.append('\\'); i++; break;
+					case '/': result.append('/'); i++; break;
 					case 'u':
 					// Unicode escape sequence (backslash u + 4 hex digits)
 						if (i + 5 < str.length()) {
