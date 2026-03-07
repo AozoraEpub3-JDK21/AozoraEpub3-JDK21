@@ -118,24 +118,24 @@ public class AozoraTextFinalizer {
 			content = detectAndMarkAuthorComments(content);
 		}
 
-		// 4. 漢数字変換
+		// 4. 改ページ直後の見出し化（漢数字変換より前に実行し、見出し行を保護する）
+		if (settings.isEnableEnchantMidashi()) {
+			content = enchantMidashi(content);
+		}
+
+		// 5. 漢数字変換
 		if (settings.isEnableConvertNumToKanji()) {
 			content = convertNumToKanji(content);
 		}
 
-		// 5. 英字全角化
+		// 6. 英字全角化
 		if (settings.isEnableAlphabetToZenkaku()) {
 			content = alphabetToZenkaku(content, settings.isEnableAlphabetForceZenkaku());
 		}
 
-		// 6. 二分アキ挿入 + 自動行頭字下げ
+		// 7. 二分アキ挿入 + 自動行頭字下げ
 		if (settings.isEnableHalfIndentBracket() || settings.isEnableAutoIndent()) {
 			content = halfIndentBracketAndAutoIndent(content);
-		}
-
-		// 7. 改ページ直後の見出し化
-		if (settings.isEnableEnchantMidashi()) {
-			content = enchantMidashi(content);
 		}
 
 		// 8. かぎ括弧内の自動連結（<br>タグ由来の改行にも対応）
@@ -362,6 +362,12 @@ public class AozoraTextFinalizer {
 		String[] lines = text.split("\n", -1);
 		List<String> result = new ArrayList<>();
 		for (String line : lines) {
+			// narou.rb互換: サブタイトル・章見出し行は漢数字変換せず全角数字変換のみ
+			// (注記行スキップより先に判定。サブタイトル行は ［＃３字下げ］［＃中見出し］ で始まるため)
+			if (line.contains("［＃中見出し］") || line.contains("［＃大見出し］")) {
+				result.add(convertNumToZenkakuLine(line));
+				continue;
+			}
 			// 注記行はスキップ
 			if (line.startsWith("［＃")) {
 				result.add(line);
@@ -370,13 +376,6 @@ public class AozoraTextFinalizer {
 			// URL含有行・変換日時行はスキップ (漢数字化すると不自然)
 			if (line.contains("://") || line.startsWith("変換日時")) {
 				result.add(line);
-				continue;
-			}
-			// narou.rb互換: サブタイトル・章見出し行は漢数字変換せず全角数字変換のみ
-			// (narou.rb は text_type=="subtitle"/"chapter" を区別するが、
-			//  Java版は全話連結テキストなので注記で判定)
-			if (line.contains("［＃中見出し］") || line.contains("［＃大見出し］")) {
-				result.add(convertNumToZenkakuLine(line));
 				continue;
 			}
 			result.add(convertNumToKanjiLine(line));

@@ -1273,7 +1273,7 @@ public class WebAozoraConverter
 			if (subTitle != null) {
 				// narou.rb互換: 横書き時は1字下げ、縦書き時は3字下げ
 				bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃中見出し］");
-				printText(bw, subTitle);
+				printText(bw, subTitle, true);
 				bw.append("［＃中見出し終わり］\n");
 			}
 			//公開日付・更新日付
@@ -2328,6 +2328,11 @@ public class WebAozoraConverter
 	/** 文字を出力 特殊文字は注記に変換 */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
+		printText(bw, text, false);
+	}
+
+	private void printText(BufferedWriter bw, String text, boolean isSubtitle) throws IOException
+	{
 		text = text.replaceAll("[\r\n]+", "");
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
 		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
@@ -2335,7 +2340,8 @@ public class WebAozoraConverter
 		text = addHalfIndentBracket(text);
 		text = convertRomanNumerals(text);
 		text = protectEnglishSentences(text);
-		if (formatSettings.isEnableConvertNumToKanji()) text = convertNumbersToKanji(text);
+		// narou.rb互換: サブタイトル行は漢数字変換せず全角数字変換のみ
+		if (formatSettings.isEnableConvertNumToKanji() && !isSubtitle) text = convertNumbersToKanji(text);
 		if (formatSettings.isEnableTransformFraction()) text = convertFractions(text);
 		if (formatSettings.isEnableTransformDate()) text = convertDates(text);
 		if (formatSettings.isEnableConvertSymbolsToZenkaku()) text = convertSymbolsToZenkaku(text);

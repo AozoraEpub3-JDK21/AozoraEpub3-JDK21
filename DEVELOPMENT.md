@@ -123,6 +123,12 @@ AozoraEpub3/
 ./gradlew clean build
 ```
 
+> **macOS / Linux での注意**: ビルド後、生成された JAR をプロジェクトルートにコピーしてください。AozoraEpub3 は実行時にルートディレクトリの `template/`、`gaiji/`、`web/` などのリソースを参照するため、JAR がルートにないと正しく動作しません。
+>
+> ```bash
+> cp build/libs/AozoraEpub3.jar .
+> ```
+
 ### 配布物の生成（FAT版のみ）
 
 FAT版（依存関係込み単一JAR）のみ公式配布します。Windows は ZIP、Unix/Linux/macOS は TAR.GZ を生成します。
