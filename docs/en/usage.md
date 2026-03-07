@@ -117,8 +117,14 @@ Drag & drop a web novel URL or `.url` shortcut file to fetch and convert directl
 | Show update date per chapter | `show_post_date` | Display last update date at end of each chapter | OFF |
 | Show initial publish date per chapter | `show_publish_date` | Display original publish date for revised chapters | OFF |
 | Auto-detect author comments | `enable_author_comments` | Detect foreword/afterword by `*44`/`*48` patterns | ON |
-| Auto indent | `enable_auto_indent` | Automatically insert line-leading indentation | OFF |
+| Auto indent | `enable_auto_indent` | Automatically insert line-leading indentation | ON |
 | Heading after page break | `enable_enchant_midashi` | Convert first line after page break to heading | ON |
+| Blank line compression | `enable_pack_blank_line` | Compress consecutive blank lines | ON |
+| Number to kanji | `enable_convert_num_to_kanji` | Convert Arabic numerals to kanji | ON |
+| Alphabet to zenkaku | `enable_alphabet_to_zenkaku` | Convert short English words to full-width | ON |
+| End of book marker | `enable_display_end_of_book` | Show completion mark at end | ON |
+| Auto join in brackets | `enable_auto_join_in_brackets` | Auto-join lines within brackets | ON |
+| Auto join at comma | `enable_auto_join_line` | Join lines ending with commas | ON |
 
 Settings are saved in `setting_narourb.ini` and are compatible with narou.rb's `setting.ini` keys.
 
@@ -197,6 +203,14 @@ Available presets (in `presets/` directory):
 -autopage <lines>   Auto page break after N lines
 ```
 
+#### Web Novel URL
+```bash
+-url <URL>          Convert web novel from URL directly
+-narou              Apply narou.rb-compatible format settings
+-interval <seconds> Page fetch interval (default: 0.5)
+-cache <path>       Cache directory (default: .cache)
+```
+
 ### Examples
 
 #### Convert UTF-8 text (vertical)
@@ -227,6 +241,14 @@ java -jar AozoraEpub3.jar -of -d output novel_archive.zip
 #### With cover image
 ```bash
 java -jar AozoraEpub3.jar -cover cover.jpg -of -d output novel.txt
+```
+
+#### Convert web novel from URL
+```bash
+java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -d output
+
+# With narou.rb-compatible settings
+java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d output
 ```
 
 ---

@@ -1,5 +1,47 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.3.0-jdk21
+
+**リリース日**: 2026年3月7日
+
+### 新機能
+
+- **narou.rb 互換テキスト前処理**
+  - 空行圧縮 (`packBlankLine`): 連続空行を圧縮
+  - 前書き・後書き検出 (`detectAndMarkAuthorComments`): 注記タグで囲む
+  - 漢数字変換 (`convertNumToKanji`): 注記内・URL行・見出し行を保護しつつ変換
+  - 英字全角化 (`alphabetToZenkaku`): 注記内・URL行を保護しつつ変換
+  - 二分アキ + 自動字下げ改善 (`halfIndentBracketAndAutoIndent`): narou.rb 互換の50%閾値判定
+  - 読了表示 (`appendEndOfBook`): 重複出力を修正
+  - `NarouFormatSettings` のデフォルト値を narou.rb `ORIGINAL_SETTINGS` に統一
+
+- **CSS・注記定義更新**
+  - `vertical_font.css` を narou.rb 互換の完全版に更新（line-height, .introduction, .postscript, .half_em_space 等）
+  - `chuki_tag.txt` に二分アキ・前書き・後書きの注記定義を追加
+
+- **CLI URLオプション**
+  - `-url` オプションでWeb小説URLからの直接変換をコマンドラインから実行可能
+  - `-narou` オプションで narou.rb 互換フォーマット設定を適用
+  - `-interval` / `-cache` オプションで取得間隔・キャッシュ制御
+
+### バグ修正
+
+- **サブタイトル行の漢数字変換**: 見出し行の数字が漢数字に変換される問題を修正（narou.rb 互換: 見出し行は全角数字変換のみ）
+- **JSON `\/` エスケープ**: あらすじに `\/` が残る問題を修正（NarouApiClient.unescapeJson）
+- **読了表示2重出力**: WebAozoraConverter と AozoraTextFinalizer の両方で出力されていた問題を修正
+- **注記内の数字・英字変換**: `［＃米印、1-2-8］` 等の注記内数字が変換される問題を修正
+- **URL行の変換**: URL含有行の数字・英字が変換されてリンクが壊れる問題を修正
+- **GUI テキストボックス**: バージョン/Java/OS 表示を削除
+
+### 検証結果
+
+```
+Build: ✓ BUILD SUCCESSFUL
+Tests: ✓ 全テスト成功 (165テスト)
+```
+
+---
+
 ## バージョン: 1.2.14-jdk21
 
 **リリース日**: 2026年2月28日
