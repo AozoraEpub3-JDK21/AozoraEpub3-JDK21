@@ -372,6 +372,13 @@ public class AozoraTextFinalizer {
 				result.add(line);
 				continue;
 			}
+			// narou.rb互換: サブタイトル・章見出し行は漢数字変換せず全角数字変換のみ
+			// (narou.rb は text_type=="subtitle"/"chapter" を区別するが、
+			//  Java版は全話連結テキストなので注記で判定)
+			if (line.contains("［＃中見出し］") || line.contains("［＃大見出し］")) {
+				result.add(convertNumToZenkakuLine(line));
+				continue;
+			}
 			result.add(convertNumToKanjiLine(line));
 		}
 		return String.join("\n", result);
@@ -405,6 +412,45 @@ public class AozoraTextFinalizer {
 			sb.append(line, chukiStart, chukiEnd + 1);
 			pos = chukiEnd + 1;
 		}
+		return sb.toString();
+	}
+
+	/** サブタイトル・章見出し行: 半角数字→全角数字変換（漢数字にはしない） */
+	private String convertNumToZenkakuLine(String line) {
+		StringBuilder sb = new StringBuilder();
+		int pos = 0;
+		while (pos < line.length()) {
+			int chukiStart = line.indexOf("［＃", pos);
+			if (chukiStart < 0) {
+				sb.append(convertNumsToZenkakuInSegment(line.substring(pos)));
+				break;
+			}
+			if (chukiStart > pos) {
+				sb.append(convertNumsToZenkakuInSegment(line.substring(pos, chukiStart)));
+			}
+			int chukiEnd = line.indexOf("］", chukiStart);
+			if (chukiEnd < 0) {
+				sb.append(line.substring(chukiStart));
+				pos = line.length();
+				break;
+			}
+			sb.append(line, chukiStart, chukiEnd + 1);
+			pos = chukiEnd + 1;
+		}
+		return sb.toString();
+	}
+
+	/** 半角数字→全角数字変換（注記外セグメント用） */
+	private String convertNumsToZenkakuInSegment(String segment) {
+		StringBuilder sb = new StringBuilder();
+		Matcher m = Pattern.compile("[\\d]+").matcher(segment);
+		int lastEnd = 0;
+		while (m.find()) {
+			sb.append(segment, lastEnd, m.start());
+			sb.append(hankakuNumToZenkaku(m.group()));
+			lastEnd = m.end();
+		}
+		sb.append(segment, lastEnd, segment.length());
 		return sb.toString();
 	}
 
