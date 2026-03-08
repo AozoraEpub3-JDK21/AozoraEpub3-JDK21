@@ -485,7 +485,7 @@ public class AozoraEpub3Applet extends JApplet
 	public void init()
 	{
 		super.init();
-		this.setSize(new Dimension(520, 460));
+		this.setSize(new Dimension(640, System.getProperty("os.name", "").toLowerCase().contains("mac") ? 580 : 460));
 		
 		//パス関連初期化
 		//this.jarPath = getClass().getClassLoader().getResource("").getFile();
@@ -535,6 +535,8 @@ public class AozoraEpub3Applet extends JApplet
 		
 		Dimension panelSize = new Dimension(1920, 26);
 		Dimension panelSize28 = new Dimension(1920, 28);
+		boolean isMac = System.getProperty("os.name", "").toLowerCase().contains("mac");
+		Dimension detailPanelSize = new Dimension(1920, isMac ? 48 : 28);
 		Dimension panelVMaxSize = new Dimension(640, 22);
 		JTextField text = new JTextField();
 		Insets is = text.getInsets();
@@ -548,7 +550,7 @@ public class AozoraEpub3Applet extends JApplet
 		//アップレットのレイアウト設定
 		this.setLayout(new BoxLayout(this.getContentPane(), BoxLayout.Y_AXIS));
 		
-		int dividerLocation = 230;
+		int dividerLocation = isMac ? 350 : 230;
 		try { dividerLocation = Integer.parseInt(props.getProperty("DividerLocation")); } catch (Exception e) {}
 		jSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
 		jSplitPane.setDividerLocation(dividerLocation);
@@ -1582,9 +1584,12 @@ public class AozoraEpub3Applet extends JApplet
 		//Tab 詳細設定
 		////////////////////////////////////////////////////////////////
 		tabPanel = new JPanel();
-		//tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
-		tabPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
-		jTabbedPane.addTab(I18n.t("ui.tab.pageSettings"), pageSettingIcon, tabPanel);
+		tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
+		JScrollPane tabScrollPane = new JScrollPane(tabPanel);
+		tabScrollPane.setBorder(null);
+		tabScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		tabScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		jTabbedPane.addTab(I18n.t("ui.tab.pageSettings"), pageSettingIcon, tabScrollPane);
 		
 		////////////////////////////////
 		//文中全角スペースの処理
@@ -1592,6 +1597,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.spaceProcess")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		//ピクセル
 		label = new JLabel(I18n.t("ui.label.hideAtLineEnd"));
@@ -1626,6 +1632,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.annotationNote")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		buttonGroup = new ButtonGroup();
 		jRadioChukiRuby0 = new JRadioButton(I18n.t("ui.radio.chukiHidden"), true);
@@ -1655,6 +1662,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.autoYoko")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		//半角2文字縦書き
 		jCheckAutoYoko = new JCheckBox(I18n.t("ui.chk.autoYoko")+" ", true);
@@ -1693,6 +1701,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.commentOutput")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		//半角2文字縦書き
 		jCheckCommentPrint = new JCheckBox(I18n.t("ui.chk.commentPrint")+" ");
@@ -1713,6 +1722,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.bookmarkId")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		jCheckMarkId = new JCheckBox(I18n.t("ui.chk.markId"));
 		jCheckMarkId.setToolTipText(I18n.t("ui.tooltip.markId"));
@@ -1741,6 +1751,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.removeEmptyLine")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		jComboxRemoveEmptyLine = new JComboBox<>(new String[]{"0", "1", "2", "3", "4", "5"});
 		jComboxRemoveEmptyLine.setToolTipText(I18n.t("ui.tooltip.removeEmptyLine"));
@@ -1773,10 +1784,11 @@ public class AozoraEpub3Applet extends JApplet
 		////////////////////////////////
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
-		panel.setBorder(new NarrowTitledBorder("行頭字下げ"));
+		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.indent")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
-		jCheckForceIndent = new JCheckBox("有効     ");
-		jCheckForceIndent.setToolTipText("行頭が「『―”（〈〔【と全角空白以外なら行頭に全角空白を追加します 半角空白のみは全角に置き換えます");
+		jCheckForceIndent = new JCheckBox(I18n.t("ui.chk.forceIndent")+"     ");
+		jCheckForceIndent.setToolTipText(I18n.t("ui.tooltip.forceIndent"));
 		jCheckForceIndent.setFocusPainted(false);
 		jCheckForceIndent.setBorder(padding2);
 		panel.add(jCheckForceIndent);
@@ -1787,6 +1799,7 @@ public class AozoraEpub3Applet extends JApplet
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.pageBreak")));
+		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		
 		jCheckPageBreak = new JCheckBox(I18n.t("ui.chk.pageBreakEnable"), true);
@@ -5084,8 +5097,9 @@ public class AozoraEpub3Applet extends JApplet
 		//アイコン設定
 		jFrame.setIconImage(applet.iconImage);
 		//最小サイズ
-		jFrame.setMinimumSize(new Dimension(520, 320));
-		jFrame.setPreferredSize(new Dimension(520, 400));
+		boolean isMacFrame = System.getProperty("os.name", "").toLowerCase().contains("mac");
+		jFrame.setMinimumSize(new Dimension(640, isMacFrame ? 480 : 320));
+		jFrame.setPreferredSize(new Dimension(640, isMacFrame ? 580 : 400));
 		
 		try {
 			int x = (int)Float.parseFloat(applet.props.getProperty("PosX"));
