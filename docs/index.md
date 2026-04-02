@@ -23,7 +23,7 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 <div style="text-align: center; margin: 2em 0;">
   <p><strong>最新版:</strong> v1.3.2-jdk21 (2026年4月2日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/RELEASE_NOTES.md">リリースノート</a></p>
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.2-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
     <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.2-jdk21/AozoraEpub3-1.3.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
