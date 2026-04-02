@@ -414,7 +414,9 @@ public class AozoraTextFinalizer {
 		return sb.toString();
 	}
 
-	/** サブタイトル・章見出し行: 半角数字→全角数字変換（漢数字にはしない） */
+	/** サブタイトル・章見出し行: 半角数字→縦中横または全角数字変換（漢数字にはしない）
+	 * 2桁以上: ［＃縦中横］...［＃縦中横終わり］で囲む（縦書き時に横組み表示）
+	 * 1桁: 全角数字に変換 */
 	private String convertNumToZenkakuLine(String line) {
 		StringBuilder sb = new StringBuilder();
 		int pos = 0;
@@ -439,14 +441,22 @@ public class AozoraTextFinalizer {
 		return sb.toString();
 	}
 
-	/** 半角数字→全角数字変換（注記外セグメント用） */
+	/** 半角数字→縦中横または全角数字変換（注記外セグメント用）
+	 * 2桁以上は縦中横注記で囲み縦書き時に横組み表示、1桁は全角数字に変換 */
 	private String convertNumsToZenkakuInSegment(String segment) {
 		StringBuilder sb = new StringBuilder();
-		Matcher m = Pattern.compile("[\\d]+").matcher(segment);
+		Matcher m = Pattern.compile("[\\d０-９]+").matcher(segment);
 		int lastEnd = 0;
 		while (m.find()) {
 			sb.append(segment, lastEnd, m.start());
-			sb.append(hankakuNumToZenkaku(m.group()));
+			String digits = zenkakuNumToHankaku(m.group()); // 全角数字も半角に統一
+			if (digits.length() >= 2) {
+				// 2桁以上: 縦中横で囲む（縦書き時に横組み表示）
+				sb.append("［＃縦中横］").append(digits).append("［＃縦中横終わり］");
+			} else {
+				// 1桁: 全角数字に変換
+				sb.append(hankakuNumToZenkaku(digits));
+			}
 			lastEnd = m.end();
 		}
 		sb.append(segment, lastEnd, segment.length());

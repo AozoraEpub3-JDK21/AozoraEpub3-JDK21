@@ -1668,15 +1668,18 @@ public class AozoraEpub3Converter
 		StringBuilder buf = new StringBuilder();
 		char[] ch = line.toCharArray();
 		int charStart = 0;
-		
+		// 自動縦中横抑止データを初期化（convertRubyText での二重適用を防ぐ）
+		this.noTcyStart.clear();
+		this.noTcyEnd.clear();
+
 		Matcher m = chukiPattern.matcher(line);
 		int chukiStart = 0;
-		
+
 		while (m.find()) {
 			String chukiTag = m.group();
 			String lowerChukiTag = chukiTag.toLowerCase();
 			chukiStart = m.start();
-			
+
 			//fontの入れ子は可、圏点・縦横中はルビも付加
 			//なぜか【＃マッチするので除外
 			if (chukiTag.charAt(0) == '＃') {
@@ -1687,16 +1690,21 @@ public class AozoraEpub3Converter
 				!(lowerChukiTag.startsWith("<img ") || lowerChukiTag.startsWith("</img>") || lowerChukiTag.startsWith("<a ") || lowerChukiTag.startsWith("</a>"))) {
 				continue;
 			}
-			
+
 			String chukiName = chukiTag.substring(2, chukiTag.length()-1);
-			
+
 			//注記の前まで本文出力
 			if (charStart < chukiStart) {
 				this.convertEscapedText(buf, ch, charStart, chukiStart);
 			}
-			
+
 			//訓点・返り点と縦書き時の縦中横
 			if (chukiKunten.contains(chukiName) || (this.vertical && chukiName.startsWith("縦中横"))) {
+				//縦中横区間をTCY抑止対象として記録（convertRubyText での二重適用を防ぐ）
+				if (this.vertical && chukiName.startsWith("縦中横")) {
+					if (chukiName.endsWith("終わり")) { noTcyEnd.add(buf.length()); }
+					else { noTcyStart.add(buf.length()); }
+				}
 				//注記変換
 				buf.append(chukiMap.get(chukiName)[0]);
 			} else {

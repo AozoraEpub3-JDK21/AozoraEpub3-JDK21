@@ -67,7 +67,7 @@ public class WebAozoraConverter
 	////////////////////////////////
 	//変換設定
 	/** 取得間隔 ミリ秒（なろう等のレート制限対策: 最低1秒推奨） */
-	int interval = 1500;
+	int interval = 700;
 	
 	/** 未更新時は変換スキップ */
 	boolean convertUpdated = false;

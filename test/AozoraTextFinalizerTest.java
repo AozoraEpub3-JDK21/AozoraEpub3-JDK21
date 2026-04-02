@@ -420,6 +420,45 @@ public class AozoraTextFinalizerTest {
 		assertTrue("注記行は変換しない", result.contains("［＃３字下げ］注記行"));
 	}
 
+	@Test
+	public void testConvertNumToZenkakuForSubtitle() throws Exception {
+		// サブタイトル（中見出し・大見出し）行の数字変換: 漢数字にせず縦中横または全角数字に変換
+		String input =
+				"第12章\n" +                          // 2桁 → 縦中横注記
+				"第1話\n" +                            // 1桁 → 全角数字（漢数字にしない）
+				"第１２話\n" +                         // 全角数字2桁 → 縦中横注記
+				"第3巻\n";                             // 1桁 → 全角数字
+
+		// convertNumToKanji 経由で中見出し行として処理
+		String line12  = "［＃３字下げ］［＃中見出し］第12章［＃中見出し終わり］";
+		String line1   = "［＃３字下げ］［＃中見出し］第1話［＃中見出し終わり］";
+		String lineZ12 = "［＃３字下げ］［＃中見出し］第１２話［＃中見出し終わり］";
+		String line3   = "［＃３字下げ］［＃大見出し］第3巻［＃大見出し終わり］";
+
+		String r12  = invokeConvertNumToKanji(line12);
+		String r1   = invokeConvertNumToKanji(line1);
+		String rZ12 = invokeConvertNumToKanji(lineZ12);
+		String r3   = invokeConvertNumToKanji(line3);
+
+		// 2桁以上 → 縦中横注記で囲む
+		assertTrue("2桁→縦中横", r12.contains("［＃縦中横］12［＃縦中横終わり］"));
+		// 1桁 → 全角数字（漢数字化なし）
+		assertTrue("1桁→全角", r1.contains("第１話"));
+		assertFalse("1桁→漢数字にしない", r1.contains("第一話"));
+		// 全角数字2桁 → 縦中横注記（半角に統一してから変換）
+		assertTrue("全角2桁→縦中横", rZ12.contains("［＃縦中横］12［＃縦中横終わり］"));
+		// 1桁大見出し → 全角数字
+		assertTrue("大見出し1桁→全角", r3.contains("第３巻"));
+	}
+
+	/** AozoraTextFinalizer#convertNumToKanji を1行テキストに適用するヘルパー */
+	private String invokeConvertNumToKanji(String line) throws Exception {
+		java.lang.reflect.Method m = finalizer.getClass()
+				.getDeclaredMethod("convertNumToKanji", String.class);
+		m.setAccessible(true);
+		return (String) m.invoke(finalizer, line);
+	}
+
 	// ========================================================================
 	// 英字全角化テスト
 	// ========================================================================
