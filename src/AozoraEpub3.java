@@ -26,7 +26,7 @@ import com.github.hmdev.writer.Epub3Writer;
 /** コマンドライン実行用mainとePub3変換関数 */
 public class AozoraEpub3
 {
-	public static final String VERSION = "1.3.1-jdk21";
+	public static final String VERSION = "1.3.2-jdk21";
 	
 	/** コマンドライン実行用 */
 	public static void main(String args[])
@@ -475,6 +475,11 @@ public class AozoraEpub3
 			outFileName = dstPath.getAbsolutePath()+"/"+srcFile.getName().replaceFirst("\\.[^\\.]+$", "");
 		}
 		if (outExt.length() == 0) outExt = ".epub";
+		// Windows MAX_PATH (260) 対策: フルパス長を拡張子込みで制限
+		int maxPath = 259; // 260 - 1 (null terminator)
+		if (outFileName.length() + outExt.length() > maxPath) {
+			outFileName = outFileName.substring(0, maxPath - outExt.length());
+		}
 		File outFile = new File(outFileName + outExt);
 		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証
 		File canonicalDst = dstPath.getCanonicalFile();
