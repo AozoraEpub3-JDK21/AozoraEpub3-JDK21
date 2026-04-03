@@ -7,6 +7,12 @@
 
 青空文庫の注記入りテキストファイルを EPUB 3 ファイルに変換するツールです。
 
+> [!IMPORTANT]
+> **正規配布について**: このプロジェクトの正規配布物は [GitHub Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) のみです。
+> 各リリースには SHA-256 チェックサム・GitHub artifact attestation を添付しています。
+> 検証方法は [VERIFY.md](VERIFY.md) を参照してください。
+> 非公式フォークや再配布物は、同名であっても正規版とは限りません。
+
 ## このプロジェクトについて
 
 このプロジェクトは [hmdev/AozoraEpub3](https://github.com/hmdev/AozoraEpub3) を元に、Java 21対応および [narou.rb](https://github.com/whiteleaf7/narou) での利用を目的として改変したものです。
