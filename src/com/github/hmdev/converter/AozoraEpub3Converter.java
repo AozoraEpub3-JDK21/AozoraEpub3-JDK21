@@ -2471,19 +2471,21 @@ public class AozoraEpub3Converter
 		String rubyEndChuki = chukiMap.get("ルビ終了")[0];
 		
 		boolean noTcy = false;
+		boolean noTcyAtRubyStart = false; // rubyStart 設定時の noTcy 値を保持
 		for (int i=begin; i<end; i++) {
-			
+
 			//縦中横と横書きの中かチェック
 			if (!noTcy && noTcyStart.contains(i)) noTcy = true;
 			else if (noTcy && noTcyEnd.contains(i)) noTcy = false;
-			
+
 			switch (ch[i]) {
 			case '｜':
 				//エスケープ文字なら処理しない
 				if (!CharUtils.isEscapedChar(ch, i)) {
 					//前まで出力
-					if (rubyStart != -1) convertTcyText(buf, ch, rubyStart, i, noTcy);
+					if (rubyStart != -1) convertTcyText(buf, ch, rubyStart, i, noTcyAtRubyStart);
 					rubyStart = i + 1;
+					noTcyAtRubyStart = noTcy;
 					inRuby = true;
 				}
 				break;
@@ -2501,8 +2503,8 @@ public class AozoraEpub3Converter
 				// ルビ終わり エスケープ文字なら処理しない
 				if (ch[i] == '》' && !CharUtils.isEscapedChar(ch, i)) {
 					if (rubyStart != -1 && rubyTopStart != -1) {
-						if (noRuby) 
-							convertTcyText(buf, ch, rubyStart, rubyTopStart, noTcy); //本文
+						if (noRuby)
+							convertTcyText(buf, ch, rubyStart, rubyTopStart, noTcyAtRubyStart); //本文
 						else {
 							//長すぎるルビを警告
 							if (rubyTopStart-rubyStart >= 30) {
@@ -2530,7 +2532,7 @@ public class AozoraEpub3Converter
 								} else {
 									buf.setLength(buf.length()-rubyEndChuki.length());
 								}
-								convertTcyText(buf, ch, rubyStart, rubyTopStart, noTcy); //本文
+								convertTcyText(buf, ch, rubyStart, rubyTopStart, noTcyAtRubyStart); //本文
 								buf.append(chukiMap.get("ルビ前")[0]);
 								convertTcyText(buf, ch, rubyTopStart+1, i, true);//ルビ
 								buf.append(chukiMap.get("ルビ後")[0]);
@@ -2560,7 +2562,7 @@ public class AozoraEpub3Converter
 					}
 					if (charTypeChanged) {
 						// rubyStartから前までを出力
-						convertTcyText(buf, ch, rubyStart, i, noTcy);
+						convertTcyText(buf, ch, rubyStart, i, noTcyAtRubyStart);
 						rubyStart = -1; rubyCharType = RubyCharType.NULL;
 					}
 				}
@@ -2568,19 +2570,19 @@ public class AozoraEpub3Converter
 				if (rubyStart == -1) {
 					// ルビ中でなく漢字
 					if (CharUtils.isKanji(ch, i)) {
-						rubyStart = i; rubyCharType = RubyCharType.KANJI;
+						rubyStart = i; noTcyAtRubyStart = noTcy; rubyCharType = RubyCharType.KANJI;
 					} else if (CharUtils.isHiragana(ch[i])) {
 						//全角英数字
-						rubyStart = i; rubyCharType = RubyCharType.HIRAGANA;
+						rubyStart = i; noTcyAtRubyStart = noTcy; rubyCharType = RubyCharType.HIRAGANA;
 					} else if (CharUtils.isKatakana(ch[i])) {
 						//全角英数字
-						rubyStart = i; rubyCharType = RubyCharType.KATAKANA;
+						rubyStart = i; noTcyAtRubyStart = noTcy; rubyCharType = RubyCharType.KATAKANA;
 					} else if (CharUtils.isHalfSpace(ch[i]) && ch[i]!='>') {
 						//英数字または空白
-						rubyStart = i; rubyCharType = RubyCharType.ALPHA;
+						rubyStart = i; noTcyAtRubyStart = noTcy; rubyCharType = RubyCharType.ALPHA;
 					} else if (CharUtils.isFullAlpha(ch[i]) || CharUtils.isFullNum(ch[i])) {
 						//全角英数字
-						rubyStart = i; rubyCharType = RubyCharType.FULLALPHA;
+						rubyStart = i; noTcyAtRubyStart = noTcy; rubyCharType = RubyCharType.FULLALPHA;
 					}
 					// ルビ中でなく漢字、半角以外は出力 数字と!?は英字扱いになっている
 					else {
@@ -2591,7 +2593,7 @@ public class AozoraEpub3Converter
 		}
 		if (rubyStart != -1) {
 			// ルビ開始チェック中で漢字以外ならキャンセルして出力
-			convertTcyText(buf, ch, rubyStart, end, noTcy);
+			convertTcyText(buf, ch, rubyStart, end, noTcyAtRubyStart);
 		}
 		
 		return buf;
@@ -2620,7 +2622,7 @@ public class AozoraEpub3Converter
 	private void convertTcyText(StringBuilder buf, char[] ch, int begin, int end, boolean noTcy) throws IOException
 	{
 		for (int i=begin; i<end; i++) {
-			
+
 			String gaijiFileName = null;
 			//4バイト文字
 			if (i<end-1 && Character.isHighSurrogate(ch[i])) {
