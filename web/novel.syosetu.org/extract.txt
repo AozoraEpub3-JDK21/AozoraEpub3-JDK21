@@ -28,8 +28,8 @@
 ##   更新日時は <NOBR><time datetime="...">...</time></NOBR> (NOBR健在)
 ################################
 
-## 変換対象URLパターン
-##PAGE_REGEX	^\/Novel/\d+/$
+## Cookie (uaid はサーバーが自動発行するためここでは固定の over18 のみ)
+COOKIE	over18=off
 
 ################################
 ## 一覧ページの抽出設定
@@ -79,10 +79,12 @@ CONTENT_ARTICLE	#honbun
 ##CONTENT_ARTICLE_END
 
 ## 前書き
-#CONTENT_PREAMBLE
+## <div id="maegaki">内容<hr><br></div>
+CONTENT_PREAMBLE	#maegaki
 
 ## 後書き
-#CONTENT_APPENDIX
+## <div id="atogaki">内容</div>
+CONTENT_APPENDIX	#atogaki
 
 ## 本文タグ外に画像がある場合
 #CONTENT_IMG

@@ -1,13 +1,17 @@
 package com.github.hmdev.web.api;
 
+import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
@@ -27,15 +31,25 @@ public class NarouApiClient {
 	private static final String API_ENDPOINT = "https://api.syosetu.com/novelapi/api/";
 	/** APIエンドポイント (R18: ノクターンノベルズ/ムーンライトノベルズ) */
 	private static final String API_ENDPOINT_R18 = "https://api.syosetu.com/novel18api/api/";
-	
-	/** タイムアウト (ミリ秒) */
-	private static final int CONNECT_TIMEOUT = 10000;
-	private static final int READ_TIMEOUT = 30000;
-	
+
 	/** リクエストカウント (簡易版) */
 	private int requestCount = 0;
 	private long bytesTransferred = 0;
-	
+
+	/** 共有 HttpClient */
+	private final HttpClient httpClient;
+
+	/** デフォルトコンストラクタ (テスト用スタブで使用) */
+	public NarouApiClient() {
+		this.httpClient = HttpClient.newBuilder()
+			.connectTimeout(Duration.ofSeconds(10))
+			.build();
+	}
+
+	public NarouApiClient(HttpClient httpClient) {
+		this.httpClient = httpClient;
+	}
+
 	/**
 	 * Nコードから作品メタデータを取得 (通常サイト)
 	 * @param ncode 作品コード (例: "n0001a")
@@ -75,7 +89,6 @@ public class NarouApiClient {
 	 * @param params リクエストパラメータ
 	 */
 	private String makeApiRequest(String endpoint, Map<String, String> params) throws ApiException {
-		HttpURLConnection connection = null;
 		try {
 			// URL構築
 			StringBuilder urlBuilder = new StringBuilder(endpoint);
@@ -88,20 +101,21 @@ public class NarouApiClient {
 				urlBuilder.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
 				first = false;
 			}
-			
+
 			String url = urlBuilder.toString();
 			System.out.println("[API] リクエスト: " + url);
-			
+
 			// HTTP接続
-			connection = (HttpURLConnection) new URI(url).toURL().openConnection();
-			connection.setRequestMethod("GET");
-			connection.setConnectTimeout(CONNECT_TIMEOUT);
-			connection.setReadTimeout(READ_TIMEOUT);
-			connection.setRequestProperty("User-Agent", "AozoraEpub3/1.2.1");
-			connection.setRequestProperty("Accept-Encoding", "gzip");
+			HttpRequest request = HttpRequest.newBuilder()
+				.uri(new URI(url))
+				.header("User-Agent", "AozoraEpub3/1.3.2")
+				.header("Accept-Encoding", "gzip")
+				.timeout(Duration.ofSeconds(30))
+				.GET().build();
+			HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
 
 			// レスポンス取得
-			int responseCode = connection.getResponseCode();
+			int responseCode = httpResponse.statusCode();
 			if (responseCode == 503) {
 				throw new RateLimitException("サーバー負荷制限中 (503)。時間をおいて再試行してください。");
 			}
@@ -110,8 +124,9 @@ public class NarouApiClient {
 			}
 
 			// レスポンス読み込み (gzip対応)
-			InputStream is = connection.getInputStream();
-			String contentEncoding = connection.getContentEncoding();
+			byte[] body = httpResponse.body();
+			InputStream is = new ByteArrayInputStream(body);
+			String contentEncoding = httpResponse.headers().firstValue("Content-Encoding").orElse("");
 			if ("gzip".equalsIgnoreCase(contentEncoding) || params.containsKey("gzip")) {
 				is = new GZIPInputStream(is);
 			}
@@ -123,24 +138,20 @@ public class NarouApiClient {
 				response.append(line);
 			}
 			reader.close();
-			
+
 			// 統計更新
 			requestCount++;
 			bytesTransferred += response.length();
-			
+
 			System.out.println("[API] レスポンス取得成功 (" + response.length() + " bytes)");
 			return response.toString();
-			
+
 		} catch (IOException e) {
 			throw new NetworkException("ネットワークエラー: " + e.getMessage(), e);
 		} catch (ApiException e) {
 			throw e;
 		} catch (Exception e) {
 			throw new ApiException("APIリクエストエラー: " + e.getMessage(), e);
-		} finally {
-			if (connection != null) {
-				connection.disconnect();
-			}
 		}
 	}
 	

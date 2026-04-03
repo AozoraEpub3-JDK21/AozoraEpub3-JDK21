@@ -10,10 +10,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URI;
-import java.net.URLConnection;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,6 +48,21 @@ public class WebAozoraConverter
 	
 	/** Singletonインスタンス格納 keyはFQDN */
 	static HashMap<String, WebAozoraConverter> converters = new HashMap<String, WebAozoraConverter>();
+
+	/** 共有 HttpClient (HTTP/2, Cookie自動管理, リダイレクト自動追跡) */
+	private static final HttpClient httpClient;
+	private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+	/** HttpClient を外部から取得するための getter */
+	public static HttpClient getHttpClient() { return httpClient; }
+
+	static {
+		CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+		httpClient = HttpClient.newBuilder()
+			.followRedirects(HttpClient.Redirect.ALWAYS)
+			.cookieHandler(cookieManager)
+			.connectTimeout(Duration.ofSeconds(10))
+			.build();
+	}
 	
 	//設定ファイルから読み込むパラメータ
 	/** リストページ抽出対象 HashMap<String key, String[]{cssQuery1, cssQuery2}> キーとJsoupのcssQuery(or配列) */
@@ -233,7 +252,7 @@ public class WebAozoraConverter
 	public void setUseApi(boolean useApi) {
 		this.useApi = useApi;
 		if (useApi && apiClient == null) {
-			apiClient = new NarouApiClient();
+			apiClient = new NarouApiClient(httpClient);
 			LogAppender.println("なろうAPI: 有効化");
 		}
 	}
@@ -421,16 +440,17 @@ public class WebAozoraConverter
 		//末尾の / をリダイレクトで取得
 		urlString = urlString.trim();
 		if (!urlString.endsWith("/") && !urlString.endsWith(".html") && !urlString.endsWith(".htm") && urlString.indexOf("?") == -1 ) {
-			HttpURLConnection connection = null;
 			try {
-				connection = (HttpURLConnection) new URI(urlString+"/").toURL().openConnection();
-				if (connection.getResponseCode() == 200) {
+				HttpRequest request = HttpRequest.newBuilder()
+					.uri(new URI(urlString+"/"))
+					.header("User-Agent", USER_AGENT)
+					.GET().build();
+				HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+				if (response.statusCode() == 200) {
 					urlString += "/";
 					LogAppender.println("URL修正 : "+urlString);
 				}
 			} catch (Exception e) {
-			} finally {
-				if (connection != null) connection.disconnect();
 			}
 		}
 		
@@ -495,7 +515,9 @@ public class WebAozoraConverter
 		}
 		
 		//パスならlist.txtの情報を元にキャッシュ後に青空txt変換して改ページで繋げて出力
-		Document doc = Jsoup.parse(cacheFile, null);
+		// キャッシュパスがディレクトリ化されていた場合は index.html を参照
+		File parseFile = cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
+		Document doc = Jsoup.parse(parseFile, null);
 		
 		//タイトル
 		boolean hasTitle = false;
@@ -2622,37 +2644,41 @@ public class WebAozoraConverter
 	{
 		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) {}
 		if (cacheFile.isDirectory()) { LogAppender.println("フォルダがあるためキャッシュできません : "+cacheFile.getAbsolutePath()); }
-		File parentFile = cacheFile.getParentFile();
-		if (parentFile.exists() && !parentFile.isDirectory()) {
-			parentFile.delete();
+		// 祖先パスにファイルが存在する場合 → index.html にリネームしてディレクトリ化
+		File ancestor = cacheFile.getParentFile();
+		while (ancestor != null && !ancestor.isDirectory()) {
+			if (ancestor.isFile()) {
+				File tmpFile = new File(ancestor.getPath() + ".tmp_rename");
+				ancestor.renameTo(tmpFile);
+				ancestor.mkdirs();
+				tmpFile.renameTo(new File(ancestor, "index.html"));
+			}
+			ancestor = ancestor.getParentFile();
 		}
 		cacheFile.getParentFile().mkdirs();
-		URLConnection conn;
+
 		try {
-			conn = new java.net.URI(urlString).toURL().openConnection();
-		} catch (java.net.URISyntaxException e) {
-			throw new IOException(e);
-		}
-		ExtractInfo[] cookie = this.queryMap.get(ExtractId.COOKIE);
-		if (cookie != null && cookie.length > 0) conn.setRequestProperty("Cookie", cookie[0].query);
-		if (referer != null) conn.setRequestProperty("Referer", referer);
-		conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
-		conn.setConnectTimeout(10000);
-		if (conn instanceof java.net.HttpURLConnection) {
-			int responseCode = ((java.net.HttpURLConnection)conn).getResponseCode();
+			HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+				.uri(new URI(urlString))
+				.header("User-Agent", USER_AGENT)
+				.timeout(Duration.ofSeconds(30))
+				.GET();
+			ExtractInfo[] cookie = this.queryMap.get(ExtractId.COOKIE);
+			if (cookie != null && cookie.length > 0) requestBuilder.header("Cookie", cookie[0].query);
+			if (referer != null) requestBuilder.header("Referer", referer);
+
+			HttpResponse<byte[]> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofByteArray());
+			int responseCode = response.statusCode();
 			LogAppender.println("HTTP Response Code: " + responseCode);
-		}
-		BufferedInputStream bis = new BufferedInputStream(conn.getInputStream(), 8192);
-		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(cacheFile));
-		try {
-			byte[] buf = new byte[8192];
-			int len;
-			while ((len = bis.read(buf)) > 0) {
-				bos.write(buf, 0, len);
+			if (responseCode >= 400) {
+				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
 			}
-		} finally {
-			bos.close();
-			bis.close();
+
+			try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(cacheFile))) {
+				bos.write(response.body());
+			}
+		} catch (java.net.URISyntaxException | InterruptedException e) {
+			throw new IOException(e);
 		}
 		return true;
 	}
