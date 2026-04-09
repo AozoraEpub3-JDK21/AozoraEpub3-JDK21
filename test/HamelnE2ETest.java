@@ -150,15 +150,20 @@ public class HamelnE2ETest {
 	// ================================================================
 
 	private File convertUrl(String url, File outDir) throws Exception {
+		// jarFile = build/libs/AozoraEpub3.jar (relative)
+		// CWD を project root に固定し、JAR も相対パスで渡す。
+		// AozoraEpub3 は java.class.path から jarPath を計算して web/ を参照するため、
+		// 相対パスで渡すと jarPath="" になり CWD 相対の web/ が使われる。
+		File projectRoot = jarFile.getAbsoluteFile().getParentFile().getParentFile().getParentFile();
 		List<String> cmd = Arrays.asList(
 			"java", "-Dfile.encoding=UTF-8",
-			"-jar", jarFile.getAbsolutePath(),
-			"--url", url,
+			"-jar", jarFile.getPath().replace('\\', '/'),  // forward slash 必須: AozoraEpub3 の jarPath 計算が File.separator 依存
+			"-url", url,
 			"-of",
 			"-d", outDir.getAbsolutePath()
 		);
 		ProcessBuilder pb = new ProcessBuilder(cmd);
-		pb.directory(new File(".").getAbsoluteFile());
+		pb.directory(projectRoot);
 		pb.redirectErrorStream(true);
 
 		System.out.println("[convert] " + url);

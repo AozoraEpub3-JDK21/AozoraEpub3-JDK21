@@ -16,6 +16,11 @@ wrapper {
 }
 
 // ソースコードの文字コードをUTF-8に指定（文字化け対策）
+// -D プロパティをテスト JVM に転送（例: -DhamelnE2E=true）
+tasks.withType(Test) {
+    systemProperties System.properties
+}
+
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     // 警告を抑止するオプション
