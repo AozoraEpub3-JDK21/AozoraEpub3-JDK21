@@ -124,11 +124,11 @@ public class WebAozoraConverterHamelnChapterTest {
 	}
 
 	// ---------------------------------------------------------------
-	// テスト5: nextDataEpisodeChapterMap フォールバック動作確認
-	// (line 997-998 の既存ロジックが map を参照することを確認)
+	// テスト5: nextDataEpisodeChapterMap フィールドのリフレクション確認
+	// 注: line 1006-1007 のフォールバック動作自体は統合テスト (HamelnE2ETest) で検証する
 	// ---------------------------------------------------------------
 	@Test
-	public void testFallbackIntegration_mapIsUsedWhenNoContentChapter() throws Exception {
+	public void testMapFieldCanBeSetViaReflection() throws Exception {
 		// nextDataEpisodeChapterMap フィールドに直接セット
 		var field = WebAozoraConverter.class.getDeclaredField("nextDataEpisodeChapterMap");
 		field.setAccessible(true);

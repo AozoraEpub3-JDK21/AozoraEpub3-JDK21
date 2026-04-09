@@ -132,7 +132,7 @@ public class WebAozoraConverter
 	private NarouFormatSettings formatSettings = new NarouFormatSettings();
 	/** 作品タイトル (章見出しで柱に使用) */
 	private String bookTitle = null;
-	/** __NEXT_DATA__ JSON から構築したエピソードURL→章タイトルマップ (カクヨムPhase 2-1) */
+	/** エピソードURL→章タイトルマップ (__NEXT_DATA__ JSON またはTOCテーブルから構築) */
 	private HashMap<String, String> nextDataEpisodeChapterMap = null;
 	/** __NEXT_DATA__ JSON から構築したエピソードURL→更新日時マップ (カクヨムPhase 2-2) */
 	private HashMap<String, String> nextDataEpisodeDateMap = null;
@@ -426,6 +426,10 @@ public class WebAozoraConverter
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
 	{
 		this.canceled = false;
+		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
+		this.nextDataEpisodeChapterMap = null;
+		this.nextDataEpisodeDateMap = null;
+		this.bookTitle = null;
 		//日付一覧が取得できない場合は常に更新
 		this.updated = true;
 		
@@ -834,8 +838,8 @@ public class WebAozoraConverter
 				}
 			}
 	
-			// TOCテーブルから章マッピング構築 (ハーメルンなど非SPA/非Next.jsサイト向けフォールバック)
-			if (this.nextDataEpisodeChapterMap == null) {
+			// TOCテーブルから章マッピング構築 (ハーメルンなど #maind .ss table 構造を持つサイト向け)
+			if (this.nextDataEpisodeChapterMap == null && doc.selectFirst("#maind .ss table") != null) {
 				HashMap<String, String> tocChapterMap = buildEpisodeChapterMapFromTocTable(doc, listBaseUrl);
 				if (!tocChapterMap.isEmpty()) {
 					this.nextDataEpisodeChapterMap = tocChapterMap;
