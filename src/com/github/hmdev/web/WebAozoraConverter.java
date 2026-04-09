@@ -2620,6 +2620,11 @@ public class WebAozoraConverter
 	 *   &lt;tr&gt;&lt;td colspan=2&gt;&lt;strong&gt;章タイトル&lt;/strong&gt;&lt;/td&gt;&lt;/tr&gt;  ← 章区切り行
 	 *   &lt;tr&gt;&lt;td&gt;&lt;a href="/novel/ID/N.html"&gt;話タイトル&lt;/a&gt;&lt;/td&gt;&lt;td&gt;...&lt;/td&gt;&lt;/tr&gt;  ← エピソード行
 	 *
+	 * ページネーションについて:
+	 *   ハーメルンは話数に関わらず全話を1ページのTOCに表示する仕様（なろうのような?p=N分割なし）。
+	 *   narou.rb の syosetu.org.yaml にもページネーション処理がないことで確認済み。
+	 *   extract.txt に PAGE_URL を定義していないため AozoraEpub3 のページネーションループも動作しない。
+	 *
 	 * @param doc TOCページの Document
 	 * @param listBaseUrl 一覧ページのベースURL
 	 * @return episodeFullURL → chapterTitle マップ (章なし作品では空マップ)

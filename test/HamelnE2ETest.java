@@ -59,8 +59,8 @@ public class HamelnE2ETest {
 		// 章ありの連載作品 (なろう同様のデモ用として小規模なものを選択)
 		new TestCase("hameln_chapter", "https://novel.syosetu.org/402358/",
 			"章ありハーメルン作品", 1, false, false),
-		// 章なし短編 (ハーメルン短編の例)
-		new TestCase("hameln_nochapter", "https://novel.syosetu.org/1/",
+		// 章なし短編 (ハーメルン短編の例 — https://novel.syosetu.org/7/ で動作確認)
+		new TestCase("hameln_nochapter", "https://novel.syosetu.org/7/",
 			"章なしハーメルン作品", 0, false, false)
 	);
 
@@ -93,6 +93,9 @@ public class HamelnE2ETest {
 		Assume.assumeTrue(
 			"ネットワーク到達不可 (ハーメルンへの接続が必要)",
 			isNetworkAvailable("https://novel.syosetu.org/"));
+		Assume.assumeTrue(
+			"[" + tc.id + "] テスト対象 URL が存在しません (削除された作品の可能性): " + tc.url,
+			isNetworkAvailable(tc.url));
 
 		Path outDir = Paths.get(OUT_DIR, tc.id);
 		if (Files.exists(outDir)) deleteDir(outDir);
