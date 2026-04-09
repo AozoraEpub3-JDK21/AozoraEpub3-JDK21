@@ -1,8 +1,8 @@
 ---
 layout: default
 lang: en
-title: narou.rb Setup Guide (December 2025)
-description: narou.rb installation, known issues (December 2025), and AozoraEpub3 integration steps.
+title: narou.rb Setup Guide (April 2026)
+description: narou.rb installation, known issues (April 2026), and AozoraEpub3 integration steps.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
@@ -20,7 +20,7 @@ description: narou.rb installation, known issues (December 2025), and AozoraEpub
 
 > ⚠️ **Notice**
 > - This article is **not** an official narou.rb manual.
-> - The following information as of 2025-12-21 is a **temporary workaround** applied at your own risk.
+> - The following information as of 2026-04-09 is a **temporary workaround** applied at your own risk.
 > - **Always check the [narou.rb Official Wiki](https://github.com/whiteleaf7/narou/wiki) and [Issues](https://github.com/whiteleaf7/narou/issues) for the latest official information.**
 > - If the narou.rb tool is updated, the workarounds in this guide may become unnecessary.
 > - Tested environment: Windows 11, Ruby 3.4.1, narou 3.9.1
@@ -178,7 +178,7 @@ After initialization, an **`AozoraEpub3.ini`** file appears in the same director
 ---
 
 <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
-  <p>Last updated: 2025-12-21 | This guide is community-maintained, not official.</p>
+  <p>Last updated: 2026-04-09 | This guide is community-maintained, not official.</p>
   <p>
     <a href="index.html">Home</a> |
     <a href="usage.html">Usage</a> |
