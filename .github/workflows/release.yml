@@ -6,9 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   build-and-release:
@@ -36,44 +34,7 @@ jobs:
       - name: Build distribution packages
         run: ./gradlew --no-daemon dist
 
-      - name: Identify distribution files
-        id: dist
+      - name: Verify distribution files
         run: |
-          set -e
-          ZIP_FILE=$(find build/distributions -name "AozoraEpub3*.zip" -type f | head -1)
-          TAR_FILE=$(find build/distributions -name "AozoraEpub3*.tar.gz" -type f | head -1)
-          echo "zip=$ZIP_FILE" >> "$GITHUB_OUTPUT"
-          echo "tar=$TAR_FILE" >> "$GITHUB_OUTPUT"
-          echo "Found ZIP: $ZIP_FILE"
-          echo "Found TAR: $TAR_FILE"
-
-      - name: Generate SHA-256 checksums
-        run: |
-          set -e
-          cd build/distributions
-          sha256sum *.zip *.tar.gz > SHA256SUMS
-          echo "=== SHA256SUMS ==="
-          cat SHA256SUMS
-
-      - name: Attest build provenance (ZIP)
-        if: steps.dist.outputs.zip != ''
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: ${{ steps.dist.outputs.zip }}
-
-      - name: Attest build provenance (TAR)
-        if: steps.dist.outputs.tar != ''
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: ${{ steps.dist.outputs.tar }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            build/distributions/*.zip
-            build/distributions/*.tar.gz
-            build/distributions/SHA256SUMS
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ls -lh build/distributions/
+          ls -lh build/libs/
