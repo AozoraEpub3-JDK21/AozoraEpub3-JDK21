@@ -30,6 +30,7 @@ This guide provides steps to install **narou.rb** (a web novel downloader) and i
 As of narou.rb v3.9.1, the following known issues are reported by the community:
 1. Dependency library (tilt) version mismatch causing startup errors
 2. Incompatibility with current "syosetu.com" website specification changes (table of contents not fetched)
+3. Kakuyomu site structure change (`tableOfContentsV2`) causing download failures
 
 This guide consolidates community-shared workarounds for these issues.
 
@@ -133,7 +134,40 @@ Copy the 2 downloaded files to the narou.rb installation folder:
 
 ---
 
-## 6. Initialize and Configure AozoraEpub3 Integration
+## 6. Fix Kakuyomu Table of Contents Error (Temporary Workaround)
+
+**Symptom**: Downloading or updating Kakuyomu works fails with an error; table of contents and text cannot be retrieved.
+
+**Cause**: Kakuyomu changed its internal data key (`tableOfContents` → `tableOfContentsV2`), and narou.rb's configuration file has not yet been updated. A community pull request ([PR #452](https://github.com/whiteleaf7/narou/pull/452)) has been submitted but was not merged as of 2026-04-09.
+
+**Workaround**:
+
+Apply the temporary fix shared by the community ([PR #452](https://github.com/whiteleaf7/narou/pull/452)).
+
+**1. Download Fixed File**
+Open the following GitHub link and download **1 file** as instructed:
+
+* 👉 **[Pull Request #452 - Files changed](https://github.com/whiteleaf7/narou/pull/452/files)**
+
+1. Find `webnovel/kakuyomu.jp.yaml` in the file list.
+2. Click the "**…**" (three-dot menu) in the top-right corner and select "**View file**".
+3. Once the file content appears, click the "**Download raw file**" (↓ arrow icon) to save it.
+
+**2. Overwrite File**
+Copy the downloaded `kakuyomu.jp.yaml` to the narou.rb installation folder:
+
+* **Example path**:
+`C:\Ruby34-x64\lib\ruby\gems\3.4.0\gems\narou-3.9.1\webnovel`
+*(Adjust Ruby version number as needed for your environment)*
+
+> **Recommendation**: Before overwriting, rename the original file (e.g., `kakuyomu.jp.yaml.bak`) as a backup.
+
+**Reference**:
+- [narou PR #452](https://github.com/whiteleaf7/narou/pull/452) — Community fix and discussion
+
+---
+
+## 7. Initialize and Configure AozoraEpub3 Integration
 
 Create a folder for managing novels and run the initialization command:
 
@@ -157,7 +191,7 @@ After initialization, an **`AozoraEpub3.ini`** file appears in the same director
 
 ---
 
-## 7. Troubleshooting Tips
+## 8. Troubleshooting Tips
 
 - **Check versions**:
    - `gem list tilt` (should be 2.4.0)
