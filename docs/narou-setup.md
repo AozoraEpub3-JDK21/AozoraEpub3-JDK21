@@ -2,7 +2,7 @@
 layout: default
 lang: ja
 title: narou.rb 導入ガイド (2025年12月時点)
-description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Windows環境でのRuby導入からgem install narou実行手順、2025年12月時点のtilt依存関係エラーや「小説家になろう」目次取得不具合の回避策、AozoraEpub3を変換ツールとして設定する手順を解説します。
+description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Windows環境でのRuby導入からgem install narou実行手順、tilt依存関係エラー・「小説家になろう」目次取得不具合・カクヨム構造変更の既知の不具合と回避策、AozoraEpub3を変換ツールとして設定する手順を解説します。
 ---
 
 <div style="text-align: right; margin-bottom: 1em;">
@@ -134,7 +134,40 @@ gem install narou
 
 ---
 
-## 6. 初期化と AozoraEpub3 の連携
+## 6. カクヨム目次取得エラーの修正【暫定回避策】
+
+**症状**: カクヨムの作品をダウンロード・更新しようとするとエラーが発生し、目次や本文が取得できない。
+
+**原因**: カクヨム側のサイト構造変更（内部データキー `tableOfContents` → `tableOfContentsV2`）に narou.rb の設定ファイルが未対応のため。有志によって修正されたプルリクエストが提出されていますが、2026-04-09 時点でまだマージされていません。
+
+**回避手順**:
+
+コミュニティから共有されている暫定修正（[PR #452](https://github.com/whiteleaf7/narou/pull/452) ベース）を適用します。
+
+**1. 修正ファイルをダウンロード**
+以下のリンク先（GitHub）を開き、手順に従って **1つのファイル** をダウンロードしてください。
+
+* 👉 **[Pull Request #452 - Files changed](https://github.com/whiteleaf7/narou/pull/452/files)**
+
+1. ファイル一覧から `webnovel/kakuyomu.jp.yaml` を探します。
+2. 右上の「**…**」（三点リーダー）をクリックし、「**View file**」を選択します。
+3. ファイルの中身が表示されたら、右上の「**Download raw file**」（↓矢印アイコン）をクリックして保存します。
+
+**2. ファイルの上書き**
+ダウンロードした `kakuyomu.jp.yaml` を、narou.rb がインストールされているフォルダの中に**上書き保存（コピペ）**します。
+
+* **フォルダの場所（例）**:
+`C:\Ruby34-x64\lib\ruby\gems\3.4.0\gems\narou-3.9.1\webnovel`
+*(※ Rubyのバージョン部分は環境に合わせて読み替えてください)*
+
+> **推奨**: 上書きする前に、元々あったファイルを「`kakuyomu.jp.yaml.bak`」のように名前を変えてバックアップしておくと安心です。
+
+**参考**:
+- [narou Issue (PR #452)](https://github.com/whiteleaf7/narou/pull/452) — 同様の報告と修正
+
+---
+
+## 7. 初期化と AozoraEpub3 の連携
 
 小説保存用のフォルダを作成し、初期化コマンドを実行します。この中で AozoraEpub3 との連携設定も行います。
 
@@ -158,7 +191,7 @@ narou init
 
 ---
 
-## 7. トラブルシュートのヒント
+## 8. トラブルシュートのヒント
 
 - **バージョン確認**:
    - `gem list tilt` (2.4.0 であること)

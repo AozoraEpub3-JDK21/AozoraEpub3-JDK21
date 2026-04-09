@@ -834,6 +834,15 @@ public class WebAozoraConverter
 				}
 			}
 	
+			// TOCテーブルから章マッピング構築 (ハーメルンなど非SPA/非Next.jsサイト向けフォールバック)
+			if (this.nextDataEpisodeChapterMap == null) {
+				HashMap<String, String> tocChapterMap = buildEpisodeChapterMapFromTocTable(doc, listBaseUrl);
+				if (!tocChapterMap.isEmpty()) {
+					this.nextDataEpisodeChapterMap = tocChapterMap;
+					LogAppender.println("TOCテーブルから章マッピング構築: " + tocChapterMap.size() + "エピソード");
+				}
+			}
+
 			List<String> failedHrefs = new ArrayList<>();
 			if (chapterHrefs.size() > 0) {
 				//全話で更新や追加があるかチェック
@@ -2594,6 +2603,55 @@ public class WebAozoraConverter
 			while (refM.find()) {
 				String epId = refM.group(1);
 				if (!result.containsKey(epId)) result.put(epId, chTitle);
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * TOCページのテーブル構造から章-エピソード対応マップを構築する。
+	 * ハーメルンなど、エピソードページに章情報がなく __NEXT_DATA__ も持たないサイト向け。
+	 *
+	 * テーブル構造:
+	 *   &lt;tr&gt;&lt;td colspan=2&gt;&lt;strong&gt;章タイトル&lt;/strong&gt;&lt;/td&gt;&lt;/tr&gt;  ← 章区切り行
+	 *   &lt;tr&gt;&lt;td&gt;&lt;a href="/novel/ID/N.html"&gt;話タイトル&lt;/a&gt;&lt;/td&gt;&lt;td&gt;...&lt;/td&gt;&lt;/tr&gt;  ← エピソード行
+	 *
+	 * @param doc TOCページの Document
+	 * @param listBaseUrl 一覧ページのベースURL
+	 * @return episodeFullURL → chapterTitle マップ (章なし作品では空マップ)
+	 */
+	private HashMap<String, String> buildEpisodeChapterMapFromTocTable(Document doc, String listBaseUrl) {
+		HashMap<String, String> result = new HashMap<String, String>();
+		Elements rows = doc.select("#maind .ss table tr");
+		if (rows == null || rows.isEmpty()) return result;
+		String currentChapter = null;
+		for (Element row : rows) {
+			// 章区切り行: colspan=2 の td 内に strong がある
+			Elements chapterCells = row.select("td[colspan=2] strong");
+			if (!chapterCells.isEmpty()) {
+				String title = chapterCells.first().text().trim();
+				if (!title.isEmpty()) {
+					currentChapter = title;
+				}
+				continue;
+			}
+			// エピソード行: currentChapter が設定済みで <a> リンクがある行
+			if (currentChapter != null) {
+				Elements links = row.select("a[href]");
+				for (Element link : links) {
+					String href = link.attr("href");
+					if (href == null || href.isEmpty()) continue;
+					// フルURL構築 (一覧取得ロジックと同じ)
+					String fullUrl;
+					if (href.startsWith("http")) {
+						fullUrl = href;
+					} else if (href.charAt(0) == '/') {
+						fullUrl = this.baseUri + href;
+					} else {
+						fullUrl = listBaseUrl + href;
+					}
+					result.put(fullUrl, currentChapter);
+				}
 			}
 		}
 		return result;
