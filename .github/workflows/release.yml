@@ -42,22 +42,16 @@ jobs:
           set -e
           ZIP_FILE=$(find build/distributions -name "AozoraEpub3*.zip" -type f | head -1)
           TAR_FILE=$(find build/distributions -name "AozoraEpub3*.tar.gz" -type f | head -1)
-          JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
           echo "zip=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "tar=$TAR_FILE" >> "$GITHUB_OUTPUT"
-          echo "jar=$JAR_FILE" >> "$GITHUB_OUTPUT"
           echo "Found ZIP: $ZIP_FILE"
           echo "Found TAR: $TAR_FILE"
-          echo "Found JAR: $JAR_FILE"
 
       - name: Generate SHA-256 checksums
         run: |
           set -e
           cd build/distributions
-          sha256sum *.zip *.tar.gz > SHA256SUMS 2>/dev/null || true
-          if [ -f "../libs/"*.jar ]; then
-            (cd ../libs && sha256sum *.jar) >> SHA256SUMS
-          fi
+          sha256sum *.zip *.tar.gz > SHA256SUMS
           echo "=== SHA256SUMS ==="
           cat SHA256SUMS
 
@@ -73,12 +67,6 @@ jobs:
         with:
           subject-path: ${{ steps.dist.outputs.tar }}
 
-      - name: Attest build provenance (JAR)
-        if: steps.dist.outputs.jar != ''
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: ${{ steps.dist.outputs.jar }}
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -87,6 +75,5 @@ jobs:
             build/distributions/*.zip
             build/distributions/*.tar.gz
             build/distributions/SHA256SUMS
-            build/libs/AozoraEpub3*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
