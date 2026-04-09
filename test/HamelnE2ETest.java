@@ -59,7 +59,7 @@ public class HamelnE2ETest {
 		// 章ありの連載作品 (なろう同様のデモ用として小規模なものを選択)
 		new TestCase("hameln_chapter", "https://novel.syosetu.org/402358/",
 			"章ありハーメルン作品", 1, false, false),
-		// 章なし短編 (ハーメルン短編の例 — https://novel.syosetu.org/7/ で動作確認)
+		// 章なし短編 (isUrlExists で存在確認するため URL が削除されていてもテストはスキップされる)
 		new TestCase("hameln_nochapter", "https://novel.syosetu.org/7/",
 			"章なしハーメルン作品", 0, false, false)
 	);
@@ -95,7 +95,7 @@ public class HamelnE2ETest {
 			isNetworkAvailable("https://novel.syosetu.org/"));
 		Assume.assumeTrue(
 			"[" + tc.id + "] テスト対象 URL が存在しません (削除された作品の可能性): " + tc.url,
-			isNetworkAvailable(tc.url));
+			isUrlExists(tc.url));
 
 		Path outDir = Paths.get(OUT_DIR, tc.id);
 		if (Files.exists(outDir)) deleteDir(outDir);
@@ -234,6 +234,7 @@ public class HamelnE2ETest {
 	// ユーティリティ
 	// ================================================================
 
+	/** サーバーに到達でき 2xx/3xx が返ること (5xx や接続エラーを除外するネットワーク疎通確認) */
 	private boolean isNetworkAvailable(String urlStr) {
 		try {
 			HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
@@ -243,6 +244,21 @@ public class HamelnE2ETest {
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
 			int code = conn.getResponseCode();
 			return code < 500;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/** URL が存在すること (2xx/3xx のみ true、404 等は false でテストスキップ) */
+	private boolean isUrlExists(String urlStr) {
+		try {
+			HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+			conn.setConnectTimeout(5000);
+			conn.setRequestMethod("HEAD");
+			conn.setRequestProperty("User-Agent",
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+			int code = conn.getResponseCode();
+			return code >= 200 && code < 400;
 		} catch (Exception e) {
 			return false;
 		}
