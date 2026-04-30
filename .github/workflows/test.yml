@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       java_version:
-        description: 'JDK version to test (21 / 25 / 26 / combinations). 26 is EA — verifies JEP 504 (JApplet removal) compatibility.'
+        description: 'JDK version to test (21 / 25 / 26 / combinations). 26 verifies JEP 504 (JApplet removal) compatibility.'
         required: false
         default: '21'
         type: choice

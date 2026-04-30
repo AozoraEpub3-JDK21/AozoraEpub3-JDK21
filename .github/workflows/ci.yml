@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       java_version:
-        description: 'JDK version to test (21 / 25 / 26 / combinations). 26 is EA — verifies JEP 504 (JApplet removal) compatibility.'
+        description: 'JDK version to test (21 / 25 / 26 / combinations). 26 verifies JEP 504 (JApplet removal) compatibility.'
         required: false
         default: '21'
         type: choice
@@ -61,8 +61,6 @@ jobs:
       - name: Setup Java ${{ matrix.java-version }}
         uses: actions/setup-java@v4
         with:
-          # Temurin EA builds may lag behind upstream; if JDK 26 is not yet available
-          # on Temurin when this runs, switch to distribution: zulu (which publishes EA).
           distribution: temurin
           java-version: ${{ matrix.java-version }}
           check-latest: true
