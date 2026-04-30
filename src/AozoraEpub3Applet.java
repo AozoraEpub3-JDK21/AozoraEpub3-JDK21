@@ -187,7 +187,7 @@ public class AozoraEpub3Applet extends JPanel
 			java.util.Set<String> available = new java.util.HashSet<>();
 			for (String name : ge.getAvailableFontFamilyNames()) available.add(name);
 			for (String c : candidates) if (available.contains(c)) return c;
-		} catch (Throwable ignore) {}
+		} catch (Throwable ignore) { /* 意図的: AWT 未初期化等で候補不可なら論理フォント Dialog で続行 */ }
 		return Font.DIALOG; // fallback
 	}
 	private static final long serialVersionUID = 1L;
@@ -510,7 +510,7 @@ public class AozoraEpub3Applet extends JPanel
 			try (InputStream fos = Files.newInputStream(Path.of(this.jarPath+this.propFileName))) {
 				props.load(fos);
 			}
-		} catch (Exception e) { }
+		} catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */ }
 		String path = props.getProperty("LastDir");
 		if (path != null && path.length() >0) this.currentPath = new File(path);
 
@@ -559,7 +559,7 @@ public class AozoraEpub3Applet extends JPanel
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
 		int dividerLocation = isMac ? 350 : 230;
-		try { dividerLocation = Integer.parseInt(props.getProperty("DividerLocation")); } catch (Exception e) {}
+		try { dividerLocation = Integer.parseInt(props.getProperty("DividerLocation")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		jSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
 		jSplitPane.setDividerLocation(dividerLocation);
 		jSplitPane.setDividerSize(3);
@@ -696,13 +696,13 @@ public class AozoraEpub3Applet extends JPanel
 				try (InputStream fos = Files.newInputStream(presetFile)) {
 					presetProps.load(fos);
 				}
-			} catch (Exception e) {}
+			} catch (Exception e) { /* 意図的: プリセット読込失敗時は当該プリセットをスキップ */ }
 			String name = presetProps.getProperty("PresetName");
 			if (name != null && name.length() > 0) {
 				JMenuItem menu = new JMenuItem(name);
 				String iconName = presetProps.getProperty("PresetIcon");
 				if (iconName != null) {
-					try { menu.setIcon(new ImageIcon(AozoraEpub3Applet.class.getResource("images/"+iconName))); } catch (Exception r) {}
+					try { menu.setIcon(new ImageIcon(AozoraEpub3Applet.class.getResource("images/"+iconName))); } catch (Exception r) { /* 意図的: アイコン読込失敗時はアイコン無しで起動 */ }
 				}
 				menu.addActionListener(new LoadPresetActionListener(presetProps));
 				jPopupPreset.add(menu);
@@ -727,7 +727,7 @@ public class AozoraEpub3Applet extends JPanel
 				try (OutputStream fos = Files.newOutputStream(Path.of(jarPath+propFileName))) {
 					props.store(fos, "AozoraEpub3 Parameters");
 				}
-			} catch (Exception ignore) {}
+			} catch (Exception ignore) { /* 意図的: 設定保存失敗時は無視 (次回起動時に既定値で起動) */ }
 			JOptionPane.showMessageDialog(
 				jFrameParent,
 				I18n.t("ui.language.changed", I18n.t("ui.language.ja")),
@@ -743,7 +743,7 @@ public class AozoraEpub3Applet extends JPanel
 				try (OutputStream fos = Files.newOutputStream(Path.of(jarPath+propFileName))) {
 					props.store(fos, "AozoraEpub3 Parameters");
 				}
-			} catch (Exception ignore) {}
+			} catch (Exception ignore) { /* 意図的: 設定保存失敗時は無視 (次回起動時に既定値で起動) */ }
 			JOptionPane.showMessageDialog(
 				jFrameParent,
 				I18n.t("ui.language.changed", I18n.t("ui.language.en")),
@@ -2671,7 +2671,7 @@ public class AozoraEpub3Applet extends JPanel
 				InputStream fos = Files.newInputStream(profile.toPath());
 				profileProps.load(fos);
 				fos.close();
-			} catch (Exception e) { }
+			} catch (Exception e) { /* 意図的: プロファイル読込失敗時は当該エントリをスキップ */ }
 			String name = profileProps.getProperty("ProfileName");
 			if (name != null && name.length() > 0) {
 				jComboProfile.addItem(new ProfileInfo(profile.getName(), name, profileProps));
@@ -2808,7 +2808,7 @@ public class AozoraEpub3Applet extends JPanel
 					textField.setText(Float.toString(this.min));
 					return true;
 				}
-			} catch (NumberFormatException e) { }
+			} catch (NumberFormatException e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			textField.setText(Float.toString(this.def));
 			return true;
 		}
@@ -2854,7 +2854,7 @@ public class AozoraEpub3Applet extends JPanel
 					textField.setText(this.format.format(this.min));
 					return true;
 				}
-			} catch (NumberFormatException e) { }
+			} catch (NumberFormatException e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			textField.setText(this.format.format(this.def));
 			return true;
 		}
@@ -2927,7 +2927,7 @@ public class AozoraEpub3Applet extends JPanel
 					if (pathString.startsWith(rootPath)) {
 						pathString = pathString.substring(rootPath.length()+1);
 					}
-				} catch (IOException e1) { }
+				} catch (IOException e1) { /* 意図的: パス変換失敗時は元の絶対パスのまま続行 */ }
 				jTextCachePath.setText(pathString);
 			}
 		}
@@ -2961,7 +2961,7 @@ public class AozoraEpub3Applet extends JPanel
 				if (transfer.isDataFlavorSupported(DataFlavor.stringFlavor)) {
 					String path = (String)transfer.getTransferData(DataFlavor.stringFlavor);
 					if (path.startsWith("file://"))
-						try { path = URLDecoder.decode(path.substring(0, path.indexOf('\n')-1).substring(7).trim(),"UTF-8"); } catch (UnsupportedEncodingException e1) { }
+						try { path = URLDecoder.decode(path.substring(0, path.indexOf('\n')-1).substring(7).trim(),"UTF-8"); } catch (UnsupportedEncodingException e1) { /* 意図的: UTF-8 は JVM で常に利用可能 (発生不能) */ }
 					jComboCover.setSelectedItem(path);
 					return;
 				}
@@ -3004,7 +3004,7 @@ public class AozoraEpub3Applet extends JPanel
 				if (transfer.isDataFlavorSupported(DataFlavor.stringFlavor)) {
 					String path = (String)transfer.getTransferData(DataFlavor.stringFlavor);
 					if (path.startsWith("file://"))
-						try { path = URLDecoder.decode(path.substring(0, path.indexOf('\n')-1).substring(7).trim(),"UTF-8"); } catch (UnsupportedEncodingException e1) { }
+						try { path = URLDecoder.decode(path.substring(0, path.indexOf('\n')-1).substring(7).trim(),"UTF-8"); } catch (UnsupportedEncodingException e1) { /* 意図的: UTF-8 は JVM で常に利用可能 (発生不能) */ }
 					jCheckSamePath.setSelected(false);
 					jComboDstPath.setEditable(true);
 					jComboDstPath.setSelectedItem(path);
@@ -3302,8 +3302,8 @@ public class AozoraEpub3Applet extends JPanel
 				try {
 					Object transferData = transfer.getTransferData(DataFlavor.stringFlavor);
 					if (transferData != null) urlString = transferData.toString();
-				} catch (Exception e) {}
-				
+				} catch (Exception e) { /* 意図的: D&D 転送データ取得失敗時は urlString を null のまま続行 */ }
+
 				if (urlString != null && urlString.startsWith("file://")) {
 					//Linux等 ファイルのパスでファイルがあれば変換
 					try {
@@ -3447,11 +3447,11 @@ public class AozoraEpub3Applet extends JPanel
 		////////////////////////////////////////////////////////////////
 		//画面サイズと画像リサイズ
 		int resizeW = 0;
-		if (jCheckResizeW.isSelected()) try { resizeW = Integer.parseInt(jTextResizeNumW.getText()); } catch (Exception e) {}
+		if (jCheckResizeW.isSelected()) try { resizeW = Integer.parseInt(jTextResizeNumW.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int resizeH = 0;
-		if (jCheckResizeH.isSelected()) try { resizeH = Integer.parseInt(jTextResizeNumH.getText()); } catch (Exception e) {}
+		if (jCheckResizeH.isSelected()) try { resizeH = Integer.parseInt(jTextResizeNumH.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		//int pixels = 0;
-		//if (jCheckPixel.isSelected()) try { pixels = Integer.parseInt(jTextPixelW.getText())*Integer.parseInt(jTextPixelH.getText()); } catch (Exception e) {}
+		//if (jCheckPixel.isSelected()) try { pixels = Integer.parseInt(jTextPixelW.getText())*Integer.parseInt(jTextPixelH.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int dispW = Integer.parseInt(jTextDispW.getText());
 		int dispH = Integer.parseInt(jTextDispH.getText());
 		this.coverW = Integer.parseInt(this.jTextCoverW.getText());
@@ -3461,17 +3461,17 @@ public class AozoraEpub3Applet extends JPanel
 		int singlePageWidth = Integer.parseInt(jTextSinglePageWidth.getText());
 		
 		float imageScale = 0;
-		if (jCheckImageScale.isSelected()) try { imageScale = Float.parseFloat(jTextImageScale.getText()); } catch (Exception e) {}
+		if (jCheckImageScale.isSelected()) try { imageScale = Float.parseFloat(jTextImageScale.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int imageFloatType = 0; //0=無効 1=上 2=下
 		int imageFloatW = 0;
 		int imageFloatH = 0;
 		if (jCheckImageFloat.isSelected()) {
 			imageFloatType = this.jComboImageFloatType.getSelectedIndex()+1;
-			try { imageFloatW =Integer.parseInt(jTextImageFloatW.getText()); } catch (Exception e) {}
-			try { imageFloatH =Integer.parseInt(jTextImageFloatH.getText()); } catch (Exception e) {}
+			try { imageFloatW =Integer.parseInt(jTextImageFloatW.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			try { imageFloatH =Integer.parseInt(jTextImageFloatH.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		}
-		float jpegQualty = 0.8f; try { jpegQualty = Integer.parseInt(jTextJpegQuality.getText())/100f; } catch (Exception e) {}
-		float gamma = 1.0f; if (jCheckGamma.isSelected()) try { gamma = Float.parseFloat(jTextGammaValue.getText()); } catch (Exception e) {}
+		float jpegQualty = 0.8f; try { jpegQualty = Integer.parseInt(jTextJpegQuality.getText())/100f; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+		float gamma = 1.0f; if (jCheckGamma.isSelected()) try { gamma = Float.parseFloat(jTextGammaValue.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int autoMarginLimitH = 0;
 		int autoMarginLimitV = 0;
 		int autoMarginWhiteLevel = 0;
@@ -3479,12 +3479,12 @@ public class AozoraEpub3Applet extends JPanel
 		int autoMarginNombre = 0;
 		float autoMarginNombreSize = 0.03f;
 		if (jCheckAutoMargin.isSelected()) {
-			try { autoMarginLimitH =Integer.parseInt(jTextAutoMarginLimitH.getText()); } catch (Exception e) {}
-			try { autoMarginLimitV =Integer.parseInt(jTextAutoMarginLimitV.getText()); } catch (Exception e) {}
-			try { autoMarginWhiteLevel =Integer.parseInt(jTextAutoMarginWhiteLevel.getText()); } catch (Exception e) {}
-			try { autoMarginPadding =Float.parseFloat(jTextAutoMarginPadding.getText()); } catch (Exception e) {}
+			try { autoMarginLimitH =Integer.parseInt(jTextAutoMarginLimitH.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			try { autoMarginLimitV =Integer.parseInt(jTextAutoMarginLimitV.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			try { autoMarginWhiteLevel =Integer.parseInt(jTextAutoMarginWhiteLevel.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			try { autoMarginPadding =Float.parseFloat(jTextAutoMarginPadding.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			autoMarginNombre = jComboAutoMarginNombre.getSelectedIndex();
-			try { autoMarginNombreSize =Float.parseFloat(jTextAutoMarginNombreSize.getText())*0.01f; } catch (Exception e) {}
+			try { autoMarginNombreSize =Float.parseFloat(jTextAutoMarginNombreSize.getText())*0.01f; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		}
 		int rorateAngle = 0; if (jComboRotateImage.getSelectedIndex() == 1) rorateAngle = 90; else if (jComboRotateImage.getSelectedIndex() == 2) rorateAngle = -90;
 		
@@ -3516,9 +3516,9 @@ public class AozoraEpub3Applet extends JPanel
 			bodyMargin[i] = jTextBodyMargins[i].getText()+bodyMarginUnit;
 		}
 		float lineHeight = 1.8f;
-		try { lineHeight = Float.parseFloat(jComboLineHeight.getEditor().getItem().toString()); } catch (Exception e) {}
+		try { lineHeight = Float.parseFloat(jComboLineHeight.getEditor().getItem().toString()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int fontSize = 100;
-		try { fontSize = (int)Float.parseFloat(jComboFontSize.getEditor().getItem().toString()); } catch (Exception e) {}
+		try { fontSize = (int)Float.parseFloat(jComboFontSize.getEditor().getItem().toString()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		
 		int dakutenType = jRadioDakutenType0.isSelected() ? 0 : (jRadioDakutenType1.isSelected() ? 1 : 2);
 		
@@ -3576,7 +3576,7 @@ public class AozoraEpub3Applet extends JPanel
 			
 			//目次設定
 			int maxLength = 64;
-			try { maxLength = Integer.parseInt((jTextMaxChapterNameLength.getText())); } catch (Exception e) {}
+			try { maxLength = Integer.parseInt((jTextMaxChapterNameLength.getText())); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			
 			this.aozoraConverter.setChapterLevel(maxLength, jCheckChapterExclude.isSelected(), jCheckChapterUseNextLine.isSelected(), jCheckChapterSection.isSelected(),
 					jCheckChapterH.isSelected(), jCheckChapterH1.isSelected(), jCheckChapterH2.isSelected(), jCheckChapterH3.isSelected(), jCheckSameLineChapter.isSelected(),
@@ -3828,9 +3828,9 @@ public class AozoraEpub3Applet extends JPanel
 				} else {
 					coverImageIndex = bookInfo.firstImageIdx;
 				}
-			} catch (Exception e) {}
+			} catch (Exception e) { /* 意図的: MaxCoverLine パース失敗時は cover 設定変更せず */ }
 		}
-		
+
 		//表紙ページの情報をbookInfoに設定
 		bookInfo.coverFileName = coverFileName;
 		bookInfo.coverImageIndex = coverImageIndex;
@@ -4244,13 +4244,13 @@ public class AozoraEpub3Applet extends JPanel
 				}
 
 				int interval = 500;
-				try { interval = (int)(Float.parseFloat(jTextWebInterval.getText())*1000); } catch (Exception e) {}
+				try { interval = (int)(Float.parseFloat(jTextWebInterval.getText())*1000); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 				int beforeChapter = 0;
 				if (this.jCheckWebBeforeChapter.isSelected()) {
-					try { beforeChapter = Integer.parseInt(jTextWebBeforeChapterCount.getText()); } catch (Exception e) {}
+					try { beforeChapter = Integer.parseInt(jTextWebBeforeChapterCount.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 				}
 				float modifiedExpire = 0;
-				try { modifiedExpire = Float.parseFloat(jTextWebModifiedExpire.getText()); } catch (Exception e) {}
+				try { modifiedExpire = Float.parseFloat(jTextWebModifiedExpire.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 				//キャッシュパス
 				if (!this.cachePath.isDirectory()) {
 					Files.createDirectories(this.cachePath.toPath());
@@ -4335,6 +4335,7 @@ public class AozoraEpub3Applet extends JPanel
 			return fileCanonicalPath.equals(cacheCanonicalPath) ||
 			       fileCanonicalPath.startsWith(cacheCanonicalPath + File.separator);
 		} catch (IOException e) {
+			// 意図的: パス比較不能なら false を返す (キャッシュファイル判定に失敗)
 		}
 		return false;
 	}
@@ -4564,7 +4565,7 @@ public class AozoraEpub3Applet extends JPanel
 		try {
 			if (!props.containsKey(name)) return;
 			jText.setText(props.getProperty(name));
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	/** int値を設定 null なら設定しない */
 	private void setPropsIntText(JTextField jText, Properties props, String name)
@@ -4572,7 +4573,7 @@ public class AozoraEpub3Applet extends JPanel
 		try {
 			if (!props.containsKey(name)) return;
 			jText.setText(Integer.toString(Integer.parseInt(props.getProperty(name))));
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	/** float値を設定 null なら設定しない */
 	private void setPropsFloatText(JTextField jText, Properties props, String name)
@@ -4580,7 +4581,7 @@ public class AozoraEpub3Applet extends JPanel
 		try {
 			if (!props.containsKey(name)) return;
 			jText.setText(Float.toString(Float.parseFloat(props.getProperty(name))));
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	/** 数値を設定 null なら設定しない */
 	private void setPropsNumberText(JTextField jText, Properties props, String name)
@@ -4588,7 +4589,7 @@ public class AozoraEpub3Applet extends JPanel
 		try {
 			if (!props.containsKey(name)) return;
 			jText.setText(NumberFormat.getNumberInstance().format(Float.parseFloat(props.getProperty(name))));
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	
 	/** プロファイルを新規保存 
@@ -4672,7 +4673,7 @@ public class AozoraEpub3Applet extends JPanel
 		boolean selected;
 		
 		//表題
-		try { jComboTitle.setSelectedIndex(Integer.parseInt(props.getProperty("TitleType"))); } catch (Exception e) {}
+		try { jComboTitle.setSelectedIndex(Integer.parseInt(props.getProperty("TitleType"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		setPropsSelected(jCheckPubFirst, props, "PubFirst");
 		setPropsSelected(jCheckUseFileName, props, "UseFileName");
 		//表紙
@@ -4712,7 +4713,7 @@ public class AozoraEpub3Applet extends JPanel
 		selected= setPropsSelected(jRadioVertical, props, "Vertical");
 		jRadioHorizontal.setSelected(!selected);
 		//入力文字コード
-		try { jComboEncType.setSelectedIndex(Integer.parseInt(props.getProperty("EncType"))); } catch (Exception e) {}
+		try { jComboEncType.setSelectedIndex(Integer.parseInt(props.getProperty("EncType"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		
 		////////////////////////////////////////////////////////////////
 		//画像設定
@@ -4738,7 +4739,7 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsSelected(jCheckFitImage, props, "FitImage");
 		//SVG画像タグ出力
 		setPropsSelected(jCheckSvgImage, props, "SvgImage");
-		try { jComboRotateImage.setSelectedIndex(Integer.parseInt(props.getProperty("RotateImage"))); } catch (Exception e) {}
+		try { jComboRotateImage.setSelectedIndex(Integer.parseInt(props.getProperty("RotateImage"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		//画像倍率
 		setPropsSelected(jCheckImageScale, props, "ImageScaleChecked", false);
 		setPropsFloatText(jTextImageScale, props, "ImageScale");
@@ -4746,7 +4747,7 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsSelected(jCheckImageFloat, props, "ImageFloat");
 		setPropsIntText(jTextImageFloatW, props, "ImageFloatW");
 		setPropsIntText(jTextImageFloatH, props, "ImageFloatH");
-		try { jComboImageFloatType.setSelectedIndex(Integer.parseInt(props.getProperty("ImageFloatType"))); } catch (Exception e) {}
+		try { jComboImageFloatType.setSelectedIndex(Integer.parseInt(props.getProperty("ImageFloatType"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		//画像縮小指定
 		setPropsSelected(jCheckResizeW, props, "ResizeW");
 		setPropsIntText(jTextResizeNumW, props, "ResizeNumW");
@@ -4766,7 +4767,7 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsIntText(jTextAutoMarginLimitV, props, "AutoMarginLimitV");
 		setPropsIntText(jTextAutoMarginWhiteLevel, props, "AutoMarginWhiteLevel");
 		setPropsFloatText(jTextAutoMarginPadding, props, "AutoMarginPadding");
-		try { jComboAutoMarginNombre.setSelectedIndex(Integer.parseInt(props.getProperty("AutoMarginNombre"))); } catch (Exception e) {}
+		try { jComboAutoMarginNombre.setSelectedIndex(Integer.parseInt(props.getProperty("AutoMarginNombre"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		setPropsFloatText(jTextAutoMarginNombreSize, props, "AutoMarginNombreSize");
 		
 		////////////////////////////////////////////////////////////////
@@ -4797,14 +4798,14 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsSelected(jCheckCommentPrint, props, "CommentPrint");
 		setPropsSelected(jCheckCommentConvert, props, "CommentConvert");
 		//空行除去
-		try { jComboxRemoveEmptyLine.setSelectedIndex(Integer.parseInt(props.getProperty("RemoveEmptyLine"))); } catch (Exception e) {}
+		try { jComboxRemoveEmptyLine.setSelectedIndex(Integer.parseInt(props.getProperty("RemoveEmptyLine"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		propValue = props.getProperty("MaxEmptyLine");
-		try { jComboxMaxEmptyLine.setSelectedIndex(Integer.parseInt(propValue)); } catch (Exception e) {}
+		try { jComboxMaxEmptyLine.setSelectedIndex(Integer.parseInt(propValue)); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		//行頭字下げ追加
 		setPropsSelected(jCheckForceIndent, props, "ForceIndent");
 		//強制改ページ
 		setPropsSelected(jCheckPageBreak, props, "PageBreak");
-		try { jTextPageBreakSize.setText(Integer.toString(Integer.parseInt(props.getProperty("PageBreakSize")))); } catch (Exception e) {}
+		try { jTextPageBreakSize.setText(Integer.toString(Integer.parseInt(props.getProperty("PageBreakSize")))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		setPropsSelected(jCheckPageBreakEmpty, props, "PageBreakEmpty");
 		propValue = props.getProperty("PageBreakEmptyLine");
 		if (propValue != null) jComboxPageBreakEmptyLine.setSelectedItem(propValue);
@@ -4908,7 +4909,7 @@ public class AozoraEpub3Applet extends JPanel
 				if (styleIndex >= 0 && styleIndex < jComboAuthorCommentStyle.getItemCount()) {
 					jComboAuthorCommentStyle.setSelectedIndex(styleIndex);
 				}
-			} catch (NumberFormatException e) {}
+			} catch (NumberFormatException e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		}
 	}
 	
@@ -5141,14 +5142,14 @@ public class AozoraEpub3Applet extends JPanel
 			int x = (int)Float.parseFloat(applet.props.getProperty("PosX"));
 			int y = (int)Float.parseFloat(applet.props.getProperty("PosY"));
 			jFrame.setLocation(x, y);
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 位置情報なしなら既定位置で起動 */ }
 		
 		jFrame.setSize(applet.getSize());
 		try {
 			int w = (int)Float.parseFloat(applet.props.getProperty("SizeW"));
 			int h = (int)Float.parseFloat(applet.props.getProperty("SizeH"));
 			jFrame.setSize(w, h);
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: サイズ情報なしなら既定サイズで起動 */ }
 		
 		jFrame.addWindowListener(new WindowAdapter() {
 			@Override
