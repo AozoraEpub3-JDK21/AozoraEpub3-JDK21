@@ -3,11 +3,10 @@ package com.github.hmdev.web;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -228,7 +227,7 @@ public class NarouFormatSettings {
 	public void loadReplacePatterns(File file) throws IOException {
 		textReplacePatterns.clear();
 		if (!file.exists()) return;
-		try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
+		try (BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(file.toPath()), "UTF-8"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				line = line.replaceAll("[\\r\\n]+$", "");
@@ -252,7 +251,7 @@ public class NarouFormatSettings {
 	 */
 	public void load(File file) throws IOException {
 		if (!file.exists()) return;
-		try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
+		try (BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(file.toPath()), "UTF-8"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				line = line.trim();
@@ -386,7 +385,7 @@ public class NarouFormatSettings {
 	 */
 	public static void generateDefaultIfMissing(File file) throws IOException {
 		if (file.exists()) return;
-		try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
+		try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(file.toPath()), "UTF-8"))) {
 			bw.write("; AozoraEpub3-JDK21 narou.rb互換フォーマット設定\n");
 			bw.write("; narou.rbから呼び出される場合はnarou.rbのsetting.iniが優先されます\n");
 			bw.write("; この設定はAozoraEpub3-JDK21が直接ダウンロード時に適用されます\n");
@@ -492,7 +491,7 @@ public class NarouFormatSettings {
 	 * 現在の設定をINI形式でファイルに保存する。
 	 */
 	public void save(File file) throws IOException {
-		try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
+		try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(file.toPath()), "UTF-8"))) {
 			bw.write("; AozoraEpub3-JDK21 narou.rb互換フォーマット設定\n");
 			bw.write("; このファイルはGUI設定ダイアログから自動生成されます\n");
 			bw.write("\n");
