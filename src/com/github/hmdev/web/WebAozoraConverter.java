@@ -33,6 +33,8 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.util.CharUtils;
 import com.github.hmdev.util.LogAppender;
@@ -44,6 +46,8 @@ import com.github.hmdev.web.api.model.NovelMetadata;
 /** HTMLを青空txtに変換 */
 public class WebAozoraConverter
 {
+	private static final Logger logger = LoggerFactory.getLogger(WebAozoraConverter.class);
+
 	final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 	
 	/** Singletonインスタンス格納 keyはFQDN */
@@ -510,7 +514,7 @@ public class WebAozoraConverter
 			cacheFile(urlString, cacheFile, null);
 			LogAppender.println(" : List Loaded.");
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.warn("一覧ページの取得に失敗、キャッシュ利用を試みる: {}", urlString, e);
 			LogAppender.println("一覧ページの取得に失敗しました。 ");
 			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
 			if (!cacheFile.exists()) return null;
@@ -895,7 +899,7 @@ public class WebAozoraConverter
 								this.updated = true;
 								loaded = true;
 							} catch (Exception e) {
-								e.printStackTrace();
+								logger.warn("章 HTML の取得に失敗（後続でキャッシュ確認・再試行）: {}", chapterHref, e);
 								LogAppender.println("htmlファイルが取得できませんでした : "+chapterHref);
 							}
 						}
@@ -980,7 +984,7 @@ public class WebAozoraConverter
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 							} catch (Exception e) {
-								e.printStackTrace();
+								logger.warn("章の再ダウンロードに失敗、スキップ: {}", chapterHref, e);
 								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
 								failedHrefs.add(chapterHref);
 								chapterIdx++;
@@ -1000,7 +1004,7 @@ public class WebAozoraConverter
 									cacheFile(chapterHref, chapterCacheFile, urlString);
 									chapterDoc = Jsoup.parse(chapterCacheFile, null);
 								} catch (Exception e) {
-									e.printStackTrace();
+									logger.warn("章本文の再取得に失敗: {}", chapterHref, e);
 									LogAppender.println("再ダウンロードできませんでした: " + chapterHref);
 								}
 							}
@@ -1077,7 +1081,7 @@ public class WebAozoraConverter
 				try (BufferedWriter fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(failedFile), "UTF-8"))) {
 					for (String href : failedHrefs) fw.write(href + "\n");
 				} catch (IOException e) {
-					e.printStackTrace();
+					logger.warn("failed_downloads.txt の書き込みに失敗: {}", failedFile, e);
 				}
 				LogAppender.println("警告: "+failedHrefs.size()+"話のダウンロードに失敗しました。失敗した話はスキップしてePubを作成しました。");
 				LogAppender.println("【再ダウンロード方法】GUIのテキスト欄に元のURLを貼り付けて変換を再実行すると、失敗した話のみ自動で再ダウンロードしてePubを再作成します。");
@@ -1109,7 +1113,7 @@ public class WebAozoraConverter
 			finalizer.finalize(txtFile, new File(this.dstPath));
 		} catch (IOException e) {
 			LogAppender.println("警告: ファイナライズ処理中にエラーが発生しました: " + e.getMessage());
-			e.printStackTrace();
+			logger.warn("テキストファイナライズ処理に失敗（付加処理のため変換は継続）: {}", txtFile, e);
 			// エラーが発生してもファイルは返す（ファイナライズ処理は付加的な処理のため）
 		}
 
@@ -1140,7 +1144,7 @@ public class WebAozoraConverter
 					}
 					
 				} catch (Exception e) {
-					e.printStackTrace();
+					logger.warn("更新情報ファイルの読み込みに失敗: {}", updateInfoFile, e);
 				} finally {
 					updateBr.close();
 				}
@@ -1167,7 +1171,7 @@ public class WebAozoraConverter
 					}
 				}
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.warn("更新情報ファイルの書き込みに失敗: {}", updateInfoFile, e);
 			} finally {
 				updateBw.close();
 			}
@@ -1213,7 +1217,7 @@ public class WebAozoraConverter
 					}
 				}
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.warn("更新情報ファイル(NextData)の読み込みに失敗: {}", updateInfoFile, e);
 			} finally {
 				br.close();
 			}
@@ -1234,7 +1238,7 @@ public class WebAozoraConverter
 				updateBw.append('\n');
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.warn("更新情報ファイル(NextData)の書き込みに失敗: {}", updateInfoFile, e);
 		} finally {
 			updateBw.close();
 		}
@@ -1598,7 +1602,7 @@ public class WebAozoraConverter
 				cacheFile(src, imageFile, this.urlString);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("画像のダウンロードに失敗: {}", src, e);
 			LogAppender.println("画像が取得できませんでした : "+src);
 		}
 		if (bw != null) {
