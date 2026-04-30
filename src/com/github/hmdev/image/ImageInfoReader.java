@@ -89,11 +89,14 @@ public class ImageInfoReader
 	}
 
 	/** パストラバーサルを防止して画像ファイルを取得 (srcParentPath 配下にあることを検証)。
-	 * candidate のシンボリックリンク追跡は行わない (Path.normalize のみで `..` を解消)。 */
+	 * candidate が存在する場合は toRealPath でシンボリックリンクを追跡し、
+	 * source dir 内の symlink が外部を指すケースを弾く。存在しない場合は
+	 * normalize 結果で startsWith 比較 (caller が File.exists() でハンドリングする前提)。 */
 	public File getImageFileSafe(String fileName) throws IOException
 	{
 		Path base = Path.of(this.srcParentPath).toRealPath();
-		Path resolved = base.resolve(fileName).normalize();
+		Path candidate = base.resolve(fileName).normalize();
+		Path resolved = Files.exists(candidate) ? candidate.toRealPath() : candidate;
 		if (!resolved.startsWith(base)) {
 			throw new IOException("画像パスが許可されたディレクトリ外です: " + fileName);
 		}
