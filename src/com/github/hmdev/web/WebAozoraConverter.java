@@ -472,6 +472,7 @@ public class WebAozoraConverter
 					LogAppender.println("URL修正 : "+urlString);
 				}
 			} catch (Exception e) {
+				// 意図的: URL 末尾スラッシュ補正の HTTP 確認失敗時は元 URL のまま続行
 			}
 		}
 		
@@ -740,7 +741,7 @@ public class WebAozoraConverter
 					LogAppender.println("PAGE_NUM : ページ数が取得できません");
 				}
 				int pageNum = -1;
-				try { pageNum = Integer.parseInt(pageNumString); } catch (Exception e) {}
+				try { pageNum = Integer.parseInt(pageNumString); } catch (Exception e) { /* 意図的: パース失敗時は pageNum=-1 のまま続行 */ }
 				Element pageUrlElement = getExtractFirstElement(doc, this.queryMap.get(ExtractId.PAGE_URL));
 				if (pageUrlElement == null && this.queryMap.containsKey(ExtractId.PAGE_URL)) {
 					LogAppender.println("PAGE_URL : ページ番号用のURLが取得できません");
@@ -783,7 +784,7 @@ public class WebAozoraConverter
 					if (tocPageUrlElem != null) {
 						java.util.regex.Matcher pm = java.util.regex.Pattern.compile("[?&]p=(\\d+)").matcher(tocPageUrlElem.attr("href"));
 						int tocTotalPages = -1;
-						try { if (pm.find()) tocTotalPages = Integer.parseInt(pm.group(1)); } catch (NumberFormatException e) {}
+						try { if (pm.find()) tocTotalPages = Integer.parseInt(pm.group(1)); } catch (NumberFormatException e) { /* 意図的: パース失敗時は tocTotalPages=-1 のまま続行 */ }
 						if (tocTotalPages > 1) {
 							ExtractInfo tocPageUrlInfo = this.queryMap.get(ExtractId.PAGE_URL)[0];
 							for (int pageIdx = 2; pageIdx <= tocTotalPages; pageIdx++) {
@@ -905,7 +906,13 @@ public class WebAozoraConverter
 						if (reload || !chapterCacheFile.exists()) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
 							try {
-								try { sleepForDownload(); } catch (InterruptedException e) { }
+								try {
+									sleepForDownload();
+								} catch (InterruptedException e) {
+									// 意図的: 中断要求を受けて canceled フラグと同様にダウンロードを終了
+									Thread.currentThread().interrupt();
+									return null;
+								}
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り
@@ -993,7 +1000,13 @@ public class WebAozoraConverter
 						if (!chapterCacheFile.exists()) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、再ダウンロードを試みます: "+chapterHref);
 							try {
-								try { Thread.sleep(3000); } catch (InterruptedException e2) { }
+								try {
+									Thread.sleep(3000);
+								} catch (InterruptedException e2) {
+									// 意図的: 中断要求を受けて canceled フラグと同様にダウンロードを終了
+									Thread.currentThread().interrupt();
+									return null;
+								}
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 							} catch (Exception e) {
@@ -2726,7 +2739,7 @@ public class WebAozoraConverter
 	
 	private boolean cacheFile(String urlString, File cacheFile, String referer) throws IOException
 	{
-		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) {}
+		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) { /* 意図的: 削除失敗時は直後のディレクトリチェックで対処 */ }
 		if (cacheFile.isDirectory()) { LogAppender.println("フォルダがあるためキャッシュできません : "+cacheFile.getAbsolutePath()); }
 		// 祖先パスにファイルが存在する場合 → index.html にリネームしてディレクトリ化
 		File ancestor = cacheFile.getParentFile();
