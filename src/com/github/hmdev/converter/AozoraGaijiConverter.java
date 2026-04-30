@@ -148,7 +148,7 @@ public class AozoraGaijiConverter
 			}
 			return JisConverter.getConverter().toCharString(Integer.parseInt(codes[0]), Integer.parseInt(codes[1]), Integer.parseInt(codes[2]));
 		}
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: コード文字列が不正な場合は null を返す */ }
 		return null;
 	}
 	
@@ -169,7 +169,7 @@ public class AozoraGaijiConverter
 	{
 		try {
 			return toCode(charString.getBytes("UTF-32"));
-		} catch (UnsupportedEncodingException e) {}
+		} catch (UnsupportedEncodingException e) { /* 意図的: UTF-32 は JVM で常に利用可能 (UnsupportedEncodingException 発生不能) */ }
 		return 0;
 	}
 	public int toCode(byte[] utf32Bytes)

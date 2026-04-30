@@ -227,7 +227,7 @@ public class Epub3ImageWriter extends Epub3Writer
 		boolean isCover = false;
 		this.imageIndex++; //xhtmlと画像ファイル名の番号を合わせるため先に++
 		String ext = "";
-		try { ext = srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(); } catch (Exception e) {}
+		try { ext = srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(); } catch (Exception e) { /* 意図的: 拡張子なしの画像名は ext="" として続行 */ }
 		String imageId = decimalFormat.format(this.imageIndex);
 		String imageFileName = IMAGES_PATH+imageId+"."+ext;
 		ImageInfo imageInfo;
