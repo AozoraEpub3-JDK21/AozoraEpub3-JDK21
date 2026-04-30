@@ -10,20 +10,22 @@ import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.ArrayList;
+import java.util.stream.Stream;
 import java.util.zip.CRC32;
 
 import javax.swing.JProgressBar;
@@ -308,8 +310,8 @@ public class Epub3Writer
 	
 	/** Velocity初期化（ファイルシステム優先、JAR内リソース代替） */
 	private void initVelocity() {
-		File templateDir = new File(templatePath);
-		if (templateDir.exists() && templateDir.isDirectory()) {
+		Path templateDir = Path.of(templatePath);
+		if (Files.isDirectory(templateDir)) {
 			// ファイルシステムにテンプレートがある場合
 			Properties p = new Properties();
 			p.setProperty("resource.loaders", "file");
@@ -361,15 +363,16 @@ public class Epub3Writer
 			} else {
 				// パスを調整: ファイルシステムにない場合は "template/" から始まるリソースパスに変換
 				String resourcePath = templateFilePath;
-				File templateDir = new File(templatePath);
-				if (templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+				Path templateDir = Path.of(templatePath);
+				boolean templateDirExists = Files.exists(templateDir);
+				if (templateDirExists && templateFilePath.startsWith(templatePath)) {
 				// 外部ファイルシステムのテンプレートを使用する場合、
 				// FileResourceLoaderはベースパス（templatePath）からの相対パスを期待する
 				resourcePath = templateFilePath.substring(templatePath.length());
 				while (resourcePath.startsWith("/")) {
 					resourcePath = resourcePath.substring(1);
 				}
-			} else if (!templateDir.exists() && templateFilePath.startsWith(templatePath)) {
+			} else if (!templateDirExists && templateFilePath.startsWith(templatePath)) {
 					// JAR内リソース用のパスに変換（ClasspathResourceLoaderは"/"から始まらないパスを期待）
 					// パスから余分なスラッシュを削除
 					String relativePath = templateFilePath.substring(templatePath.length());
@@ -483,13 +486,13 @@ public class Epub3Writer
 	private InputStream getTemplateInputStream(String fileName) throws IOException
 	{
 		// まずファイルシステムをチェック（カスタムファイル優先）
-		File file = new File(templatePath+fileName);
+		Path file = Path.of(templatePath+fileName);
 		int idx = fileName.lastIndexOf('/');
-		if (idx > 0) { 
-			File customFile = new File(templatePath+fileName.substring(0, idx)+"_custom/"+fileName.substring(idx+1));
-			if (customFile.exists()) return new FileInputStream(customFile);
+		if (idx > 0) {
+			Path customFile = Path.of(templatePath+fileName.substring(0, idx)+"_custom/"+fileName.substring(idx+1));
+			if (Files.exists(customFile)) return Files.newInputStream(customFile);
 		}
-		if (file.exists()) return new FileInputStream(file);
+		if (Files.exists(file)) return Files.newInputStream(file);
 		
 		// JAR内リソースから読み込み
 		InputStream stream = Epub3Writer.class.getResourceAsStream("/template/"+fileName);
@@ -585,7 +588,7 @@ public class Epub3Writer
 		velocityContext.put("gothicUseBold", this.gothicUseBold);
 		
 		//出力先ePubのZipストリーム生成
-		zos = new ZipArchiveOutputStream(new BufferedOutputStream(new FileOutputStream(epubFile)));
+		zos = new ZipArchiveOutputStream(new BufferedOutputStream(Files.newOutputStream(epubFile.toPath())));
 		//mimetypeは非圧縮
 		//STOREDで格納しCRCとsizeを指定する必要がある
 		ZipArchiveEntry mimeTypeEntry = new ZipArchiveEntry(MIMETYPE_PATH);
@@ -697,7 +700,7 @@ public class Epub3Writer
 				if (bookInfo.coverFileName.startsWith("http")) {
 					bis = new BufferedInputStream(new URI(bookInfo.coverFileName).toURL().openStream(), 8192);
 				} else {
-					bis = new BufferedInputStream(new FileInputStream(new File(bookInfo.coverFileName)), 8192);
+					bis = new BufferedInputStream(Files.newInputStream(Path.of(bookInfo.coverFileName)), 8192);
 				}
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
 				try {
@@ -963,10 +966,14 @@ public class Epub3Writer
 		
 		//フォントファイル格納
 		if (!bookInfo.imageOnly) {
-			File fontsPath = new File(templatePath+OPS_PATH+FONTS_PATH);
-			if (fontsPath.exists()) {
-				for (File fontFile : fontsPath.listFiles()) {
-					String outFileName = OPS_PATH+FONTS_PATH+fontFile.getName();
+			Path fontsPath = Path.of(templatePath+OPS_PATH+FONTS_PATH);
+			if (Files.exists(fontsPath)) {
+				List<Path> fontFiles;
+				try (Stream<Path> stream = Files.list(fontsPath)) {
+					fontFiles = stream.toList();
+				}
+				for (Path fontFile : fontFiles) {
+					String outFileName = OPS_PATH+FONTS_PATH+fontFile.getFileName().toString();
 					zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
 					try (InputStream is = getTemplateInputStream(outFileName)) {
 						byte[] buf = new byte[8192];
@@ -986,7 +993,7 @@ public class Epub3Writer
 			if (gaijiFile.exists()) {
 				String outFileName = OPS_PATH+GAIJI_PATH+gaijiFile.getName();
 				zos.putArchiveEntry(new ZipArchiveEntry(outFileName));
-				try (FileInputStream fis = new FileInputStream(gaijiFile)) {
+				try (InputStream fis = Files.newInputStream(gaijiFile.toPath())) {
 					byte[] buf = new byte[8192];
 					while ((len = fis.read(buf)) > 0) {
 						zos.write(buf, 0, len);
@@ -1057,7 +1064,7 @@ public class Epub3Writer
 							continue;
 						}
 						if (imageFile.exists()) {
-							try (FileInputStream fis = new FileInputStream(imageFile)) {
+							try (InputStream fis = Files.newInputStream(imageFile.toPath())) {
 								zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 								this.writeImage(new BufferedInputStream(fis, 8192), zos, imageInfo);
 								zos.closeArchiveEntry();
@@ -1096,7 +1103,7 @@ public class Epub3Writer
 			} else {
 				////////////////////////////////
 				//Zip
-				ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false);
+				ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(Files.newInputStream(srcFile.toPath()), 65536), "MS932", false);
 				try {
 				ArchiveEntry entry;
 				while( (entry = zis.getNextEntry()) != null ) {
