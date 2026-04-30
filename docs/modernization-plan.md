@@ -98,6 +98,7 @@
 
 | # | 項目 | 影響範囲 | 検証方法 |
 |---|------|---------|--------|
+| **PR-1** ✅ | **`.gitattributes` 新設 + Java 33 ファイル LF 正規化（前提整備）**。`*.java text eol=lf` / `*.MF text eol=crlf` / 主要バイナリ宣言を導入。`git add --renormalize` で src 32 + test 1 の Java を index 上 LF に統一。以降の 0B 系 PR で追加行の CR 剥がしを不要化 | `.gitattributes` 新規, Java 33 ファイル + MANIFEST.MF (line ending only) | `gradlew clean test` PASS, `.NET` 比較 5/5, `git diff -w` 空, JAR 内 MANIFEST.MF が CRLF（PR #13, 2026-04-30 完了） |
 | 0B-1 | `Vector` → `ArrayList`（同期不要箇所のみ） | 24 ファイル | 全テスト + 比較テスト |
 | 0B-2 | `java.io.File` → `java.nio.file.Path`（段階的） | 24 ファイル、複数 PR に分割 | 全テスト |
 | 0B-3 | `new Date()` + `SimpleDateFormat` → `java.time` | `WebAozoraConverter` 等 | 単体テスト |
