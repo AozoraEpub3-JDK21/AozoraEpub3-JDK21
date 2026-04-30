@@ -114,12 +114,19 @@ jobs:
           set -e
           JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
           [ -z "$JAR_FILE" ] && (echo "JAR not found"; exit 1)
-          echo "Testing GUI startup with: $JAR_FILE"
+          # fat-jar は matrix JDK でコンパイルされる (class file version が matrix 版)
+          # ため、起動側も matrix JDK を明示使用する。setup-java@v4 が設定する
+          # JAVA_HOME_<NN>_X64 を bash の indirect expansion (${!var}) で参照する。
+          JAVA_VAR_NAME="JAVA_HOME_${{ matrix.java-version }}_X64"
+          JAVA_BIN="${!JAVA_VAR_NAME}/bin/java"
+          [ ! -x "$JAVA_BIN" ] && (echo "Java binary not found: $JAVA_BIN ($JAVA_VAR_NAME)"; exit 1)
+          echo "Testing GUI startup with: $JAR_FILE using $JAVA_BIN"
+          "$JAVA_BIN" -version
           # Install Xvfb for headless GUI rendering
           sudo apt-get update -y >/dev/null 2>&1 || true
           sudo apt-get install -y xvfb >/dev/null 2>&1 || true
           # Launch GUI in background via Xvfb; crash on startup exits immediately
-          xvfb-run --auto-servernum java -jar "$JAR_FILE" &
+          xvfb-run --auto-servernum "$JAVA_BIN" -jar "$JAR_FILE" &
           GUI_PID=$!
           sleep 5
           if kill -0 $GUI_PID 2>/dev/null; then
