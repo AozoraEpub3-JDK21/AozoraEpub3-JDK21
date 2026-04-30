@@ -199,6 +199,24 @@ java -jar "$SCRIPT_DIR/AozoraEpub3.jar"
     }
 }
 
+// 配布物に含める共通コンテンツ（zipDistribution / tarDistribution / installDist で共有）
+// ここを 1 箇所更新すれば 3 経路すべての配布物に反映される（chuki_*.txt 追加忘れ等の事故防止）
+ext.distCommonContent = { CopySpec spec ->
+    spec.from('.') {
+        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
+        include 'THIRD-PARTY-NOTICES.txt'
+        include 'chuki_*.txt'
+        include 'AozoraEpub3.ico'
+        include 'AozoraEpub3.ini', 'setting_narourb.ini'
+    }
+    spec.from('gaiji')    { into 'gaiji' }
+    spec.from('presets')  { into 'presets' }
+    spec.from('web')      { into 'web' }
+    spec.from('template') { into 'template' }
+    // Include third-party licenses
+    spec.from('lib/LICENSE') { into 'LICENSE' }
+}
+
 // 配布用の ZIP アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
 task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
@@ -213,29 +231,7 @@ task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
         // ZIP (Windows-oriented) - .exe launcher（.bat から .exe に変更）
         include 'AozoraEpub3.exe'
     }
-    from('.') {
-        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
-        include 'THIRD-PARTY-NOTICES.txt'
-        include 'chuki_*.txt'
-        include 'AozoraEpub3.ico'
-        include 'AozoraEpub3.ini', 'setting_narourb.ini'
-    }
-    from('gaiji') {
-        into 'gaiji'
-    }
-    from('presets') {
-        into 'presets'
-    }
-    from('web') {
-        into 'web'
-    }
-    from('template') {
-        into 'template'
-    }
-    // Include third-party licenses
-    from('lib/LICENSE') {
-        into 'LICENSE'
-    }
+    distCommonContent(it)
 }
 
 // 配布用の TAR アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
@@ -245,7 +241,7 @@ task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
     compression = Compression.GZIP
     preserveFileTimestamps = true
     reproducibleFileOrder = false
-    
+
     from('build/libs') {
         include '*.jar'
     }
@@ -256,29 +252,7 @@ task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
             unix(0755)  // Unix実行権限を設定
         }
     }
-    from('.') {
-        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
-        include 'THIRD-PARTY-NOTICES.txt'
-        include 'chuki_*.txt'
-        include 'AozoraEpub3.ico'
-        include 'AozoraEpub3.ini', 'setting_narourb.ini'
-    }
-    from('gaiji') {
-        into 'gaiji'
-    }
-    from('presets') {
-        into 'presets'
-    }
-    from('web') {
-        into 'web'
-    }
-    from('template') {
-        into 'template'
-    }
-    // Include third-party licenses
-    from('lib/LICENSE') {
-        into 'LICENSE'
-    }
+    distCommonContent(it)
 }
 
 // 配布用パッケージを生成するタスク
@@ -490,7 +464,7 @@ tasks.register('generateLocalSamples') {
     }
 }
 
-// Include third-party licenses into Application plugin distributions
+// Application プラグインの distribution（installDist 用）も distCommonContent を共有
 distributions {
     main {
         contents {
@@ -498,31 +472,7 @@ distributions {
             from('build/libs') {
                 include 'AozoraEpub3.jar'
             }
-            from('lib/LICENSE') {
-                into 'LICENSE'
-            }
-            from('.') {
-                include 'THIRD-PARTY-NOTICES.txt'
-                include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
-                include 'chuki_*.txt'
-                include 'AozoraEpub3.ico'
-                include 'AozoraEpub3.ini', 'setting_narourb.ini'
-            }
-            from('presets') {
-                into 'presets'
-            }
-            // ユーザーが編集可能なテンプレートを外部配置
-            from('template') {
-                into 'template'
-            }
-            // 外字フォルダも外部配置
-            from('gaiji') {
-                into 'gaiji'
-            }
-            // webフォルダも外部配置
-            from('web') {
-                into 'web'
-            }
+            distCommonContent(delegate)
         }
     }
 }
