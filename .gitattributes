@@ -1,0 +1,26 @@
+# AozoraEpub3 line ending policy
+#
+# PR-1: Java ソースのみ LF 正規化（モダン化計画 ステージ 0B 前提整備）
+# - chuki_*.txt / presets/*.ini / template/*.vm / *.css は EPUB 出力に影響するため
+#   PR-2/PR-3 で個別検証（.NET ポート JavaComparisonTests 5/5 ゲート）してから正規化する
+
+# Java sources: LF in index regardless of platform
+*.java text eol=lf
+
+# JAR Manifest must keep CRLF per JAR spec
+*.MF text eol=crlf
+
+# Binary files: explicit declaration to avoid autocrlf misclassification
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.jar binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.epub binary
+*.pdf binary
+*.class binary
