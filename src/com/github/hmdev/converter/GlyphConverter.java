@@ -8,6 +8,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.HashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.hmdev.util.LogAppender;
 
 /**
@@ -16,6 +19,8 @@ import com.github.hmdev.util.LogAppender;
  */
 public class GlyphConverter
 {
+	private static final Logger logger = LoggerFactory.getLogger(GlyphConverter.class);
+
 	/** 分解表記文字列→拡張ラテン文字の対応テーブル */
 	HashMap<Character, String> cidMap = new HashMap<Character, String>();
 	
@@ -91,7 +96,7 @@ public class GlyphConverter
 			converter.printGlyphTag(out, '㎎');
 			out.close();
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error("テストメインで I/O エラー", e);
 		}
 	}
 }

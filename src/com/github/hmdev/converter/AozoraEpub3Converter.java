@@ -13,6 +13,9 @@ import java.util.Vector;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.BookInfo.TitleType;
@@ -27,6 +30,8 @@ import com.github.hmdev.writer.Epub3Writer;
  */
 public class AozoraEpub3Converter
 {
+	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3Converter.class);
+
 	//---------------- Properties ----------------//
 	/** UTF-8以外の文字を代替文字に変換 */
 	boolean userAlterCharEscape = false;
@@ -998,7 +1003,7 @@ public class AozoraEpub3Converter
 		
 		return bookInfo;
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("BookInfo 解析中にエラー (lineNum={})", lineNum, e);
 			LogAppender.error(lineNum, "");
 			throw e;
 		}
@@ -1302,7 +1307,7 @@ public class AozoraEpub3Converter
 		} while ((line = src.readLine()) != null);
 		
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("EPUB 用テキスト変換中にエラー (lineNum={})", lineNum, e);
 			LogAppender.error(lineNum, "");
 			throw e;
 		}

@@ -29,6 +29,9 @@ import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.border.Border;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.ChapterLineInfo;
@@ -39,6 +42,8 @@ import com.github.hmdev.swing.JTocTable.TocTableDataModel;
  */
 public class JConfirmDialog extends JDialog
 {
+	private static final Logger logger = LoggerFactory.getLogger(JConfirmDialog.class);
+
 	private static final long serialVersionUID = 1L;
 	
 	////////////////////////////////
@@ -759,7 +764,7 @@ public class JConfirmDialog extends JDialog
 				jCoverImagePanel.setBookInfo(this.bookInfo);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.warn("表紙画像のプレビュー切替に失敗", e);
 			this.bookInfo.coverImage = null;
 			this.bookInfo.coverImageIndex = -1;
 			this.jCoverImagePanel.setBookInfo(this.bookInfo);
@@ -957,7 +962,9 @@ public class JConfirmDialog extends JDialog
 					bookInfo.coverImageIndex = -1;
 				}
 			}
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (Exception e) {
+			logger.warn("表紙ファイルの探索・読み込みに失敗", e);
+		}
 		
 		//フラグ初期化
 		this.canceled = false;

@@ -26,12 +26,16 @@ import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.LogAppender;
 
 public class ImageUtils
 {
+	private static final Logger logger = LoggerFactory.getLogger(ImageUtils.class);
+
 	/** 4bitグレースケール時のRGB階調カラーモデル Singleton */
 	static ColorModel GRAY16_COLOR_MODEL;
 	/** 8bitグレースケール時のRGB階調カラーモデル Singleton */
@@ -380,7 +384,7 @@ public class ImageUtils
 		}
 		} catch (Exception e) {
 			LogAppender.println("画像読み込みエラー: "+imageInfo.getOutFileName());
-			e.printStackTrace();
+			logger.error("画像出力エラー: {}", imageInfo.getOutFileName(), e);
 		}
 	}
 	/** 画像を出力 マージン指定があればカット
@@ -417,7 +421,9 @@ public class ImageUtils
 					iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
 					iwp.setCompressionQuality(jpegQuality);
 					imageWriter.write(null, new IIOImage(srcImage, null, null), iwp);
-				} catch (Exception e) { e.printStackTrace(); }
+				} catch (Exception e) {
+					logger.warn("JPEG 圧縮書き込みに失敗", e);
+				}
 			} else {
 				imageWriter.write(srcImage);
 			}

@@ -30,6 +30,9 @@ import java.util.List;
 
 import javax.swing.JPanel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.CoverEditInfo;
 
@@ -38,6 +41,8 @@ import com.github.hmdev.info.CoverEditInfo;
  */
 public class JCoverImagePanel extends JPanel implements MouseListener, MouseMotionListener, MouseWheelListener, DropTargetListener, KeyListener
 {
+	private static final Logger logger = LoggerFactory.getLogger(JCoverImagePanel.class);
+
 	private static final long serialVersionUID = 1L;
 	
 	BookInfo bookInfo;
@@ -335,7 +340,7 @@ public class JCoverImagePanel extends JPanel implements MouseListener, MouseMoti
 		}
 		return coverImage;
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.warn("表紙画像のトリミング処理に失敗", e);
 			return null;
 		}
 	}
@@ -395,7 +400,7 @@ public class JCoverImagePanel extends JPanel implements MouseListener, MouseMoti
 				return;
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.warn("ドラッグ&ドロップによる表紙設定に失敗", e);
 		} finally {
 		}
 		this.requestFocus();
