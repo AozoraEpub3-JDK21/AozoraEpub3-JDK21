@@ -1,12 +1,14 @@
 package com.github.hmdev.converter;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,20 +30,24 @@ public class GlyphConverter
 	 * @throws IOException */
 	public GlyphConverter(StringBuilder log, String dir) throws IOException
 	{
-		File dirFile = new File(dir);
-		if (dirFile.isDirectory()) {
-			for (File file : dirFile.listFiles()) {
-				System.out.println(file.getPath());
-				this.loadCidFile(log, file, cidMap);
+		Path dirPath = Path.of(dir);
+		if (Files.isDirectory(dirPath)) {
+			List<Path> paths;
+			try (Stream<Path> stream = Files.list(dirPath)) {
+				paths = stream.toList();
+			}
+			for (Path path : paths) {
+				System.out.println(path.toString());
+				this.loadCidFile(log, path, cidMap);
 			}
 		}
 	}
-	
-	/** 注記変換ファイル読み込み 
+
+	/** 注記変換ファイル読み込み
 	 * @throws IOException */
-	private void loadCidFile(StringBuilder log, File srcFile, HashMap<Character, String> cidMap) throws IOException
+	private void loadCidFile(StringBuilder log, Path srcFile, HashMap<Character, String> cidMap) throws IOException
 	{
-		BufferedReader src = new BufferedReader(new InputStreamReader(new FileInputStream(srcFile), "UTF-8"));
+		BufferedReader src = new BufferedReader(new InputStreamReader(Files.newInputStream(srcFile), "UTF-8"));
 		String line;
 		int lineNum = 0;
 		try {
@@ -52,7 +58,7 @@ public class GlyphConverter
 						String[] values = line.split("\t");
 						char ch = values[0].charAt(0);
 						if (!cidMap.containsKey(ch)) cidMap.put(ch, values[1]);
-					} catch (Exception e) { LogAppender.error(lineNum, srcFile.getName(), line); }
+					} catch (Exception e) { LogAppender.error(lineNum, srcFile.getFileName().toString(), line); }
 				}
 			}
 		} finally {

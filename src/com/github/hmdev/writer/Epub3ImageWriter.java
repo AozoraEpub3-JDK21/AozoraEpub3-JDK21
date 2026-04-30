@@ -4,10 +4,10 @@ import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
 import java.util.ArrayList;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
@@ -110,7 +110,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			}
 			} finally { archive.close(); }
 		} else {
-			ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false);
+			ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(Files.newInputStream(srcFile.toPath()), 65536), "MS932", false);
 			try {
 			ArchiveEntry entry;
 			while( (entry = zis.getNextEntry()) != null ) {
