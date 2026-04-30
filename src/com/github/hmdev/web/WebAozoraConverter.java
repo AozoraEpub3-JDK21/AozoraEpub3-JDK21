@@ -906,7 +906,13 @@ public class WebAozoraConverter
 						if (reload || !chapterCacheFile.exists()) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
 							try {
-								try { sleepForDownload(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); /* 意図的: 中断要求を上位に伝播してダウンロード継続を中止可能に */ }
+								try {
+									sleepForDownload();
+								} catch (InterruptedException e) {
+									// 意図的: 中断要求を受けて canceled フラグと同様にダウンロードを終了
+									Thread.currentThread().interrupt();
+									return null;
+								}
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り
@@ -994,7 +1000,13 @@ public class WebAozoraConverter
 						if (!chapterCacheFile.exists()) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、再ダウンロードを試みます: "+chapterHref);
 							try {
-								try { Thread.sleep(3000); } catch (InterruptedException e2) { Thread.currentThread().interrupt(); /* 意図的: 中断要求を上位に伝播してダウンロード継続を中止可能に */ }
+								try {
+									Thread.sleep(3000);
+								} catch (InterruptedException e2) {
+									// 意図的: 中断要求を受けて canceled フラグと同様にダウンロードを終了
+									Thread.currentThread().interrupt();
+									return null;
+								}
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 							} catch (Exception e) {
