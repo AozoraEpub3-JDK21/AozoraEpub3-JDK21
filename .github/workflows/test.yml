@@ -34,10 +34,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK ${{ matrix.java-version }}
+      # Gradle 9.2.1 の launcher JVM は JDK 21 までしか対応しない。
+      # matrix 版を toolchain として使うため JDK 21 を launcher に残しつつ matrix 版を追加 install。
+      # multi-line java-version は最後の項目を JAVA_HOME にするので 21 を最後に書く。
+      - name: Set up JDK (toolchain ${{ matrix.java-version }} + launcher 21)
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ matrix.java-version }}
+          java-version: |
+            ${{ matrix.java-version }}
+            21
           distribution: 'temurin'
           cache: gradle
           check-latest: true
@@ -45,16 +50,26 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # -PjavaToolchainVersion forces compileJava to use the matrix JDK (not just the launcher JVM).
-      # Without this, build.gradle's default toolchain (21) would compile code even on JDK 25/26 runners.
+      # -PjavaToolchainVersion: compileJava 用 toolchain のバージョン
+      # -Dorg.gradle.java.installations.fromEnv: setup-java が立てる JAVA_HOME_<NN>_X64 を
+      # Gradle の toolchain 検索パスに登録 (Gradle 標準スキャナは /opt/hostedtoolcache を見ない)
       - name: Run tests with Gradle
-        run: ./gradlew test --info -PjavaToolchainVersion=${{ matrix.java-version }}
+        run: |
+          ./gradlew test --info \
+            -PjavaToolchainVersion=${{ matrix.java-version }} \
+            -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java-version }}_X64,JAVA_HOME_21_X64
 
       - name: Run syntax checks
-        run: ./gradlew check -PjavaToolchainVersion=${{ matrix.java-version }}
+        run: |
+          ./gradlew check \
+            -PjavaToolchainVersion=${{ matrix.java-version }} \
+            -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java-version }}_X64,JAVA_HOME_21_X64
 
       - name: Build jar
-        run: ./gradlew jar -PjavaToolchainVersion=${{ matrix.java-version }}
+        run: |
+          ./gradlew jar \
+            -PjavaToolchainVersion=${{ matrix.java-version }} \
+            -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java-version }}_X64,JAVA_HOME_21_X64
 
       - name: Check test results
         if: always()
