@@ -3,15 +3,18 @@ package com.github.hmdev.converter;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -317,8 +320,8 @@ public class AozoraEpub3Converter
 		}
 		
 		// 外字変換 (JAR内リソースまたはファイルシステムから読み込み)
-		File ivsFile = new File(jarPath+"chuki_ivs.txt");
-		if (ivsFile.exists()) {
+		Path ivsFile = Path.of(jarPath+"chuki_ivs.txt");
+		if (Files.exists(ivsFile)) {
 			gaijiConverter = new AozoraGaijiConverter(jarPath);
 		} else {
 			// JAR内リソースとして読み込み
@@ -332,10 +335,10 @@ public class AozoraEpub3Converter
 		}
 		
 		//注記タグ変換
-		File chukiTagFile = new File(jarPath+"chuki_tag.txt");
+		Path chukiTagFile = Path.of(jarPath+"chuki_tag.txt");
 		BufferedReader src;
-		if (chukiTagFile.exists()) {
-			src = new BufferedReader(new InputStreamReader(new FileInputStream(chukiTagFile), "UTF-8"));
+		if (Files.exists(chukiTagFile)) {
+			src = new BufferedReader(new InputStreamReader(Files.newInputStream(chukiTagFile), "UTF-8"));
 		} else {
 			InputStream tagStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_tag.txt");
 			if (tagStream == null) throw new IOException("chuki_tag.txt not found");
@@ -383,9 +386,9 @@ public class AozoraEpub3Converter
 		chukiPatternMap.put("字下げ終わり複合", Pattern.compile("^［＃ここで字下げ.*終わり"));
 		
 		//前方参照注記
-		File chukiSufFile = new File(jarPath+"chuki_tag_suf.txt");
-		if (chukiSufFile.exists()) {
-			src = new BufferedReader(new InputStreamReader(new FileInputStream(chukiSufFile), "UTF-8"));
+		Path chukiSufFile = Path.of(jarPath+"chuki_tag_suf.txt");
+		if (Files.exists(chukiSufFile)) {
+			src = new BufferedReader(new InputStreamReader(Files.newInputStream(chukiSufFile), "UTF-8"));
 		} else {
 			InputStream sufStream = AozoraEpub3Converter.class.getResourceAsStream("/chuki_tag_suf.txt");
 			if (sufStream == null) throw new IOException("chuki_tag_suf.txt not found");
@@ -416,11 +419,11 @@ public class AozoraEpub3Converter
 		}
 		
 		//単純文字置換
-		File replaceFile = new File(jarPath+"replace.txt");
-		if (replaceFile.exists()) {
+		Path replaceFile = Path.of(jarPath+"replace.txt");
+		if (Files.exists(replaceFile)) {
 			replaceMap = new HashMap<Character, String>();
 			replace2Map = new HashMap<String, String>();
-			src = new BufferedReader(new InputStreamReader(new FileInputStream(replaceFile), "UTF-8"));
+			src = new BufferedReader(new InputStreamReader(Files.newInputStream(replaceFile), "UTF-8"));
 			lineNum = 0;
 			try {
 				while ((line = src.readLine()) != null) {
@@ -433,10 +436,10 @@ public class AozoraEpub3Converter
 							} else if (values[0].length() == 2) {
 									replace2Map.put(values[0], values[1]);
 							} else {
-								LogAppender.error(lineNum, replaceFile.getName()+" too long ", line);
+								LogAppender.error(lineNum, replaceFile.getFileName().toString()+" too long ", line);
 							}
 						} catch (Exception e) {
-							LogAppender.error(lineNum, replaceFile.getName(), line);
+							LogAppender.error(lineNum, replaceFile.getFileName().toString(), line);
 						}
 					}
 				}
@@ -446,16 +449,21 @@ public class AozoraEpub3Converter
 		}
 		
 		//外字フォント一覧取得
-		File gaijiPath = new File(writer.getGaijiFontPath());
-		if (gaijiPath.isDirectory()) {
+		Path gaijiPath = Path.of(writer.getGaijiFontPath());
+		if (Files.isDirectory(gaijiPath)) {
 			utf16FontMap = new HashMap<Integer, String>();
 			utf32FontMap = new HashMap<Integer, String>();
 			ivs16FontMap = new HashMap<String, String>();
 			ivs32FontMap = new HashMap<String, String>();
 			String subPath = "";
-			for (File fontFile : gaijiPath.listFiles()) {
-				if (fontFile.isFile()) {
-					String fileName = fontFile.getName().toLowerCase();
+			List<Path> fontFiles;
+			try (Stream<Path> stream = Files.list(gaijiPath)) {
+				fontFiles = stream.toList();
+			}
+			for (Path fontFile : fontFiles) {
+				if (Files.isRegularFile(fontFile)) {
+					String fontFileName = fontFile.getFileName().toString();
+					String fileName = fontFileName.toLowerCase();
 					String ext = fileName.substring(fileName.lastIndexOf(".")+1);
 					if ("ttf".equals(ext) || "ttc".equals(ext) || "otf".equals(ext)) {
 						if (fileName.startsWith("u")){
@@ -463,26 +471,26 @@ public class AozoraEpub3Converter
 								String className = fileName.substring(1, fileName.length()-ext.length()-1);
 								String[] strs = className.split("-u");
 								if (strs.length > 2) {
-									LogAppender.warn(-1, "IVS以外の合成フォントは対応しません", fontFile.getName());
+									LogAppender.warn(-1, "IVS以外の合成フォントは対応しません", fontFileName);
 								} else {
 									int[] codes = new int[]{Integer.parseInt(strs[0], 16), Integer.parseInt(strs[1], 16)};
 									if (0xe0100 <= codes[1] && codes[1] <= 0xe01ef) {
 										if (codes[0] < 0xFFFF) {
-											ivs16FontMap.put("u"+className, subPath+fontFile.getName());
+											ivs16FontMap.put("u"+className, subPath+fontFileName);
 										} else {
-											ivs32FontMap.put("u"+className, subPath+fontFile.getName());
+											ivs32FontMap.put("u"+className, subPath+fontFileName);
 										}
 									} else {
-										LogAppender.warn(-1, "IVS以外の合成フォントは対応しません", fontFile.getName());
+										LogAppender.warn(-1, "IVS以外の合成フォントは対応しません", fontFileName);
 									}
 								}
 							} else {
 								int code = 0;
 								try { code = Integer.valueOf(fileName.substring(1, fileName.length()-ext.length()-1), 16); } catch (Exception e) {}
 								if (code <= 0xFFFF) {
-									utf16FontMap.put(code, subPath+fontFile.getName());
+									utf16FontMap.put(code, subPath+fontFileName);
 								} else {
-									utf32FontMap.put(code, subPath+fontFile.getName());
+									utf32FontMap.put(code, subPath+fontFileName);
 								}
 							}
 						}
@@ -2615,9 +2623,9 @@ public class AozoraEpub3Converter
 	/** １文字フォント用タグを出力 */
 	private boolean printGlyphFontTag(StringBuilder buf, String gaijiFileName, String className, char baseChar)
 	{
-		File gaijiFile = new File(writer.getGaijiFontPath()+gaijiFileName);
-		if (!gaijiFile.isFile()) return false;
-		writer.addGaijiFont(className, gaijiFile);
+		Path gaijiPath = Path.of(writer.getGaijiFontPath()+gaijiFileName);
+		if (!Files.isRegularFile(gaijiPath)) return false;
+		writer.addGaijiFont(className, gaijiPath.toFile());
 		buf.append("<span class=\"glyph ").append(className).append("\">").append(baseChar).append("</span>");
 		return true;
 	}
