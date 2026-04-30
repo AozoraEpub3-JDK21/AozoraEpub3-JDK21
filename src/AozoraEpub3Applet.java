@@ -58,7 +58,6 @@ import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.InputVerifier;
-import javax.swing.JApplet;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -110,10 +109,10 @@ import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
 
 /**
- * 青空文庫テキスト→ePub3変換操作用アプレット
+ * 青空文庫テキスト→ePub3変換操作用パネル
+ * （旧名「アプレット」のまま — クラス名互換維持のため。`JFrame` に組み込まれる `JPanel`）
  */
-@SuppressWarnings("removal")
-public class AozoraEpub3Applet extends JApplet
+public class AozoraEpub3Applet extends JPanel
 {
 	/**
 	 * 日本語に適したUIフォントをOS毎の候補から選択して、UIManagerの全フォントに適用します。
@@ -480,11 +479,9 @@ public class AozoraEpub3Applet extends JApplet
 		this.jFrameParent = parent;
 	}
 	
-	/** アプレット初期化 */
-	@Override
+	/** パネル初期化（main() から明示的に呼ばれる。旧 JApplet#init() の置き換え） */
 	public void init()
 	{
-		super.init();
 		this.setSize(new Dimension(640, System.getProperty("os.name", "").toLowerCase().contains("mac") ? 580 : 460));
 		
 		//パス関連初期化
@@ -536,7 +533,9 @@ public class AozoraEpub3Applet extends JApplet
 		Dimension panelSize = new Dimension(1920, 26);
 		Dimension panelSize28 = new Dimension(1920, 28);
 		boolean isMac = System.getProperty("os.name", "").toLowerCase().contains("mac");
-		Dimension detailPanelSize = new Dimension(1920, isMac ? 48 : 28);
+		// 詳細設定タブの各パネル高さ。Windows でも 28 では TitledBorder+ラジオ行が入らず崩れるため 48 に統一
+		// （macOS は ba02558 で 48 に修正済み。ScrollPane で囲まれているため余り高さは無害）
+		Dimension detailPanelSize = new Dimension(1920, 48);
 		Dimension panelVMaxSize = new Dimension(640, 22);
 		JTextField text = new JTextField();
 		Insets is = text.getInsets();
@@ -547,8 +546,8 @@ public class AozoraEpub3Applet extends JApplet
 		Dimension text300 = new Dimension(300, 20);
 		Dimension combo3 = new Dimension(text3.width+20, 20);
 		
-		//アップレットのレイアウト設定
-		this.setLayout(new BoxLayout(this.getContentPane(), BoxLayout.Y_AXIS));
+		//パネルのレイアウト設定（JPanel 自身がコンテナ）
+		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
 		int dividerLocation = isMac ? 350 : 230;
 		try { dividerLocation = Integer.parseInt(props.getProperty("DividerLocation")); } catch (Exception e) {}
