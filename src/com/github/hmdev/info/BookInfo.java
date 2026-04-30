@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Vector;
+import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -165,7 +165,7 @@ public class BookInfo
 	//public int preTitlePageBreak = -2;
 	
 	/** 改ページ単位で区切られたセクションの情報を格納 */
-	//Vector<SectionInfo> vecSectionInfo;
+	//ArrayList<SectionInfo> vecSectionInfo;
 	
 	/** 画像単体ページ開始行 */
 	HashMap<Integer, String> mapImageSectionLine;
@@ -286,9 +286,9 @@ public class BookInfo
 	}
 	
 	/** 行番号順に並び替えた目次一覧リストを生成して返す */
-	public Vector<ChapterLineInfo> getChapterLineInfoList()
+	public ArrayList<ChapterLineInfo> getChapterLineInfoList()
 	{
-		Vector<ChapterLineInfo> list = new Vector<ChapterLineInfo>();
+		ArrayList<ChapterLineInfo> list = new ArrayList<ChapterLineInfo>();
 		
 		if (this.mapChapterLine == null) return list;
 		

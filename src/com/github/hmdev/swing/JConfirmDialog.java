@@ -12,7 +12,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.net.URI;
-import java.util.Vector;
+import java.util.ArrayList;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -995,7 +995,7 @@ public class JConfirmDialog extends JDialog
 			this.jScrollToc.setVisible(false);
 		} else {
 			
-			Vector<ChapterLineInfo> vecChapterLineInfo = bookInfo.getChapterLineInfoList();
+			ArrayList<ChapterLineInfo> vecChapterLineInfo = bookInfo.getChapterLineInfoList();
 			this.tocDataModel = this.jTableToc.getModel();
 			this.tocDataModel.setRowCount(0);
 			for (ChapterLineInfo chapterLineInfo : vecChapterLineInfo) {

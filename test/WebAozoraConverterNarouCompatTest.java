@@ -591,7 +591,7 @@ public class WebAozoraConverterNarouCompatTest {
 		Object key = map.keySet().stream().filter(k -> k.toString().equals("TITLE")).findFirst().orElse(null);
 		assertNotNull("replaceMap に TITLE が見つからない", key);
 		@SuppressWarnings("unchecked")
-		java.util.Vector<String[]> vec = (java.util.Vector<String[]>) map.get(key);
+		java.util.List<String[]> vec = (java.util.List<String[]>) map.get(key);
 		assertEquals("検索", vec.get(0)[0]);
 		assertEquals("置換", vec.get(0)[1]);
 	}
