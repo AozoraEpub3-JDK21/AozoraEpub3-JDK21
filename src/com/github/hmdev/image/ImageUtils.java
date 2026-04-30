@@ -13,11 +13,11 @@ import java.awt.image.WritableRaster;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Iterator;
 
 import javax.imageio.IIOImage;
@@ -88,9 +88,9 @@ public class ImageUtils
 			if (path.startsWith("http")) {
 				is = new BufferedInputStream(new URI(path).toURL().openStream(), 8192);
 			} else {
-				File file = new File(path);
-				if (!file.exists()) return null;
-				is = new BufferedInputStream(new FileInputStream(file), 8192);
+				Path filePath = Path.of(path);
+				if (!Files.exists(filePath)) return null;
+				is = new BufferedInputStream(Files.newInputStream(filePath), 8192);
 			}
 			return readImage(path.substring(path.lastIndexOf('.')+1).toLowerCase(), is);
 		} catch (Exception e) { return null; }

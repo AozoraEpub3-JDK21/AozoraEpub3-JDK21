@@ -1,13 +1,13 @@
 package com.github.hmdev.converter;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 
 import com.github.hmdev.util.LogAppender;
@@ -35,20 +35,20 @@ public class AozoraGaijiConverter
 	{
 		//初期化
 		//ファイルチェック取得 IVS優先
-		this.loadChukiFile(new File(jarPath+"chuki_ivs.txt"), chukiUtfMap);
-		this.loadChukiFile(new File(jarPath+"chuki_utf.txt"), chukiUtfMap);
-		this.loadChukiFile(new File(jarPath+"chuki_alt.txt"), chukiAltMap);
+		this.loadChukiFile(Path.of(jarPath+"chuki_ivs.txt"), chukiUtfMap);
+		this.loadChukiFile(Path.of(jarPath+"chuki_utf.txt"), chukiUtfMap);
+		this.loadChukiFile(Path.of(jarPath+"chuki_alt.txt"), chukiAltMap);
 	}
 	
 	public void loadChukiFileFromStream(InputStream inputStream, String fileName, HashMap<String, String> chukiMap) throws IOException {
 		loadChukiFile(inputStream, fileName, chukiMap);
 	}
 	
-	/** 注記変換ファイル読み込み 
+	/** 注記変換ファイル読み込み
 	 * @throws IOException */
-	private void loadChukiFile(File srcFile, HashMap<String, String> chukiMap) throws IOException
+	private void loadChukiFile(Path srcFile, HashMap<String, String> chukiMap) throws IOException
 	{
-		loadChukiFile(new FileInputStream(srcFile), srcFile.getName(), chukiMap);
+		loadChukiFile(Files.newInputStream(srcFile), srcFile.getFileName().toString(), chukiMap);
 	}
 	
 	private void loadChukiFile(InputStream inputStream, String fileName, HashMap<String, String> chukiMap) throws IOException
