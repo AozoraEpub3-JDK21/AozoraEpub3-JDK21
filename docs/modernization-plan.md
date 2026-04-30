@@ -38,7 +38,7 @@
 - Java 21 toolchain、Gradle 9 系
 - `java.net.http.HttpClient`（HTTP/2、Cookie 自動）採用済
 - Velocity でテンプレート分離済（`template/` 配下）
-- SLF4J 導入済（呼び出し側がログを使えていない箇所はあり）
+- SLF4J 依存は `build.gradle` に組み込み済（`slf4j-api` + `slf4j-simple` 2.0.16）。**ただし `src/` 配下で `org.slf4j` を import しているファイルはゼロ**（実運用は `e.printStackTrace()` / `System.err`）。ステージ 0B-4 で「導入済 → 実利用化」する
 - テスト階層化（`test/com/github/hmdev/{config,converter,epub,image,info,io,util,validator}`）
 - **`.NET` ポート（`aozoraepub3-dotnet`）との byte-identical 比較テスト** がリファクタの安全網
   - 検証済みケース: n9623lp / n8005ls / n0063lr / kakuyomu_822139840468926025 / aozora_1567_14913
@@ -48,7 +48,8 @@
 | 種別 | 箇所数 | 影響 |
 |------|------|------|
 | `Vector` / `Hashtable` 等レガシーコレクション | 24 ファイル / 112 occ | 不要な同期オーバーヘッド、API 古さ |
-| `e.printStackTrace()` / 空 catch | 15 ファイル / 158 occ | エラーハンドリング不在、原因不明の沈黙失敗 |
+| `e.printStackTrace()` | 12 ファイル / 65 occ（実測 2026-04-30） | エラーハンドリング不在、原因不明の沈黙失敗。SLF4J ロガーへ移行が必要 |
+| 空 catch ブロック (`catch (...) {}`) | 10 ファイル / 130 occ（実測 2026-04-30） | **多くは意図的なフォールバック**（例: `BookInfo` の配列範囲外で null 返却）。一律ログ化は誤動作を招くため **per-file 監査必須** |
 | `JApplet` 継承 | 1 箇所（`AozoraEpub3Applet.java:116`） | **deprecated for removal**。OpenJDK [JEP 504](https://openjdk.org/jeps/504) により **JDK 26 で `javax.swing.JApplet` 削除**（JDK 25 が最後にサポート）。JDK 26 でコンパイル不能になる |
 | `new Date()` + `SimpleDateFormat` | 多数 | スレッド安全でない、`java.time` 未活用 |
 | `java.io.File` 中心 | 24 ファイル | Windows パス問題の温床 |
@@ -100,9 +101,15 @@
 | 0B-1 | `Vector` → `ArrayList`（同期不要箇所のみ） | 24 ファイル | 全テスト + 比較テスト |
 | 0B-2 | `java.io.File` → `java.nio.file.Path`（段階的） | 24 ファイル、複数 PR に分割 | 全テスト |
 | 0B-3 | `new Date()` + `SimpleDateFormat` → `java.time` | `WebAozoraConverter` 等 | 単体テスト |
-| 0B-4 | `e.printStackTrace()` / 空 catch を SLF4J ログに統一 | 15 ファイル | 全テスト |
+| 0B-4a | **SLF4J 実利用化（パイロット）**: 1 ファイル（候補: `Epub3Writer`）に `Logger` を導入し、`e.printStackTrace()` を `logger.error(msg, e)` に置換。テンプレートとして以降の PR の基準にする | パイロット 1 ファイル / 6 occ | 全テスト |
+| 0B-4b | `e.printStackTrace()` を残り 11 ファイル / 59 occ で順次 SLF4J 化（数 PR に分割） | 12 ファイル / 65 occ（合計） | 全テスト |
+| 0B-4c | **空 catch ブロックの per-file 監査**: 130 occ を 3 分類（意図フォールバック / リソース未解放 / 真のバグ）。意図的なものは `// intentional: ...` コメント追加、それ以外はログまたは適切な処理に置換 | 10 ファイル / 130 occ | 全テスト + 振る舞い変化なし確認 |
 
 **ゲート条件**: 各 PR で全テスト + 比較テスト 5/5 PASS。
+
+**0B-4 の進め方の補足**:
+- 0B-4a を**最初に単独 PR**としてマージし、ロガー命名規約・粒度（error/warn/info/debug）の実例を残す。以降の PR はこのテンプレートを踏襲
+- 0B-4c は**ログ化とは性質が違う**（多くは意図的フォールバック）。一律置換せず、`BookInfo` のような配列範囲外フォールバックは「コメントで意図明示」が正解。真の沈黙失敗のみログ化対象
 
 ### ステージ 0C — テスト基盤・ソース配置（推定 2〜3 週、中リスク）
 
