@@ -39,6 +39,15 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/2
 
 ---
 
+## What's New in v1.3.5-jdk21
+
+- **JDK 26 compatibility**: Removed `JApplet` inheritance ahead of its removal in JDK 26 ([JEP 504](https://openjdk.org/jeps/504)); switched to `JPanel`. Class name, `mainClass`, and CLI entry are unchanged — no impact on narou.rb integration
+- **Detail Settings tab layout fix (Windows)**: Fixed a long-standing bug where settings rows and labels overlapped due to insufficient panel height
+
+See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
+
+---
+
 ## About This Project
 
 This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 25 compatibility and support for modern operating systems.

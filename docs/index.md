@@ -42,6 +42,15 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
+## v1.3.5-jdk21 の主な変更
+
+- **JDK 26 互換確保**: [JEP 504](https://openjdk.org/jeps/504) により JDK 26 で削除予定の `JApplet` 継承を撤去（`JPanel` ベースに変更）。クラス名・`mainClass`・CLI エントリは据え置きで、narou.rb 連携への影響はありません
+- **詳細設定タブ表示崩れ修正（Windows）**: 設定行と文字が重なって表示されていた既存バグを修正
+
+過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
+
+---
+
 ## このプロジェクトについて
 
 本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rbとの互換性維持、Java 25 対応と最新 OS 向けの調整を行った派生版です。
