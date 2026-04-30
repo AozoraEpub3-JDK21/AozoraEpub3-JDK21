@@ -48,7 +48,9 @@ public class WebAozoraConverter
 {
 	private static final Logger logger = LoggerFactory.getLogger(WebAozoraConverter.class);
 
-	/** 「変換日時」表示用 (元コード SimpleDateFormat と同じくインスタンス生成時にシステム TZ を捕捉) */
+	/** 「変換日時」表示用
+	 *  元コード SimpleDateFormat と同じくインスタンス生成時にシステム TZ を捕捉。
+	 *  非グレゴリオロケールでは常に ISO/Gregorian 年を出力する (Epub3Writer.MODIFIED_FORMATTER 参照)。 */
 	final DateTimeFormatter dateFormat =
 		DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss").withZone(ZoneId.systemDefault());
 	

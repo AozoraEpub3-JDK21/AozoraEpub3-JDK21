@@ -239,7 +239,10 @@ public class Epub3Writer
 	
 	/** ファイル名桁揃え用 */
 	final static DecimalFormat decimalFormat = new DecimalFormat("0000");
-	/** 更新日時フォーマット 2011-06-29T12:00:00Z (元コードの static SimpleDateFormat と同じくクラスロード時にシステム TZ を捕捉) */
+	/** 更新日時フォーマット 2011-06-29T12:00:00Z
+	 *  元コードの static SimpleDateFormat と同じくクラスロード時にシステム TZ を捕捉。
+	 *  ja_JP_JP (和暦) / th_TH (仏暦) 等の非グレゴリオロケールでは legacy SimpleDateFormat と異なり
+	 *  常に ISO/Gregorian 年を出力する (EPUB 3.3 dcterms:modified の ISO 8601 仕様準拠寄り)。 */
 	static final DateTimeFormatter MODIFIED_FORMATTER =
 		DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneId.systemDefault());
 	

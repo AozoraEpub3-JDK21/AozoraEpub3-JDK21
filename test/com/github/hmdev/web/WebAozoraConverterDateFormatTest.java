@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.Locale;
 import java.util.TimeZone;
 
 import org.junit.Test;
@@ -69,5 +70,32 @@ public class WebAozoraConverterDateFormatTest {
 
         // 2026-04-30T12:00:00Z は JST で 2026/04/30 21:00:00
         assertEquals("2026/04/30 21:00:00", formatted);
+    }
+
+    /**
+     * Codex [P2] 反映 / 意図的非互換 (Option B): 非グレゴリオロケール (th_TH 仏暦) で
+     * dateFormat は **ISO/Gregorian 年を出力する**ことをロックダウン。詳細は
+     * Epub3WriterDateFormatTest#normalizesNonGregorianLocaleToIsoYear と
+     * docs/stage-0b3-plan.md §4.2 を参照。
+     */
+    @Test
+    public void normalizesNonGregorianLocaleToIsoYear() {
+        Locale origFormat = Locale.getDefault(Locale.Category.FORMAT);
+        try {
+            Locale.setDefault(Locale.Category.FORMAT, Locale.of("th", "TH"));
+
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
+                    .withZone(ZoneId.of("Asia/Tokyo"));
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+            sdf.setTimeZone(TimeZone.getTimeZone("Asia/Tokyo"));
+
+            String dtfOutput = dtf.format(FIXED_INSTANT);
+            String sdfOutput = sdf.format(Date.from(FIXED_INSTANT));
+
+            assertEquals("2026/04/30 21:00:00", dtfOutput);
+            assertEquals("2569/04/30 21:00:00", sdfOutput);
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, origFormat);
+        }
     }
 }

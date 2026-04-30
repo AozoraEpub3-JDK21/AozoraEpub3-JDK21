@@ -114,7 +114,44 @@ String modified = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
 - `bookInfo.modified` (Date) は `Date#toInstant()` で `Instant` に変換 → 同一時点を表す
 - `new Date()` は `Instant.now()` に置換 — 同じシステムクロックの「現在時刻」を取得し、本 PR の対象フォーマットはすべて秒以上の精度（`yyyy-MM-dd'T'HH:mm:ss'Z'` / `yyyy/MM/dd HH:mm:ss` / `yyyyMMdd-HHmmss`）で出力するため、`Date` と `Instant` の内部分解能差は出力に影響しない
 
-### 4.2 タイムゾーン捕捉タイミング (Codex [P2] 対応)
+### 4.2 ロケール由来 Calendar の意図的 ISO/Gregorian 化 (Codex 3 巡目 [P2] / Option B 採用)
+
+`SimpleDateFormat(String)` はデフォルト FORMAT locale の `Calendar` を使うため、非グレゴリオロケールでは年表記が変化する:
+
+| ロケール | SimpleDateFormat 出力 (`yyyy-MM-dd...`) | 本 PR の DateTimeFormatter (ISO) |
+|---|---|---|
+| `ja_JP`, `en_US` (Gregorian 系) | `2026-04-30...` | `2026-04-30...` ✅ 互換 |
+| `ja_JP_JP` (和暦 era) | `8-04-30...` (令和 8 年) | `2026-04-30...` ❌ 意図的非互換 |
+| `th_TH` (仏暦) | `2569-04-30...` | `2026-04-30...` ❌ 意図的非互換 |
+
+**判断 (Option B)**: 完全互換よりも EPUB 仕様準拠を優先し、**ISO/Gregorian 年で正規化**する方針を採用。
+
+#### 採用理由
+
+1. **完全互換の実装コストが見合わない**: `withChronology(Chronology.ofLocale(...))` recipe では補えない:
+   - `Chronology.ofLocale()` は legacy locale (`th_TH` 国コード推測) を仏暦にマップしない (BCP 47 `u-ca-buddhist` 拡張のみ参照)。SDF の `Calendar.getInstance(locale)` は `th_TH` で BuddhistCalendar を返すが、java.time 側は ISO のまま → recipe では補えない
+   - `ja_JP_JP` (variant "JP") では JapaneseChronology を捕捉できるが、`yyyy` パターンの semantic 差 (SDF: unpadded "8" / DTF: zero-padded "0008") で完全互換にならない
+   - 実装上の選択肢として `DateTimeFormatterBuilder.appendValue(YEAR_OF_ERA)` + 明示的 chronology マッピングがあるが、コード複雑化 (各 occurrence で ~15 行) に対する実運用上の対価が小さい
+2. **EPUB 3.3 仕様準拠寄り**: `<dcterms:modified>` は ISO 8601 (Gregorian) を要求するため、和暦/仏暦年を OPF に書く方が本来 invalid
+3. **想定ユーザーで影響者ゼロ**: AozoraEpub3 ユーザーが `ja_JP_JP` / `th_TH` を default locale にする想定的にゼロ。`ja_JP` / `en_US` (Gregorian) では完全 byte-identical を維持
+
+#### 影響範囲
+
+| 出力経路 | 影響内容 |
+|---|---|
+| `Epub3Writer.MODIFIED_FORMATTER` → OPF `<dcterms:modified>` | `ja_JP_JP` / `th_TH` ロケール下で年表記が ISO 化 (元: 和暦/仏暦) |
+| `WebAozoraConverter.dateFormat` → 「変換日時」ヘッダ行 | 同上 |
+| `AozoraEpub3Applet.addProfile` → プロファイル ini ファイル名 | 同上 (ファイル名 prefix の年表記が変化) |
+
+#### 検証方針
+
+`th_TH` ロケール下で「DTF が ISO 年を出力 / SDF が仏暦年を出力」する**差異を明示的に確認するテスト** (`normalizesNonGregorianLocaleToIsoYear`) を `Epub3WriterDateFormatTest` / `WebAozoraConverterDateFormatTest` に配置。これにより本 PR の意図的挙動 (ISO 化) がコードに固定される。
+
+#### release notes 反映
+
+`memory/release_notes_pending.md` に「次リリース時にロケール由来年表記の ISO 化を behavior change として明記」する追加エントリを記録。
+
+### 4.3 タイムゾーン捕捉タイミング (Codex [P2] 対応)
 
 `withZone(ZoneId.systemDefault())` の評価タイミングを**元コードと一致させる**:
 
@@ -126,7 +163,7 @@ String modified = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
 これにより `TimeZone.setDefault()` が絡む（テストや長寿命プロセス上の）シナリオでも互換性を保つ。
 
-### 4.3 既存の TZ 仕様違反について
+### 4.4 既存の TZ 仕様違反について
 
 `<dcterms:modified>` の `'Z'` literal suffix + システム TZ ローカル時刻の組み合わせは、技術的には W3C EPUB 3.3 の dcterms:modified UTC 要件 に違反している既存 bug。本 PR では byte-identical 維持優先で**現状挙動を保存**し、UTC 化は **ステージ S (EPUB 3.3 準拠強化)** に follow-up として記録する。
 
@@ -244,3 +281,9 @@ GUI 起動 → プロファイル新規保存でファイル名 `yyyyMMdd-HHmmss
   - [P3] §4.1 の精度説明を「秒精度出力に影響しない」表現に修正
 - 2026-04-30 Codex レビュー (2 巡目) 反映:
   - [P2] §5.1 のテスト配置を `com.github.hmdev.util` 集中→対象パッケージ分散へ変更。`AozoraEpub3Applet` (デフォルトパッケージ) はテスト追加見送り、§9 確認事項 4 として明示
+- 2026-04-30 Codex レビュー (3 巡目) 反映 + Option A 試行 → Option B 採用に転換:
+  - [P2] 当初 Option A (`withChronology(Chronology.ofLocale(...))` recipe) を試行したが、Trial 1 (ja_JP_JP) で yyyy パディング差、Trial 2 (th_TH) で `Chronology.ofLocale()` が BuddhistChronology を返さず ISO 年のままであることが判明
+  - Trial & Error 2 回上限に従いユーザー判断を仰ぎ、**Option B (意図的 ISO/Gregorian 正規化) に転換**
+  - 全 4 occurrence から `withChronology(...)` を削除し、関連 import (`Chronology`, `Locale`) も整理
+  - §4.2 を「ロケール由来 Calendar の意図的 ISO/Gregorian 化」として書き直し、採用理由・影響範囲・検証方針・release notes 反映を明記
+  - テストは `formatterRecipeMatchesLegacyFor*Locale` を撤回し、代わりに `normalizesNonGregorianLocaleToIsoYear` (DTF が ISO 年 / SDF が仏暦年を出力する差異を明示確認) を追加
