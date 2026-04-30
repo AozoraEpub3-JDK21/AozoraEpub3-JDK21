@@ -75,3 +75,7 @@ epubcheck-*/
 test_data/narou_compat/actual_java.txt
 test_data/narou_compat/diff_report.txt
 test_data/.claudeignore
+
+## AI エージェント案内（個人ローカル運用）
+CLAUDE.md
+AGENTS.md
