@@ -84,16 +84,17 @@ public class WebAozoraConverterDateFormatTest {
         try {
             Locale.setDefault(Locale.Category.FORMAT, Locale.of("th", "TH"));
 
-            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
+            DateTimeFormatter dtfWithLocaleRoot = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
+                    .withLocale(Locale.ROOT)
+                    .withZone(ZoneId.of("Asia/Tokyo"));
+            DateTimeFormatter dtfDefaultLocale = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
                     .withZone(ZoneId.of("Asia/Tokyo"));
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
             sdf.setTimeZone(TimeZone.getTimeZone("Asia/Tokyo"));
 
-            String dtfOutput = dtf.format(FIXED_INSTANT);
-            String sdfOutput = sdf.format(Date.from(FIXED_INSTANT));
-
-            assertEquals("2026/04/30 21:00:00", dtfOutput);
-            assertEquals("2569/04/30 21:00:00", sdfOutput);
+            assertEquals("2026/04/30 21:00:00", dtfWithLocaleRoot.format(FIXED_INSTANT));
+            assertEquals("2026/04/30 21:00:00", dtfDefaultLocale.format(FIXED_INSTANT));
+            assertEquals("2569/04/30 21:00:00", sdf.format(Date.from(FIXED_INSTANT)));
         } finally {
             Locale.setDefault(Locale.Category.FORMAT, origFormat);
         }

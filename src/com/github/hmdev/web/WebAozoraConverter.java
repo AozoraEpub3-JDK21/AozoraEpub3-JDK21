@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -50,9 +51,12 @@ public class WebAozoraConverter
 
 	/** 「変換日時」表示用
 	 *  元コード SimpleDateFormat と同じくインスタンス生成時にシステム TZ を捕捉。
-	 *  非グレゴリオロケールでは常に ISO/Gregorian 年を出力する (Epub3Writer.MODIFIED_FORMATTER 参照)。 */
+	 *  非グレゴリオロケールでは常に ISO/Gregorian 年を出力する (Epub3Writer.MODIFIED_FORMATTER 参照)。
+	 *  withLocale(Locale.ROOT) は ISO/Gregorian 化が意図的であることを明示する。 */
 	final DateTimeFormatter dateFormat =
-		DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss").withZone(ZoneId.systemDefault());
+		DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
+			.withLocale(Locale.ROOT)
+			.withZone(ZoneId.systemDefault());
 	
 	/** Singletonインスタンス格納 keyはFQDN */
 	static HashMap<String, WebAozoraConverter> converters = new HashMap<String, WebAozoraConverter>();

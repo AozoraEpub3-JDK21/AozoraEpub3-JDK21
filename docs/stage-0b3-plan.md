@@ -143,9 +143,22 @@ String modified = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
 | `WebAozoraConverter.dateFormat` → 「変換日時」ヘッダ行 | 同上 |
 | `AozoraEpub3Applet.addProfile` → プロファイル ini ファイル名 | 同上 (ファイル名 prefix の年表記が変化) |
 
+#### 意図の明示: `withLocale(Locale.ROOT)`
+
+production code の formatter には `withLocale(Locale.ROOT)` を明示する。`DateTimeFormatter` のデフォルト locale は `Locale.getDefault(Locale.Category.FORMAT)` だが、`Locale.ROOT` を明示することで「ロケール非依存に ISO/Gregorian 年で出力する意図」がコード読者に伝わる:
+
+```java
+static final DateTimeFormatter MODIFIED_FORMATTER =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        .withLocale(Locale.ROOT)        // ← 意図表示: ロケール非依存
+        .withZone(ZoneId.systemDefault());
+```
+
+`Locale.ROOT` 明示の有無で実出力は変わらない (`withChronology` を付けない限り `DateTimeFormatter` は IsoChronology を使うため)。これは挙動変更ではなく**ドキュメントとしてのコード**である。
+
 #### 検証方針
 
-`th_TH` ロケール下で「DTF が ISO 年を出力 / SDF が仏暦年を出力」する**差異を明示的に確認するテスト** (`normalizesNonGregorianLocaleToIsoYear`) を `Epub3WriterDateFormatTest` / `WebAozoraConverterDateFormatTest` に配置。これにより本 PR の意図的挙動 (ISO 化) がコードに固定される。
+`th_TH` ロケール下で「DTF (Locale.ROOT 明示版 / デフォルト版どちらも) が ISO 年を出力 / SDF が仏暦年を出力」する**差異を明示的に確認するテスト** (`normalizesNonGregorianLocaleToIsoYear`) を `Epub3WriterDateFormatTest` / `WebAozoraConverterDateFormatTest` に配置。これにより本 PR の意図的挙動 (ISO 化) がコードに固定される。
 
 #### release notes 反映
 
@@ -287,3 +300,8 @@ GUI 起動 → プロファイル新規保存でファイル名 `yyyyMMdd-HHmmss
   - 全 4 occurrence から `withChronology(...)` を削除し、関連 import (`Chronology`, `Locale`) も整理
   - §4.2 を「ロケール由来 Calendar の意図的 ISO/Gregorian 化」として書き直し、採用理由・影響範囲・検証方針・release notes 反映を明記
   - テストは `formatterRecipeMatchesLegacyFor*Locale` を撤回し、代わりに `normalizesNonGregorianLocaleToIsoYear` (DTF が ISO 年 / SDF が仏暦年を出力する差異を明示確認) を追加
+- 2026-04-30 Codex レビュー (4 巡目) 反映:
+  - [P2] Codex 提案の「`Locale.ROOT` 等で意図を明示」を採用。全 4 occurrence の formatter に `.withLocale(Locale.ROOT)` を追加し、ロケール非依存挙動が意図的であることをコード上で明示
+  - `Locale.ROOT` 明示の有無で実出力は変わらず (DateTimeFormatter デフォルト Chronology は IsoChronology のため)、挙動変更なし・ドキュメントとしてのコードという位置づけ
+  - テスト `normalizesNonGregorianLocaleToIsoYear` を更新し、`Locale.ROOT` 明示版とデフォルト版の DTF 両方を検証 (どちらも ISO 年を出力することを確認)
+  - 計画書 §4.2 に「意図の明示: withLocale(Locale.ROOT)」サブセクションを追加

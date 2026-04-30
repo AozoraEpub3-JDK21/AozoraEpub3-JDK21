@@ -47,6 +47,7 @@ public class PackageTemplateSmokeTest {
         String creator = "著者名";
         String identifier = UUID.randomUUID().toString();
         String modified = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                .withLocale(Locale.ROOT)
                 .withZone(ZoneId.systemDefault())
                 .format(Instant.now());
         ctx.put("title", title);

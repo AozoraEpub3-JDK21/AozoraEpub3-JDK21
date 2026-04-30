@@ -20,6 +20,7 @@ import java.text.DecimalFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.ArrayList;
@@ -242,9 +243,12 @@ public class Epub3Writer
 	/** 更新日時フォーマット 2011-06-29T12:00:00Z
 	 *  元コードの static SimpleDateFormat と同じくクラスロード時にシステム TZ を捕捉。
 	 *  ja_JP_JP (和暦) / th_TH (仏暦) 等の非グレゴリオロケールでは legacy SimpleDateFormat と異なり
-	 *  常に ISO/Gregorian 年を出力する (EPUB 3.3 dcterms:modified の ISO 8601 仕様準拠寄り)。 */
+	 *  常に ISO/Gregorian 年を出力する (EPUB 3.3 dcterms:modified の ISO 8601 仕様準拠寄り)。
+	 *  withLocale(Locale.ROOT) はこの ISO/Gregorian 化が意図的であることを明示する。 */
 	static final DateTimeFormatter MODIFIED_FORMATTER =
-		DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneId.systemDefault());
+		DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+			.withLocale(Locale.ROOT)
+			.withZone(ZoneId.systemDefault());
 	
 	/** セクション番号自動追加用インデックス */
 	int sectionIndex = 0;

@@ -4573,7 +4573,10 @@ public class AozoraEpub3Applet extends JPanel
 	 * @throws FileNotFoundException */
 	private void addProfile(String name) throws FileNotFoundException, IOException
 	{
-		DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault());
+		// withLocale(Locale.ROOT) で非グレゴリオロケールでも ISO/Gregorian 年を出力する意図を明示
+		DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+			.withLocale(Locale.ROOT)
+			.withZone(ZoneId.systemDefault());
 		File profile = new File(profilePath.getPath()+"/"+dateFormat.format(Instant.now())+".ini");
 		int i = 1;
 		while (profile.exists()) {
