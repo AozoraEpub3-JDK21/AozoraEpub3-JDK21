@@ -89,7 +89,7 @@
 
 **ゲート条件**:
 - [x] JDK 21 ビルド・全テスト PASS
-- [ ] JDK 26 でコンパイル PASS（`-Xlint:removal` 警告ゼロ） — **0A-4 完了待ち**
+- [ ] JDK 26 で `compileJava` PASS（**JEP 504 関連の API 削除エラーゼロ**。`AozoraEpub3Applet.java:5165` の既存 `Object.finalize()` removal 警告は本ステージ scope 外、別 issue として残置） — **0A-4 完了待ち**
 - [x] `.NET` ポート `JavaComparisonTests` 5/5 PASS
 - [x] 配布 ZIP 起動・GUI 主要操作の手動確認
 - [x] narou.rb から `java -cp AozoraEpub3.jar AozoraEpub3 ...` の動作確認
