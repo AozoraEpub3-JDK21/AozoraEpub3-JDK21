@@ -482,7 +482,7 @@ public class BookInfo
 		if (this.titleLine == -1) return null;
 		try {
 			return metaLines[this.titleLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getSubTitleText()
@@ -490,7 +490,7 @@ public class BookInfo
 		if (this.subTitleLine == -1) return null;
 		try {
 			return metaLines[this.subTitleLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getOrgTitleText()
@@ -498,7 +498,7 @@ public class BookInfo
 		if (this.orgTitleLine == -1) return null;
 		try {
 			return metaLines[this.orgTitleLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getSubOrgTitleText()
@@ -506,7 +506,7 @@ public class BookInfo
 		if (this.subOrgTitleLine == -1) return null;
 		try {
 			return metaLines[this.subOrgTitleLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getCreatorText()
@@ -514,7 +514,7 @@ public class BookInfo
 		if (this.creatorLine == -1) return null;
 		try {
 			return metaLines[this.creatorLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getSubCreatorText()
@@ -522,7 +522,7 @@ public class BookInfo
 		if (this.subCreatorLine == -1) return null;
 		try {
 			return metaLines[this.subCreatorLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getSeriesText()
@@ -530,7 +530,7 @@ public class BookInfo
 		if (this.seriesLine == -1) return null;
 		try {
 			return metaLines[this.seriesLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	public String getPublisherText()
@@ -538,7 +538,7 @@ public class BookInfo
 		if (this.publisherLine == -1) return null;
 		try {
 			return metaLines[this.publisherLine-this.metaLineStart];
-		} catch (Exception e) {}
+		} catch (Exception e) { /* 意図的: 配列範囲外時は null を返す */ }
 		return null;
 	}
 	
