@@ -5,10 +5,10 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,8 +42,8 @@ public class ImageInfoReader
 	boolean isFile = true;
 	
 	/** 変換するtxtまたは圧縮ファイル */
-	File srcFile = null;
-	
+	Path srcPath = null;
+
 	/** テキストファイルの親のパス 末尾は"/"または空文字列
 	 *  txtなら絶対パス zipならentryのパス */
 	String srcParentPath = null;
@@ -65,7 +65,7 @@ public class ImageInfoReader
 	public ImageInfoReader(boolean isFile, File srcFile)
 	{
 		this.isFile = isFile;
-		this.srcFile = srcFile;
+		this.srcPath = srcFile.toPath();
 		this.srcParentPath = srcFile.getParent()+"/";
 		this.archiveTextParentPath = "";
 		this.imageFileNames = new ArrayList<String>();
@@ -88,15 +88,19 @@ public class ImageInfoReader
 		return new File(this.srcParentPath+fileName);
 	}
 
-	/** パストラバーサルを防止して画像ファイルを取得 (srcParentPath 配下にあることを検証) */
+	/** パストラバーサルを防止して画像ファイルを取得 (srcParentPath 配下にあることを検証)。
+	 * candidate が存在する場合は toRealPath でシンボリックリンクを追跡し、
+	 * source dir 内の symlink が外部を指すケースを弾く。存在しない場合は
+	 * normalize 結果で startsWith 比較 (caller が File.exists() でハンドリングする前提)。 */
 	public File getImageFileSafe(String fileName) throws IOException
 	{
-		File base = new File(this.srcParentPath).getCanonicalFile();
-		File resolved = new File(this.srcParentPath + fileName).getCanonicalFile();
-		if (!resolved.getPath().startsWith(base.getPath() + File.separator)) {
+		Path base = Path.of(this.srcParentPath).toRealPath();
+		Path candidate = base.resolve(fileName).normalize();
+		Path resolved = Files.exists(candidate) ? candidate.toRealPath() : candidate;
+		if (!resolved.startsWith(base)) {
 			throw new IOException("画像パスが許可されたディレクトリ外です: " + fileName);
 		}
-		return resolved;
+		return resolved.toFile();
 	}
 	
 	/** 画像出力順にImageInfoを格納 zipの場合は後で並び替える */
@@ -198,8 +202,8 @@ public class ImageInfoReader
 		if (this.imageFileInfos.containsKey(srcImageFileName)) return true;
 		if (isFile) {
 			//ファイルシステムから取得
-			File imageFile = new File(this.srcParentPath+srcImageFileName);
-			if (imageFile.exists()) return true;
+			Path imageFile = Path.of(this.srcParentPath+srcImageFileName);
+			if (Files.exists(imageFile)) return true;
 		} else {
 			if (this.imageFileInfos.containsKey(this.archiveTextParentPath+srcImageFileName)) return true;
 		}
@@ -217,10 +221,10 @@ public class ImageInfoReader
 		//zipのサブパスから取得
 		if (isFile) {
 			//ファイルシステムから取得
-			File imageFile = new File(this.srcParentPath+srcImageFileName);
-			if (imageFile.exists()) {
+			Path imageFile = Path.of(this.srcParentPath+srcImageFileName);
+			if (Files.exists(imageFile)) {
 				try {
-					imageInfo = ImageInfo.getImageInfo(imageFile);
+					imageInfo = ImageInfo.getImageInfo(imageFile.toFile());
 					if (imageInfo != null) {
 						this.imageFileInfos.put(srcImageFileName, imageInfo);
 						return imageInfo;
@@ -240,29 +244,29 @@ public class ImageInfoReader
 	public void loadZipImageInfos(File srcFile, boolean addFileName) throws IOException
 	{
 		try {
-			loadArchiveImageInfosFromCache(srcFile, "zip", addFileName);
+			loadArchiveImageInfosFromCache(srcFile.toPath(), "zip", addFileName);
 		} catch (RarException e) {
 			throw new IOException(e);
 		}
 	}
-	
+
 	/** rar内の画像情報をすべて読み込み（ArchiveCacheを使用） */
 	public void loadRarImageInfos(File srcFile, boolean addFileName) throws IOException, RarException
 	{
-		loadArchiveImageInfosFromCache(srcFile, "rar", addFileName);
+		loadArchiveImageInfosFromCache(srcFile.toPath(), "rar", addFileName);
 	}
-	
+
 	/** キャッシュから画像エントリを取得してImageInfoを読み込む */
-	private void loadArchiveImageInfosFromCache(File srcFile, String ext, boolean addFileName) throws IOException, RarException
+	private void loadArchiveImageInfosFromCache(Path srcPath, String ext, boolean addFileName) throws IOException, RarException
 	{
-		ArchiveCache cache = new ArchiveCache(srcFile, ext);
+		ArchiveCache cache = new ArchiveCache(srcPath.toFile(), ext);
 		cache.scan();
-		
+
 		List<String> imageEntries = cache.getImageEntries();
 		int idx = 0;
 		for (String entryName : imageEntries) {
 			if (idx++ % 10 == 0) LogAppender.append(".");
-			
+
 			// ZipSlip脆弱性対策: パストラバーサル攻撃をチェック
 			try {
 				entryName = sanitizeArchiveEntryName(entryName);
@@ -270,11 +274,11 @@ public class ImageInfoReader
 				System.err.println("Skipping suspicious archive entry: " + e.getMessage());
 				continue;
 			}
-			
+
 			ImageInfo imageInfo = null;
 			try {
 				// アーカイブを再度開いて画像を読み込む（画像内容はキャッシュしない）
-				imageInfo = readImageInfoFromArchive(srcFile, ext, entryName);
+				imageInfo = readImageInfoFromArchive(srcPath, ext, entryName);
 			} catch (Exception e) {
 				LogAppender.error("画像が読み込めませんでした: " + entryName);
 				logger.error("画像情報の取得に失敗: {}", entryName, e);
@@ -286,12 +290,12 @@ public class ImageInfoReader
 		}
 		LogAppender.println();
 	}
-	
+
 	/** アーカイブ内の特定エントリからImageInfoを読み込む */
-	private ImageInfo readImageInfoFromArchive(File srcFile, String ext, String entryName) throws IOException, RarException {
+	private ImageInfo readImageInfoFromArchive(Path srcPath, String ext, String entryName) throws IOException, RarException {
 		if ("zip".equals(ext) || "txtz".equals(ext)) {
 			try (ZipArchiveInputStream zis = new ZipArchiveInputStream(
-					new BufferedInputStream(new FileInputStream(srcFile), 65536), "MS932", false)) {
+					new BufferedInputStream(Files.newInputStream(srcPath), 65536), "MS932", false)) {
 				ArchiveEntry entry;
 				while ((entry = zis.getNextEntry()) != null) {
 					if (entry.getName().equals(entryName)) {
@@ -300,7 +304,7 @@ public class ImageInfoReader
 				}
 			}
 		} else if ("rar".equals(ext)) {
-			try (Archive archive = new Archive(srcFile)) {
+			try (Archive archive = new Archive(srcPath.toFile())) {
 				for (FileHeader fileHeader : archive.getFileHeaders()) {
 					String rarEntryName = fileHeader.getFileName().replace('\\', '/');
 					if (rarEntryName.equals(entryName)) {
@@ -381,21 +385,21 @@ public class ImageInfoReader
 	public BufferedImage getImage(String srcImageFileName) throws IOException, RarException
 	{
 		if (this.isFile) {
-			File file = new File(this.srcParentPath+srcImageFileName);
-			if (!file.exists()) {
+			Path file = Path.of(this.srcParentPath+srcImageFileName);
+			if (!Files.exists(file)) {
 				//拡張子修正
 				srcImageFileName = this.correctExt(srcImageFileName);
-				file = new File(this.srcParentPath+srcImageFileName);
-				if (!file.exists()) return null;
+				file = Path.of(this.srcParentPath+srcImageFileName);
+				if (!Files.exists(file)) return null;
 			}
-			BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file), 8192);
+			BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(file), 8192);
 			try {
 				return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), bis);
 			} finally { bis.close(); }
 		} else {
-			if (this.srcFile.getName().endsWith(".rar")) {
+			if (this.srcPath.getFileName().toString().endsWith(".rar")) {
 				InputStream is = null;
-				Archive archive = new Archive(srcFile);
+				Archive archive = new Archive(this.srcPath.toFile());
 				try {
 				FileHeader fileHeader = archive.nextFileHeader();
 				while (fileHeader != null) {
@@ -413,12 +417,12 @@ public class ImageInfoReader
 					if (is != null) is.close();
 					archive.close();
 				}
-				
+
 			} else {
 				// ZipFileの非推奨使用を避けるため、ZipArchiveInputStreamを使用
-				try (InputStream fis = Files.newInputStream(this.srcFile.toPath(), StandardOpenOption.READ);
+				try (InputStream fis = Files.newInputStream(this.srcPath, StandardOpenOption.READ);
 				     ZipArchiveInputStream zais = new ZipArchiveInputStream(fis, "MS932")) {
-					
+
 					ArchiveEntry entry = null;
 					while ((entry = zais.getNextEntry()) != null) {
 						if (entry.getName().equalsIgnoreCase(srcImageFileName)) {
@@ -430,10 +434,10 @@ public class ImageInfoReader
 							}
 						}
 					}
-					
+
 					// 拡張子が異なる場合は正しい拡張子を探す
 					srcImageFileName = this.correctExt(srcImageFileName);
-					try (InputStream fis2 = Files.newInputStream(this.srcFile.toPath(), StandardOpenOption.READ);
+					try (InputStream fis2 = Files.newInputStream(this.srcPath, StandardOpenOption.READ);
 					     ZipArchiveInputStream zais2 = new ZipArchiveInputStream(fis2, "MS932")) {
 						
 						ArchiveEntry entry2 = null;
