@@ -4,8 +4,8 @@ import static org.junit.Assert.*;
 
 import java.io.StringWriter;
 import java.nio.file.*;
+import java.util.ArrayList;
 import java.util.Properties;
-import java.util.Vector;
 
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.Template;
@@ -41,7 +41,7 @@ public class HorizontalCssTemplateRenderTest {
         ctx.put("fontSize", 110);
         ctx.put("boldUseGothic", Boolean.TRUE);
         ctx.put("gothicUseBold", Boolean.TRUE);
-        ctx.put("vecGaijiInfo", new Vector<>());
+        ctx.put("vecGaijiInfo", new ArrayList<>());
 
         StringWriter out = new StringWriter();
         Template t = ve.getTemplate("horizontal_text.vm", "UTF-8");

@@ -21,7 +21,7 @@ import java.text.SimpleDateFormat;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.Vector;
+import java.util.ArrayList;
 import java.util.zip.CRC32;
 
 import javax.swing.JProgressBar;
@@ -247,17 +247,17 @@ public class Epub3Writer
 	int imageIndex = 0;
 	
 	/** 改ページでセクション分割されたセクション番号(0001)を格納 カバー画像(cover)等も含む */
-	Vector<SectionInfo> sectionInfos;
+	ArrayList<SectionInfo> sectionInfos;
 	/** 章の名称を格納(仮) */
-	Vector<ChapterInfo> chapterInfos;
+	ArrayList<ChapterInfo> chapterInfos;
 	
 	/** 外字フォント情報 */
-	Vector<GaijiInfo> vecGaijiInfo;
+	ArrayList<GaijiInfo> vecGaijiInfo;
 	/** 外字フォント重複除去 */
 	HashSet<String> gaijiNameSet;
 	
 	/** 画像情報リスト Velocity埋め込み */
-	Vector<ImageInfo> imageInfos;
+	ArrayList<ImageInfo> imageInfos;
 	
 	/** 出力対象のファイル名 (青空テキストの挿絵注記で追加され 重複出力のチェックに利用) */
 	HashSet<String> outImageFileNames; 
@@ -289,11 +289,11 @@ public class Epub3Writer
 		this.templatePath = templatePath;
 		//Velocity初期化: ファイルシステム優先、JAR内リソース代替
 		initVelocity();
-		this.sectionInfos = new Vector<SectionInfo>();
-		this.chapterInfos = new Vector<ChapterInfo>();
-		this.vecGaijiInfo = new Vector<GaijiInfo>();
+		this.sectionInfos = new ArrayList<SectionInfo>();
+		this.chapterInfos = new ArrayList<ChapterInfo>();
+		this.vecGaijiInfo = new ArrayList<GaijiInfo>();
 		this.gaijiNameSet = new HashSet<String>();
-		this.imageInfos = new Vector<ImageInfo>();
+		this.imageInfos = new ArrayList<ImageInfo>();
 		this.outImageFileNames = new HashSet<String>();
 	}
 	
@@ -326,11 +326,11 @@ public class Epub3Writer
 	{
 		this.templatePath = templatePath;
 		this.velocityEngine = velocityEngine;
-		this.sectionInfos = new Vector<SectionInfo>();
-		this.chapterInfos = new Vector<ChapterInfo>();
-		this.vecGaijiInfo = new Vector<GaijiInfo>();
+		this.sectionInfos = new ArrayList<SectionInfo>();
+		this.chapterInfos = new ArrayList<ChapterInfo>();
+		this.vecGaijiInfo = new ArrayList<GaijiInfo>();
 		this.gaijiNameSet = new HashSet<String>();
-		this.imageInfos = new Vector<ImageInfo>();
+		this.imageInfos = new ArrayList<ImageInfo>();
 		this.outImageFileNames = new HashSet<String>();
 	}
 
@@ -854,7 +854,7 @@ public class Epub3Writer
 		}
 		//一番最後は閉じる
 		if (chapterInfos.size() > 0) {
-			ChapterInfo chapterInfo = chapterInfos.lastElement();
+			ChapterInfo chapterInfo = chapterInfos.get(chapterInfos.size() - 1);
 			if (chapterInfo != null) chapterInfo.levelEnd = chapterInfo.chapterLevel;
 		}
 		
@@ -895,7 +895,7 @@ public class Epub3Writer
 			
 			//一番最後は閉じる
 			if (chapterInfos.size() > 0) {
-				ChapterInfo chapterInfo = chapterInfos.lastElement();
+				ChapterInfo chapterInfo = chapterInfos.get(chapterInfos.size() - 1);
 				if (chapterInfo != null) {
 					int close = 1;
 					for (int i=0; i<navPointLevel.length; i++) {
@@ -1275,7 +1275,7 @@ public class Epub3Writer
 	/** 章を追加 */
 	public void addChapter(String chapterId, String name, int chapterLevel)
 	{
-		SectionInfo sectionInfo = this.sectionInfos.lastElement();
+		SectionInfo sectionInfo = this.sectionInfos.get(this.sectionInfos.size() - 1);
 		this.chapterInfos.add(new ChapterInfo(sectionInfo.sectionId, chapterId, name, chapterLevel));
 	}
 	/** 追加済の章の名称を変更 */

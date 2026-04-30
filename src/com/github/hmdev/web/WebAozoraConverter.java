@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Vector;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,7 +72,7 @@ public class WebAozoraConverter
 	HashMap<ExtractId, ExtractInfo[]> queryMap;
 	
 	/** 出力文字列置換情報 */
-	HashMap<ExtractId, Vector<String[]>> replaceMap;
+	HashMap<ExtractId, ArrayList<String[]>> replaceMap;
 	
 	/** テキスト出力先パス 末尾は/ */
 	String dstPath;
@@ -199,7 +198,7 @@ public class WebAozoraConverter
 					}
 					
 					//置換情報
-					this.replaceMap = new HashMap<ExtractId, Vector<String[]>>();
+					this.replaceMap = new HashMap<ExtractId, ArrayList<String[]>>();
 					File replaceInfoFile = new File(configPath.getAbsolutePath()+"/"+fqdn+"/replace.txt");
 					if (replaceInfoFile.isFile()) {
 						br = new BufferedReader(new InputStreamReader(new FileInputStream(replaceInfoFile), "UTF-8"));
@@ -209,9 +208,9 @@ public class WebAozoraConverter
 								String[] values = line.split("\t");
 								if (values.length > 1) {
 									ExtractId extractId = ExtractId.valueOf(values[0]);
-									Vector<String[]> vecReplace = this.replaceMap.get(extractId);
+									ArrayList<String[]> vecReplace = this.replaceMap.get(extractId);
 									if (vecReplace == null) {
-										vecReplace = new Vector<String[]>();
+										vecReplace = new ArrayList<String[]>();
 										this.replaceMap.put(extractId, vecReplace);
 									}
 									vecReplace.add(new String[]{values[1], values.length==2?"":values[2]});
@@ -703,14 +702,14 @@ public class WebAozoraConverter
 			String preChapterTitle = "";
 			
 			//各話のURL(フルパス)を格納
-			Vector<String> chapterHrefs = new Vector<String>();
+			ArrayList<String> chapterHrefs = new ArrayList<String>();
 			
 			Elements hrefs = getExtractElements(doc, this.queryMap.get(ExtractId.HREF));
 			if (hrefs == null && this.queryMap.containsKey(ExtractId.HREF)) {
 				LogAppender.println("HREF : 各話のリンク先URLが取得できません");
 			}
 			
-			Vector<String> subtitles = getExtractStrings(doc, this.queryMap.get(ExtractId.SUBTITLE_LIST), true);
+			ArrayList<String> subtitles = getExtractStrings(doc, this.queryMap.get(ExtractId.SUBTITLE_LIST), true);
 			if (subtitles == null && this.queryMap.containsKey(ExtractId.SUBTITLE_LIST)) {
 				LogAppender.println("SUBTITLE_LIST : 各話タイトルが取得できません");
 			}
@@ -2444,13 +2443,13 @@ public class WebAozoraConverter
 		return null;
 	}
 	
-	Vector<String> getExtractStrings(Document doc, ExtractInfo[] extractInfos, boolean replace)
+	ArrayList<String> getExtractStrings(Document doc, ExtractInfo[] extractInfos, boolean replace)
 	{
 		if (extractInfos == null) return null;
 		for (ExtractInfo extractInfo : extractInfos) {
 			Elements elements = doc.select(extractInfo.query);
 			if (elements == null || elements.size() == 0) continue;
-			Vector<String> vecString = new Vector<String>();
+			ArrayList<String> vecString = new ArrayList<String>();
 			if (extractInfo.idx == null) {
 				for (Element element : elements) {
 					String html = element.html();
@@ -2549,7 +2548,7 @@ public class WebAozoraConverter
 		// "Episode:ID" を出現順・重複なしで収集
 		Pattern epPattern = Pattern.compile("\"Episode:(\\d+)\"");
 		Matcher epMatcher = epPattern.matcher(json);
-		Vector<String> result = new Vector<String>();
+		ArrayList<String> result = new ArrayList<String>();
 		HashSet<String> seen = new HashSet<String>();
 		while (epMatcher.find()) {
 			String epId = epMatcher.group(1);

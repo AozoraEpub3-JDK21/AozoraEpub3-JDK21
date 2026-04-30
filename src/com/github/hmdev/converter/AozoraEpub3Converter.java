@@ -7,9 +7,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Vector;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1148,7 +1148,7 @@ public class AozoraEpub3Converter
 		int lastZeroTagLevelLineNum = -1;
 		
 		//タイトル目の画像等をバッファ
-		Vector<String> preTitleBuf = null;
+		ArrayList<String> preTitleBuf = null;
 		
 		//コメントブロック内
 		boolean inComment = false;
@@ -1167,7 +1167,7 @@ public class AozoraEpub3Converter
 			//outがnullなら改ページと出力はされない
 			out = null;
 			//バッファ
-			preTitleBuf = new Vector<String>();
+			preTitleBuf = new ArrayList<String>();
 			noImage = true;
 		}
 		

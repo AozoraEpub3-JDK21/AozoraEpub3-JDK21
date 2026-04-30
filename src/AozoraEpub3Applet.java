@@ -49,7 +49,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Properties;
-import java.util.Vector;
+import java.util.ArrayList;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -2628,7 +2628,7 @@ public class AozoraEpub3Applet extends JPanel
 		String selectedProfileFileName = this.props.getProperty("ProfileFileName");
 		
 		//並び順取得
-		Vector<File> propFiles = new Vector<File>();
+		ArrayList<File> propFiles = new ArrayList<File>();
 		HashSet<String> profileFileNameMap = new HashSet<String>();
 		if (this.props.containsKey("ProfileList")) {
 			for (String fileName : this.props.getProperty("ProfileList").split(",")) {
@@ -3059,16 +3059,16 @@ public class AozoraEpub3Applet extends JPanel
 			switch (state) {
 			case JFileChooser.APPROVE_OPTION:
 				
-				Vector<File> vecFiles = new Vector<File>();
-				Vector<String> vecUrlString = null;
-				Vector<File> vecUrlSrcFile = null;
+				ArrayList<File> vecFiles = new ArrayList<File>();
+				ArrayList<String> vecUrlString = null;
+				ArrayList<File> vecUrlSrcFile = null;
 				File dstPath = null;
 				try {
 				for (File file : fileChooser.getSelectedFiles()) {
 					if (file.getName().toLowerCase().endsWith(".url")) {
 						if (vecUrlString == null) {
-							vecUrlString = new Vector<String>();
-							vecUrlSrcFile = new Vector<File>();
+							vecUrlString = new ArrayList<String>();
+							vecUrlSrcFile = new ArrayList<File>();
 						}
 						vecUrlString.add(readInternetShortCut(file));
 						vecUrlSrcFile.add(file);
@@ -3105,8 +3105,8 @@ public class AozoraEpub3Applet extends JPanel
 			dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
 			Transferable transfer = dtde.getTransferable();
 			try {
-				Vector<File> vecFiles = new Vector<File>();
-				Vector<String> vecUrlString = null;
+				ArrayList<File> vecFiles = new ArrayList<File>();
+				ArrayList<String> vecUrlString = null;
 				File dstPath = null;
 				
 				if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
@@ -3116,7 +3116,7 @@ public class AozoraEpub3Applet extends JPanel
 					if (files.size() > 0) {
 						for (File file : files) {
 							if (file.getName().toLowerCase().endsWith(".url")) {
-								if (vecUrlString == null) vecUrlString = new Vector<String>();
+								if (vecUrlString == null) vecUrlString = new ArrayList<String>();
 								vecUrlString.add(readInternetShortCut(file));
 								dstPath = file.getParentFile();
 							} else {
@@ -3140,12 +3140,12 @@ public class AozoraEpub3Applet extends JPanel
 						//Linux等 ファイルのパスでファイルがあれば変換
 						try {
 							String[] fileNames = urlString.split("\n");
-							vecFiles = new Vector<File>();
+							vecFiles = new ArrayList<File>();
 							for (String path : fileNames) {
 								File file = new File(URLDecoder.decode(path.substring(7).trim(),"UTF-8"));
 								if (file.exists()) {
 									if (file.getName().toLowerCase().endsWith(".url")) {
-										if (vecUrlString == null) vecUrlString = new Vector<String>();
+										if (vecUrlString == null) vecUrlString = new ArrayList<String>();
 										vecUrlString.add(readInternetShortCut(file));
 										dstPath = file.getParentFile();
 									} else {
@@ -3160,7 +3160,7 @@ public class AozoraEpub3Applet extends JPanel
 					}
 					else if (urlString != null && urlString.toLowerCase().startsWith("http")) {
 						//ブラウザからのDnD
-						vecUrlString = new Vector<String>();
+						vecUrlString = new ArrayList<String>();
 						vecUrlString.add(urlString);
 						dstPath = null;
 					}
@@ -3272,11 +3272,11 @@ public class AozoraEpub3Applet extends JPanel
 	{
 		if (isRunning()) return false;
 		try {
-			Vector<File> vecFiles = new Vector<File>();
+			ArrayList<File> vecFiles = new ArrayList<File>();
 			//Web変換対象URLを格納
-			Vector<String> vecUrlString = new Vector<String>();
+			ArrayList<String> vecUrlString = new ArrayList<String>();
 			//ショートカットファイルを格納(同名の表紙取得に利用)
-			Vector<File> vecUrlSrcFile = new Vector<File>();
+			ArrayList<File> vecUrlSrcFile = new ArrayList<File>();
 			File dstPath = null;
 			
 			if (transfer.isDataFlavorSupported(DataFlavor.stringFlavor)) {
@@ -3291,7 +3291,7 @@ public class AozoraEpub3Applet extends JPanel
 					//Linux等 ファイルのパスでファイルがあれば変換
 					try {
 						String[] fileNames = urlString.split("\n");
-						vecFiles = new Vector<File>();
+						vecFiles = new ArrayList<File>();
 						for (String path : fileNames) {
 							File file = new File(URLDecoder.decode(path.substring(7).trim(),"UTF-8"));
 							if (file.exists()) {
@@ -3409,7 +3409,7 @@ public class AozoraEpub3Applet extends JPanel
 	////////////////////////////////////////////////////////////////
 	/** 複数ファイルを変換
 	 * @param dstPath srcFileがキャッシュで入力ファイルを同じ場所に出力先指定をする場合 */
-	private void convertFiles(Vector<File> vecSrcFiles, File dstPath)
+	private void convertFiles(ArrayList<File> vecSrcFiles, File dstPath)
 	{
 		File[] srcFiles = new File[vecSrcFiles.size()];
 		for (int i=0; i<srcFiles.length; i++) {
@@ -4150,7 +4150,7 @@ public class AozoraEpub3Applet extends JPanel
 	/** Web変換
 	 * @param vecUrlString 青空文庫テキストのzipまたは対応サイトのリンクURL
 	 * @param vecUrlSrcFile ショートカットファイルのURLならファイルが指定されている */
-	private void convertWeb(Vector<String> vecUrlString, Vector<File> vecUrlSrcFile, File dstPath) throws IOException
+	private void convertWeb(ArrayList<String> vecUrlString, ArrayList<File> vecUrlSrcFile, File dstPath) throws IOException
 	{
 		for (int i=0; i<vecUrlString.size(); i++) {
 			String urlString = vecUrlString.get(i);
@@ -4338,7 +4338,7 @@ public class AozoraEpub3Applet extends JPanel
 	////////////////////////////////////////////////////////////////
 	/** 別スレッド実行用SwingWorkerを実行
 	 * @param dstPath 出力先 ブラウザからまたはURLペーストの場合はnull */
-	void startConvertWorker(Vector<File> vecFiles, Vector<String> vecUrlString, Vector<File> vecUrlSrcFile, File dstPath)
+	void startConvertWorker(ArrayList<File> vecFiles, ArrayList<String> vecUrlString, ArrayList<File> vecUrlSrcFile, File dstPath)
 	{
 		//出力先が指定されていない場合は選択させる
 		if (dstPath == null && jCheckSamePath.isSelected() || !jCheckSamePath.isSelected() && "".equals(jComboDstPath.getEditor().getItem().toString().trim())) {
@@ -4393,16 +4393,16 @@ public class AozoraEpub3Applet extends JPanel
 		/** 面倒なのでAppletを渡す */
 		AozoraEpub3Applet applet;
 		/** 変換対象ファイル */
-		Vector<File> vecFiles;
+		ArrayList<File> vecFiles;
 		/** 変換対象URL */
-		Vector<String> vecUrlString;
+		ArrayList<String> vecUrlString;
 		/** ショートカットファイル */
-		Vector<File> vecUrlSrcFile;
+		ArrayList<File> vecUrlSrcFile;
 		
 		File dstPath = null;
 		
 		/** @param dstPath ショートカットファイルなら同じ場所出力用に指定 */
-		public ConvertWorker(Vector<File> vecFiles, Vector<String> vecUrlString, Vector<File> vecUrlSrcFile, File dstPath)
+		public ConvertWorker(ArrayList<File> vecFiles, ArrayList<String> vecUrlString, ArrayList<File> vecUrlSrcFile, File dstPath)
 		{
 			this.applet = getApplet();
 			
@@ -5148,7 +5148,7 @@ public class AozoraEpub3Applet extends JPanel
 		//引数にファイルが指定されていたら変換実行
 		for (String fileName : args) {
 			File file = new File(fileName);
-			Vector<File> vecFiles = new Vector<File>();
+			ArrayList<File> vecFiles = new ArrayList<File>();
 			if (file.exists()) vecFiles.add(file);
 			if (vecFiles.size() > 0) {
 				File[] files = new File[vecFiles.size()];
