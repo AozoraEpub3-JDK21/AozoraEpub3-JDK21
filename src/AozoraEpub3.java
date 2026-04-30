@@ -1,9 +1,10 @@
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Properties;
 
 import org.apache.commons.cli.DefaultParser;
@@ -124,7 +125,7 @@ public class AozoraEpub3
 			
 			//propsから読み込み
 			props = new Properties();
-			try { props.load(new FileInputStream(propFileName)); } catch (Exception e) { }
+			try { props.load(Files.newInputStream(Path.of(propFileName))); } catch (Exception e) { }
 			
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) {}//表題
 			
@@ -253,7 +254,7 @@ public class AozoraEpub3
 				String[] urls = commandLine.getOptionValues("url");
 				File cachePath = new File(jarPath + ".cache");
 				if (commandLine.hasOption("cache")) cachePath = new File(commandLine.getOptionValue("cache"));
-				cachePath.mkdirs();
+				Files.createDirectories(cachePath.toPath());
 
 				int interval = 1000;
 				if (commandLine.hasOption("interval")) {
@@ -485,15 +486,17 @@ public class AozoraEpub3
 			outFileName = outFileName.substring(0, maxPath - outExt.length());
 		}
 		File outFile = new File(outFileName + outExt);
-		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証
-		File canonicalDst = dstPath.getCanonicalFile();
-		File canonicalOut = outFile.getCanonicalFile();
-		if (!canonicalOut.getPath().startsWith(canonicalDst.getPath() + File.separator)) {
+		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証 (PR #22/#23 の 2 段階パターン)
+		Path dstPathNio = dstPath.toPath();
+		Path canonicalDst = Files.exists(dstPathNio) ? dstPathNio.toRealPath() : dstPathNio.toAbsolutePath().normalize();
+		Path outFileNio = outFile.toPath();
+		Path canonicalOut = Files.exists(outFileNio) ? outFileNio.toRealPath() : outFileNio.toAbsolutePath().normalize();
+		if (!canonicalOut.startsWith(canonicalDst)) {
 			throw new IOException("出力パスが許可されたディレクトリ外です: " + canonicalOut);
 		}
-		outFile = canonicalOut;
+		outFile = canonicalOut.toFile();
 		outFile.setWritable(true);
-		
+
 		return outFile;
 	}
 	
@@ -564,7 +567,7 @@ public class AozoraEpub3
 		baseFileName = baseFileName.substring(0, baseFileName.lastIndexOf('.')+1);
 		for (String ext : new String[]{"png","jpg","jpeg","PNG","JPG","JPEG","Png","Jpg","Jpeg"}) {
 			String coverFileName = baseFileName+ext; 
-			if (new File(coverFileName).exists()) return coverFileName;
+			if (Files.exists(Path.of(coverFileName))) return coverFileName;
 		}
 		return null;
 	}
