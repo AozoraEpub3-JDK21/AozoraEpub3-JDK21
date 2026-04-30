@@ -24,15 +24,18 @@ COVER_IMG	img.cover:0,.cover img:0,#main img:0
 
 ################
 ## 目次→各話へのリンク（HREF）
-## 青空文庫では作品ページ内に複数の.htmlファイルへのリンクが並ぶことが多い
-## ここでは単純に「.html」リンクを拾う（必要に応じて絞る）
-HREF	a	^.*\.html$
+## 青空文庫の作品 HTML は単話完結ページ（`cards/NNNNNN/files/NNN_NNNN.html` 形式）であり、
+## 同ページ内の他 .html リンクはサイトナビ・他作品への参照のため「各話リンク」ではない。
+## HREF を未定義にすると WebAozoraConverter が「一覧のリンクはないが本文がある場合」分岐
+## (`docToAozoraText` 呼び出し) に入り、CONTENT_ARTICLE (`.main_text:0`) で本文を直接抽出する。
+#HREF	a	^.*\.html$
 
 ## 目次側の各話タイトル（一覧で使われている場合）
-SUBTITLE_LIST	#index a:0,.index_list a:0,ul li a:0
+## 同上の理由で青空文庫では使用しない。
+#SUBTITLE_LIST	#index a:0,.index_list a:0,ul li a:0
 
 ## 一覧に記載されている各話の更新日時チェック用にタグ全体の文字列を利用
-SUB_UPDATE	.time, .date
+#SUB_UPDATE	.time, .date
 
 ################
 ## 各話の抽出設定

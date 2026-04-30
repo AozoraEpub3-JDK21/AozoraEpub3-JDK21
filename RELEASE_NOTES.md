@@ -1,5 +1,68 @@
 # AozoraEpub3 リリースノート
 
+## バージョン: 1.3.6-jdk21
+
+**リリース日**: 2026年5月1日
+
+### ハイライト
+
+- **JDK 26 完全対応**: ビルド・全テスト実行・GUI 起動を JDK 26 (2026-03-17 GA) で CI 検証済
+- **内部コード現代化**: SLF4J ロガー、`java.nio.file.Path`、`java.time`、空 catch 監査
+- 配布物は **Java 21 ターゲットビルド** (class file version 65) のまま — JDK 21 LTS から JDK 26 まで全環境で動作します
+
+### JDK 26 対応の内訳
+
+| 項目 | PR | 対応内容 |
+|------|----|----------|
+| JEP 504 (`JApplet` 削除) | v1.3.5 で完了 | `extends JApplet` → `extends JPanel` に変更 |
+| JDK 26 toolchain での `compileJava` 検証 | #29 | `build.gradle` に `-PjavaToolchainVersion=<NN>` を導入。CI matrix に JDK 26 を追加 |
+| JDK 26 での全テスト実行 | #36 | JUnit 4 の test detection が JDK 26 のリフレクション挙動変化で `InvalidTestClassError` を発生させていた問題を `build.gradle` の test exclude (`AozoraFullFlowTest` / `AozoraRealTest` / `VelocityTestUtils` / `**/*$*.class`) で解消 |
+| JDK 26 での GUI smoke test | #36 | CI で fat-jar を JDK 26 ランタイムで起動し、Xvfb 経由で Swing GUI が立ち上がることを確認 |
+
+### 内部コード現代化
+
+| 領域 | PR | 変更点 |
+|------|----|--------|
+| `Vector` → `ArrayList` | #17 | 24 ファイルでレガシーコレクションを撤去 |
+| `java.io.File` → `java.nio.file.Path` | #19〜#27 | 14 ファイルを内部 Path 化（公開 API は File 維持で後方互換） |
+| `java.time` 移行 | #18 | `Date` / `SimpleDateFormat` を撤去（後述のロケールバグ修正を含む） |
+| SLF4J 実利用化 | #12 / #14 / #15 / #16 | 11 ファイルで `e.printStackTrace()` をロガー呼び出しに置換 |
+| 空 catch 監査 | #30〜#35 | 11 ファイル / 133 occ の `catch (...) {}` に意図コメントを付与（grep 「意図的:」で追跡可能） |
+
+### バグ修正
+
+- **`dcterms:modified` の EPUB 3.3 仕様違反 (#18)**: タイ仏暦・日本和暦などのロケールで `Date` + `SimpleDateFormat` の組み合わせが非グレゴリオ歴の年号を出力し、epubcheck が `OPF-054` で reject していた問題を修正。`Instant.now()` + `DateTimeFormatter.ISO_INSTANT` で常に UTC グレゴリオ歴の `YYYY-MM-DDThh:mm:ssZ` 形式を出力するようにした
+- **青空文庫 URL から CLI -url で本文取得できなかった問題を修正**: extract.txt のディレクトリ名が `web/aozora.gr.jp/` で、実際の URL ホスト名 `www.aozora.gr.jp` と不一致 → サイト定義が読み込まれていなかった。`web/www.aozora.gr.jp/` に rename して解決。さらに同 extract.txt の `HREF`/`SUBTITLE_LIST`/`SUB_UPDATE` が「単話 HTML 完結」形式の青空文庫作品では誤動作していた (他作品リンクを各話と誤認識して本文 placeholder のみ出力) ためコメントアウトし、`docToAozoraText` 経路で `.main_text` から本文を直接抽出するようにした
+
+### Breaking changes
+
+- `BookInfo` 等の公開フィールドで `Vector` → `ArrayList` に変更 (#17)。**バイナリ互換性が崩れる**ため、AozoraEpub3 を外部ライブラリとして利用しているコードは再コンパイルが必要
+
+### `InterruptedException` の扱い変更
+
+- `WebAozoraConverter` の sleep ループで `InterruptedException` を silent swallow していた箇所を、`Thread.currentThread().interrupt()` + `return null` に変更 (#35)。`ExecutorService.shutdownNow()` 等の外部 interrupt が来た場合に正しくダウンロードを終了します
+
+### 動作環境
+
+- **最低要件**: Java 21 以降
+- **推奨**: Java 26 (最新 GA)
+- **互換性**: Java 21 LTS / Java 25 LTS / Java 26 すべてで動作確認済
+
+### 検証結果
+
+```
+Build (JDK 21 toolchain): ✓ BUILD SUCCESSFUL
+Tests:
+  - JDK 21: ✓ 182 tests, 0 failures, 0 errors, 9 skipped
+  - JDK 26: ✓ 全テスト PASS (workflow_dispatch CI)
+GUI smoke test:
+  - JDK 21: ✓ Xvfb 経由で起動確認
+  - JDK 26: ✓ Xvfb 経由で起動確認
+.NET ポート JavaComparisonTests: ✓ 5/5 PASS (byte-identical 出力維持)
+```
+
+---
+
 ## バージョン: 1.3.1-jdk21
 
 **リリース日**: 2026年3月7日

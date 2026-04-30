@@ -2,7 +2,7 @@
 layout: default
 lang: en
 title:  AozoraEpub3-JDK21 Download
-description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/25 compatible on Windows, macOS, and Linux. Supports narou.rb, EpubCheck 5.x, and GUI/CLI.
+description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21–26 compatible on Windows, macOS, and Linux. Supports narou.rb, EpubCheck 5.x, and GUI/CLI.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
@@ -19,17 +19,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/2
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.3.5-jdk21 (April 30, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.5-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.3.6-jdk21 (May 1, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.6-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.5-jdk21/AozoraEpub3-1.3.5-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.5-jdk21/AozoraEpub3-1.3.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.5-jdk21/AozoraEpub3-1.3.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -39,10 +39,12 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21/2
 
 ---
 
-## What's New in v1.3.5-jdk21
+## What's New in v1.3.6-jdk21
 
-- **JDK 26 compatibility**: Removed `JApplet` inheritance ahead of its removal in JDK 26 ([JEP 504](https://openjdk.org/jeps/504)); switched to `JPanel`. Class name, `mainClass`, and CLI entry are unchanged — no impact on narou.rb integration
-- **Detail Settings tab layout fix (Windows)**: Fixed a long-standing bug where settings rows and labels overlapped due to insufficient panel height
+- **Full JDK 26 support**: Build, full test execution, and GUI startup are all CI-verified on JDK 26 (`JApplet` removal per [JEP 504](https://openjdk.org/jeps/504) was already addressed). The release artifact is **built targeting Java 21** (class file version 65), so it runs on any JRE from JDK 21 LTS through JDK 26
+- **Codebase modernization**: SLF4J logging adoption, `java.io.File` → `java.nio.file.Path` migration, `java.time` API, empty-catch audit with intent comments
+- **Bug fix**: `dcterms:modified` no longer violates EPUB 3.3 spec under non-Gregorian locales (Thai Buddhist, Japanese era, etc.)
+- **Breaking changes**: Public fields like `BookInfo` switched from `Vector` to `ArrayList`. External libraries using AozoraEpub3 must be recompiled (binary incompatibility)
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 
@@ -50,7 +52,7 @@ See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/re
 
 ## About This Project
 
-This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 25 compatibility and support for modern operating systems.
+This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 21–26 compatibility and support for modern operating systems.
 
 It aims to comply with EPUB 3.3 and the [Japanese Book Publishing Association (電書協) EPUB 3 Production Guide](https://www.ebookjapan.jp/), validated with epubcheck 5.x.
 
@@ -58,36 +60,37 @@ It aims to comply with EPUB 3.3 and the [Japanese Book Publishing Association (�
 
 ## System Requirements
 
-- Java 25 or later (JRE / JDK) recommended
-  - Also compatible with Java 21 (LTS)
+- **Java 26 recommended** (latest GA)
+  - Compatible with Java 21 LTS / Java 25 LTS as well
+  - **Minimum requirement: Java 21 or later**
 - Windows / macOS / Linux
 
-If you don't have Java installed, download [Eclipse Temurin](https://adoptium.net/temurin/releases/) Java 25.
+If you don't have Java installed, download [Eclipse Temurin](https://adoptium.net/temurin/releases/) Java 26 (Java 21 LTS also works if you prefer LTS).
 
 ---
 
-## Install Java 25 (Eclipse Temurin)
+## Install Java 26 (Eclipse Temurin)
 
 ### Windows
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 25 → Windows x64 → `.MSI`
+2. Select JDK 26 → Windows x64 → `.MSI`
 3. Double-click the MSI file and follow the installer
 4. Verify in Command Prompt: `java -version`
 
 ### macOS
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 25 → macOS → `.PKG` (Intel or Apple Silicon M1/M2)
+2. Select JDK 26 → macOS → `.PKG` (Intel or Apple Silicon M1/M2)
 3. Double-click the PKG file and follow the installer
 4. Verify in Terminal: `java -version`
 
 ### Linux (Ubuntu/Debian)
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 25 → Linux x64 → `.TAR.GZ`
-3. Extract: `tar -xzf OpenJDK25U-jdk_x64_linux_hotspot_25_x.tar.gz`
-4. Verify: `./jdk-25.x.x+yy/bin/java -version` or add to PATH
+2. Select JDK 26 → Linux x64 → `.TAR.GZ`
+3. Extract: `tar -xzf OpenJDK26U-jdk_x64_linux_hotspot_26_x.tar.gz`
+4. Verify: `./jdk-26.x.x+yy/bin/java -version` or add to PATH
 
 ---
 
@@ -127,7 +130,7 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 
 ## Troubleshooting
 
-- **Java is not installed** — Download Java 25 from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
+- **Java is not installed** — Download Java 26 from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
 - **JAR file won't open on Windows** — Use the EXE file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
 - **Permission denied on Linux/macOS** — Run `chmod +x AozoraEpub3.sh` and try again.
 - **Other issues** — Report on [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues).

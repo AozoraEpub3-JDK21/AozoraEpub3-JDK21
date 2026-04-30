@@ -15,7 +15,7 @@
 
 - 対象ドメイン: `aozora.gr.jp`（作品本文ページ、目次ページ）
 - 既存の `WebAozoraConverter` を用いた実装（新クラスは不要）
-- 必要な構成ファイル: `web/aozora.gr.jp/extract.txt`（必須）、`web/aozora.gr.jp/replace.txt`（任意）
+- 必要な構成ファイル: `web/www.aozora.gr.jp/extract.txt`（必須）、`web/www.aozora.gr.jp/replace.txt`（任意）
 
 ## 前提・注意点
 
@@ -24,8 +24,8 @@
 
 ## 成果物
 
-- `web/aozora.gr.jp/extract.txt` サイト定義
-- （必要なら）`web/aozora.gr.jp/replace.txt` 置換パターン
+- `web/www.aozora.gr.jp/extract.txt` サイト定義
+- （必要なら）`web/www.aozora.gr.jp/replace.txt` 置換パターン
 - 単体テスト・統合テスト（`test/`に追加）
 - ドキュメント更新（本ファイル、READMEの追記）
 
@@ -125,4 +125,4 @@ CONTENT_ARTICLE	<small class="credit">.*?</small>
 
 ---
 
-次の作業: まず代表ページのHTMLを収集して `web/aozora.gr.jp/extract.txt` の草案を作成します。
+次の作業: まず代表ページのHTMLを収集して `web/www.aozora.gr.jp/extract.txt` の草案を作成します。

@@ -1,6 +1,6 @@
 # AozoraEpub3
 
-**Java 21対応版 / Gradle対応版**
+**Java 21〜26対応 / Gradle対応版**
 
 > [!NOTE]
 > **Read this in other languages:** [English](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) (Auto-translated by your browser)
@@ -35,7 +35,7 @@
 - 画像zip/rarを EPUB 3 に変換
 - 縦書き・横書きに対応
 - 日本の主要電子書籍リーダー（Kobo, Kindle, Reader等）に対応
-- Java 21 ベースで開発（Java 25 でも動作確認済み）
+- Java 21 ベースで開発（Java 26 まで動作確認済み）
 - iPhone版Kindle縦書き対応（※表題ページのレイアウトが画面比率により崩れることがあります）
 - **高速変換**: 大容量アーカイブの処理を最適化（アーカイブスキャンを4回→1回に削減）
 
@@ -43,13 +43,13 @@
 
 ## 動作環境
 
-**Java 21以降** が必要です（Java 25 でも動作確認済み）。
+**Java 21以降** が必要です（Java 26 まで動作確認済み）。
 
-- **実行**: JRE 21以降で動作します（JDK不要）。[Adoptium Temurin](https://adoptium.net/) などのランタイム配布を推奨。
-- **ビルド/開発**: JDK 21 が必要です（Gradle 9.2.1 で動作確認済み）。
-- **推奨**: 最新の長期サポート版（LTS）である Java 21 を推奨しますが、Java 25 でも互換性を確認しています。
+- **実行**: JRE 21以降で動作します（JDK不要）。[Adoptium Temurin](https://adoptium.net/) などのランタイム配布を推奨。配布物は Java 21 ターゲットでビルドされている（class file version 65）ため、JDK 21 LTS から JDK 26 までいずれの環境でも動作します。
+- **ビルド/開発**: JDK 21 が必要です（Gradle 9.2.1 launcher は JDK 21 固定）。`./gradlew -PjavaToolchainVersion=26 jar` で JDK 26 toolchain によるビルドも可能です。
+- **推奨**: 最新版 **Java 26** を推奨しますが、Java 21 LTS / Java 25 LTS でも互換性を確認しています。
 
-Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から Java 21 または Java 25 をダウンロードしてください。
+Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から Java 26 をダウンロードしてください（LTS が必要なら Java 21 でも動作します）。
 
 ### 対応OS
 
@@ -75,12 +75,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.3.0-jdk21.zip
+AozoraEpub3-1.3.6-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.3.0-jdk21.tar.gz
+AozoraEpub3-1.3.6-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -130,6 +130,12 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.3.6-jdk21 (2026-05-01)
+- **JDK 26 完全対応**: ビルド・全テスト実行・GUI 起動を JDK 26 (2026-03-17 GA) で CI 検証済（v1.3.5 で対応した [JEP 504](https://openjdk.org/jeps/504) `JApplet` 削除に加え、JUnit 4 の test detection を整備）。配布物は Java 21 ターゲットでビルド (class file version 65) のため、JDK 21 LTS〜JDK 26 のいずれの環境でも動作します
+- **内部コード現代化**: SLF4J ロガー導入、`java.io.File` → `java.nio.file.Path` 移行、`java.time` API 採用、空 catch ブロック 133 occ の意図コメント整備
+- **バグ修正**: `dcterms:modified` が仏暦圏（タイ等）・日本和暦ロケール環境で EPUB 3.3 仕様違反になる問題を修正
+- **Breaking changes**: `BookInfo` 等の公開フィールドで `Vector` → `ArrayList` に変更。バイナリ互換性のため、外部ライブラリとして AozoraEpub3 を使うコードは要再コンパイル
 
 ### v1.3.5-jdk21 (2026-04-30)
 - **JDK 26 互換確保**: [JEP 504](https://openjdk.org/jeps/504) により JDK 26 で削除予定の `JApplet` 継承を撤去（`JPanel` ベースに変更）。`mainClass` / CLI エントリ / narou.rb 連携への影響なし

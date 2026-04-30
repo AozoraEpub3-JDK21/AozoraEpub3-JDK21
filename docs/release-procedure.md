@@ -270,7 +270,7 @@ tar -tzf AozoraEpub3-*.tar.gz | grep -E 'chuki_|template/|gaiji/|web/|presets/|s
 - `chuki_tag.txt`, `chuki_alt.txt`, `chuki_utf.txt`, `chuki_ivs.txt`, `chuki_latin.txt`, `chuki_tag_suf.txt` 等
 - `template/OPS/package.vm`, `template/OPS/toc.ncx.vm`, `template/OPS/css/*.vm`, `template/META-INF/container.xml`, `template/mimetype`
 - `gaiji/dakuten/u*-u*.ttf`（222 本）
-- `web/aozora.gr.jp/extract.txt`, `web/ncode.syosetu.com/extract.txt`, `web/kakuyomu.jp/extract.txt`, `web/novel.syosetu.org/extract.txt` 他
+- `web/www.aozora.gr.jp/extract.txt`, `web/ncode.syosetu.com/extract.txt`, `web/kakuyomu.jp/extract.txt`, `web/novel.syosetu.org/extract.txt` 他
 - `presets/*.ini`
 - `AozoraEpub3.ini`, `setting_narourb.ini`, `AozoraEpub3.ico`, `AozoraEpub3.jar`, `AozoraEpub3.exe`（ZIP のみ）/ `AozoraEpub3.sh`（TAR のみ）
 
