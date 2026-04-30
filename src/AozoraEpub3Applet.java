@@ -92,6 +92,9 @@ import javax.swing.plaf.FontUIResource;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.TextAction;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.image.ImageInfoReader;
@@ -114,6 +117,8 @@ import com.github.hmdev.writer.Epub3Writer;
  */
 public class AozoraEpub3Applet extends JPanel
 {
+	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3Applet.class);
+
 	/**
 	 * 日本語に適したUIフォントをOS毎の候補から選択して、UIManagerの全フォントに適用します。
 	 * 候補が見つからない場合は論理フォント Dialog を使用します。
@@ -593,7 +598,7 @@ public class AozoraEpub3Applet extends JPanel
 					break;
 				}
 				} catch (Exception e) {
-					e.printStackTrace();
+					logger.error("プロファイル操作 (add/edit/delete) でエラー", e);
 				}
 			}
 		});
@@ -2568,7 +2573,9 @@ public class AozoraEpub3Applet extends JPanel
 					Clipboard systemClipboard = getToolkit().getSystemClipboard();
 					StringSelection responseURLString = new StringSelection(text);
 					systemClipboard.setContents(responseURLString, null);
-				} catch (Exception e2) { e2.printStackTrace(); }
+				} catch (Exception e2) {
+					logger.warn("ログクリップボードコピーに失敗", e2);
+				}
 				if (!jButtonCancel.isEnabled()) {
 					jProgressBar.setValue(0);
 					jProgressBar.setStringPainted(false);
@@ -2610,7 +2617,7 @@ public class AozoraEpub3Applet extends JPanel
 			this.aozoraConverter = new AozoraEpub3Converter(this.epub3Writer, this.jarPath);
 			
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error("ePub Writer / Converter の初期化に失敗", e);
 			jTextArea.append(e.getMessage());
 		}
 		
@@ -2662,7 +2669,7 @@ public class AozoraEpub3Applet extends JPanel
 		}
 		//何もなければデフォルト設定を追加
 		if (jComboProfile.getItemCount() == 0) {
-			try { addProfile("デフォルト"); } catch (Exception e) { e.printStackTrace(); }
+			try { addProfile("デフォルト"); } catch (Exception e) { logger.warn("デフォルトプロファイルの追加に失敗", e); }
 		}
 		//選択済プロファイル保存
 		selectedProfile = (ProfileInfo)jComboProfile.getSelectedItem();
@@ -2683,7 +2690,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 				//移動ボタン有効化
 				setProfileMoveEnable();
-			} catch (Exception e) { e.printStackTrace(); }
+			} catch (Exception e) { logger.warn("プロファイル変更イベントでエラー", e); }
 		}});
 		
 		//移動ボタン有効化
@@ -2942,7 +2949,7 @@ public class AozoraEpub3Applet extends JPanel
 					return;
 				}
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error("表紙画像のドラッグ&ドロップ処理でエラー", e);
 			} finally {
 			}
 		}
@@ -2987,7 +2994,7 @@ public class AozoraEpub3Applet extends JPanel
 					return;
 				}
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error("出力先パスのドラッグ&ドロップ処理でエラー", e);
 			} finally {
 			}
 		}
@@ -3071,7 +3078,7 @@ public class AozoraEpub3Applet extends JPanel
 					}
 				}
 				} catch (IOException e1) {
-					e1.printStackTrace();
+					logger.error("ドロップされた .url ショートカットの読み込みに失敗", e1);
 				}
 				
 				startConvertWorker(vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
@@ -3300,7 +3307,7 @@ public class AozoraEpub3Applet extends JPanel
 								}
 							}
 						}
-					} catch (Exception e) { e.printStackTrace(); }
+					} catch (Exception e) { logger.warn("file:// 形式の DnD パス展開でエラー", e); }
 				}
 				else if (urlString != null) {
 					//ブラウザからのDnD
@@ -3322,7 +3329,7 @@ public class AozoraEpub3Applet extends JPanel
 								}
 							}
 						}
-					} catch (Exception e) { e.printStackTrace(); }
+					} catch (Exception e) { logger.warn("ブラウザ DnD の URL/ファイル解析でエラー", e); }
 				}
 			}
 			else if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
@@ -3353,7 +3360,7 @@ public class AozoraEpub3Applet extends JPanel
 			startConvertWorker(vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 			
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("ドロップ受付・変換ワーカー開始処理でエラー", e);
 			return false;
 		} finally {
 			jTextArea.setCaretPosition(jTextArea.getDocument().getLength());
@@ -3573,7 +3580,7 @@ public class AozoraEpub3Applet extends JPanel
 			}
 		
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("バッチ変換処理でエラー", e);
 			LogAppender.append("エラーが発生しました : ");
 			LogAppender.println(e.getMessage());
 		}
@@ -3611,14 +3618,14 @@ public class AozoraEpub3Applet extends JPanel
 			try {
 				txtCount = ArchiveTextExtractor.countZipText(srcFile);
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.warn("ZIP 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 			}
 			if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 		} else if ("rar".equals(ext)) {
 			try {
 				txtCount = ArchiveTextExtractor.countRarText(srcFile);
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.warn("RAR 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 			}
 			if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 		} else if ("cbz".equals(ext)) {
@@ -3687,7 +3694,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("アーカイブ画像情報の読み込みに失敗: {}", srcFile, e);
 			LogAppender.error(e.getMessage());
 		}
 		
@@ -3749,7 +3756,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("BookInfo の取得に失敗: {}", srcFile, e);
 			LogAppender.error(e.getMessage());
 		}
 		
@@ -3856,7 +3863,7 @@ public class AozoraEpub3Applet extends JPanel
 							bookInfo.loadCoverImage(bookInfo.coverFileName);
 						}
 						bookInfo.coverImage = this.jConfirmDialog.jCoverImagePanel.getModifiedImage(this.coverW, this.coverH);
-					} catch (Exception e) { e.printStackTrace(); }
+					} catch (Exception e) { logger.warn("変換確定時の表紙画像再読み込みに失敗", e); }
 				}
 			}
 		}
@@ -4133,7 +4140,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("kindlegen 実行中にエラー", e);
 		} finally {
 			if (this.kindleProcess != null) this.kindleProcess.destroy();
 			this.kindleProcess = null;
@@ -4289,7 +4296,8 @@ public class AozoraEpub3Applet extends JPanel
 				jComboCover.setSelectedItem(coverItem);
 				
 			} catch (Exception e) {
-				e.printStackTrace(); LogAppender.println("エラーが発生しました : "+e.getMessage());
+				logger.error("ファイル変換ワーカーでエラー", e);
+				LogAppender.println("エラーが発生しました : "+e.getMessage());
 			}
 		}
 	}
@@ -4420,7 +4428,7 @@ public class AozoraEpub3Applet extends JPanel
 					this.applet.convertWeb(vecUrlString, vecUrlSrcFile, dstPath);
 				}
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error("変換 SwingWorker でエラー", e);
 				LogAppender.println("エラーが発生しました");
 			} finally {
 				this.applet.setConvertEnabled(true);
@@ -5081,7 +5089,9 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 			
-		} catch(Exception e) { e.printStackTrace(); }
+		} catch(Exception e) {
+			logger.warn("UI フォント適用処理でエラー", e);
+		}
 
 		// 可能ならGUI全体のフォントを日本語対応フォントへ統一（再適用）
 		applyJapaneseFontDefaults();
@@ -5127,7 +5137,7 @@ public class AozoraEpub3Applet extends JPanel
 					//props保存と終了処理
 					applet.finalize();
 				} catch (Throwable e) {
-					e.printStackTrace();
+					logger.error("ウィンドウクローズ時の終了処理でエラー", e);
 				}
 				System.exit(0);
 			}
@@ -5164,7 +5174,7 @@ public class AozoraEpub3Applet extends JPanel
 				if (tmpPath != null) this.deleteFiles(this.tmpPath);
 				//キャッシュファイル削除
 				if (cachePath != null) this.deleteFiles(this.cachePath);
-			} catch (Exception e) { e.printStackTrace(); }
+			} catch (Exception e) { logger.warn("終了時の一時・キャッシュファイル削除でエラー", e); }
 			*/
 			
 			//Spliterの位置
@@ -5185,7 +5195,7 @@ public class AozoraEpub3Applet extends JPanel
 					}
 					if (propList.length() > 0) propList.deleteCharAt(0);
 					this.props.setProperty("ProfileList", propList.toString());
-				} catch (Exception e) { e.printStackTrace(); }
+				} catch (Exception e) { logger.warn("プロファイル一覧の保存でエラー", e); }
 			}
 			//出力先と履歴保存
 			try {
@@ -5209,7 +5219,7 @@ public class AozoraEpub3Applet extends JPanel
 					}
 					this.props.setProperty("DstPathList", dstPathList);
 				}
-			} catch (Exception e) { e.printStackTrace(); }
+			} catch (Exception e) { logger.warn("出力先パス履歴の保存でエラー", e); }
 			this.props.setProperty("LastDir", this.currentPath==null?"":this.currentPath.getAbsolutePath());
 			
 			//アプレットの設定をPropertiesに反映
@@ -5222,7 +5232,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("終了時のプロパティファイル保存でエラー", e);
 		}
 	}
 	
