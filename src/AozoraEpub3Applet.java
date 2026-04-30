@@ -41,8 +41,9 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -4572,11 +4573,14 @@ public class AozoraEpub3Applet extends JPanel
 	 * @throws FileNotFoundException */
 	private void addProfile(String name) throws FileNotFoundException, IOException
 	{
-		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd-HHmmss");
-		File profile = new File(profilePath.getPath()+"/"+dateFormat.format(new Date())+".ini");
+		// withLocale(Locale.ROOT) で非グレゴリオロケールでも ISO/Gregorian 年を出力する意図を明示
+		DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+			.withLocale(Locale.ROOT)
+			.withZone(ZoneId.systemDefault());
+		File profile = new File(profilePath.getPath()+"/"+dateFormat.format(Instant.now())+".ini");
 		int i = 1;
 		while (profile.exists()) {
-			profile = new File(profilePath.getPath()+"/"+dateFormat.format(new Date())+i+".ini");
+			profile = new File(profilePath.getPath()+"/"+dateFormat.format(Instant.now())+i+".ini");
 			i++;
 		}
 		

@@ -4,7 +4,9 @@ import static org.junit.Assert.*;
 
 import java.io.StringWriter;
 import java.nio.file.*;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 import org.apache.velocity.VelocityContext;
@@ -44,7 +46,10 @@ public class PackageTemplateSmokeTest {
         String title = "サンプルタイトル";
         String creator = "著者名";
         String identifier = UUID.randomUUID().toString();
-        String modified = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(new Date());
+        String modified = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                .withLocale(Locale.ROOT)
+                .withZone(ZoneId.systemDefault())
+                .format(Instant.now());
         ctx.put("title", title);
         ctx.put("creator", creator);
         ctx.put("identifier", identifier);

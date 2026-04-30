@@ -17,8 +17,10 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.ArrayList;
@@ -238,8 +240,15 @@ public class Epub3Writer
 	
 	/** ファイル名桁揃え用 */
 	final static DecimalFormat decimalFormat = new DecimalFormat("0000");
-	/** 更新日時フォーマット 2011-06-29T12:00:00Z */
-	final static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+	/** 更新日時フォーマット 2011-06-29T12:00:00Z
+	 *  元コードの static SimpleDateFormat と同じくクラスロード時にシステム TZ を捕捉。
+	 *  ja_JP_JP (和暦) / th_TH (仏暦) 等の非グレゴリオロケールでは legacy SimpleDateFormat と異なり
+	 *  常に ISO/Gregorian 年を出力する (EPUB 3.3 dcterms:modified の ISO 8601 仕様準拠寄り)。
+	 *  withLocale(Locale.ROOT) はこの ISO/Gregorian 化が意図的であることを明示する。 */
+	static final DateTimeFormatter MODIFIED_FORMATTER =
+		DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+			.withLocale(Locale.ROOT)
+			.withZone(ZoneId.systemDefault());
 	
 	/** セクション番号自動追加用インデックス */
 	int sectionIndex = 0;
@@ -556,7 +565,7 @@ public class Epub3Writer
 		//書籍情報
 		velocityContext.put("bookInfo", bookInfo);
 		//更新日時
-		velocityContext.put("modified", dateFormat.format(bookInfo.modified));
+		velocityContext.put("modified", MODIFIED_FORMATTER.format(bookInfo.modified.toInstant()));
 		
 		//目次階層化
 		velocityContext.put("navNest", this.navNest);
