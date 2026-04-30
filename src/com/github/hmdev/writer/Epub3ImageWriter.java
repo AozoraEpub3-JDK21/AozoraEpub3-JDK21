@@ -15,6 +15,8 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.apache.velocity.app.Velocity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.info.ImageInfo;
@@ -29,6 +31,8 @@ import com.github.junrar.rarfile.FileHeader;
  */
 public class Epub3ImageWriter extends Epub3Writer
 {
+	private static final Logger logger = LoggerFactory.getLogger(Epub3ImageWriter.class);
+
 	/** コピーのみのファイル */
 	final static String[] TEMPLATE_FILE_NAMES_VERTICAL_IMAGE = new String[]{
 		"META-INF/container.xml",
@@ -242,7 +246,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			this.imageInfos.add(imageInfo);
 			
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error("画像ファイルの読み込みに失敗: {}", srcImageFileName, e);
 			return null;
 		}
 		//先頭に表紙ページ移動の場合でカバーページならnullを返して本文中から削除

@@ -17,6 +17,8 @@ import java.util.Vector;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 import com.github.hmdev.info.ImageInfo;
@@ -33,6 +35,8 @@ import com.github.junrar.rarfile.FileHeader;
  */
 public class ImageInfoReader
 {
+	private static final Logger logger = LoggerFactory.getLogger(ImageInfoReader.class);
+
 	/** 画像が圧縮ファイル内でなくファイルならtrue
 	 *  画像データ取得時にファイルシステムから取得するかの判別用 */
 	boolean isFile = true;
@@ -273,7 +277,7 @@ public class ImageInfoReader
 				imageInfo = readImageInfoFromArchive(srcFile, ext, entryName);
 			} catch (Exception e) {
 				LogAppender.error("画像が読み込めませんでした: " + entryName);
-				e.printStackTrace();
+				logger.error("画像情報の取得に失敗: {}", entryName, e);
 			}
 			if (imageInfo != null) {
 				this.imageFileInfos.put(entryName, imageInfo);
@@ -421,7 +425,7 @@ public class ImageInfoReader
 							try {
 								return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais);
 							} catch (Exception e) {
-								e.printStackTrace();
+								logger.warn("ZIP 内画像の読み込みに失敗: {}", srcImageFileName, e);
 								return null;
 							}
 						}
@@ -438,7 +442,7 @@ public class ImageInfoReader
 								try {
 									return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais2);
 								} catch (Exception e) {
-									e.printStackTrace();
+									logger.warn("ZIP 内画像の読み込みに失敗（拡張子訂正後）: {}", srcImageFileName, e);
 									return null;
 								}
 							}

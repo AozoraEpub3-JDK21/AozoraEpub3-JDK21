@@ -11,6 +11,8 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.help.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
@@ -26,6 +28,8 @@ import com.github.hmdev.writer.Epub3Writer;
 /** コマンドライン実行用mainとePub3変換関数 */
 public class AozoraEpub3
 {
+	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3.class);
+
 	public static final String VERSION = "1.3.5-jdk21";
 	
 	/** コマンドライン実行用 */
@@ -311,7 +315,7 @@ public class AozoraEpub3
 						File outFile = getOutFile(srcFile, urlDstPath, bookInfo, autoFileName, outExt);
 						AozoraEpub3.convertFile(srcFile, "txt", outFile, aozoraConverter, epub3Writer, "UTF-8", bookInfo, imageInfoReader, 0);
 					} catch (Exception e) {
-						e.printStackTrace();
+						logger.error("URL 入力ファイルの変換に失敗: {}", urlString, e);
 						LogAppender.println("エラーが発生しました : " + e.getMessage());
 					}
 				}
@@ -348,14 +352,14 @@ public class AozoraEpub3
 					try {
 						txtCount = ArchiveTextExtractor.countZipText(srcFile);
 					} catch (IOException e) {
-						e.printStackTrace();
+						logger.warn("ZIP 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					}
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if("rar".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countRarText(srcFile);
 					} catch (IOException e) {
-						e.printStackTrace();
+						logger.warn("RAR 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					}
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if ("cbz".equals(ext)) {
@@ -450,7 +454,7 @@ public class AozoraEpub3
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("バッチ変換処理でエラー", e);
 		}
 	}
 	
@@ -510,7 +514,7 @@ public class AozoraEpub3
 			return bookInfo;
 			
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("BookInfo の生成に失敗: {}", srcFile, e);
 			LogAppender.append("エラーが発生しました : ");
 			LogAppender.println(e.getMessage());
 		}
@@ -546,7 +550,7 @@ public class AozoraEpub3
 			}
 			
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("EPUB 変換に失敗: {}", srcFile, e);
 			LogAppender.println("エラーが発生しました : "+e.getMessage());
 			//LogAppender.printStaclTrace(e);
 		}
