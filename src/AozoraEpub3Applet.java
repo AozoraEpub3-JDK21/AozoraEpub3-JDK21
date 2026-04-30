@@ -533,7 +533,9 @@ public class AozoraEpub3Applet extends JPanel
 		Dimension panelSize = new Dimension(1920, 26);
 		Dimension panelSize28 = new Dimension(1920, 28);
 		boolean isMac = System.getProperty("os.name", "").toLowerCase().contains("mac");
-		Dimension detailPanelSize = new Dimension(1920, isMac ? 48 : 28);
+		// 詳細設定タブの各パネル高さ。Windows でも 28 では TitledBorder+ラジオ行が入らず崩れるため 48 に統一
+		// （macOS は ba02558 で 48 に修正済み。ScrollPane で囲まれているため余り高さは無害）
+		Dimension detailPanelSize = new Dimension(1920, 48);
 		Dimension panelVMaxSize = new Dimension(640, 22);
 		JTextField text = new JTextField();
 		Insets is = text.getInsets();
