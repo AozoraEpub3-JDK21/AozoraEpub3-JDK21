@@ -19,6 +19,16 @@ wrapper {
 // -D プロパティをテスト JVM に転送（例: -DhamelnE2E=true）
 tasks.withType(Test) {
     systemProperties System.properties
+
+    // JUnit 4.13.2 が JDK 26 のリフレクション挙動変化により
+    // 非テストクラスにも InvalidTestClassError を発生させるため、
+    // テスト検出対象から「テストでないクラス」を明示的に除外する。
+    // 0C-1 (JUnit 5 移行) で根本解決予定だが、それまでこの exclude で
+    // JDK 21 / 26 双方で全テストが走る状態を維持する。
+    exclude '**/AozoraFullFlowTest.class'   // main() 実行スクリプト (runFullFlowTest task で実行)
+    exclude '**/AozoraRealTest.class'       // main() 実行スクリプト (runRealTest task で実行)
+    exclude '**/VelocityTestUtils.class'    // テストヘルパー (final class)
+    exclude '**/*$*.class'                  // inner / anonymous class (data holder / stub)
 }
 
 tasks.withType(JavaCompile) {

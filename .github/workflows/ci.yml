@@ -74,29 +74,19 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build (JDK 21 = full test, JDK 25/26 = compile validation only)
+      - name: Build & Test (all matrix JDK versions)
         run: |
           # -PjavaToolchainVersion: compileJava 用 toolchain のバージョン
           # -Dorg.gradle.java.installations.fromEnv: setup-java が立てる JAVA_HOME_<NN>_X64
           # を Gradle の toolchain 検索パスに登録 (Gradle 標準スキャナは /opt/hostedtoolcache を見ない)
-          # JDK 21 (LTS) は全テスト + compile、JDK 25/26 は compile validation のみ。
-          # 後者で test 実行をスキップする理由: JUnit 4.13.2 が JDK 26 toolchain で
-          # InvalidTestClassError を発生させる (リフレクション挙動変化)。
-          # 0C-1 (JUnit 5 移行) で根本解決予定。docs/modernization-plan.md 参照。
-          if [ "${{ matrix.java-version }}" = "21" ]; then
-            ./gradlew --no-daemon \
-              -PjavaToolchainVersion=${{ matrix.java-version }} \
-              -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java-version }}_X64,JAVA_HOME_21_X64 \
-              clean test -x dist -x distZip -x tarDistribution
-          else
-            ./gradlew --no-daemon \
-              -PjavaToolchainVersion=${{ matrix.java-version }} \
-              -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java-version }}_X64,JAVA_HOME_21_X64 \
-              clean compileJava
-          fi
+          # 全 matrix JDK で test 実行。JUnit 4.13.2 + JDK 26 の InvalidTestClassError は
+          # build.gradle の test exclude (0A-5) で解消済み。
+          ./gradlew --no-daemon \
+            -PjavaToolchainVersion=${{ matrix.java-version }} \
+            -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java-version }}_X64,JAVA_HOME_21_X64 \
+            clean test -x dist -x distZip -x tarDistribution
 
       - name: Package fat-jar
-        if: matrix.java-version == '21'
         run: |
           set -e
           ./gradlew --no-daemon \
@@ -120,17 +110,23 @@ jobs:
           echo "JAR_FILE=$JAR_FILE" >> $GITHUB_ENV
 
       - name: GUI smoke test (exe/jar startup check)
-        if: matrix.java-version == '21'
         run: |
           set -e
           JAR_FILE=$(find build/libs -name "AozoraEpub3*.jar" -type f | head -1)
           [ -z "$JAR_FILE" ] && (echo "JAR not found"; exit 1)
-          echo "Testing GUI startup with: $JAR_FILE"
+          # fat-jar は matrix JDK でコンパイルされる (class file version が matrix 版)
+          # ため、起動側も matrix JDK を明示使用する。setup-java@v4 が設定する
+          # JAVA_HOME_<NN>_X64 を bash の indirect expansion (${!var}) で参照する。
+          JAVA_VAR_NAME="JAVA_HOME_${{ matrix.java-version }}_X64"
+          JAVA_BIN="${!JAVA_VAR_NAME}/bin/java"
+          [ ! -x "$JAVA_BIN" ] && (echo "Java binary not found: $JAVA_BIN ($JAVA_VAR_NAME)"; exit 1)
+          echo "Testing GUI startup with: $JAR_FILE using $JAVA_BIN"
+          "$JAVA_BIN" -version
           # Install Xvfb for headless GUI rendering
           sudo apt-get update -y >/dev/null 2>&1 || true
           sudo apt-get install -y xvfb >/dev/null 2>&1 || true
           # Launch GUI in background via Xvfb; crash on startup exits immediately
-          xvfb-run --auto-servernum java -jar "$JAR_FILE" &
+          xvfb-run --auto-servernum "$JAVA_BIN" -jar "$JAR_FILE" &
           GUI_PID=$!
           sleep 5
           if kill -0 $GUI_PID 2>/dev/null; then
