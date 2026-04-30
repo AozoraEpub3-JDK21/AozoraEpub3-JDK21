@@ -49,6 +49,7 @@ public class PackageTemplateSmokeTest {
         ctx.put("creator", creator);
         ctx.put("identifier", identifier);
         ctx.put("modified", modified);
+        ctx.put("epubVersion", "3.0");
         ctx.put("bookInfo", new StubBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);
@@ -62,6 +63,7 @@ public class PackageTemplateSmokeTest {
         String opf = out.toString();
 
             assertTrue(opf.contains("<package "));
+            assertTrue(opf.contains("version=\"3.0\""));
             assertTrue(opf.contains("<metadata"));
             assertTrue(opf.contains("urn:uuid:"));
             assertTrue(opf.contains("<manifest>"));

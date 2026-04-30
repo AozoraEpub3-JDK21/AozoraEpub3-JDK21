@@ -208,6 +208,15 @@ public class Epub3Writer
 	boolean navNest = false;
 	/** toc.ncx階層化 */
 	boolean ncxNest = false;
+
+	/** package.opf に出力する EPUB バージョン文字列。
+	 *  デフォルトは後方互換のため "3.0"（過去出力と byte-identical）。
+	 *  INI の EpubVersion で上書き可能（ステージ S-1 / モダン化計画書参照）。
+	 *  許容値は {@link #ALLOWED_EPUB_VERSIONS}。 */
+	String epubVersion = DEFAULT_EPUB_VERSION;
+	public static final String DEFAULT_EPUB_VERSION = "3.0";
+	public static final java.util.Set<String> ALLOWED_EPUB_VERSIONS =
+		java.util.Set.of("3.0", "3.1", "3.2", "3.3");
 	
 	/** svgタグのimageでxhtml出力 */
 	boolean isSvgImage = false;
@@ -449,6 +458,27 @@ public class Epub3Writer
 		this.navNest = navNest;
 		this.ncxNest = ncxNest;
 	}
+
+	/** package.opf に出力する EPUB バージョンを設定する。
+	 *  null や空文字列、未許容値は無視してデフォルトを保持する（後方互換）。
+	 *  許容値は {@link #ALLOWED_EPUB_VERSIONS}。 */
+	public void setEpubVersion(String version)
+	{
+		if (version == null) return;
+		String trimmed = version.trim();
+		if (trimmed.isEmpty()) return;
+		if (!ALLOWED_EPUB_VERSIONS.contains(trimmed)) {
+			LogAppender.println("EpubVersion '"+trimmed+"' は未対応のため "+this.epubVersion+" を使用します");
+			return;
+		}
+		this.epubVersion = trimmed;
+	}
+
+	/** 現在設定されている EPUB バージョン（テスト用） */
+	public String getEpubVersion()
+	{
+		return this.epubVersion;
+	}
 	
 	public void setStyles(String[] pageMargin, String[] bodyMargin, float lineHeight, int fontSize, boolean boldUseGothic, boolean gothicUseBold)
 	{
@@ -553,6 +583,7 @@ public class Epub3Writer
 		velocityContext.put("bookInfo", bookInfo);
 		//更新日時
 		velocityContext.put("modified", dateFormat.format(bookInfo.modified));
+		velocityContext.put("epubVersion", this.epubVersion);
 		
 		//目次階層化
 		velocityContext.put("navNest", this.navNest);

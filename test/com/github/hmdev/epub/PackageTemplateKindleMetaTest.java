@@ -57,6 +57,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("creator", "c");
         ctx.put("identifier", UUID.randomUUID().toString());
         ctx.put("modified", "2020-01-01T00:00:00Z");
+        ctx.put("epubVersion", "3.0");
         ctx.put("bookInfo", new StubBookInfo());
         ctx.put("kindle", Boolean.TRUE);
         ctx.put("svgImage", Boolean.FALSE);
@@ -89,6 +90,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("creator", "c");
         ctx.put("identifier", UUID.randomUUID().toString());
         ctx.put("modified", "2020-01-01T00:00:00Z");
+        ctx.put("epubVersion", "3.0");
         ctx.put("bookInfo", new VerticalBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);
@@ -122,6 +124,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("creator", "c");
         ctx.put("identifier", UUID.randomUUID().toString());
         ctx.put("modified", "2020-01-01T00:00:00Z");
+        ctx.put("epubVersion", "3.0");
         ctx.put("bookInfo", new HorizontalBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);
@@ -155,6 +158,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("creator", "c");
         ctx.put("identifier", UUID.randomUUID().toString());
         ctx.put("modified", "2020-01-01T00:00:00Z");
+        ctx.put("epubVersion", "3.0");
         ctx.put("bookInfo", new VerticalBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);
@@ -189,6 +193,7 @@ private VelocityEngine createVelocityEngine() throws Exception {
         ctx.put("creator", "c");
         ctx.put("identifier", UUID.randomUUID().toString());
         ctx.put("modified", "2020-01-01T00:00:00Z");
+        ctx.put("epubVersion", "3.0");
         ctx.put("bookInfo", new HorizontalBookInfo());
         ctx.put("kindle", Boolean.FALSE);
         ctx.put("svgImage", Boolean.FALSE);

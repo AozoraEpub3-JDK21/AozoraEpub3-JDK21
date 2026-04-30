@@ -74,6 +74,14 @@ public final class WriterConfigurator {
 		// toc nesting
 		epub3Writer.setTocParam("1".equals(props.getProperty("NavNest")), "1".equals(props.getProperty("NcxNest")));
 
+		// EPUB バージョン（後方互換のため未指定時は Epub3Writer のデフォルト "3.0" を維持）
+		// 許容値: 3.0 / 3.1 / 3.2 / 3.3。3.4 は Recommendation 化後に追加予定（モダン化計画書 ステージ S+ 参照）
+		String epubVersion = props.getProperty("EpubVersion");
+		if (epubVersion != null) {
+			epub3Writer.setEpubVersion(epubVersion);
+			epub3ImageWriter.setEpubVersion(epubVersion);
+		}
+
 		// style settings
 		String[] pageMargin = {};
 		try { pageMargin = props.getProperty("PageMargin").split(","); } catch (Exception e) {}

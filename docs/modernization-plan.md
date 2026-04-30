@@ -252,6 +252,59 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 - mutation testing（PIT）— 中核ロジックに限定
 - カバレッジ計測（JaCoCo）— CI レポート
 
+### ステージ S — EPUB 3.3 準拠強化（ステージ 0 と独立、いつでも着手可）
+
+> **目的**: 現状 `package.vm` で宣言している `version="3.0"` を W3C 現行 Recommendation の **3.3** へ更新し、deprecated 要素を整理。EPUB Accessibility 1.1+ 推奨メタデータも最低限導入する。
+
+#### 現状の主なギャップ
+
+| 項目 | 現状 | EPUB 3.3 での扱い |
+|---|---|---|
+| `package version="3.0"` | 出力 | 3.3 が現行 Recommendation |
+| `<meta name="cover">` | 出力 | deprecated（`properties="cover-image"` が正規） |
+| `<spine ... toc="ncx">` の `toc` 属性 | 出力 | EPUB 3 で deprecated |
+| `<guide>` 要素 | 出力 | EPUB 3 で deprecated |
+| アクセシビリティメタ（`schema:accessMode` 等） | 全く無し | EPUB Accessibility 1.1+ で SHOULD |
+
+#### サブステージ
+
+| # | 項目 | 影響範囲 |
+|---|------|---------|
+| S-1 | `epubVersion` を **INI / Properties で上書き可能化** し、`package.vm` の `version` 属性を可変に。デフォルト初期は `"3.0"` 維持（無害なメカニズム導入のみ） | `WriterConfigurator`、`Epub3Writer`、`package.vm` |
+| S-2 | デフォルトを `"3.3"` に切替＋ deprecated 要素整理（`<meta name="cover">` 削除、`<spine>` `toc` 属性削除、`<guide>` を opt-in 化） | `package.vm` |
+| S-3 | アクセシビリティメタデータ最低限を追加（`schema:accessMode=textual`、`accessibilityFeature=structuralNavigation,readingOrder`、`accessibilityHazard=none`、`accessibilitySummary`、`conformsTo`） | `package.vm` |
+| S-4 | epubcheck CI を 3.3 プロファイル相当に拡張、a11y 警告を非致命サマリに表示 | `.github/workflows/ci.yml` |
+| S-5 | 後方互換確認: calibre / Kindle Previewer / Adobe Digital Editions で生成 EPUB が問題なく読めることをスポット確認、結果を docs に記録 | 手動検証 |
+
+#### 後方互換戦略
+
+EPUB 3.x は仕様上 forward compatible（3.0 リーダは 3.3 を 3.x として読み、未知 properties は無視）。実害はほぼ無いが、念のため **INI の `EpubVersion` 設定で上書き可能**にし、特殊環境（古い ADE、自前ストアパイプライン等）に当たったユーザーが `EpubVersion=3.0` で旧モードに戻せる逃げ道を用意する。S-1 でメカニズムだけ先に入れてから S-2 で既定値を切り替える二段階方式。
+
+**ゲート条件**:
+- [ ] `.NET` ポート `JavaComparisonTests` 5/5 PASS（出力差分は `version` 文字列等のメタ部のみで本文同一を確認）
+- [ ] epubcheck PASS（3.3 として）
+- [ ] calibre / Kindle Previewer / ADE のいずれかでサンプル EPUB が読める
+
+### ステージ S+ — EPUB 3.4 移行（**保留**：3.4 が W3C Recommendation 化されるまで）
+
+> **目的**: EPUB 3.4 が Recommendation 化されたら `version="3.4"` へ bump。
+
+#### 現状の制約
+
+- 2026-04-30 時点では **EPUB 3.4 は Working Draft**（最新 2026-04-17 ドラフト）。Recommendation 化前に `"3.4"` 申告するのはリスク
+- epubcheck 5.x は 3.4 完全対応していない可能性あり。3.4 対応版（epubcheck 6.x 等）の登場を待つ
+- 3.4 で追加された Core Media Type（AVIF / JPEG XL / Opus）は AozoraEpub3 の用途では使わない
+
+#### サブステージ（着手は 3.4 Rec 化検知後）
+
+| # | 項目 |
+|---|------|
+| S+-1 | EPUB 3.4 の Recommendation 化を確認後、`EpubVersion` のデフォルトを `"3.4"` に切替（INI 上書きで `"3.3"` / `"3.0"` も可能） |
+| S+-2 | epubcheck を 3.4 対応版に更新 |
+| S+-3 | 必要に応じ AVIF / JPEG XL 入力サポート（青空文庫 ZIP 内画像で利用例があれば） |
+
+**トリガー**: W3C EPUB 3.4 Recommendation 公開、または epubcheck 6.x（3.4 完全対応）リリース。`/schedule` で四半期ごとにチェックする等で良い。
+
 ---
 
 ## 4. 実装順序の推奨
@@ -274,6 +327,8 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
                └─ 1-B 巨大クラス分割
 並行:       ステージ 2（言語機能、§2.1 の互換性監査を先に完了させる）
 Week 5+:    ステージ 4（配布、ステージ 0A 完了後にいつでも）
+独立:       ステージ S（EPUB 3.3 準拠強化、いつでも着手可）
+保留:       ステージ S+（EPUB 3.4 移行、Rec 化待ち）
 未定:       ステージ 3 GUI（要方針合意）
 ```
 
