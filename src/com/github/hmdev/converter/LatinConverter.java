@@ -2,10 +2,10 @@ package com.github.hmdev.converter;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.util.HashMap;
 
 import com.github.hmdev.util.LogAppender;
@@ -24,7 +24,7 @@ public class LatinConverter
 	
 	public LatinConverter(File file) throws IOException
 	{
-		this(new FileInputStream(file), file.getName());
+		this(Files.newInputStream(file.toPath()), file.getName());
 	}
 	
 	public LatinConverter(InputStream inputStream, String fileName) throws IOException

@@ -3,9 +3,9 @@ package com.github.hmdev.info;
 import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.Iterator;
 
 import javax.imageio.ImageIO;
@@ -56,7 +56,7 @@ public class ImageInfo
 	/** ファイルから画像情報を生成 */
 	static public ImageInfo getImageInfo(File imageFile) throws IOException
 	{
-		BufferedInputStream bis = new BufferedInputStream(new FileInputStream(imageFile));
+		BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(imageFile.toPath()));
 		ImageInfo imageInfo = ImageInfo.getImageInfo(bis, -1);
 		bis.close();
 		return imageInfo;
