@@ -3,11 +3,11 @@ package com.github.hmdev.web;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -84,13 +84,15 @@ public class AozoraTextFinalizer {
 	 * @throws IOException ファイル読み書きエラー
 	 */
 	public void finalize(File txtFile, File baseDir) throws IOException {
-		// パストラバーサル対策: baseDir 配下にあることを検証
-		File canonicalBase = baseDir.getCanonicalFile();
-		File canonicalTxt = txtFile.getCanonicalFile();
-		if (!canonicalTxt.getPath().startsWith(canonicalBase.getPath() + File.separator)) {
+		// パストラバーサル対策: baseDir 配下にあることを検証 (PR #22 と同じ 2 段階パターン)
+		Path basePath = baseDir.toPath();
+		Path canonicalBase = Files.exists(basePath) ? basePath.toRealPath() : basePath.toAbsolutePath().normalize();
+		Path txtPath = txtFile.toPath();
+		Path canonicalTxt = Files.exists(txtPath) ? txtPath.toRealPath() : txtPath.toAbsolutePath().normalize();
+		if (!canonicalTxt.startsWith(canonicalBase)) {
 			throw new IOException("ファイルパスが許可されたディレクトリ外です: " + canonicalTxt);
 		}
-		txtFile = canonicalTxt;
+		txtFile = canonicalTxt.toFile();
 		// ファイルサイズチェック
 		long fileSizeBytes = txtFile.length();
 		long maxSizeBytes = settings.getMaxFinalizableFileSizeMB() * 1024L * 1024L;
@@ -175,7 +177,7 @@ public class AozoraTextFinalizer {
 	private String readFile(File file) throws IOException {
 		StringBuilder sb = new StringBuilder();
 		try (BufferedReader br = new BufferedReader(
-				new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
+				new InputStreamReader(Files.newInputStream(file.toPath()), "UTF-8"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				sb.append(line).append('\n');
@@ -189,7 +191,7 @@ public class AozoraTextFinalizer {
 	 */
 	private void writeFile(File file, String content) throws IOException {
 		try (BufferedWriter bw = new BufferedWriter(
-				new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
+				new OutputStreamWriter(Files.newOutputStream(file.toPath()), "UTF-8"))) {
 			bw.write(content);
 		}
 	}

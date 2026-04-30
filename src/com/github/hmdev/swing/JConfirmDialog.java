@@ -12,6 +12,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 
 import javax.swing.BorderFactory;
@@ -952,10 +954,10 @@ public class JConfirmDialog extends JDialog
 			if (bookInfo.coverImage == null) {
 				if (bookInfo.coverFileName == null) {
 					String srcPath = srcFile.getParent();
-					File coverFile = new File(srcPath+"/cover.png");
-					if (!coverFile.exists()) coverFile = new File(srcPath+"/cover.jpg");
-					if (!coverFile.exists()) coverFile = new File(srcPath+"/cover.jpeg");
-					if (coverFile.exists()) bookInfo.coverFileName = coverFile.getAbsolutePath();
+					Path coverPath = Path.of(srcPath+"/cover.png");
+					if (!Files.exists(coverPath)) coverPath = Path.of(srcPath+"/cover.jpg");
+					if (!Files.exists(coverPath)) coverPath = Path.of(srcPath+"/cover.jpeg");
+					if (Files.exists(coverPath)) bookInfo.coverFileName = coverPath.toAbsolutePath().toString();
 				}
 				if (bookInfo.coverFileName != null) {
 					bookInfo.loadCoverImage(bookInfo.coverFileName);
