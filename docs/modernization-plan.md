@@ -73,23 +73,23 @@
 
 ## 3. 段階別ロードマップ
 
-### ステージ 0A — JDK 26 互換確保 ✅ 主要作業完了 (v1.3.5-jdk21, 2026-04-30)
+### ステージ 0A — JDK 26 互換確保 ✅ 完了 (v1.3.5-jdk21 + PR #29, 2026-04-30)
 
 > **目的**: JDK 26 でコンパイル不能になる `JApplet` 継承を**先に外す**。他の機械置換は混ぜない。
 > このステージだけを単独 PR として先行マージし、ステージ 0B 以降の土台を整える。
 >
-> **完了状況**: 0A-1 / 0A-2 / 0A-3 は v1.3.5-jdk21 で完了（`AozoraEpub3Applet extends JPanel` 化、`Main-Class`/`mainClass`/CLI エントリ据え置き）。**0A-4（JDK 26 CI 検証）は未完了** — `build.gradle:115` の `JavaLanguageVersion.of(21)` 固定のため、CI で起動 JVM だけ JDK 26 にしてもコンパイル自体は JDK 21 toolchain で行われ API 削除検知にならない。CI で JDK 26 検証を行うには **toolchain ブロックを matrix で上書き**する必要がある（後述）。JDK 26 は 2026-03-17 GA 済みのため EA 配布の心配は不要。
+> **完了状況**: 全項目完了。0A-1 / 0A-2 / 0A-3 は v1.3.5-jdk21 で完了（`AozoraEpub3Applet extends JPanel` 化、`Main-Class`/`mainClass`/CLI エントリ据え置き）。0A-4（JDK 26 CI 検証）は PR #29 で完了 — `build.gradle` に `-PjavaToolchainVersion` プロパティ切替を導入し、CI matrix から渡すことで `compileJava` が指定 JDK で動作するようにした。Gradle 9.2.1 launcher は JDK 21 固定（Groovy が JDK 26 bytecode を読めないため）、toolchain だけ matrix 版に切替える設計に落ち着いた。
 
 | # | 項目 | 影響範囲 | 検証方法 | 状態 |
 |---|------|---------|--------|----|
 | 0A-1 | `AozoraEpub3Applet` の `extends JApplet` を外し、`JPanel`/`JComponent` ベースの構造へ変更（`JFrame` は `main` 内で組み立て） | `AozoraEpub3Applet.java` のみ（クラス名は維持） | 起動・GUI 操作の手動確認、smoke test | ✅ 完了 |
 | 0A-2 | `Main-Class`／`mainClass`／`launch4j` 設定は **据え置き**（`AozoraEpub3Applet`） | `build.gradle:104, 129, 160` 確認のみ | ビルド + 配布 ZIP 起動 | ✅ 完了 |
 | 0A-3 | CLI エントリ `AozoraEpub3` も据え置き（narou.rb 互換維持） | 変更なし | narou.rb 経由変換の手動確認 | ✅ 完了 |
-| 0A-4 | JDK 26（2026-03-17 GA）でコンパイルが通ることを確認（CI に matrix 追加）。**設計（承認済）**: `build.gradle` に `-PjavaToolchainVersion=<NN>` プロパティ切替を導入し、デフォルトは `21`、CI matrix の JDK 26 step だけ `-PjavaToolchainVersion=26` を渡す。Gradle 起動 JVM は JDK 21 固定（Groovy 4.0.28 が JDK 26 bytecode を読めない）、`compileJava` の toolchain だけ matrix 版に切替える。test 実行は JDK 21 のみ（JDK 25 / 26 では JUnit 4.13.2 の `InvalidTestClassError` が発生するため、0C-1 の JUnit 5 移行まで compile validation のみ運用、ステージ 0C-1 注意点参照） | `.github/workflows/`、`build.gradle` の `java.toolchain.languageVersion` | CI matrix で `-PjavaToolchainVersion=26` を渡し、setup-java で JDK 26 を取得し `compileJava` を通す | ⏳ 未完了（実装は #29 で進行中、マージ後に ✅ にフリップ予定） |
+| 0A-4 | JDK 26（2026-03-17 GA）でコンパイルが通ることを確認（CI に matrix 追加）。**実装**: `build.gradle` に `-PjavaToolchainVersion=<NN>` プロパティ切替を導入し、デフォルトは `21`、CI matrix の JDK 26 step だけ `-PjavaToolchainVersion=26` を渡す。Gradle 起動 JVM は JDK 21 固定（Groovy 4.0.28 が JDK 26 bytecode を読めない）、`compileJava` の toolchain だけ matrix 版に切替える。test 実行は JDK 21 のみ（JDK 25 / 26 では JUnit 4.13.2 の `InvalidTestClassError` が発生するため、0C-1 の JUnit 5 移行まで compile validation のみ運用、ステージ 0C-1 注意点参照） | `.github/workflows/`、`build.gradle` の `java.toolchain.languageVersion` | CI matrix で `-PjavaToolchainVersion=26` を渡し、setup-java で JDK 26 を取得し `compileJava` を通す | ✅ 完了（PR #29、2026-04-30） |
 
 **ゲート条件**:
 - [x] JDK 21 ビルド・全テスト PASS
-- [ ] JDK 26 で `compileJava` PASS（**JEP 504 関連の API 削除エラーゼロ**。`AozoraEpub3Applet.java:5165` の既存 `Object.finalize()` removal 警告は本ステージ scope 外、別 issue として残置） — **0A-4 完了待ち**
+- [x] JDK 26 で `compileJava` PASS（**JEP 504 関連の API 削除エラーゼロ**。`AozoraEpub3Applet.java:5165` の既存 `Object.finalize()` removal 警告は本ステージ scope 外、別 issue として残置）
 - [x] `.NET` ポート `JavaComparisonTests` 5/5 PASS
 - [x] 配布 ZIP 起動・GUI 主要操作の手動確認
 - [x] narou.rb から `java -cp AozoraEpub3.jar AozoraEpub3 ...` の動作確認
@@ -313,9 +313,9 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 - ステージ 0B-2 Phase A: File → Path 14/24 ファイル（PR #19〜#27）
 - ステージ 0B-3: Date / SimpleDateFormat → java.time（PR #18）
 - ステージ 0B-4a / 0B-4b: SLF4J 実利用化（PR #12 / #14 / #15 / #16）
+- ステージ 0A-4: JDK 26 CI 検証（PR #29）
 
 **次の着手候補（着手順は要相談）**:
-- 0A-4: JDK 26（2026-03-17 GA）CI 検証（toolchain 上書き設計が必要）
 - 0B-4c: 空 catch 11 ファイル / 133 occ の per-file 監査（事前計画は別ターンで提示済）
 - 0B-4 残存: `AozoraEpub3Applet.java:3176, 3201` の active `printStackTrace` 2 occ → **0B-4c PR #5（Applet 残り）に同梱と決定**
 - 0B-2 Phase B: 除外 4 ファイル + private method 引数残存（`docs/stage-0b2-plan.md` §4.1.1）
