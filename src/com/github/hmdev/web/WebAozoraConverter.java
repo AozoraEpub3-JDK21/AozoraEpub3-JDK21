@@ -5,8 +5,6 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -16,6 +14,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -187,7 +188,7 @@ public class WebAozoraConverter
 					if (!extractInfoFile.isFile()) return;
 					this.queryMap = new HashMap<ExtractId, ExtractInfo[]>();
 					String line;
-					BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(extractInfoFile), "UTF-8"));
+					BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(extractInfoFile.toPath()), "UTF-8"));
 					try {
 						while ((line = br.readLine()) != null) {
 							if (line.length() == 0 || line.charAt(0) == '#') continue;
@@ -210,7 +211,7 @@ public class WebAozoraConverter
 					this.replaceMap = new HashMap<ExtractId, ArrayList<String[]>>();
 					File replaceInfoFile = new File(configPath.getAbsolutePath()+"/"+fqdn+"/replace.txt");
 					if (replaceInfoFile.isFile()) {
-						br = new BufferedReader(new InputStreamReader(new FileInputStream(replaceInfoFile), "UTF-8"));
+						br = new BufferedReader(new InputStreamReader(Files.newInputStream(replaceInfoFile.toPath()), "UTF-8"));
 						try {
 							while ((line = br.readLine()) != null) {
 								if (line.length() == 0 || line.charAt(0) == '#') continue;
@@ -357,8 +358,8 @@ public class WebAozoraConverter
 	private void saveMetadataToCache(NovelMetadata metadata, File file) {
 		file.getParentFile().mkdirs();
 		try (BufferedWriter writer = new BufferedWriter(
-			new OutputStreamWriter(new FileOutputStream(file), "UTF-8"))) {
-			
+			new OutputStreamWriter(Files.newOutputStream(file.toPath()), "UTF-8"))) {
+
 			// 簡易JSON形式で保存
 			writer.write("{\n");
 			writer.write("  \"ncode\": \"" + escapeJson(metadata.getNcode()) + "\",\n");
@@ -422,15 +423,19 @@ public class WebAozoraConverter
 		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
 	}
 
-	/** dstPath 配下にあることを検証して File を返す（パストラバーサル対策） */
+	/** dstPath 配下にあることを検証して File を返す（パストラバーサル対策）。
+	 * candidate が存在する場合は toRealPath でシンボリックリンクを追跡し、
+	 * source dir 内の symlink が外部を指すケースを弾く。存在しない場合は
+	 * normalize 結果で startsWith 比較 (PR #22/#23 の 2 段階パターン)。 */
 	private File safeDstFile(String fileName) throws IOException {
-		File base = new File(this.dstPath).getCanonicalFile();
-		File resolved = new File(this.dstPath + fileName).getCanonicalFile();
-		if (!resolved.getPath().startsWith(base.getPath() + File.separator)
-				&& !resolved.equals(base)) {
+		Path basePath = Path.of(this.dstPath);
+		Path canonicalBase = Files.exists(basePath) ? basePath.toRealPath() : basePath.toAbsolutePath().normalize();
+		Path candidate = Path.of(this.dstPath + fileName).normalize();
+		Path resolved = Files.exists(candidate) ? candidate.toRealPath() : candidate.toAbsolutePath().normalize();
+		if (!resolved.startsWith(canonicalBase) && !resolved.equals(canonicalBase)) {
 			throw new IOException("安全でないパス: " + resolved);
 		}
-		return resolved;
+		return resolved.toFile();
 	}
 	
 	/** 変換実行 (ファイル名指定あり) */
@@ -597,7 +602,7 @@ public class WebAozoraConverter
 			parentFile.delete();
 		}
 		parentFile.mkdirs();
-		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(txtFile), "UTF-8"));
+		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(txtFile.toPath()), "UTF-8"));
 		try {
 			
 			//表紙画像
@@ -788,7 +793,7 @@ public class WebAozoraConverter
 									else nextTocUrl = listBaseUrl + nextTocUrl;
 								}
 								LogAppender.println("目次ページ " + pageIdx + "/" + tocTotalPages + " 取得: " + nextTocUrl);
-								File tocPageFile = File.createTempFile("tocpage", ".html", cachePath);
+								File tocPageFile = Files.createTempFile(cachePath.toPath(), "tocpage", ".html").toFile();
 								try {
 									cacheFile(nextTocUrl, tocPageFile, urlString);
 									Document tocPageDoc = Jsoup.parse(tocPageFile, null);
@@ -1086,7 +1091,7 @@ public class WebAozoraConverter
 			//ダウンロード失敗話の報告
 			if (!failedHrefs.isEmpty()) {
 				File failedFile = new File(this.dstPath, "failed_downloads.txt");
-				try (BufferedWriter fw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(failedFile), "UTF-8"))) {
+				try (BufferedWriter fw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(failedFile.toPath()), "UTF-8"))) {
 					for (String href : failedHrefs) fw.write(href + "\n");
 				} catch (IOException e) {
 					logger.warn("failed_downloads.txt の書き込みに失敗: {}", failedFile, e);
@@ -1141,7 +1146,7 @@ public class WebAozoraConverter
 		} else {
 			if (updateInfoFile.exists()) {
 				//前回の更新情報を取得して比較
-				BufferedReader updateBr = new BufferedReader(new InputStreamReader(new FileInputStream(updateInfoFile), "UTF-8"));
+				BufferedReader updateBr = new BufferedReader(new InputStreamReader(Files.newInputStream(updateInfoFile.toPath()), "UTF-8"));
 				try {
 					String line;
 					while ((line=updateBr.readLine()) != null) {
@@ -1161,7 +1166,7 @@ public class WebAozoraConverter
 		
 		if (contentsUpdate != null || updates != null) {
 			//ファイルに出力
-			BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(updateInfoFile), "UTF-8"));
+			BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(updateInfoFile.toPath()), "UTF-8"));
 			try {
 				if (contentsUpdate != null) {
 					updateBw.append(urlString);
@@ -1215,7 +1220,7 @@ public class WebAozoraConverter
 		HashMap<String, String> savedUpdateMap = new HashMap<String, String>();
 		// 前回の更新情報を読み込む
 		if (updateInfoFile.exists()) {
-			BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(updateInfoFile), "UTF-8"));
+			BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(updateInfoFile.toPath()), "UTF-8"));
 			try {
 				String line;
 				while ((line = br.readLine()) != null) {
@@ -1231,7 +1236,7 @@ public class WebAozoraConverter
 			}
 		}
 		// 現在の更新情報を書き出す
-		BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(updateInfoFile), "UTF-8"));
+		BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(updateInfoFile.toPath()), "UTF-8"));
 		try {
 			if (contentsUpdate != null) {
 				updateBw.append(urlString);
@@ -2728,9 +2733,9 @@ public class WebAozoraConverter
 		while (ancestor != null && !ancestor.isDirectory()) {
 			if (ancestor.isFile()) {
 				File tmpFile = new File(ancestor.getPath() + ".tmp_rename");
-				ancestor.renameTo(tmpFile);
+				Files.move(ancestor.toPath(), tmpFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 				ancestor.mkdirs();
-				tmpFile.renameTo(new File(ancestor, "index.html"));
+				Files.move(tmpFile.toPath(), new File(ancestor, "index.html").toPath(), StandardCopyOption.REPLACE_EXISTING);
 			}
 			ancestor = ancestor.getParentFile();
 		}
@@ -2753,7 +2758,7 @@ public class WebAozoraConverter
 				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
 			}
 
-			try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(cacheFile))) {
+			try (BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(cacheFile.toPath()))) {
 				bos.write(response.body());
 			}
 		} catch (java.net.URISyntaxException | InterruptedException e) {
