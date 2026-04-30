@@ -6,14 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       java_version:
-        description: 'JDK version to test (21, 25, or 21,25 for both)'
+        description: 'JDK version to test (21 / 25 / 26 / combinations). 26 is EA — verifies JEP 504 (JApplet removal) compatibility.'
         required: false
         default: '21'
         type: choice
         options:
           - '21'
           - '25'
+          - '26'
           - '21,25'
+          - '21,26'
+          - '21,25,26'
 
 permissions:
   contents: read
@@ -25,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java-version: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.java_version == '21,25' && '["21", "25"]' || format('["{0}"]', inputs.java_version)) || '["21"]') }}
+        java-version: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.java_version == '21,25' && '["21","25"]' || inputs.java_version == '21,26' && '["21","26"]' || inputs.java_version == '21,25,26' && '["21","25","26"]' || format('["{0}"]', inputs.java_version)) || '["21"]') }}
       fail-fast: false
 
     steps:
@@ -37,18 +40,21 @@ jobs:
           java-version: ${{ matrix.java-version }}
           distribution: 'temurin'
           cache: gradle
+          check-latest: true
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      # -PjavaToolchainVersion forces compileJava to use the matrix JDK (not just the launcher JVM).
+      # Without this, build.gradle's default toolchain (21) would compile code even on JDK 25/26 runners.
       - name: Run tests with Gradle
-        run: ./gradlew test --info
+        run: ./gradlew test --info -PjavaToolchainVersion=${{ matrix.java-version }}
 
       - name: Run syntax checks
-        run: ./gradlew check
+        run: ./gradlew check -PjavaToolchainVersion=${{ matrix.java-version }}
 
       - name: Build jar
-        run: ./gradlew jar
+        run: ./gradlew jar -PjavaToolchainVersion=${{ matrix.java-version }}
 
       - name: Check test results
         if: always()

@@ -109,10 +109,15 @@ application {
 distZip.enabled = false
 distTar.enabled = false
 
+// Toolchain version is overridable via -PjavaToolchainVersion=<NN> (default 21).
+// CI matrix passes the JDK version under test so compileJava actually uses that JDK
+// (Gradle launcher JVM alone is not enough — without this, the compiler still uses 21).
+// 例: ./gradlew jar -PjavaToolchainVersion=26 で JEP 504 (JDK 26 で javax.swing.JApplet 削除) 検証
+def javaToolchainVersion = (project.findProperty('javaToolchainVersion') ?: '21').toString().toInteger()
+
 java {
     toolchain {
-        // インストールしたJDK 21を使用
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(javaToolchainVersion)
     }
 }
 

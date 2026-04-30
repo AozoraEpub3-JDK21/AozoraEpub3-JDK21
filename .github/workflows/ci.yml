@@ -20,14 +20,17 @@ on:
   workflow_dispatch:
     inputs:
       java_version:
-        description: 'JDK version to test (21, 25, or 21,25 for both)'
+        description: 'JDK version to test (21 / 25 / 26 / combinations). 26 is EA — verifies JEP 504 (JApplet removal) compatibility.'
         required: false
         default: '21'
         type: choice
         options:
           - '21'
           - '25'
+          - '26'
           - '21,25'
+          - '21,26'
+          - '21,25,26'
       ini_font_size:
         description: "INI FontSize (percent)"
         required: false
@@ -46,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java-version: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.java_version == '21,25' && '["21", "25"]' || format('["{0}"]', inputs.java_version)) || '["21"]') }}
+        java-version: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.java_version == '21,25' && '["21","25"]' || inputs.java_version == '21,26' && '["21","26"]' || inputs.java_version == '21,25,26' && '["21","25","26"]' || format('["{0}"]', inputs.java_version)) || '["21"]') }}
       fail-fast: false
     steps:
       - name: Checkout
@@ -58,20 +61,25 @@ jobs:
       - name: Setup Java ${{ matrix.java-version }}
         uses: actions/setup-java@v4
         with:
+          # Temurin EA builds may lag behind upstream; if JDK 26 is not yet available
+          # on Temurin when this runs, switch to distribution: zulu (which publishes EA).
           distribution: temurin
           java-version: ${{ matrix.java-version }}
+          check-latest: true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build and Test
         run: |
-          ./gradlew --no-daemon clean test -x dist -x distZip -x tarDistribution
+          # -PjavaToolchainVersion forces compileJava to use the matrix JDK (not just the launcher JVM).
+          # Without this, build.gradle's default toolchain (21) would compile code even on JDK 25/26 runners.
+          ./gradlew --no-daemon -PjavaToolchainVersion=${{ matrix.java-version }} clean test -x dist -x distZip -x tarDistribution
 
       - name: Package fat-jar
         run: |
           set -e
-          ./gradlew --no-daemon jar
+          ./gradlew --no-daemon -PjavaToolchainVersion=${{ matrix.java-version }} jar
           echo "=== Checking JAR output ==="
           ls -la build/libs || echo "build/libs not found"
           echo "=== Searching for .jar files ==="
