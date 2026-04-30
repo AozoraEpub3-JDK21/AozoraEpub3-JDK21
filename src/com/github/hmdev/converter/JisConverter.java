@@ -198,6 +198,7 @@ public class JisConverter
 			}
 			return String.valueOf((char)unicode);
 		} catch (Exception e) {
+			// 意図的: 不正な unicode 値時は null を返す
 		}
 		return null;
 	}

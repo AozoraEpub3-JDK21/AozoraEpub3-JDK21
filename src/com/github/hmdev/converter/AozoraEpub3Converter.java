@@ -486,7 +486,7 @@ public class AozoraEpub3Converter
 								}
 							} else {
 								int code = 0;
-								try { code = Integer.valueOf(fileName.substring(1, fileName.length()-ext.length()-1), 16); } catch (Exception e) {}
+								try { code = Integer.valueOf(fileName.substring(1, fileName.length()-ext.length()-1), 16); } catch (Exception e) { /* 意図的: ファイル名の hex 部不正時は code=0 のままスキップ */ }
 								if (code <= 0xFFFF) {
 									utf16FontMap.put(code, subPath+fontFileName);
 								} else {

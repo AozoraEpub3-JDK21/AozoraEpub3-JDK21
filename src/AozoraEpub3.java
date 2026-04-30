@@ -125,15 +125,15 @@ public class AozoraEpub3
 			
 			//propsから読み込み
 			props = new Properties();
-			try { props.load(Files.newInputStream(Path.of(propFileName))); } catch (Exception e) { }
+			try { props.load(Files.newInputStream(Path.of(propFileName))); } catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */ }
 			
-			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) {}//表題
+			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			
 			//コマンドラインオプション以外
 			boolean coverPage = "1".equals(props.getProperty("CoverPage"));//表紙追加
 			int titlePage = BookInfo.TITLE_NONE;
 			if ("1".equals(props.getProperty("TitlePageWrite"))) {
-				try { titlePage =Integer.parseInt(props.getProperty("TitlePage")); } catch (Exception e) {}
+				try { titlePage =Integer.parseInt(props.getProperty("TitlePage")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			}
 			boolean withMarkId = "1".equals(props.getProperty("MarkId"));
 			//boolean gaiji32 = "1".equals(props.getProperty("Gaiji32"));
@@ -143,12 +143,12 @@ public class AozoraEpub3
 			boolean autoYokoNum1 = "1".equals(props.getProperty("AutoYokoNum1"));
 			boolean autoYokoNum3 = "1".equals(props.getProperty("AutoYokoNum3"));
 			boolean autoYokoEQ1 = "1".equals(props.getProperty("AutoYokoEQ1"));
-			int spaceHyp = 0; try { spaceHyp = Integer.parseInt(props.getProperty("SpaceHyphenation")); } catch (Exception e) {}
+			int spaceHyp = 0; try { spaceHyp = Integer.parseInt(props.getProperty("SpaceHyphenation")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			boolean tocPage = "1".equals(props.getProperty("TocPage"));//目次追加
 			boolean tocVertical = "1".equals(props.getProperty("TocVertical"));//目次縦書き
 			boolean coverPageToc = "1".equals(props.getProperty("CoverPageToc"));
-			int removeEmptyLine = 0; try { removeEmptyLine = Integer.parseInt(props.getProperty("RemoveEmptyLine")); } catch (Exception e) {}
-			int maxEmptyLine = 0; try { maxEmptyLine = Integer.parseInt(props.getProperty("MaxEmptyLine")); } catch (Exception e) {}
+			int removeEmptyLine = 0; try { removeEmptyLine = Integer.parseInt(props.getProperty("RemoveEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			int maxEmptyLine = 0; try { maxEmptyLine = Integer.parseInt(props.getProperty("MaxEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			
 			WriterConfigurator.apply(props, epub3Writer, epub3ImageWriter);
 			
@@ -161,17 +161,17 @@ public class AozoraEpub3
 			int forcePageBreakChapterSize = 0;
 			if ("1".equals(props.getProperty("PageBreak"))) {
 				try {
-					try { forcePageBreakSize = Integer.parseInt(props.getProperty("PageBreakSize")) * 1024; } catch (Exception e) {}
+					try { forcePageBreakSize = Integer.parseInt(props.getProperty("PageBreakSize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 					if ("1".equals(props.getProperty("PageBreakEmpty"))) {
-						try { forcePageBreakEmpty = Integer.parseInt(props.getProperty("PageBreakEmptyLine")); } catch (Exception e) {}
-						try { forcePageBreakEmptySize = Integer.parseInt(props.getProperty("PageBreakEmptySize")) * 1024; } catch (Exception e) {}
+						try { forcePageBreakEmpty = Integer.parseInt(props.getProperty("PageBreakEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+						try { forcePageBreakEmptySize = Integer.parseInt(props.getProperty("PageBreakEmptySize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 					} if ("1".equals(props.getProperty("PageBreakChapter"))) {
 						forcePageBreakChapter = 1;
-						try { forcePageBreakChapterSize = Integer.parseInt(props.getProperty("PageBreakChapterSize")) * 1024; } catch (Exception e) {}
+						try { forcePageBreakChapterSize = Integer.parseInt(props.getProperty("PageBreakChapterSize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 					}
-				} catch (Exception e) {}
+				} catch (Exception e) { /* 意図的: PageBreak ブロック内で個別 catch が拾わない例外も既定値のまま続行 */ }
 			}
-			int maxLength = 64; try { maxLength = Integer.parseInt((props.getProperty("ChapterNameLength"))); } catch (Exception e) {}
+			int maxLength = 64; try { maxLength = Integer.parseInt((props.getProperty("ChapterNameLength"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			boolean insertTitleToc = "1".equals(props.getProperty("TitleToc"));
 			boolean chapterExclude = "1".equals(props.getProperty("ChapterExclude"));
 			boolean chapterUseNextLine = "1".equals(props.getProperty("ChapterUseNextLine"));
@@ -196,7 +196,7 @@ public class AozoraEpub3
 			boolean autoFileName = true; //ファイル名を表題に利用
 			boolean vertical = true;
 			String targetDevice = null;
-			if(commandLine.hasOption("t")) try { titleIndex = Integer.parseInt(commandLine.getOptionValue("t")); } catch (Exception e) {}//表題
+			if(commandLine.hasOption("t")) try { titleIndex = Integer.parseInt(commandLine.getOptionValue("t")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			if(commandLine.hasOption("tf")) useFileName = true;
 			if(commandLine.hasOption("c")) coverFileName = commandLine.getOptionValue("c");
 			if(commandLine.hasOption("enc")) encType = commandLine.getOptionValue("enc");
@@ -226,7 +226,7 @@ public class AozoraEpub3
 			//変換オプション設定
 			aozoraConverter.setAutoYoko(autoYoko, autoYokoNum1, autoYokoNum3, autoYokoEQ1);
 			//文字出力設定
-			int dakutenType = 0; try { dakutenType = Integer.parseInt(props.getProperty("DakutenType")); } catch (Exception e) {}
+			int dakutenType = 0; try { dakutenType = Integer.parseInt(props.getProperty("DakutenType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			boolean printIvsBMP = "1".equals(props.getProperty("IvsBMP"));
 			boolean printIvsSSP = "1".equals(props.getProperty("IvsSSP"));
 			
@@ -258,7 +258,7 @@ public class AozoraEpub3
 
 				int interval = 1000;
 				if (commandLine.hasOption("interval")) {
-					try { interval = (int)(Float.parseFloat(commandLine.getOptionValue("interval")) * 1000); } catch (Exception e) {}
+					try { interval = (int)(Float.parseFloat(commandLine.getOptionValue("interval")) * 1000); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 				}
 
 				File webConfigPath = new File(jarPath + "web");
@@ -416,7 +416,7 @@ public class AozoraEpub3
 								coverImageIndex = -1;
 								coverFileName = null;
 							}
-						} catch (Exception e) {}
+						} catch (Exception e) { /* 意図的: MaxCoverLine 不正時は cover 設定変更せず */ }
 					}
 					
 					//表紙設定
