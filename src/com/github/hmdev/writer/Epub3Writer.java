@@ -34,6 +34,8 @@ import org.apache.velocity.VelocityContext;
 import org.apache.velocity.Template;
 import org.apache.velocity.app.Velocity;
 import org.apache.velocity.app.VelocityEngine;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.converter.PageBreakType;
@@ -56,6 +58,8 @@ import com.github.junrar.rarfile.FileHeader;
  */
 public class Epub3Writer
 {
+	private static final Logger logger = LoggerFactory.getLogger(Epub3Writer.class);
+
 	/** MIMETYPEパス */
 	final static String MIMETYPE_PATH = "mimetype";
 	
@@ -714,7 +718,9 @@ public class Epub3Writer
 					coverImageInfo.setIsCover(true);
 					this.imageInfos.add(0, coverImageInfo);
 				}
-			} catch (Exception e) { e.printStackTrace(); }
+			} catch (Exception e) {
+				logger.error("表紙画像の解析に失敗: {}", bookInfo.coverFileName, e);
+			}
 		} else if (bookInfo.coverImage != null) {
 			//表紙画像が編集されていた場合
 			//すべてのページの表紙設定解除
@@ -1017,7 +1023,7 @@ public class Epub3Writer
 				imageInfos.remove(0);//カバー画像は出力済みなので削除
 				if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error("表紙画像取得エラー: {}", bookInfo.coverFileName, e);
 				LogAppender.error("表紙画像取得エラー: "+bookInfo.coverFileName);
 			}
 		}
@@ -1104,15 +1110,15 @@ public class Epub3Writer
 		
 		//エラーがなければ100%
 		if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getMaximum());
-		
+
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("EPUB 出力中にエラーが発生", e);
 		} finally {
 			try {
 			//ePub3出力ファイルを閉じる
 			if (zos != null) zos.close();
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.warn("EPUB 出力ストリームのクローズに失敗", e);
 			}
 			//メンバ変数解放
 			this.velocityContext = null;
@@ -1430,9 +1436,11 @@ public class Epub3Writer
 				else return PageBreakType.IMAGE_INLINE_H; //縦の方が長い
 			}
 			if (imageHeight > dispH) return PageBreakType.IMAGE_INLINE_H; //縦がはみ出している
-			
-			
-		} catch (Exception e) { e.printStackTrace(); }
+
+
+		} catch (Exception e) {
+			logger.warn("画像ページ判定でエラーが発生", e);
+		}
 		return PageBreakType.IMAGE_PAGE_NONE;
 	}
 	
@@ -1474,7 +1482,9 @@ public class Epub3Writer
 				}
 				ratio = wRatio;
 			}
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (Exception e) {
+			logger.warn("画像比率計算でエラーが発生: {}", srcFilePath, e);
+		}
 		return Math.min(100, ratio);
 	}
 	
