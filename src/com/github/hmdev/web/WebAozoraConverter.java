@@ -16,9 +16,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,7 +48,9 @@ public class WebAozoraConverter
 {
 	private static final Logger logger = LoggerFactory.getLogger(WebAozoraConverter.class);
 
-	final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+	/** 「変換日時」表示用 (元コード SimpleDateFormat と同じくインスタンス生成時にシステム TZ を捕捉) */
+	final DateTimeFormatter dateFormat =
+		DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss").withZone(ZoneId.systemDefault());
 	
 	/** Singletonインスタンス格納 keyはFQDN */
 	static HashMap<String, WebAozoraConverter> converters = new HashMap<String, WebAozoraConverter>();
@@ -1096,7 +1099,7 @@ public class WebAozoraConverter
 			bw.append("</a>");
 			bw.append('\n');
 			bw.append("変換日時： ");
-			bw.append(dateFormat.format(new Date()));
+			bw.append(dateFormat.format(Instant.now()));
 			bw.append('\n');
 
 			// 読了表示は AozoraTextFinalizer.appendEndOfBook() に統一
