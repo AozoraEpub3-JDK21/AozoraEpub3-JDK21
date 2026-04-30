@@ -2,8 +2,10 @@ package com.github.hmdev.info;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Properties;
 
 /** iniファイルの設定を格納するクラス
@@ -25,7 +27,8 @@ public class ProfileInfo
 	public void update(File profilePath) throws FileNotFoundException, IOException
 	{
 		if (fileName != null) {
-			FileOutputStream fos = new FileOutputStream(profilePath+"/"+fileName);
+			Path target = profilePath.toPath().resolve(fileName);
+			OutputStream fos = Files.newOutputStream(target);
 			this.props.store(fos, "AozoraEpub3 Profile");
 			fos.close();
 		}
