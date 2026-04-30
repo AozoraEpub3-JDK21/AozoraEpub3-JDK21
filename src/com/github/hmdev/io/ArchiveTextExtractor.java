@@ -1,9 +1,9 @@
 package com.github.hmdev.io;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,7 +49,7 @@ public final class ArchiveTextExtractor {
 	public static InputStream getTextInputStream(File srcFile, String ext, ImageInfoReader imageInfoReader, String[] textEntryName, int txtIdx)
 			throws IOException, RarException {
 		if ("txt".equals(ext)) {
-			return new FileInputStream(srcFile);
+			return Files.newInputStream(srcFile.toPath());
 		} else if ("zip".equals(ext) || "txtz".equals(ext) || "rar".equals(ext)) {
 			ArchiveCache cache = getCache(srcFile, ext);
 			cache.scan();

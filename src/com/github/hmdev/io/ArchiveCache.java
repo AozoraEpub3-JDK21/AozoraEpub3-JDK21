@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,30 +16,30 @@ import com.github.junrar.exception.RarException;
  * Holds text file count, text content, and image entry names.
  */
 public class ArchiveCache {
-	private final File archiveFile;
+	private final Path archivePath;
 	private final String ext;
-	
+
 	// cached results
 	private int textFileCount = -1;
 	private List<TextEntry> textEntries;
 	private List<String> imageEntries;
 	private boolean scanned = false;
-	
+
 	public ArchiveCache(File archiveFile, String ext) {
-		this.archiveFile = archiveFile;
+		this.archivePath = archiveFile.toPath();
 		this.ext = ext;
 	}
-	
+
 	public synchronized void scan() throws IOException, RarException {
 		if (scanned) return;
-		
+
 		textEntries = new ArrayList<>();
 		imageEntries = new ArrayList<>();
-		
+
 		if ("zip".equals(ext) || "txtz".equals(ext)) {
-			ArchiveScanner.scanZip(archiveFile, textEntries, imageEntries);
+			ArchiveScanner.scanZip(archivePath, textEntries, imageEntries);
 		} else if ("rar".equals(ext)) {
-			ArchiveScanner.scanRar(archiveFile, textEntries, imageEntries);
+			ArchiveScanner.scanRar(archivePath, textEntries, imageEntries);
 		}
 		
 		textFileCount = textEntries.size();
