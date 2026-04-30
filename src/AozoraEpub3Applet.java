@@ -32,14 +32,17 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -499,12 +502,12 @@ public class AozoraEpub3Applet extends JPanel
 		this.cachePath = new File(this.jarPath+".cache");
 		this.webConfigPath = new File(this.jarPath+"web");
 		this.profilePath = new File(this.jarPath+"profiles");
-		this.profilePath.mkdir();
+		try { Files.createDirectories(this.profilePath.toPath()); } catch (IOException e) { logger.warn("プロファイルディレクトリの作成に失敗", e); }
 		
 		//設定ファイル読み込み
 		props = new Properties(); 
 		try {
-			try (FileInputStream fos = new FileInputStream(this.jarPath+this.propFileName)) {
+			try (InputStream fos = Files.newInputStream(Path.of(this.jarPath+this.propFileName))) {
 				props.load(fos);
 			}
 		} catch (Exception e) { }
@@ -681,10 +684,16 @@ public class AozoraEpub3Applet extends JPanel
 		jPopupPreset = new JPopupMenu();
 		
 		//presetsファイルから名称を取得してPopupに追加
-		for (File presetFile : new File(jarPath+"presets").listFiles()) {
+		java.util.List<Path> presetFiles;
+		try (java.util.stream.Stream<Path> stream = Files.list(Path.of(jarPath+"presets"))) {
+			presetFiles = stream.toList();
+		} catch (IOException e) {
+			presetFiles = java.util.Collections.emptyList();
+		}
+		for (Path presetFile : presetFiles) {
 			Properties presetProps = new Properties();
 			try {
-				try (FileInputStream fos = new FileInputStream(presetFile)) {
+				try (InputStream fos = Files.newInputStream(presetFile)) {
 					presetProps.load(fos);
 				}
 			} catch (Exception e) {}
@@ -715,7 +724,7 @@ public class AozoraEpub3Applet extends JPanel
 			props.setProperty("UILang", "ja");
 			// 設定ファイル更新
 			try {
-				try (FileOutputStream fos = new FileOutputStream(jarPath+propFileName)) {
+				try (OutputStream fos = Files.newOutputStream(Path.of(jarPath+propFileName))) {
 					props.store(fos, "AozoraEpub3 Parameters");
 				}
 			} catch (Exception ignore) {}
@@ -731,7 +740,7 @@ public class AozoraEpub3Applet extends JPanel
 			props.setProperty("UILang", "en");
 			// 設定ファイル更新
 			try {
-				try (FileOutputStream fos = new FileOutputStream(jarPath+propFileName)) {
+				try (OutputStream fos = Files.newOutputStream(Path.of(jarPath+propFileName))) {
 					props.store(fos, "AozoraEpub3 Parameters");
 				}
 			} catch (Exception ignore) {}
@@ -2641,7 +2650,14 @@ public class AozoraEpub3Applet extends JPanel
 			}
 		}
 		//まだ追加されていないファイルを追加
-		for (File file : profilePath.listFiles()) {
+		java.util.List<Path> profilePathFiles;
+		try (java.util.stream.Stream<Path> stream = Files.list(profilePath.toPath())) {
+			profilePathFiles = stream.toList();
+		} catch (IOException e) {
+			profilePathFiles = java.util.Collections.emptyList();
+		}
+		for (Path filePath : profilePathFiles) {
+			File file = filePath.toFile();
 			if (!profileFileNameMap.contains(file.getName())) {
 				propFiles.add(file);
 			}
@@ -2652,7 +2668,7 @@ public class AozoraEpub3Applet extends JPanel
 		for (File profile : propFiles) {
 			Properties profileProps = new Properties(); 
 			try {
-				FileInputStream fos = new FileInputStream(profile);
+				InputStream fos = Files.newInputStream(profile.toPath());
 				profileProps.load(fos);
 				fos.close();
 			} catch (Exception e) { }
@@ -4128,11 +4144,11 @@ public class AozoraEpub3Applet extends JPanel
 						File mobiTmpFile = new File(outFile.getAbsolutePath().substring(0, outFile.getAbsolutePath().length()-4)+"mobi");
 						File mobiFile = new File(outFileOrg.getAbsolutePath().substring(0, outFileOrg.getAbsolutePath().length()-4)+"mobi");
 						if (mobiFile.exists()) mobiFile.delete();
-						mobiTmpFile.renameTo(mobiFile);
+						Files.move(mobiTmpFile.toPath(), mobiFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 						if (outExt.endsWith(".epub")) {
 							//epubリネーム
 							if (outFileOrg.exists()) outFileOrg.delete();
-							outFile.renameTo(outFileOrg);
+							Files.move(outFile.toPath(), outFileOrg.toPath(), StandardCopyOption.REPLACE_EXISTING);
 						} else {
 							outFile.delete();
 						}
@@ -4166,7 +4182,7 @@ public class AozoraEpub3Applet extends JPanel
 				//出力先 出力パスに保存
 				File srcFile = new File(dstPath+"/"+new File(urlPath).getName());
 				LogAppender.println("出力先にダウンロードします : "+srcFile.getCanonicalPath());
-				srcFile.getParentFile().mkdirs();
+				Files.createDirectories(srcFile.getParentFile().toPath());
 				//ダウンロード
 				BufferedInputStream bis;
 				try {
@@ -4174,7 +4190,7 @@ public class AozoraEpub3Applet extends JPanel
 				} catch (java.net.URISyntaxException e) {
 					throw new IOException(e);
 				}
-				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(srcFile));
+				BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()));
 			try {
 				byte[] buf = new byte[8192];
 				int len;
@@ -4237,7 +4253,7 @@ public class AozoraEpub3Applet extends JPanel
 				try { modifiedExpire = Float.parseFloat(jTextWebModifiedExpire.getText()); } catch (Exception e) {}
 				//キャッシュパス
 				if (!this.cachePath.isDirectory()) {
-					this.cachePath.mkdirs();
+					Files.createDirectories(this.cachePath.toPath());
 					LogAppender.println("キャッシュパスを作成します : "+this.cachePath.getCanonicalPath());
 				}
 				if (!this.cachePath.isDirectory()) {
@@ -4365,11 +4381,11 @@ public class AozoraEpub3Applet extends JPanel
 				JOptionPane.YES_NO_OPTION);
 			if (ret == JOptionPane.YES_OPTION) {
 				//フォルダ作成
-				dstPath.mkdirs();
+				try { Files.createDirectories(dstPath.toPath()); } catch (IOException e) { /* fallthrough: isDirectory check */ }
 				if (!dstPath.isDirectory()) {
 					LogAppender.error("フォルダを作成できませんでした");
 					return;
-				}				
+				}
 			} else {
 				LogAppender.error("変換処理を中止しました : "+(vecFiles.size()>0?vecFiles.get(0).getAbsoluteFile():vecUrlString.size()>0?vecUrlString.get(0):""));
 				return;
@@ -4502,7 +4518,14 @@ public class AozoraEpub3Applet extends JPanel
 	void deleteFiles(File path)
 	{
 		if (path.isDirectory()) {
-			for (File file : path.listFiles()) {
+			java.util.List<Path> children;
+			try (java.util.stream.Stream<Path> stream = Files.list(path.toPath())) {
+				children = stream.toList();
+			} catch (IOException e) {
+				return;
+			}
+			for (Path childPath : children) {
+				File file = childPath.toFile();
 				if (file.isDirectory()) deleteFiles(file);
 				else if (file.isFile()) file.delete();
 			}
@@ -4590,7 +4613,7 @@ public class AozoraEpub3Applet extends JPanel
 		//画面の設定をPropertiesに設定
 		this.setProperties(profileProps);
 		//プロファイル保存
-		FileOutputStream fos = new FileOutputStream(profile);
+		OutputStream fos = Files.newOutputStream(profile.toPath());
 		profileProps.store(fos, "AozoraEpub3 Profile");
 		fos.close();
 		//コンボボックスに追加
@@ -4630,7 +4653,7 @@ public class AozoraEpub3Applet extends JPanel
 		//画面の設定をPropertiesに設定
 		this.setProperties(profileProps);
 		//プロファイル更新
-		FileOutputStream fos = new FileOutputStream(profilePath.getPath()+"/"+propInfo.getFileName());
+		OutputStream fos = Files.newOutputStream(Path.of(profilePath.getPath()+"/"+propInfo.getFileName()));
 		profileProps.store(fos, "AozoraEpub3 Profile");
 		fos.close();
 		jComboProfile.repaint();
@@ -5231,7 +5254,7 @@ public class AozoraEpub3Applet extends JPanel
 			
 			//設定ファイル更新
 			if (this.jarPath != null && this.propFileName != null) {
-				try (FileOutputStream fos = new FileOutputStream(this.jarPath+this.propFileName)) {
+				try (OutputStream fos = Files.newOutputStream(Path.of(this.jarPath+this.propFileName))) {
 					this.props.store(fos, "AozoraEpub3 Parameters");
 				}
 			}
