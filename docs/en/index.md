@@ -60,37 +60,37 @@ It aims to comply with EPUB 3.3 and the [Japanese Book Publishing Association (�
 
 ## System Requirements
 
-- **Java 26 recommended** (latest GA)
-  - Compatible with Java 21 LTS / Java 25 LTS as well
+- **Java 25 LTS recommended**
+  - Compatible with Java 21 LTS as well (JDK 26 runtime also verified)
   - **Minimum requirement: Java 21 or later**
 - Windows / macOS / Linux
 
-If you don't have Java installed, download [Eclipse Temurin](https://adoptium.net/temurin/releases/) Java 26 (Java 21 LTS also works if you prefer LTS).
+If you don't have Java installed, download [Eclipse Temurin](https://adoptium.net/temurin/releases/) Java 25 LTS (Java 21 LTS also works).
 
 ---
 
-## Install Java 26 (Eclipse Temurin)
+## Install Java 25 (Eclipse Temurin)
 
 ### Windows
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 26 → Windows x64 → `.MSI`
+2. Select JDK 25 → Windows x64 → `.MSI`
 3. Double-click the MSI file and follow the installer
 4. Verify in Command Prompt: `java -version`
 
 ### macOS
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 26 → macOS → `.PKG` (Intel or Apple Silicon M1/M2)
+2. Select JDK 25 → macOS → `.PKG` (Intel or Apple Silicon M1/M2)
 3. Double-click the PKG file and follow the installer
 4. Verify in Terminal: `java -version`
 
 ### Linux (Ubuntu/Debian)
 
 1. Visit [Adoptium Releases](https://adoptium.net/temurin/releases/)
-2. Select JDK 26 → Linux x64 → `.TAR.GZ`
-3. Extract: `tar -xzf OpenJDK26U-jdk_x64_linux_hotspot_26_x.tar.gz`
-4. Verify: `./jdk-26.x.x+yy/bin/java -version` or add to PATH
+2. Select JDK 25 → Linux x64 → `.TAR.GZ`
+3. Extract: `tar -xzf OpenJDK25U-jdk_x64_linux_hotspot_25_x.tar.gz`
+4. Verify: `./jdk-25.x.x+yy/bin/java -version` or add to PATH
 
 ---
 
@@ -130,7 +130,7 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 
 ## Troubleshooting
 
-- **Java is not installed** — Download Java 26 from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
+- **Java is not installed** — Download Java 25 LTS from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
 - **JAR file won't open on Windows** — Use the EXE file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
 - **Permission denied on Linux/macOS** — Run `chmod +x AozoraEpub3.sh` and try again.
 - **Other issues** — Report on [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues).

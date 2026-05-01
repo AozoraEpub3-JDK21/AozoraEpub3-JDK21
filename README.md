@@ -35,7 +35,7 @@
 - 画像zip/rarを EPUB 3 に変換
 - 縦書き・横書きに対応
 - 日本の主要電子書籍リーダー（Kobo, Kindle, Reader等）に対応
-- Java 21 ベースで開発（Java 26 まで動作確認済み）
+- Java 21 ベースで開発（Java 25 LTS まで動作確認済み、JDK 26 でも CI ビルド/テスト PASS）
 - iPhone版Kindle縦書き対応（※表題ページのレイアウトが画面比率により崩れることがあります）
 - **高速変換**: 大容量アーカイブの処理を最適化（アーカイブスキャンを4回→1回に削減）
 
@@ -43,13 +43,13 @@
 
 ## 動作環境
 
-**Java 21以降** が必要です（Java 26 まで動作確認済み）。
+**Java 21以降** が必要です（Java 25 LTS まで動作確認済み）。
 
-- **実行**: JRE 21以降で動作します（JDK不要）。[Adoptium Temurin](https://adoptium.net/) などのランタイム配布を推奨。配布物は Java 21 ターゲットでビルドされている（class file version 65）ため、JDK 21 LTS から JDK 26 までいずれの環境でも動作します。
+- **実行**: JRE 21以降で動作します（JDK不要）。[Adoptium Temurin](https://adoptium.net/) などのランタイム配布を推奨。配布物は Java 21 ターゲットでビルドされている（class file version 65）ため、JDK 21 LTS から JDK 25 LTS までいずれの環境でも動作します（JDK 26 ランタイムも CI で起動確認済）。
 - **ビルド/開発**: JDK 21 が必要です（Gradle 9.2.1 launcher は JDK 21 固定）。`./gradlew -PjavaToolchainVersion=26 jar` で JDK 26 toolchain によるビルドも可能です。
-- **推奨**: 最新版 **Java 26** を推奨しますが、Java 21 LTS / Java 25 LTS でも互換性を確認しています。
+- **推奨**: **Java 25 LTS** を推奨します（Java 21 LTS でも動作します）。Temurin による JDK 26 のバイナリ配布が出揃い次第、推奨を更新する予定です。
 
-Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から Java 26 をダウンロードしてください（LTS が必要なら Java 21 でも動作します）。
+Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から Java 25 LTS をダウンロードしてください。
 
 ### 対応OS
 

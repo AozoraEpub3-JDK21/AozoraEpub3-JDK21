@@ -45,8 +45,8 @@
 ### 動作環境
 
 - **最低要件**: Java 21 以降
-- **推奨**: Java 26 (最新 GA)
-- **互換性**: Java 21 LTS / Java 25 LTS / Java 26 すべてで動作確認済
+- **推奨**: Java 25 LTS（Temurin による JDK 26 のバイナリ配布が出揃い次第、推奨を更新予定）
+- **互換性**: Java 21 LTS / Java 25 LTS で動作確認済（JDK 26 でもビルド・全テスト・GUI smoke test PASS）
 
 ### 検証結果
 
