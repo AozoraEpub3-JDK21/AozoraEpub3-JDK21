@@ -56,10 +56,9 @@ public class ImageInfo
 	/** ファイルから画像情報を生成 */
 	static public ImageInfo getImageInfo(File imageFile) throws IOException
 	{
-		BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(imageFile.toPath()));
-		ImageInfo imageInfo = ImageInfo.getImageInfo(bis, -1);
-		bis.close();
-		return imageInfo;
+		try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(imageFile.toPath()))) {
+			return ImageInfo.getImageInfo(bis, -1);
+		}
 	}
 	
 	/** 画像ストリームから画像情報を生成 */
@@ -76,15 +75,19 @@ public class ImageInfo
 	static public ImageInfo getImageInfo(InputStream is, int zipIndex) throws IOException
 	{
 		ImageInfo imageInfo = null;
-		ImageInputStream iis = ImageIO.createImageInputStream(is);
-		Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
-		if (readers.hasNext()) {
-			ImageReader reader = readers.next();
-			if (readers.hasNext() && reader.getClass().getName().endsWith("CLibPNGImageReader")) readers.next();
-			reader.setInput(iis);
-			String ext = reader.getFormatName();
-			imageInfo = new ImageInfo(ext, reader.getWidth(0), reader.getHeight(0), zipIndex);
-			reader.dispose();
+		//ImageIO はデフォルトで FileCacheImageInputStream (temp ファイル) を作るため
+		//閉じないと大量画像の変換で一時ファイル / FD が滞留する。
+		//close しても引数の is は閉じられない仕様なので呼び出し側の所有権に影響しない
+		try (ImageInputStream iis = ImageIO.createImageInputStream(is)) {
+			Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+			if (readers.hasNext()) {
+				ImageReader reader = readers.next();
+				if (readers.hasNext() && reader.getClass().getName().endsWith("CLibPNGImageReader")) readers.next();
+				reader.setInput(iis);
+				String ext = reader.getFormatName();
+				imageInfo = new ImageInfo(ext, reader.getWidth(0), reader.getHeight(0), zipIndex);
+				reader.dispose();
+			}
 		}
 		return imageInfo;
 	}

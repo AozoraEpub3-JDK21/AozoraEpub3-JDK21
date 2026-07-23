@@ -53,6 +53,7 @@ import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.util.CharUtils;
 import com.github.hmdev.util.LogAppender;
+import com.github.hmdev.util.NetUtils;
 import com.github.junrar.Archive;
 import com.github.junrar.rarfile.FileHeader;
 
@@ -716,7 +717,7 @@ public class Epub3Writer
 				}
 				BufferedInputStream bis;
 				if (bookInfo.coverFileName.startsWith("http")) {
-					bis = new BufferedInputStream(new URI(bookInfo.coverFileName).toURL().openStream(), 8192);
+					bis = new BufferedInputStream(NetUtils.openStream(new URI(bookInfo.coverFileName).toURL()), 8192);
 				} else {
 					bis = new BufferedInputStream(Files.newInputStream(Path.of(bookInfo.coverFileName)), 8192);
 				}

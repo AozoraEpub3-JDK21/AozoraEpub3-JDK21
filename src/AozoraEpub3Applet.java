@@ -109,7 +109,9 @@ import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.swing.JConfirmDialog;
 import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
+import com.github.hmdev.util.CharUtils;
 import com.github.hmdev.util.LogAppender;
+import com.github.hmdev.util.NetUtils;
 import com.github.hmdev.util.I18n;
 import com.github.hmdev.web.WebAozoraConverter;
 import com.github.hmdev.writer.Epub3ImageWriter;
@@ -4183,7 +4185,7 @@ public class AozoraEpub3Applet extends JPanel
 			String ext = urlString.substring(urlString.lastIndexOf('.')+1).toLowerCase();
 			if (ext.equals("zip") || ext.equals("txtz") || ext.equals("rar")) {
 				
-				String urlPath = urlString.substring(urlString.indexOf("//")+2).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_");
+				String urlPath = CharUtils.replaceInvalidFileChars(urlString.substring(urlString.indexOf("//")+2));
 				//青空zipのURLをキャッシュして変換
 				//出力先 出力パスに保存
 				File srcFile = new File(dstPath+"/"+new File(urlPath).getName());
@@ -4192,20 +4194,33 @@ public class AozoraEpub3Applet extends JPanel
 				//ダウンロード
 				BufferedInputStream bis;
 				try {
-					bis = new BufferedInputStream(new java.net.URI(urlString).toURL().openStream(), 8192);
+					bis = new BufferedInputStream(NetUtils.openStream(new java.net.URI(urlString).toURL()), 8192);
 				} catch (java.net.URISyntaxException e) {
 					throw new IOException(e);
 				}
 				BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()));
+			boolean downloaded = false;
 			try {
 				byte[] buf = new byte[8192];
 				int len;
 				while ((len = bis.read(buf)) > 0) {
 					bos.write(buf, 0, len);
 				}
+				downloaded = true;
 			} finally {
 				bos.close();
 				bis.close();
+				//読み込みタイムアウト等で中断した場合、途中まで書かれた zip を残さない
+				//（正常な青空 zip と誤認されて「読み込めません」になるため）
+				if (!downloaded) {
+					try {
+						if (Files.deleteIfExists(srcFile.toPath())) {
+							LogAppender.println("ダウンロードに失敗したため途中のファイルを削除しました : "+srcFile.getPath());
+						}
+					} catch (Exception e) {
+						logger.warn("ダウンロード途中ファイルの削除に失敗: {}", srcFile, e);
+					}
+				}
 			}
 				
 				continue;

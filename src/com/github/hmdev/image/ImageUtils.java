@@ -24,6 +24,7 @@ import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.LogAppender;
+import com.github.hmdev.util.NetUtils;
 
 public class ImageUtils
 {
@@ -83,16 +85,21 @@ public class ImageUtils
 	 * 読み込めなければnull */
 	static public BufferedImage loadImage(String path)
 	{
+		//readImage は成功時に is を閉じるが、読み込み中の例外では閉じられない。
+		//タイムアウト導入により http 経路で SocketTimeoutException が現実に起きるため
+		//try-with-resources で確実に閉じる（二重 close は無害）
 		try {
 			InputStream is;
 			if (path.startsWith("http")) {
-				is = new BufferedInputStream(new URI(path).toURL().openStream(), 8192);
+				is = new BufferedInputStream(NetUtils.openStream(new URI(path).toURL()), 8192);
 			} else {
 				Path filePath = Path.of(path);
 				if (!Files.exists(filePath)) return null;
 				is = new BufferedInputStream(Files.newInputStream(filePath), 8192);
 			}
-			return readImage(path.substring(path.lastIndexOf('.')+1).toLowerCase(), is);
+			try (InputStream in = is) {
+				return readImage(path.substring(path.lastIndexOf('.')+1).toLowerCase(), in);
+			}
 		} catch (Exception e) { return null; }
 	}
 	
@@ -410,22 +417,29 @@ public class ImageUtils
 			*/
 			//ImageIO.write(srcImage, "PNG", zos);
 			ImageWriter imageWriter = getPngImageWriter();
-			imageWriter.setOutput(ImageIO.createImageOutputStream(zos));
-			imageWriter.write(srcImage);
+			//ImageIO はデフォルトで FileCacheImageOutputStream (temp ファイル) を作るため
+			//閉じないと画像 1 枚ごとに一時ファイルが滞留する。
+			//close しても引数の zos は閉じられない仕様
+			try (ImageOutputStream ios = ImageIO.createImageOutputStream(zos)) {
+				imageWriter.setOutput(ios);
+				imageWriter.write(srcImage);
+			}
 		} else if ("jpeg".equals(ext) || "jpg".equals(ext)) {
 			ImageWriter imageWriter = getJpegImageWriter();
-			imageWriter.setOutput(ImageIO.createImageOutputStream(zos));
-			ImageWriteParam iwp = imageWriter.getDefaultWriteParam();
-			if (iwp.canWriteCompressed()) {
-				try {
-					iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-					iwp.setCompressionQuality(jpegQuality);
-					imageWriter.write(null, new IIOImage(srcImage, null, null), iwp);
-				} catch (Exception e) {
-					logger.warn("JPEG 圧縮書き込みに失敗", e);
+			try (ImageOutputStream ios = ImageIO.createImageOutputStream(zos)) {
+				imageWriter.setOutput(ios);
+				ImageWriteParam iwp = imageWriter.getDefaultWriteParam();
+				if (iwp.canWriteCompressed()) {
+					try {
+						iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+						iwp.setCompressionQuality(jpegQuality);
+						imageWriter.write(null, new IIOImage(srcImage, null, null), iwp);
+					} catch (Exception e) {
+						logger.warn("JPEG 圧縮書き込みに失敗", e);
+					}
+				} else {
+					imageWriter.write(srcImage);
 				}
-			} else {
-				imageWriter.write(srcImage);
 			}
 		} else {
 			ImageIO.write(srcImage, ext, zos);
