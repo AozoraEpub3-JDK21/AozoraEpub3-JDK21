@@ -33,9 +33,21 @@ public class AozoraEpub3
 
 	public static final String VERSION = "1.3.6-jdk21";
 	
-	/** コマンドライン実行用 */
+	/** コマンドライン実行用。
+	 * 失敗時のみ非 0 で終了する（成功時に System.exit を呼ばないのは、
+	 * main() を in-process で直接呼ぶテストを終了させないため）。 */
 	public static void main(String args[])
 	{
+		int exitCode = run(args);
+		if (exitCode != 0) System.exit(exitCode);
+	}
+
+	/** コマンドライン処理本体
+	 * @return 終了コード。全件成功なら 0、1 件でも失敗があれば 1 */
+	static int run(String args[])
+	{
+		//変換に失敗した件数。1 件でもあれば非 0 で終了する
+		int errorCount = 0;
 		String jarPath = System.getProperty("java.class.path");
 		int idx = jarPath.indexOf(";");
 		if (idx > 0) jarPath = jarPath.substring(0, idx);
@@ -88,19 +100,19 @@ public class AozoraEpub3
 				commandLine = new DefaultParser().parse(options, args, true);
 			} catch (ParseException e) {
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
-				return;
+				return 1;
 			}
 			//オプションの後ろをファイル名に設定
 			String[] fileNames = commandLine.getArgs();
-			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
-				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
-				return;
-			}
 			
-			//ヘルプ出力
+			//ヘルプ出力（-h は入力ファイル無しで指定されるため、ファイル数チェックより先に処理する）
 			if (commandLine.hasOption('h') ) {
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
-				return;
+				return 0;
+			}
+			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
+				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
+				return 1;
 			}
 			//iniファイル確認
 			if (commandLine.hasOption("i")) {
@@ -108,7 +120,7 @@ public class AozoraEpub3
 				File file = new File(propFileName);
 				if (file == null || !file.isFile()) {
 					LogAppender.error("-i : ini file not exist. "+file.getAbsolutePath());
-					return;
+					return 1;
 				}
 			}
 			//出力パス確認
@@ -116,7 +128,7 @@ public class AozoraEpub3
 				dstPath = new File(commandLine.getOptionValue("d"));
 				if (dstPath == null || !dstPath.isDirectory()) {
 					LogAppender.error("-d : dst path not exist. "+dstPath.getAbsolutePath());
-					return;
+					return 1;
 				}
 			}
 			//ePub出力クラス初期化
@@ -272,6 +284,7 @@ public class AozoraEpub3
 						if (webConverter == null) {
 							LogAppender.append(urlString);
 							LogAppender.println(" は変換できませんでした");
+							errorCount++;
 							continue;
 						}
 
@@ -289,6 +302,7 @@ public class AozoraEpub3
 						if (srcFile == null) {
 							LogAppender.append(urlString);
 							LogAppender.println(" は変換できませんでした");
+							errorCount++;
 							continue;
 						}
 
@@ -298,6 +312,7 @@ public class AozoraEpub3
 							BookInfo.TitleType.indexOf(titleIndex), false);
 						if (bookInfo == null) {
 							LogAppender.println("BookInfo取得失敗: " + urlString);
+							errorCount++;
 							continue;
 						}
 						bookInfo.vertical = vertical;
@@ -314,10 +329,11 @@ public class AozoraEpub3
 
 						File urlDstPath = (dstPath != null) ? dstPath : srcFile.getAbsoluteFile().getParentFile();
 						File outFile = getOutFile(srcFile, urlDstPath, bookInfo, autoFileName, outExt);
-						AozoraEpub3.convertFile(srcFile, "txt", outFile, aozoraConverter, epub3Writer, "UTF-8", bookInfo, imageInfoReader, 0);
+						if (!AozoraEpub3.convertFile(srcFile, "txt", outFile, aozoraConverter, epub3Writer, "UTF-8", bookInfo, imageInfoReader, 0)) errorCount++;
 					} catch (Exception e) {
 						logger.error("URL 入力ファイルの変換に失敗: {}", urlString, e);
 						LogAppender.println("エラーが発生しました : " + e.getMessage());
+						errorCount++;
 					}
 				}
 			}
@@ -330,6 +346,7 @@ public class AozoraEpub3
 				File srcFile = new File(fileName);
 				if (srcFile == null || !srcFile.isFile()) {
 					LogAppender.error("file not exist. "+srcFile.getAbsolutePath());
+					errorCount++;
 					continue;
 				}
 				String ext = srcFile.getName();
@@ -402,7 +419,7 @@ public class AozoraEpub3
 							
 							if (imageInfoReader.countImageFileInfos() == 0) {
 								LogAppender.error("画像がありませんでした");
-								return;
+								return 1;
 							}
 							//名前順で並び替え
 							imageInfoReader.sortImageFileNames();
@@ -448,15 +465,17 @@ public class AozoraEpub3
 					}
 					
 					File outFile = getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
-					AozoraEpub3.convertFile(
+					if (!AozoraEpub3.convertFile(
 							srcFile, ext, outFile,
 							aozoraConverter, writer,
-							encType, bookInfo, imageInfoReader, txtIdx);
+							encType, bookInfo, imageInfoReader, txtIdx)) errorCount++;
 				}
 			}
 		} catch (Exception e) {
 			logger.error("バッチ変換処理でエラー", e);
+			return 1;
 		}
+		return errorCount > 0 ? 1 : 0;
 	}
 	
 	/** 出力ファイルを生成 */
@@ -526,8 +545,9 @@ public class AozoraEpub3
 	
 	/** ファイルを変換
 	 * @param srcFile 変換するファイル
-	 * @param dstPath 出力先パス */
-	static public void convertFile(File srcFile, String ext, File outFile, AozoraEpub3Converter aozoraConverter, Epub3Writer epubWriter,
+	 * @param dstPath 出力先パス
+	 * @return 変換に成功したら true。失敗時は false（出力途中の EPUB は削除済み） */
+	static public boolean convertFile(File srcFile, String ext, File outFile, AozoraEpub3Converter aozoraConverter, Epub3Writer epubWriter,
 			String encType, BookInfo bookInfo, ImageInfoReader imageInfoReader, int txtIdx)
 	{
 		try {
@@ -543,19 +563,28 @@ public class AozoraEpub3
 			
 			//ePub書き出し srcは中でクローズされる
 			epubWriter.write(aozoraConverter, src, srcFile, ext, outFile, bookInfo, imageInfoReader);
-			
-			LogAppender.append("変換完了["+(((System.currentTimeMillis()-time)/100)/10f)+"s] : ");
-			LogAppender.println(outFile.getPath());
-			
+
+			//キャンセル時は例外を投げずに戻り、出力途中のファイルも削除済みなので
+			//「変換完了」とは報告しない
+			boolean canceled = epubWriter.isCanceled();
+			if (canceled) {
+				LogAppender.println("変換を中止しました : "+srcFile.getPath());
+			} else {
+				LogAppender.append("変換完了["+(((System.currentTimeMillis()-time)/100)/10f)+"s] : ");
+				LogAppender.println(outFile.getPath());
+			}
+
 			// アーカイブキャッシュをクリア（メモリ解放）
 			if (!"txt".equals(ext)) {
 				ArchiveTextExtractor.clearCache(srcFile);
 			}
-			
+
+			return !canceled;
 		} catch (Exception e) {
 			logger.error("EPUB 変換に失敗: {}", srcFile, e);
 			LogAppender.println("エラーが発生しました : "+e.getMessage());
 			//LogAppender.printStaclTrace(e);
+			return false;
 		}
 	}
 	
