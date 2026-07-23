@@ -160,7 +160,9 @@ public class WebAozoraConverter
 	public static WebAozoraConverter createWebAozoraConverter(String urlString, File configPath) throws IOException
 	{
 		urlString = urlString.trim();
-		String baseUri = urlString.substring(0, urlString.indexOf('/', urlString.indexOf("//")+2));
+		//パスなし URL (https://example.com) は indexOf が -1 になり substring が例外を投げる
+		int pathIdx = urlString.indexOf('/', urlString.indexOf("//")+2);
+		String baseUri = pathIdx == -1 ? urlString : urlString.substring(0, pathIdx);
 		String fqdn = baseUri.substring(baseUri.indexOf("//")+2);
 		WebAozoraConverter converter = converters.get(fqdn);
 		if (converter == null) {
@@ -502,6 +504,10 @@ public class WebAozoraConverter
 				// 意図的: URL 末尾スラッシュ補正の HTTP 確認失敗時は元 URL のまま続行
 			}
 		}
+		
+		//オフライン等で末尾スラッシュ補正ができなかった場合も、パスなし URL はルート扱いにする
+		//(補正が成功した場合と同じ結果に収束させ、以降の substring が例外にならないようにする)
+		if (urlString.indexOf('/', urlString.indexOf("//")+2) == -1) urlString += "/";
 		
 		this.urlString = urlString;
 		
@@ -873,10 +879,10 @@ public class WebAozoraConverter
 			}
 			
 
-			// __NEXT_DATA__ JSON 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ: HTML縺ｮhrefs莉ｶ謨ｰ繧医ｊ螟壹＞蝣ｴ蜷医↓菴ｿ逕ｨ (繧ｫ繧ｯ繝ｨ繝縺ｪ縺ｩ Next.js 繧ｵ繧､繝亥ｯｾ蠢・
+			// __NEXT_DATA__ JSON フォールバック: HTMLのhrefs件数より多い場合に使用 (カクヨムなど Next.js サイト対応)
 			List<String> nextDataEpisodes = extractEpisodesFromNextData(doc, urlString);
 			if (nextDataEpisodes != null && nextDataEpisodes.size() > chapterHrefs.size()) {
-				LogAppender.println("__NEXT_DATA__ JSON 縺九ｉ繧ｨ繝斐た繝ｼ繝我ｸ隕ｧ蜿門ｾ・ " + nextDataEpisodes.size() + "隧ｱ");
+				LogAppender.println("__NEXT_DATA__ JSON からエピソード一覧取得: " + nextDataEpisodes.size() + "話");
 				chapterHrefs.clear();
 				chapterHrefs.addAll(nextDataEpisodes);
 				// Phase 2-2: 更新日時マップが構築されていれば更新チェックに使用 (カクヨム SUB_UPDATE対応)

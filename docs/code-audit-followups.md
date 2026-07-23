@@ -19,11 +19,11 @@
 | 4 | 🟡 中 | `ImageInputStream` / `ImageOutputStream` 未クローズ | ✅ 対応済 | #40 |
 | 5 | 🟡 中 | レガシー `URL.openStream()` 3 箇所にタイムアウトなし | ✅ 対応済 | #40 |
 | 6 | 🟡 中 | URL サニタイズ regex が文字クラス欠落で実質無効 | ✅ 対応済 | #40 |
-| 7 | 🟢 低 | 0B-4c 監査漏れの空 catch 2 件 | 未着手 | - |
-| 8 | 🟢 低 | `new FileReader` のデフォルトエンコーディング依存 | 未着手 | - |
-| 9 | 🟢 低 | パスなし URL 入力で `StringIndexOutOfBoundsException` | 未着手 | - |
-| 10 | 🟢 低 | `getTextInputStream` の null 戻りで NPE | 未着手 | - |
-| 11 | 🟢 低 | ソース内コメントの文字化け | 未着手 | - |
+| 7 | 🟢 低 | 0B-4c 監査漏れの空 catch 2 件 | ❌ 誤検出（対応不要） | #41 |
+| 8 | 🟢 低 | `new FileReader` のデフォルトエンコーディング依存 | ✅ 対応済 | #41 |
+| 9 | 🟡 中 | パスなし URL 入力で `StringIndexOutOfBoundsException` | ✅ 対応済 | #41 |
+| 10 | 🟢 低 | `getTextInputStream` の null 戻りで NPE | ✅ 対応済 | #41 |
+| 11 | 🟢 低 | ソース内コメントの文字化け（ログ文字列を含む） | ✅ 対応済 | #41 |
 | 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | 未着手 | - |
 
 ---
@@ -169,12 +169,22 @@ urlString.substring(...).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_")
 
 ## 🟢 低
 
-### 7. 0B-4c 監査漏れの空 catch（`意図的:` コメントなし）2 件
+### 7. 0B-4c 監査漏れの空 catch（`意図的:` コメントなし）2 件 → ❌ 誤検出（対応不要）
 
-- `src/AozoraEpub3Applet.java:3154` — `catch (Exception e) {}`（D&D の transferData 取得）
-- `src/com/github/hmdev/swing/JConfirmDialog.java:544` — `catch (MalformedURLException e1) {}`（アイコン読込）
+- `src/AozoraEpub3Applet.java` — `catch (Exception e) {}`（D&D の transferData 取得）
+- `src/com/github/hmdev/swing/JConfirmDialog.java` — `catch (MalformedURLException e1) {}`（アイコン読込）
 
-実害は小さいが、0B-4c で確立した規約（`/* 意図的: <理由> */` コメント必須）の漏れ。コメントを追記する。
+**結論: 2 件とも誤検出。対応不要。**
+
+いずれも**ブロックコメント内の dead code** で、grep ベースの監査がコメント内をヒットさせたもの。
+
+- Applet 側は `/*class DropListener implements DropTargetListener ... }*/`（3110 行目付近から始まる）の内側
+- JConfirmDialog 側は `/*jButtonFit = ... panel.add(jButtonFit);*/` の内側
+
+実際に `/* 意図的: ... */` コメントを追記しようとすると、**内側の `*/` が外側のブロックコメントを途中で終端させてコンパイルエラーになる**（PR #41 で確認）。
+0B-4c の規約漏れではないため、`grep 「意図的:」` での追跡対象からも外してよい。
+
+**教訓**: 空 catch の監査を grep で行う場合、ブロックコメント内の dead code を除外すること。
 
 ### 8. `new FileReader(file)` のデフォルトエンコーディング依存
 
@@ -183,13 +193,28 @@ urlString.substring(...).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_")
 Java 18+ ではデフォルトが UTF-8 固定になるが、Windows の `.url` ファイルは ANSI (MS932) の場合がある。
 `URL=` 行が ASCII なら実害なしだが、非 ASCII を含む URL で文字化けの可能性。charset を明示する。
 
+**対応（PR #41）**: `new FileReader(file, StandardCharsets.UTF_8)` で **UTF-8 を明示**した。
+Java 18+ の既定と同じためバイト単位で挙動不変（回帰ゼロ）だが、
+**MS932 で書かれた `.url` の非 ASCII を読む問題は解消していない**。
+OS が生成する InternetShortcut の `URL=` 値は percent-encoding された ASCII のため実害はほぼないが、
+手編集された MS932 ファイルへの対応が必要になったら別課題として扱う。
+
 ### 9. パスなし URL 入力で `StringIndexOutOfBoundsException`
 
-**場所**: `src/com/github/hmdev/web/WebAozoraConverter.java:481`
+**場所**: `src/com/github/hmdev/web/WebAozoraConverter.java` の 2 箇所
+（`createWebAozoraConverter` と `convertToAozoraText`。監査時の `:481` からは移動している）
 
 `urlString.indexOf('/', ...)` が -1 のまま `substring` に渡る。
-`https://example.com`（末尾スラッシュなし）を入力し、かつ `:463-477` の末尾スラッシュ補正 HTTP 確認が失敗（オフライン等）した場合に例外。
-補正成功時は顕在化しないため**要確認**（再現条件の確定が先）。indexOf の -1 チェックを追加する。
+
+**訂正（PR #41）**: 当初「末尾スラッシュ補正が失敗した場合のみ」「要確認」としていたが、**無条件に再現する**。
+呼び出し順は `createWebAozoraConverter`（`AozoraEpub3.java` / `AozoraEpub3Applet.java` から）→ `convertToAozoraText` であり、
+**末尾スラッシュ補正は後者の中にある**。したがって `https://example.com`（パスなし）入力は
+ネットワーク状態と無関係に `createWebAozoraConverter` で即例外になり、
+ユーザーには `エラーが発生しました : begin 0, end -1, length 19` という意味不明なメッセージが出る。
+深刻度も 🟢 低 → 🟡 中 に訂正。
+
+該当は 2 箇所（`createWebAozoraConverter` と `convertToAozoraText`）。前者は -1 チェック、
+後者は補正できなかった場合にルート扱い（`/` 付与）にして、補正成功時と同じ結果に収束させる。
 
 ### 10. `getTextInputStream` の null 戻りで NPE
 
@@ -201,12 +226,34 @@ Java 18+ ではデフォルトが UTF-8 固定になるが、Windows の `.url` 
 txt を含まない zip の変換で、ユーザー向けエラーが NPE メッセージになる（外側 catch があるためクラッシュはしない）。
 null チェックして明示メッセージで return する。
 
+**訂正（PR #41）**: 監査が挙げた `InputStreamReader(null, ...)` は**真因ではなかった**。
+png 1 枚だけの zip / cbz を CLI 変換すると、実際には**その手前**で落ちる:
+
+```
+java.lang.NullPointerException: Cannot read field "insertTitleToc" because "bookInfo" is null
+	at AozoraEpub3.run(AozoraEpub3.java:401)
+```
+
+`imageOnly` 時は `bookInfo` が null のままで `if (!bookInfo.insertTitleToc && ...)` に到達する。
+また `getBookInfo` が null を返した場合も同じ経路で NPE になる。
+PR #41 では以下の 3 点をまとめて対応した:
+
+- `getTextInputStream` の null チェック（監査が挙げた箇所）
+- `getBookInfo` が null を返した場合に明示メッセージ + `errorCount++` で次のファイルへ
+- `imageOnly` 時に `bookInfo` が null のまま参照される箇所に null ガード
+
+GUI 経路は先に BookInfo を生成するため元から影響なし。
+
 ### 11. ソース内コメントの文字化け (mojibake)
 
 **場所**: `src/com/github/hmdev/web/WebAozoraConverter.java:847` / `:850`
 
-`__NEXT_DATA__ 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ...` のように mojibake 化している。動作影響はないが、エンコーディング事故の痕跡。
-同ファイルは編集時に注意が必要（UTF-8 CRLF、Edit ツールが失敗する場合はバイトレベル編集）。
+`__NEXT_DATA__ 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ...` のように mojibake 化している。
+同ファイルは編集時に注意が必要（Edit ツールが失敗する場合はバイトレベル編集）。
+
+**訂正（PR #41）**: 「動作影響なし」ではなかった。2 行のうち片方は**ユーザー可視のログ文字列**で、
+カクヨム等で `__NEXT_DATA__` フォールバックが発動すると GUI / CLI のログに文字化けが表示されていた。
+復元内容は CP932 の round-trip decode で機械的に検証済み。`src/` 全体を再スキャンして残存 mojibake はゼロ。
 
 ### 12. Windows 予約デバイス名でキャッシュが毎回無効化される
 

@@ -389,6 +389,12 @@ public class AozoraEpub3
 					BookInfo bookInfo = null;
 					if (!imageOnly) {
 						bookInfo = AozoraEpub3.getBookInfo(srcFile, ext, txtIdx, imageInfoReader, aozoraConverter, encType, BookInfo.TitleType.indexOf(titleIndex), false);
+						if (bookInfo == null) {
+							//txt を含まない zip 等。そのまま進むと以降の参照で NPE になる
+							LogAppender.error("入力ファイルから書籍情報が取得できませんでした : "+srcFile.getPath());
+							errorCount++;
+							continue;
+						}
 						bookInfo.vertical = vertical;
 						bookInfo.insertTocPage = tocPage;
 						bookInfo.setTocVertical(tocVertical);
@@ -398,7 +404,8 @@ public class AozoraEpub3
 						bookInfo.titlePageType = titlePage;
 					}
 					//表題の見出しが非表示で行が追加されていたら削除
-					if (!bookInfo.insertTitleToc && bookInfo.titleLine >= 0) {
+					//imageOnly 時は bookInfo が null のままここに来る（後段の imageOnly 分岐で生成される）
+					if (bookInfo != null && !bookInfo.insertTitleToc && bookInfo.titleLine >= 0) {
 						bookInfo.removeChapterLineInfo(bookInfo.titleLine);
 					}
 					
@@ -558,7 +565,13 @@ public class AozoraEpub3
 			//入力Stream再オープン
 			BufferedReader src = null;
 			if (!bookInfo.imageOnly) {
-				src = new BufferedReader(new InputStreamReader(ArchiveTextExtractor.getTextInputStream(srcFile, ext, null, null, txtIdx), encType));
+				//zip 内に txt が無い場合等は null が返る。そのまま渡すと NPE メッセージになる
+				InputStream is = ArchiveTextExtractor.getTextInputStream(srcFile, ext, null, null, txtIdx);
+				if (is == null) {
+					LogAppender.println("入力ファイルからテキストが取得できませんでした : "+srcFile.getPath());
+					return false;
+				}
+				src = new BufferedReader(new InputStreamReader(is, encType));
 			}
 			
 			//ePub書き出し srcは中でクローズされる
