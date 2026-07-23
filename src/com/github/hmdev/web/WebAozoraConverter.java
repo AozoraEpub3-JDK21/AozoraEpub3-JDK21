@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
@@ -423,19 +424,45 @@ public class WebAozoraConverter
 		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
 	}
 
-	/** dstPath 配下にあることを検証して File を返す（パストラバーサル対策）。
-	 * candidate が存在する場合は toRealPath でシンボリックリンクを追跡し、
-	 * source dir 内の symlink が外部を指すケースを弾く。存在しない場合は
-	 * normalize 結果で startsWith 比較 (PR #22/#23 の 2 段階パターン)。 */
-	private File safeDstFile(String fileName) throws IOException {
-		Path basePath = Path.of(this.dstPath);
-		Path canonicalBase = Files.exists(basePath) ? basePath.toRealPath() : basePath.toAbsolutePath().normalize();
-		Path candidate = Path.of(this.dstPath + fileName).normalize();
-		Path resolved = Files.exists(candidate) ? candidate.toRealPath() : candidate.toAbsolutePath().normalize();
-		if (!resolved.startsWith(canonicalBase) && !resolved.equals(canonicalBase)) {
+	/** 実在する最も近い祖先を toRealPath() で解決し、残りのセグメントを連結して返す。
+	 * path 自身が存在しない場合でも、途中のディレクトリが symlink / junction で
+	 * 別の場所を指しているケースを解決できるようにするため。
+	 * 壊れた symlink に当たった場合は toRealPath() が IOException を投げ、
+	 * 呼び出し元では「安全でないパス」として扱われる（fail closed）。 */
+	private static Path realPath(Path path) throws IOException {
+		Path abs = path.toAbsolutePath().normalize();
+		//symlink 自体も「実在する」とみなすため NOFOLLOW_LINKS で遡る
+		Path existing = abs;
+		while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+			existing = existing.getParent();
+		}
+		if (existing == null) return abs;
+		Path real = existing.toRealPath();
+		if (existing.getNameCount() == abs.getNameCount()) return real;
+		return real.resolve(abs.subpath(existing.getNameCount(), abs.getNameCount())).normalize();
+	}
+
+	/** base ディレクトリ配下にあることを検証して File を返す（パストラバーサル対策）。
+	 * base・candidate とも realPath() で同じ基準に正規化してから startsWith 比較する
+	 * (PR #22/#23 の 2 段階パターンを、実在しない葉にも効くよう拡張したもの)。
+	 * 両者を同じ基準で解決するのが要点で、
+	 *  - base 自体が junction / symlink 配下にある場合の誤検知を防ぐ（正常系の保護）
+	 *  - candidate の途中ディレクトリが symlink で base 外を指すケースを弾く（脱出の防止）
+	 * を両立させる。
+	 * relative が絶対パスの場合は resolve がそれを返すため、startsWith 検査で弾かれる。
+	 * テストから利用するため package-private */
+	static File safeResolve(Path base, String relative) throws IOException {
+		Path canonicalBase = realPath(base);
+		Path resolved = realPath(canonicalBase.resolve(relative));
+		if (!resolved.startsWith(canonicalBase)) {
 			throw new IOException("安全でないパス: " + resolved);
 		}
 		return resolved.toFile();
+	}
+
+	/** dstPath 配下にあることを検証して File を返す（パストラバーサル対策） */
+	private File safeDstFile(String fileName) throws IOException {
+		return safeResolve(Path.of(this.dstPath), fileName);
 	}
 	
 	/** 変換実行 (ファイル名指定あり) */
@@ -499,12 +526,14 @@ public class WebAozoraConverter
 		else urlParentPath = urlFilePath.substring(0, urlFilePath.lastIndexOf('/')+1);
 		
 		//変換結果
-		this.dstPath = cachePath.getAbsolutePath()+"/";
-		if (isPath) this.dstPath += urlParentPath;
-		else this.dstPath += urlFilePath+"_converted/";
-		
-		//urlStringのファイルをキャッシュ
-		File cacheFile = new File(cachePath.getAbsolutePath()+"/"+urlFilePath);
+		String dstRelative = isPath ? urlParentPath : urlFilePath+"_converted/";
+		//dstPath 自体が cachePath 配下であることを検証（ここが外に出ていると
+		//dstPath を base にする safeDstFile / 画像側の検証が空回りするため）
+		safeResolve(cachePath.toPath(), dstRelative);
+		this.dstPath = cachePath.getAbsolutePath()+"/"+dstRelative;
+
+		//urlStringのファイルをキャッシュ (cachePath 配下であることを検証)
+		File cacheFile = safeResolve(cachePath.toPath(), urlFilePath);
 		
 		// なろうAPI処理: メタデータ取得を試行
 		NovelMetadata apiMetadata = null;
@@ -894,7 +923,18 @@ public class WebAozoraConverter
 						
 						//キャッシュ取得 ロードされたらWait 500ms
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
-						File chapterCacheFile = new File(cachePath.getAbsolutePath()+"/"+chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+						File chapterCacheFile;
+						try {
+							//cachePath 配下であることを検証（パストラバーサル対策）
+							chapterCacheFile = safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+						} catch (IOException e) {
+							logger.error("安全でない章キャッシュパスのためスキップ: {}", chapterHref, e);
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 安全でないパスのためスキップします: "+chapterHref);
+							//failedHrefs には追加しない（同じ href は後段の変換ループでも
+							//同様に弾かれ、そちらで一度だけ記録されるため）
+							chapterIdx++;
+							continue;
+						}
 						//hrefsのときは更新分のみurlsに入っている
 						boolean loaded = false;
 						
@@ -995,7 +1035,17 @@ public class WebAozoraConverter
 					if (modifiedChapterIdx == null || modifiedChapterIdx.contains(chapterIdx)) {
 						//キャッシュファイル取得
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
-						File chapterCacheFile = new File(cachePath.getAbsolutePath()+"/"+chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+						File chapterCacheFile;
+						try {
+							//cachePath 配下であることを検証（パストラバーサル対策）
+							chapterCacheFile = safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+						} catch (IOException e) {
+							logger.error("安全でない章キャッシュパスのためスキップ: {}", chapterHref, e);
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 安全でないパスのためスキップします: "+chapterHref);
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
 						//ダウンロード失敗でキャッシュが存在しない場合は再試行
 						if (!chapterCacheFile.exists()) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、再ダウンロードを試みます: "+chapterHref);
@@ -1617,9 +1667,20 @@ public class WebAozoraConverter
 		}
 		
 		if (imagePath.endsWith("/")) imagePath += "image.png";
-		
-		File imageFile = new File(this.dstPath+"images/"+imagePath);
-		
+
+		//dstPath 配下であることを検証（パストラバーサル対策）
+		//imageOutFile 指定時（表紙）は imageFile を使わないため検証も不要
+		File imageFile = null;
+		if (imageOutFile == null) {
+			try {
+				imageFile = safeResolve(Path.of(this.dstPath), "images/"+imagePath);
+			} catch (IOException e) {
+				logger.error("安全でない画像パスのためスキップ: {}", src, e);
+				LogAppender.println("安全でない画像パスのためスキップします : "+src);
+				return;
+			}
+		}
+
 		try {
 			if (imageOutFile != null) {
 				if (imageOutFile.exists()) imageOutFile.delete();
