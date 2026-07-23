@@ -40,6 +40,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -3390,7 +3391,8 @@ public class AozoraEpub3Applet extends JPanel
 	/** Windowsのインターネットショートカットを読み込み */
 	String readInternetShortCut(File file) throws IOException
 	{
-		BufferedReader br = new BufferedReader(new FileReader(file));
+		//Java 18+ の既定は UTF-8 だが、プラットフォーム依存に見えるため明示する
+		BufferedReader br = new BufferedReader(new FileReader(file, StandardCharsets.UTF_8));
 		try {
 			String line;
 			while ((line = br.readLine()) != null) {
