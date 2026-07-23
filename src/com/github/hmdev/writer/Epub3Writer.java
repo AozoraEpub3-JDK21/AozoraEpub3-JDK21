@@ -481,6 +481,14 @@ public class Epub3Writer
 	{
 		this.canceled = true;
 	}
+
+	/** 直前の write() がキャンセルで終了したか。
+	 * キャンセル時は例外を投げずに戻るため、呼び出し側が「変換完了」と
+	 * 報告しないようにこれで判別する */
+	public boolean isCanceled()
+	{
+		return this.canceled;
+	}
 	
 	/** テンプレートファイルまたはJAR内リソースからInputStreamを取得 */
 	private InputStream getTemplateInputStream(String fileName) throws IOException
@@ -526,8 +534,17 @@ public class Epub3Writer
 	 * @throws IOException */
 	public void write(AozoraEpub3Converter converter, BufferedReader src, File srcFile, String srcExt, File epubFile, BookInfo bookInfo, ImageInfoReader imageInfoReader) throws Exception
 	{
+		//出力途中で発生したエラー。zos を閉じた後に epubFile を削除して再スローする
+		Exception writeError = null;
+		//出力が最後まで完走したか。catch (Exception) では拾えない Error (OutOfMemoryError 等) や
+		//キャンセルによる早期 return も「未完走」として扱い、壊れた EPUB を残さないため
+		boolean completed = false;
+		//出力ファイルを開いたか。開く前に失敗した場合、既存の EPUB を消してはいけない
+		boolean outputOpened = false;
+		//外側の try は「キャンセルによる早期 return でも後始末を通す」ため
 		try {
-		
+		try {
+
 		this.canceled = false;
 		this.bookInfo = bookInfo;
 		this.imageInfoReader = imageInfoReader;
@@ -589,6 +606,7 @@ public class Epub3Writer
 		
 		//出力先ePubのZipストリーム生成
 		zos = new ZipArchiveOutputStream(new BufferedOutputStream(Files.newOutputStream(epubFile.toPath())));
+		outputOpened = true;
 		//mimetypeは非圧縮
 		//STOREDで格納しCRCとsizeを指定する必要がある
 		ZipArchiveEntry mimeTypeEntry = new ZipArchiveEntry(MIMETYPE_PATH);
@@ -958,8 +976,12 @@ public class Epub3Writer
 		bw.flush();
 		zos.closeArchiveEntry();
 		
-		if (src != null) src.close();
-		
+		//入力ロックを早期解放する（後段のフォント・画像出力を待たない）。
+		//クローズ失敗は出力の成否と無関係なので警告に留める（finally 側と同じ方針）
+		if (src != null) {
+			try { src.close(); } catch (IOException e) { logger.warn("入力ストリームのクローズに失敗", e); }
+		}
+
 		if (this.canceled) return;
 		//プログレスバーにテキスト進捗分を追加
 		if (this.jProgressBar != null && !bookInfo.imageOnly) this.jProgressBar.setValue(bookInfo.totalLineNum/10);
@@ -1088,6 +1110,8 @@ public class Epub3Writer
 						if (entryName.length() == 0) entryName = "";
 						entryName = entryName.replace('\\', '/');
 						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
+						//本文より浅い階層のエントリは対象外（substring の SIOOBE 回避）
+						if (entryName.length() < archivePathLength) continue;
 						String srcImageFileName = entryName.substring(archivePathLength);
 						if (outImageFileNames.contains(srcImageFileName)) {
 							InputStream is = archive.getInputStream(fileHeader);
@@ -1110,11 +1134,13 @@ public class Epub3Writer
 					try {
 						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
 						String entryName = sanitizeArchiveEntryName(entry.getName());
+						//本文より浅い階層のエントリは対象外（substring の SIOOBE 回避）
+						if (entryName.length() < archivePathLength) continue;
 						String srcImageFileName = entryName.substring(archivePathLength);
 						if (outImageFileNames.contains(srcImageFileName)) {
 							this.writeArchiveImage(srcImageFileName, zis);
 						}
-					} catch (IllegalArgumentException e) {
+					} catch (IllegalArgumentException | IndexOutOfBoundsException e) {
 						System.err.println("Skipping suspicious archive entry: " + e.getMessage());
 						// 疑わしいエントリはスキップ
 						continue;
@@ -1127,20 +1153,57 @@ public class Epub3Writer
 		//エラーがなければ100%
 		if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getMaximum());
 
+		//ここまで到達したら出力は完走している
+		completed = true;
+
 		} catch (Exception e) {
 			logger.error("EPUB 出力中にエラーが発生", e);
+			writeError = e;
 		} finally {
+			//入力ストリームを閉じる（キャンセル・途中例外で未クローズのまま残ると
+			//Windows では入力ファイルがロックされ削除・再変換に失敗する）
+			//成功経路では既に閉じられているが Reader.close() は冪等
+			if (src != null) {
+				try {
+					src.close();
+				} catch (Exception e) {
+					//入力側のクローズ失敗は出力の成否とは無関係なので警告に留める
+					logger.warn("入力ストリームのクローズに失敗", e);
+				}
+			}
 			try {
 			//ePub3出力ファイルを閉じる
 			if (zos != null) zos.close();
 			} catch (Exception e) {
+				//ZipOutputStream.close() は central directory の書き出しを含むため
+				//失敗は EPUB の破損を意味する。警告で済ませず失敗として扱う
 				logger.warn("EPUB 出力ストリームのクローズに失敗", e);
+				if (writeError == null) writeError = e;
+				else writeError.addSuppressed(e);
 			}
 			//メンバ変数解放
 			this.velocityContext = null;
 			this.bookInfo = null;
 			this.imageInfoReader = null;
 		}
+		} finally {
+			//未完走なら出力途中の壊れた EPUB を残さない
+			//（zos.close() 後に削除する。Windows ではオープン中のファイルは削除できない）
+			//キャンセルは本文出力途中の return で抜けるため、外側 finally に置く必要がある
+			//outputOpened で「今回の実行が作ったファイル」に限定し、
+			//出力先を開く前に失敗したケースで既存の EPUB を消さないようにする
+			if (outputOpened && !completed) {
+				try {
+					if (Files.deleteIfExists(epubFile.toPath())) {
+						LogAppender.println((this.canceled ? "中止したため出力途中のファイルを削除しました : "
+							: "出力途中のファイルを削除しました : ")+epubFile.getPath());
+					}
+				} catch (Exception e) {
+					logger.warn("出力途中ファイルの削除に失敗: {}", epubFile, e);
+				}
+			}
+		}
+		if (writeError != null) throw writeError;
 	}
 	
 	/** アーカイブ内の画像を出力 */

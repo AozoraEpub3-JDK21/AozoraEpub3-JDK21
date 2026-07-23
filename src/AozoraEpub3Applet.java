@@ -4079,7 +4079,7 @@ public class AozoraEpub3Applet extends JPanel
 		
 		////////////////////////////////
 		//変換実行
-		AozoraEpub3.convertFile(
+		boolean converted = AozoraEpub3.convertFile(
 			srcFile, ext, outFile,
 			this.aozoraConverter,
 			writer,
@@ -4096,6 +4096,12 @@ public class AozoraEpub3Applet extends JPanel
 		//変換中にキャンセルされた場合
 		if (this.convertCanceled) {
 			LogAppender.println("変換処理を中止しました : "+srcFile.getAbsolutePath());
+			return;
+		}
+		
+		//変換失敗時は出力途中のファイルが削除済みなので後続処理(kindlegen等)に進まない
+		if (!converted) {
+			LogAppender.error("変換に失敗しました : "+srcFile.getAbsolutePath());
 			return;
 		}
 		
