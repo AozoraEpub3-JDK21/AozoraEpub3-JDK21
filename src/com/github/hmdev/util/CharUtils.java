@@ -183,6 +183,14 @@ public class CharUtils
 	}
 	
 	////////////////////////////////////////////////////////////////
+	/** ファイル名に使えない文字を'_'に置換（URL をそのままファイル名にする用途）。
+	 * escapeUrlToFile と違い '?' '&' もディレクトリ区切りにせず '_' にする */
+	static public String replaceInvalidFileChars(String str)
+	{
+		return str.replaceAll("[?*&|<>\"\\\\]", "_");
+	}
+
+	////////////////////////////////////////////////////////////////
 	/** 前後の空白を除外 */
 	static public String removeSpace(String text)
 	{
