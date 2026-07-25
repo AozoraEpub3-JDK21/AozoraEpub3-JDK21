@@ -251,6 +251,33 @@ java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -d output
 java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d output
 ```
 
+### Exit Codes
+
+When run from the CLI, AozoraEpub3 returns an exit code so that shell scripts and external tools can detect success or failure.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | All input files converted successfully (`-h` / `--help` also returns `0`) |
+| `1` | One or more input files failed to convert; the INI file (`-i`), output directory (`-d`), or input file does not exist; the options were invalid; or neither an input file nor `-url` was given (help is printed and the run ends) |
+
+```bash
+java -jar AozoraEpub3.jar -of -d output novel.txt
+if [ $? -ne 0 ]; then
+  echo "Conversion failed"
+fi
+```
+
+> Running `java -jar AozoraEpub3.jar` with no arguments launches the GUI, so the table above does not apply to that case.
+
+> **Changed in v1.3.7-jdk21 (upcoming release)**: v1.3.6-jdk21 and earlier **always returned `0`**, even when conversion failed.
+> If writing the EPUB was interrupted partway through (disk full, no write permission on the output directory), the tool still reported success,
+> leaving a **broken `.epub` behind that looked like a successful conversion**.
+> From v1.3.7-jdk21 onward, failures return `1` and the **partially written `.epub` is deleted** (the same applies when you cancel a conversion).
+>
+> Recoverable problems — image decode failures, cover download failures, suspicious archive entries — are still handled locally and do not abort the run,
+> so conversions that used to succeed will not start failing.
+> If you use narou.rb, see the [narou.rb Setup Guide](narou-setup.html) as well.
+
 ---
 
 ## Device Presets
