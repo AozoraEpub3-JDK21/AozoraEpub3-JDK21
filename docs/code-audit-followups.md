@@ -499,6 +499,49 @@ Windows では制御文字を含む名前をファイル API が受け付けな�
 
 ---
 
+## 依存ライブラリ更新の判断（2026-07-25）
+
+### junrar 7.5.10 → 8.0.0 — **見送り（時期尚早）**
+
+**API 面の移行コストはゼロ**と確認済み。8.0.0 の破壊的変更は 3 点だけで、いずれも本プロジェクトは未使用:
+
+- `UnsupportedRarV5Exception` の削除
+- `FileHeader#getFileNameString` / `getFileNameW` の削除
+- `BaseBlock#getHeaderSize()` の削除
+
+`src/` が使うのは `Archive`（`new Archive(File)` / `getFileHeaders()` / `nextFileHeader()` / `extractFile()`）、
+`FileHeader`（`isDirectory()` / `getFileName()`）、`RarException` のみ（import しているのは 6 ファイル）。
+
+**実利も明確**: RAR5 は WinRAR の既定形式で 7.5.10 では読めない。CBR 入力で普通に遭遇する。
+`.NET` ポートの byte-identical 比較テスト 5 件は txt / zip / Web 経路のみなので影響なし。
+
+**それでも見送る理由**: 8.0.0 は **2026-07-23 公開**（Maven Central の `maven-metadata.xml` の
+`lastUpdated=20260723071908` で確認）で、**RAR5 デコーダの新規実装を含むメジャー版**。
+公開直後で実地の実績情報がなく、8.0.1 も出ていない。
+
+**再検討の条件**: 8.0.1 の公開、または公開から 1〜2 か月経って重大な issue が上がっていないこと。
+
+### Gradle wrapper 9.2.1 → 9.6.1 — **v1.3.7 リリース後に実施**
+
+9.x 系内のマイナー更新で破壊的変更なし。ただし 9.6 の目玉（Configuration Cache のヒット率改善）は
+本プロジェクトが config cache 未使用のため**実利がほぼない**。急ぐ理由はないが、
+放置すると Gradle 10 移行時の差分が肥大するのでパッチ追従として実施する。
+
+進め方: wrapper 更新 + バージョン文字列 5 箇所（`CLAUDE.md` / `AGENTS.md` / `README.md` /
+`docs/release-procedure.md` / `docs/modernization-plan.md`）の更新のみの単独 PR。
+検証は (a) CI matrix（JDK 21 / 25 / 26）で `gradlew test`、
+(b) **9.2.1 と 9.6.1 それぞれで `gradlew dist` を実行し `unzip -l` / `tar -tzf` のファイルリストを diff**
+（過去の include 漏れ事故対策）。**リリース直前には入れない**。
+
+### 先にやるべき準備: RAR 経路のテスト整備
+
+`test_data/` に **RAR / CBR のフィクスチャが 1 件も無く、RAR 経路は完全に無テスト**（2026-07-25 時点で確認）。
+このまま junrar を上げると回帰に気づけない。junrar 更新の前に、
+RAR4 フィクスチャ + 抽出テストを追加して現行動作のベースラインを確立すること。
+これは junrar のバージョン判断と独立して価値がある。
+
+---
+
 ## 進め方
 
 優先度順に着手する。各 PR は以下のゲートを通す:
