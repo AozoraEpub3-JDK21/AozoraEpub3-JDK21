@@ -64,6 +64,41 @@ public class WebAozoraConverterSafeResolveTest {
 			() -> WebAozoraConverter.safeResolve(base, "../evil.txt"));
 	}
 
+	/**
+	 * OS がファイル名として受け付けない文字を含むパスは IOException になる（監査 #13）。
+	 *
+	 * Windows では Path 解決の時点で InvalidPathException（RuntimeException）が飛ぶため、
+	 * 変換していないと呼び出し側の catch (IOException) をすり抜けて変換全体が中断する。
+	 * safeResolve で IOException に変換し、「該当の章・画像だけをスキップ」という既存の扱いに載せる。
+	 *
+	 * 非 Windows では InvalidPathException にならず正常に解決されるため、その環境ではスキップする。
+	 */
+	@Test
+	public void wrapsInvalidPathExceptionAsIOException() {
+		String[] invalidRelatives = {
+			"host.example.com/foo /bar.html",   // セグメント末尾の半角スペース
+			"host.example.com/fo\to/bar.html",  // 制御文字 (TAB)
+		};
+		// この OS で InvalidPathException になるものだけを対象にする。
+		// assumeTrue をループ内で呼ぶと 1 件目で打ち切られて 2 件目が未検証になるため、
+		// 先に全件を分類してから検証する
+		java.util.List<String> invalidOnThisOs = new java.util.ArrayList<>();
+		for (String relative : invalidRelatives) {
+			try {
+				base.resolve(relative);
+			} catch (java.nio.file.InvalidPathException e) {
+				invalidOnThisOs.add(relative);
+			}
+		}
+		org.junit.Assume.assumeFalse(
+			"この OS では不正なパスにならないためスキップ", invalidOnThisOs.isEmpty());
+
+		for (String relative : invalidOnThisOs) {
+			assertThrows("IOException に変換されていない: " + relative, IOException.class,
+				() -> WebAozoraConverter.safeResolve(base, relative));
+		}
+	}
+
 	/** 中間に「..」を挟んで base 外に出るパスも IOException */
 	@Test
 	public void rejectsNestedParentEscape() {

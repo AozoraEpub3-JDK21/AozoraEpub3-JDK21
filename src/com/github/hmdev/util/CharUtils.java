@@ -192,13 +192,22 @@ public class CharUtils
 	/** ファイル名に使えない文字を'_'に置換
 	 * パストラバーサル対策として「..」のみのパスセグメントは「__」に無害化する（多層防御）。
 	 * Windows の予約デバイス名と完全一致するパスセグメントは末尾に '_' を付けて無害化する。
-	 * どちらにも該当しない入力の出力は従来と完全に同一（キャッシュファイル名互換維持） */
+	 * 制御文字とセグメント末尾の半角スペースも '_' に置換する（Windows で InvalidPathException になるため）。
+	 * いずれにも該当しない入力の出力は従来と完全に同一（キャッシュファイル名互換維持） */
 	static public String escapeUrlToFile(String str)
 	{
 		String escaped = str.replaceAll("(\\?|\\&)", "/").replaceAll("(:|\\*|\\||\\<|\\>|\"|\\\\)", "_");
+		// 制御文字 (0x00-0x1F) は Windows のファイル名に使えず、位置を問わず InvalidPathException になる
+		escaped = escaped.replaceAll("[\\x00-\\x1F]", "_");
 		// 「?」「&」→「/」置換後に現れる「..」セグメントも対象にするため、置換後に無害化する
 		escaped = escaped.replaceAll("(^|/)\\.\\.(?=/|$)", "$1__");
-		return escapeReservedDeviceNames(escaped);
+		escaped = escapeReservedDeviceNames(escaped);
+		// セグメント末尾の半角スペースも Windows では許されず InvalidPathException になる。
+		// 予約デバイス名の判定後に行う（"COM1 " は先に "COM1 _" になり、この時点では末尾スペースではなくなる）。
+		// 末尾ドットは Windows が黙って切り詰めるだけで例外にはならないため対象外。
+		// 入力末尾は '$' ではなく '\z' で判定する。'$' は行終端文字 (U+0085 / U+2028 / U+2029) の
+		// 直前にもマッチするため、"foo " のような Windows で有効な名前まで書き換えてしまう
+		return escaped.replaceAll(" (?= *(?:/|\\z))", "_");
 	}
 
 	/** Windows 予約デバイス名と一致するパスセグメントの末尾に '_' を付けて無害化する。
