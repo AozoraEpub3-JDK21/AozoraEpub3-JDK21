@@ -199,6 +199,31 @@ After initialization, an **`AozoraEpub3.ini`** file appears in the same director
 - **Unsure about config file location**: Run `gem env home` to find the base GEM installation folder
 - **Official help**: [narou.rb Wiki](https://github.com/whiteleaf7/narou/wiki)
 
+### "JavaがインストールされていないかAozoraEpub3実行時にエラーが発生しました"
+
+If you see this message ("Java is not installed, or an error occurred while running AozoraEpub3") even though Java is installed correctly, the real cause is most likely that **EPUB output actually failed**.
+
+narou.rb decides success or failure from AozoraEpub3's exit code, but it was written on the assumption that
+"AozoraEpub3 always returns 0, even on error". As a result it interprets **any non-zero exit code as "Java could not run"**
+and shows this message (narou.rb 3.9.1, `lib/novelconverter.rb`).
+
+Starting with **v1.3.7-jdk21 (upcoming release), AozoraEpub3 returns exit code `1` when conversion fails.**
+This is an intentional change. In v1.3.6-jdk21 and earlier it returned `0` even on failure,
+so **broken `.epub` files were imported into narou.rb as if they had succeeded**.
+
+**How to find the real cause**: immediately before this message, narou.rb prints AozoraEpub3's **full stdout and stderr** as-is (`novelconverter.rb:197`).
+If you see a line starting with `エラーが発生しました :` ("An error occurred:"), that is the actual reason.
+
+> `narou convert -v <ID>` (verbose) does not add anything here.
+> When the exit code is non-zero, narou.rb does `return :error` before reaching the verbose output block (`novelconverter.rb:195-200` vs `:218-223`).
+> The full output is already shown, so you can diagnose it without `-v`.
+
+Common causes: not enough free disk space at the destination, or no write permission on the output directory.
+
+Note that image decode failures and cover download failures are still handled locally and do **not** cause this failure. They print an error line such as `画像読み込みエラー: ...` to the log, but the conversion continues and the exit code stays `0`.
+
+> Note that a genuinely missing Java installation produces the same message. Check with `java -version`.
+
 ---
 
 ## Reference Links

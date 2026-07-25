@@ -348,6 +348,19 @@ java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -d ./output/
 java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d ./output/
 ```
 
+### 終了コード
+
+| 終了コード | 意味 |
+|---|---|
+| `0` | すべての入力ファイルの変換に成功（`-h` / `--help` も `0`） |
+| `1` | 1 つ以上の入力ファイルで変換に失敗した／`-i` の INI ファイル・`-d` の出力先ディレクトリ・入力ファイルが存在しない／オプションの指定が不正、または入力ファイルも `-url` も指定されていない |
+
+引数なしで実行した場合は GUI が起動するため、上表の対象外です。
+
+> **v1.3.7-jdk21（次回リリース予定）での変更点**: v1.3.6-jdk21 以前は、変換に失敗しても常に `0` を返していました。
+> v1.3.7-jdk21 以降は失敗時に `1` を返し、出力途中の壊れた `.epub` は削除されます。
+> 詳細は [docs/usage.md](docs/usage.md#終了コード)、narou.rb 連携時の注意は [docs/narou-setup.md](docs/narou-setup.md) を参照してください。
+
 ---
 
 ## テンプレートのカスタマイズ
@@ -431,6 +444,16 @@ your-directory/
 ```bash
 java -Xmx2g -jar AozoraEpub3.jar input.txt
 ```
+
+### narou.rb で「JavaがインストールされていないかAozoraEpub3実行時にエラーが発生しました」と出る
+
+Java は正しく入っているのにこのメッセージが出る場合、実際には **EPUB の出力に失敗している**可能性があります。
+
+narou.rb は「AozoraEpub3 はエラーでも終了コード 0 を返す」という前提で作られているため、0 以外の終了コードをすべて「Java が動かなかった」と解釈します。AozoraEpub3 は v1.3.7-jdk21（次回リリース予定）から変換失敗時に `1` を返すようになったため、このメッセージが出るようになりました（意図した変更です。詳細は上記「[終了コード](#終了コード)」）。
+
+真の原因は、このメッセージの直前に narou.rb が全文表示する AozoraEpub3 の出力（`エラーが発生しました : ...` の行）で確認できます。`narou convert -v` はこの場面では追加情報になりません（終了コードが 0 以外だと verbose 出力に到達する前に処理を打ち切るため）。
+
+詳細は [docs/narou-setup.md](docs/narou-setup.md) を参照してください。
 
 ---
 
