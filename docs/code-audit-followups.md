@@ -626,6 +626,97 @@ Java の `convertNumsToZenkakuInSegment` は `digits.length() >= 2` で縦中横
 
 ---
 
+## 16. CLI `-url` に zip / txtz / rar の URL を渡すと変換できない（GUI 経路との乖離）
+
+**発見**: v1.3.7 リリース前 E2E（2026-07-25、2 回目）。**既存仕様であり本リリースの回帰ではない**。
+
+**症状**:
+
+```
+$ java -jar AozoraEpub3.jar -url "https://www.aozora.gr.jp/cards/000035/files/1567_ruby_4948.zip" -d out
+https://www.aozora.gr.jp/.../1567_ruby_4948.zip を読み込みます
+HTTP Response Code: 200
+ : List Loaded.
+SERIES/TITLE : タイトルがありません
+https://www.aozora.gr.jp/.../1567_ruby_4948.zip は変換できませんでした   ← exit 1
+```
+
+**原因**: 拡張子が `.zip` / `.txtz` / `.rar` の URL を「アーカイブを直接ダウンロードして変換する」経路に
+振り分ける分岐が **GUI 側にしかない**。
+
+- GUI（DnD / URL 入力）: `AozoraEpub3Applet.java:3188` と `:4186` の 2 箇所に分岐がある
+- CLI: `AozoraEpub3.java:265-334` の `-url` 処理は**無条件に `WebAozoraConverter`** に渡すため、
+  zip をスクレイピング対象の HTML として扱おうとして失敗する
+
+**影響**: 青空文庫のテキスト zip（`NNNN_ruby_NNNN.zip`）を CLI から直接指定できない。
+回避策は zip を手元にダウンロードして入力ファイルとして渡すこと（この経路は正常に動作する）。
+
+**対応方針（未着手）**: `AozoraEpub3.java` の `-url` ループに GUI と同じ拡張子分岐を追加し、
+`convertArchive` 相当の処理へ振り分ける。GUI 側の実装（`AozoraEpub3Applet.convertWeb` の zip 分岐、
+監査 #14 で `replaceInvalidFileChars` を修正した箇所）を共通化して両経路で使うのが望ましい。
+
+> **注**: `docs/release-procedure.md` §2.1.1 の「青空文庫 URL 1 件（`_ruby_` を含む zip パターンを推奨）」は
+> **card ページ URL または HTML 単話ページ**を指す。zip URL の直接指定は上記のとおり CLI では未対応。
+
+---
+
+## 17. タイトルページの外字画像が `<img src="null"/>` になり epubcheck が ERROR になる — ✅ 修正済み
+
+**発見**: v1.3.7 リリース前の `generateLocalSamples` + epubcheck（2026-07-25）。
+**v1.3.6 の配布 JAR でも同じ EPUB が生成されることを実測済み。既存バグであり本リリースの回帰ではない。**
+
+**症状**: `test_data/test_title.txt` から生成した EPUB で
+
+```
+ERROR(RSC-007): OPS/xhtml/title.xhtml(59,95):
+  参照されているリソース "OPS/xhtml/null" がEPUB内に見つかりません.
+```
+
+該当箇所（`title.xhtml`）:
+
+```html
+<div class="orgtitle">…タイトル<span class="gaiji"><img src="null"/></span>&amp;&lt;&gt;…</div>
+```
+
+**再現条件**: **表題行に画像外字注記があり、かつ参照先の画像ファイルが存在しない**とき。
+`test_title.txt` は `fig46187_03.png` を参照しているが `test_data/` に実体がなく、変換時に
+`[WARN] 画像ファイルなし (6) : fig46187_03.png` が出る。本文側は画像なしとして処理されるが、
+**タイトルページ側は `chuki_tag.txt:713` の `外字画像 <span class="gaiji"><img src="%s"/></span>` に
+`null` が埋め込まれたまま出力される**。
+
+**真因**: `AozoraEpub3Converter.convertTitleLineToEpub3`（タイトル行用の変換）に
+`writer.getImageFilePath()` の **null チェックが無かった**。
+本文側 `convertTextLineToEpub3`（同ファイル :2150-2155）には `if (imgFileName != null)` があり、
+画像が解決できないときは何も出力しない。タイトル側だけがガードを持たず、`String.format` に
+`null` が渡って文字列 `"null"` が `src` に埋まっていた。
+
+**CI が緑だった理由**（実測で確認。当初「`build/libs/` に ini が無いため」と書いたが誤り）:
+
+1. CI の最初の生成（`ci.yml:162`）はリポジトリ直下の `AozoraEpub3.ini`（`TitlePage=2`）を使うため、
+   **タイトルページ入りの `build/epub_out/test_title.epub` を正しく生成していた**
+   （CI ログにも title ページ変換由来の `[WARN] 画像ファイルなし (0)` が出ている）
+2. しかし後段の「INI マップ確認」ステップ（`ci.yml:190`）が
+   `-i build/epub_out/sample.ini -of -d build/epub_out test_data/test_title.txt` を実行し、
+   **同名ファイルを上書き**する。`sample.ini` は CSS 検証用の 6 キーしか持たずタイトルページが出ない
+3. その結果、epubcheck が検証していたのは**タイトルページの無い方の EPUB** だった
+
+epubcheck 5.2.0（CI 版）でも 5.3.0（ローカル）でも、タイトルページ入りの EPUB は
+同じ `RSC-007` を報告することを実測済み。**バージョン差ではなく検証対象の取り違え**。
+
+**影響度**: 🟢 低〜🟡 中。入力側に「表題行の画像外字 + 画像ファイル欠落」が揃った場合のみ。
+ただし成果物は epubcheck ERROR になり、EPUB 3.3 非準拠。
+
+**修正内容**（v1.3.7）:
+
+1. `convertTitleLineToEpub3` に本文側と同じ null ガードを追加し、画像が解決できない外字は
+   `<img>` を出力しないようにした
+2. ユニットテスト 2 件を追加（`AozoraEpub3ConverterTest`）— 画像なしで `<img>` が出ないこと、
+   画像ありでは従来どおり出力されること
+3. CI に「local samples に対する epubcheck」ステップを追加。`generateLocalSamples` は
+   リポジトリ直下の `AozoraEpub3.ini` を使うためタイトルページ経路を通る（上書き問題の影響も受けない）
+
+---
+
 ## 依存ライブラリ更新の判断（2026-07-25）
 
 ### junrar 7.5.10 → 8.0.0 — **見送り（時期尚早）**

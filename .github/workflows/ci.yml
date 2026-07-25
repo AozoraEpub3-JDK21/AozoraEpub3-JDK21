@@ -267,6 +267,39 @@ jobs:
             exit 1
           fi
 
+      # build/epub_out/test_title.epub は後段の INI マップ用生成 (-i sample.ini) で上書きされ、
+      # その設定ではタイトルページが出ないため、上の epubcheck はタイトルページ経路を検証していない。
+      # generateLocalSamples はリポジトリ直下の AozoraEpub3.ini (TitlePage=2) を使うのでこの経路を通る。
+      # 監査 #17 (タイトルページの外字画像が <img src="null"/> になる) はここでしか検出できなかった。
+      - name: Run epubcheck on local samples (title page path)
+        if: success() && matrix.java-version == '21'
+        run: |
+          set -e
+          EC_VERSION="5.2.0"
+          ./gradlew --no-daemon generateLocalSamples
+          shopt -s nullglob
+          FAILED=0
+          EPUBS=(build/epub_local/*.epub)
+          if [ "${#EPUBS[@]}" -eq 0 ]; then
+            echo "No local sample EPUB generated"
+            exit 1
+          fi
+          for f in "${EPUBS[@]}"; do
+            echo "Validating $f"
+            set +e
+            java -jar build/tools/epubcheck-${EC_VERSION}/epubcheck.jar "$f" > "$f.epubcheck.txt" 2>&1
+            set -e
+            cat "$f.epubcheck.txt"
+            if grep -E "\bERROR\b" -i "$f.epubcheck.txt" >/dev/null; then
+              echo "Found errors in $f"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" = "1" ]; then
+            echo "EPUBCheck found errors in local samples"
+            exit 1
+          fi
+
       - name: Validate OPF essentials (XPath)
         if: success() && matrix.java-version == '21'
         run: |

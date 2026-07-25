@@ -93,6 +93,35 @@ public class AozoraEpub3ConverterTest
 		}
 	}
 	
+	/** 画像が解決できない外字は img を出力しない (監査 #17)
+	 * getImageFilePath が null を返した場合に <img src="null"/> を出力すると
+	 * epubcheck が RSC-007 でエラーにする */
+	@Test
+	public void testConvertTitleLineToEpub3GaijiImageNotFound() throws IOException
+	{
+		converter.writer = new Epub3Writer("") {
+			@Override
+			public String getImageFilePath(String srcImageFileName, int lineNum) throws IOException
+			{
+				return null;
+			}
+		};
+		String line = converter.convertGaijiChuki("タイトル※［＃中に点のある△を右に90度傾けた三角形（fig46187_03.png、横19×縦15）入る］あり", true, true);
+		String str = converter.convertTitleLineToEpub3(line);
+		Assert.assertEquals("タイトルあり", str);
+		Assert.assertFalse(str.contains("<img"));
+		Assert.assertFalse(str.contains("null"));
+	}
+
+	/** 画像が解決できる場合は従来どおり img を出力する (監査 #17 の修正で退行していないこと) */
+	@Test
+	public void testConvertTitleLineToEpub3GaijiImageFound() throws IOException
+	{
+		String line = converter.convertGaijiChuki("タイトル※［＃中に点のある△を右に90度傾けた三角形（fig46187_03.png、横19×縦15）入る］あり", true, true);
+		String str = converter.convertTitleLineToEpub3(line);
+		Assert.assertEquals("タイトル<span class=\"gaiji\"><img src=\"test.png\"/></span>あり", str);
+	}
+
 	@Test
 	public void testConvertRubyText()
 	{

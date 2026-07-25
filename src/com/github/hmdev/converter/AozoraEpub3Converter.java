@@ -1739,7 +1739,11 @@ public class AozoraEpub3Converter
 							//外字の場合 (注記末尾がフラグ文字列になっている)
 							if (chukiTag.endsWith("#GAIJI#］")) {
 								String fileName = writer.getImageFilePath(srcFilePath.trim(), -1);
-								buf.append(String.format(chukiMap.get("外字画像")[0], fileName));
+								//画像が解決できない場合は img を出力しない (src="null" になり epubcheck が RSC-007 で reject するため)
+								//本文側 convertTextLineToEpub3 の外字画像処理と同じ扱い
+								if (fileName != null) {
+									buf.append(String.format(chukiMap.get("外字画像")[0], fileName));
+								}
 							}
 						}
 					}
