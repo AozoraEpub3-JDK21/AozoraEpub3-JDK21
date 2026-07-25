@@ -108,7 +108,7 @@ public class NarouApiClient {
 			// HTTP接続
 			HttpRequest request = HttpRequest.newBuilder()
 				.uri(new URI(url))
-				.header("User-Agent", "AozoraEpub3/1.3.6")
+				.header("User-Agent", "AozoraEpub3/1.3.7")
 				.header("Accept-Encoding", "gzip")
 				.timeout(Duration.ofSeconds(30))
 				.GET().build();

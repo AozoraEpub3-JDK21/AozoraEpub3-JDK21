@@ -207,7 +207,7 @@ narou.rb decides success or failure from AozoraEpub3's exit code, but it was wri
 "AozoraEpub3 always returns 0, even on error". As a result it interprets **any non-zero exit code as "Java could not run"**
 and shows this message (narou.rb 3.9.1, `lib/novelconverter.rb`).
 
-Starting with **v1.3.7-jdk21 (upcoming release), AozoraEpub3 returns exit code `1` when conversion fails.**
+Starting with **v1.3.7-jdk21, AozoraEpub3 returns exit code `1` when conversion fails.**
 This is an intentional change. In v1.3.6-jdk21 and earlier it returned `0` even on failure,
 so **broken `.epub` files were imported into narou.rb as if they had succeeded**.
 

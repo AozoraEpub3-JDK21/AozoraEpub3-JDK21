@@ -269,7 +269,7 @@ fi
 
 > Running `java -jar AozoraEpub3.jar` with no arguments launches the GUI, so the table above does not apply to that case.
 
-> **Changed in v1.3.7-jdk21 (upcoming release)**: v1.3.6-jdk21 and earlier **always returned `0`**, even when conversion failed.
+> **Changed in v1.3.7-jdk21**: v1.3.6-jdk21 and earlier **always returned `0`**, even when conversion failed.
 > If writing the EPUB was interrupted partway through (disk full, no write permission on the output directory), the tool still reported success,
 > leaving a **broken `.epub` behind that looked like a successful conversion**.
 > From v1.3.7-jdk21 onward, failures return `1` and the **partially written `.epub` is deleted** (the same applies when you cancel a conversion).

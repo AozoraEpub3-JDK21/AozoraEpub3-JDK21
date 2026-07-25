@@ -19,17 +19,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.3.6-jdk21 (May 1, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.6-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.3.7-jdk21 (July 25, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.7-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -39,12 +39,12 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.3.6-jdk21
+## What's New in v1.3.7-jdk21
 
-- **Full JDK 26 support**: Build, full test execution, and GUI startup are all CI-verified on JDK 26 (`JApplet` removal per [JEP 504](https://openjdk.org/jeps/504) was already addressed). The release artifact is **built targeting Java 21** (class file version 65), so it runs on any JRE from JDK 21 LTS through JDK 26
-- **Codebase modernization**: SLF4J logging adoption, `java.io.File` → `java.nio.file.Path` migration, `java.time` API, empty-catch audit with intent comments
-- **Bug fix**: `dcterms:modified` no longer violates EPUB 3.3 spec under non-Gregorian locales (Thai Buddhist, Japanese era, etc.)
-- **Breaking changes**: Public fields like `BookInfo` switched from `Vector` to `ArrayList`. External libraries using AozoraEpub3 must be recompiled (binary incompatibility)
+- **Bug-fix release driven by a full `src/` code audit (#1–#17)**: path traversal, ImageIO resource leaks, missing network timeouts, and Windows filename constraints that silently invalidated the cache or aborted an entire conversion are all fixed
+- **Broken source-URL link fixed**: the `href` of the source link appended to EPUBs converted from a URL could contain Aozora annotation markup, making the link unopenable (a pre-existing bug also present in v1.3.6)
+- **⚠️ Breaking changes**: the CLI now exits with `1` instead of `0` when a conversion fails, and partially written `.epub` files are deleted. With narou.rb, corrupted EPUBs that used to be accepted as successful are now reported as failures (an intentional change)
+- The generated EPUB structure is unchanged (byte-identical comparison tests on the .NET port: 5/5 PASS)
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 
@@ -134,7 +134,7 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 - **JAR file won't open on Windows** — Use the EXE file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
 - **"Windows protected your PC" when starting the EXE** — This is a SmartScreen warning, not a malware detection. Right-click the ZIP → Properties → tick **Unblock** **before** extracting, and it will not appear. [Full steps](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe)
 - **Permission denied on Linux/macOS** — Run `chmod +x AozoraEpub3.sh` and try again.
-- **narou.rb says Java is not installed, but Java is installed** — EPUB output has most likely failed. From v1.3.7-jdk21 (upcoming release) the exit code on conversion failure changed from `0` to `1` (an intentional change). See the [narou.rb Setup Guide](narou-setup.html).
+- **narou.rb says Java is not installed, but Java is installed** — EPUB output has most likely failed. From v1.3.7-jdk21 the exit code on conversion failure changed from `0` to `1` (an intentional change). See the [narou.rb Setup Guide](narou-setup.html).
 - **Detecting conversion success from a script** — The CLI returns `0` on success and `1` on failure. See [Exit Codes](usage.html#exit-codes) in the usage guide.
 - **Other issues** — Report on [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues).
 

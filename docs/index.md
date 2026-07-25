@@ -22,17 +22,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.3.6-jdk21 (2026年5月1日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.6-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.3.7-jdk21 (2026年7月25日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.7-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.6-jdk21/AozoraEpub3-1.3.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -42,12 +42,12 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.3.6-jdk21 の主な変更
+## v1.3.7-jdk21 の主な変更
 
-- **JDK 26 完全対応**: ビルド・全テスト実行・GUI 起動を JDK 26 で CI 検証済（[JEP 504](https://openjdk.org/jeps/504) による `JApplet` 削除に対応済）。配布物は **Java 21 ターゲットでビルド**（class file version 65）のため、JDK 21 LTS 〜 JDK 26 のいずれの環境でも動作します
-- **内部コード現代化**: SLF4J ロガー導入、`java.io.File` → `java.nio.file.Path` 移行、`java.time` API 採用、空 catch 監査と意図コメント整備
-- **バグ修正**: `dcterms:modified` が仏暦圏（タイ等）・日本和暦ロケール環境で EPUB 3.3 仕様違反になる問題を修正
-- **Breaking changes**: `BookInfo` 等の公開フィールドで `Vector` → `ArrayList` に変更。バイナリ互換性のため、外部ライブラリとして AozoraEpub3 を使うコードは要再コンパイル
+- **コード監査（#1〜#17）にもとづくバグ修正リリース**: パストラバーサル、ImageIO のリソースリーク、ネットワークタイムアウト欠如、Windows のファイル名制約によるキャッシュ無効化・変換中断などを一括で修正
+- **出典 URL のリンク破損を修正**: URL から変換した EPUB の末尾に付く出典リンクの `href` に注記記法が混入し、リンクを開けなくなっていた問題を修正（v1.3.6 以前にも存在する既存バグ）
+- **⚠️ Breaking changes**: 変換に失敗したとき、CLI の終了コードが `0` → `1` に変わりました。あわせて出力途中の壊れた `.epub` は削除されます。narou.rb 連携では、これまで「成功」として取り込まれていた破損 EPUB が失敗として扱われます（意図した変更）
+- 出力 EPUB の構造は変わりません（`.NET` ポートの byte-identical 比較テスト 5/5 PASS）
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 
@@ -143,7 +143,7 @@ GUI を起動する場合は引数なしで実行します: `java -jar AozoraEpu
 - **Windows で JAR ファイルが開かない場合** — EXE ファイルを使用するか、コマンドプロンプトから `java -jar AozoraEpub3.jar` で起動してください。
 - **EXE 起動時に「Windows によって PC が保護されました」と出る** — SmartScreen の警告で、マルウェア検出ではありません。**ZIP を展開する前に**右クリック →プロパティ →「許可する」にチェックを入れると出なくなります。[詳しい手順](usage.html#aozoraepub3exe-の起動時にwindows-によって-pc-が保護されましたと出る)
 - **Linux/macOS で permission denied エラー** — `chmod +x AozoraEpub3.sh` を実行し、再度起動してください。
-- **narou.rb で「Javaがインストールされていないか…」と出るが Java は入っている** — 実際には EPUB の出力に失敗している可能性があります。v1.3.7-jdk21（次回リリース予定）から変換失敗時の終了コードが `0` → `1` に変わったためです（意図した変更）。[narou.rb 導入ガイド](narou-setup.html)を参照してください。
+- **narou.rb で「Javaがインストールされていないか…」と出るが Java は入っている** — 実際には EPUB の出力に失敗している可能性があります。v1.3.7-jdk21 から変換失敗時の終了コードが `0` → `1` に変わったためです（意図した変更）。[narou.rb 導入ガイド](narou-setup.html)を参照してください。
 - **スクリプトから変換の成否を判定したい** — CLI は成功時 `0`、失敗時 `1` を返します。[使い方ガイドの「終了コード」](usage.html#終了コード)を参照してください。
 - **その他の問題** — [GitHub Issues](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/issues) でご報告ください。
 
