@@ -579,10 +579,45 @@ Windows では制御文字を含む名前をファイル API が受け付けな�
 底本行（`:1182-1189` で生成 → finalize 段で処理）とは経路が違う点に注意。
 **別途 `printText` 側にも同様のタグ保護が必要**。
 
-**残作業**: 上記 `[jump:]` 経路の対応、`.NET` ポートへの移植と `JavaComparisonTests` の期待値更新。移植時の注意点:
+**`.NET` ポートへの移植（完了）**: `D:\git\aozoraepub3-dotnet` の
+`src/AozoraEpub3.Core/Web/AozoraTextFinalizer.cs` に同等の修正を入れた（全 472 件 PASS）。
 
-- `sb.append(line, start, end)` は Java が **end 排他**、C# の `StringBuilder.Append(string, int, int)` は **count** 指定
-- C# の `string.IndexOf(string)` は既定がカルチャ依存。**`StringComparison.Ordinal` を明示**すること
+移植時に判明した事実:
+
+- **`JavaComparisonTests` は落ちなかった**。同テストは `input.txt`（**青空テキスト**）を入力にしており、
+  `AozoraTextFinalizer` は URL → txt の段で動くため**比較経路に含まれない**。
+  フィクスチャの `input.txt` に `<a href>` 底本行が存在しないことも確認済み。
+  「修正すると比較テストが落ちる」という当初の想定は誤りだった
+- `.NET` には既に `TransformOutsideAnnotations(line, transform)` ヘルパがあったため、
+  正規表現を `［＃[^］]*］|</?[a-zA-Z][^>]*>` に拡張するだけでタグ除外が入った。
+  Java のような手書きループの移植は不要だった
+- あわせて `DecimalPointRegex` の適用を transform の内側へ移した。
+  従来は行全体に適用しており、`/v1.5/` のような URL を含む href を壊し得たため
+
+### `.NET` ポートとの既存乖離（本修正で判明、未対応）
+
+**1. `ConvertNumToKanji` の判定順** — 本修正で解消済み。
+
+`.NET` は `ShouldSkipConversion`（`://` チェック）が見出し分岐より**先**にあり、
+底本行を丸ごとスキップしていた。Java は見出し分岐が先。
+順序を Java に合わせた（`AozoraTextFinalizer.cs` の該当箇所にコメントあり）。
+
+**2. 見出し行の数字変換ルール — 未対応の乖離**
+
+| 桁数 | Java | `.NET` |
+|---|---|---|
+| 1 桁 | 全角 | 全角 |
+| 2 桁 | 縦中横 | 縦中横 |
+| **3 桁以上** | **縦中横** | **全角** |
+
+Java の `convertNumsToZenkakuInSegment` は `digits.length() >= 2` で縦中横、
+`.NET` の該当箇所は `digits.Length == 2` のみ縦中横。
+**どちらが narou.rb 準拠として正しいか未確認**。比較テストがこの経路を通らないため検出されていなかった。
+別途どちらかに寄せる必要がある。
+
+### `[jump:]` 経路の残作業
+
+上記の同種問題（`printText` 内でタグ非対応の変換が走る）は Java / `.NET` とも未対応。
 
 ### 要確認（未追跡）
 
