@@ -386,32 +386,59 @@ public class AozoraTextFinalizer {
 	}
 
 	private String convertNumToKanjiLine(String line) {
-		// 注記 ［＃...］ 内の数字は変換しない
+		// 注記 ［＃...］ とタグ <...> 内の数字は変換しない
+		return convertOutsideChukiAndTags(line, this::convertNumsInSegment);
+	}
+
+	/** HTML タグ。中間テキストに現れるのは &lt;a href="..."&gt; と &lt;/a&gt; のみだが、汎用に開始/終了タグを拾う。
+	 * 「&lt; の直後が英字」かつ「閉じ &gt; がある」ものだけをタグとみなすので、
+	 * 本文中の裸の '&lt;'（数式の A&lt;B、顔文字の (&gt;_&lt;) 等）は通常テキストのまま扱われる */
+	private static final Pattern HTML_TAG_PATTERN = Pattern.compile("</?[a-zA-Z][^>]*>");
+
+	/**
+	 * 注記 ［＃...］ と HTML タグ &lt;...&gt; を変換対象外にし、その間のセグメントにだけ converter を適用する。
+	 *
+	 * タグを対象外にするのは、&lt;a href="...URL..."&gt; の属性値が変換されるとリンクが壊れるため（監査 #15）。
+	 * 表示テキスト（タグの外）は従来どおり変換されるので、見た目は変わらない。
+	 *
+	 * 閉じ ］ が無い注記は残りをそのまま出力する（従来動作を維持）。
+	 * タグ側は HTML_TAG_PATTERN が閉じ &gt; を要求するため「閉じられていないタグ」は発生せず、
+	 * 裸の '&lt;' は通常テキストとして変換され、その後ろの注記も従来どおり保護される。
+	 *
+	 * 前提: converter に渡すのは注記・タグの外側だけなので、
+	 * converter 自身が '&lt;' や '&gt;' をまたいでマッチしないことに依存している
+	 * （現在の 3 つの converter の正規表現はいずれも '&lt;' '&gt;' にマッチしない）。
+	 */
+	private static String convertOutsideChukiAndTags(String line, java.util.function.UnaryOperator<String> converter) {
 		StringBuilder sb = new StringBuilder();
+		Matcher tagMatcher = HTML_TAG_PATTERN.matcher(line);
 		int pos = 0;
 		while (pos < line.length()) {
-			// 注記の開始を検出
 			int chukiStart = line.indexOf("［＃", pos);
-			if (chukiStart < 0) {
-				// 残り全体を変換
-				sb.append(convertNumsInSegment(line.substring(pos)));
+			int tagStart = tagMatcher.find(pos) ? tagMatcher.start() : -1;
+			if (chukiStart < 0 && tagStart < 0) {
+				sb.append(converter.apply(line.substring(pos)));
 				break;
 			}
-			// 注記の前を変換
-			if (chukiStart > pos) {
-				sb.append(convertNumsInSegment(line.substring(pos, chukiStart)));
+			// 先に現れた方を境界にする
+			boolean isChuki = chukiStart >= 0 && (tagStart < 0 || chukiStart < tagStart);
+			int start = isChuki ? chukiStart : tagStart;
+			if (start > pos) {
+				sb.append(converter.apply(line.substring(pos, start)));
 			}
-			// 注記の終了を検出
-			int chukiEnd = line.indexOf("］", chukiStart);
-			if (chukiEnd < 0) {
-				// 閉じ注記がない場合、残り全体をそのまま
-				sb.append(line.substring(chukiStart));
-				pos = line.length();
-				break;
+			if (isChuki) {
+				int chukiEnd = line.indexOf('］', start);
+				if (chukiEnd < 0) {
+					// 閉じ注記なし: 残りをそのまま（従来動作）
+					sb.append(line.substring(start));
+					break;
+				}
+				sb.append(line, start, chukiEnd + 1);
+				pos = chukiEnd + 1;
+			} else {
+				sb.append(line, start, tagMatcher.end());
+				pos = tagMatcher.end();
 			}
-			// 注記部分をそのまま出力
-			sb.append(line, chukiStart, chukiEnd + 1);
-			pos = chukiEnd + 1;
 		}
 		return sb.toString();
 	}
@@ -420,27 +447,7 @@ public class AozoraTextFinalizer {
 	 * 2桁以上: ［＃縦中横］...［＃縦中横終わり］で囲む（縦書き時に横組み表示）
 	 * 1桁: 全角数字に変換 */
 	private String convertNumToZenkakuLine(String line) {
-		StringBuilder sb = new StringBuilder();
-		int pos = 0;
-		while (pos < line.length()) {
-			int chukiStart = line.indexOf("［＃", pos);
-			if (chukiStart < 0) {
-				sb.append(convertNumsToZenkakuInSegment(line.substring(pos)));
-				break;
-			}
-			if (chukiStart > pos) {
-				sb.append(convertNumsToZenkakuInSegment(line.substring(pos, chukiStart)));
-			}
-			int chukiEnd = line.indexOf("］", chukiStart);
-			if (chukiEnd < 0) {
-				sb.append(line.substring(chukiStart));
-				pos = line.length();
-				break;
-			}
-			sb.append(line, chukiStart, chukiEnd + 1);
-			pos = chukiEnd + 1;
-		}
-		return sb.toString();
+		return convertOutsideChukiAndTags(line, this::convertNumsToZenkakuInSegment);
 	}
 
 	/** 半角数字→縦中横または全角数字変換（注記外セグメント用）
@@ -548,28 +555,8 @@ public class AozoraTextFinalizer {
 	}
 
 	private String alphabetToZenkakuLine(String line, boolean force) {
-		// 注記 ［＃...］ 内の英字は変換しない
-		StringBuilder sb = new StringBuilder();
-		int pos = 0;
-		while (pos < line.length()) {
-			int chukiStart = line.indexOf("［＃", pos);
-			if (chukiStart < 0) {
-				sb.append(convertAlphaInSegment(line.substring(pos), force));
-				break;
-			}
-			if (chukiStart > pos) {
-				sb.append(convertAlphaInSegment(line.substring(pos, chukiStart), force));
-			}
-			int chukiEnd = line.indexOf("］", chukiStart);
-			if (chukiEnd < 0) {
-				sb.append(line.substring(chukiStart));
-				pos = line.length();
-				break;
-			}
-			sb.append(line, chukiStart, chukiEnd + 1);
-			pos = chukiEnd + 1;
-		}
-		return sb.toString();
+		// 注記 ［＃...］ とタグ <...> 内の英字は変換しない
+		return convertOutsideChukiAndTags(line, segment -> convertAlphaInSegment(segment, force));
 	}
 
 	private String convertAlphaInSegment(String segment, boolean force) {

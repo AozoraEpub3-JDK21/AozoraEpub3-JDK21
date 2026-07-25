@@ -556,4 +556,160 @@ public class AozoraTextFinalizerTest {
 		System.out.println("=".repeat(60));
 		System.out.println();
 	}
+
+	////////////////////////////////////////////////////////////////
+	// 監査 #15: <...> タグ内は数字・英字の変換対象外
+
+	/**
+	 * 出典 URL の <a href> 内に縦中横注記が混入しないこと（監査 #15）。
+	 *
+	 * enchantMidashi が ［＃改ページ］ 直後の底本行を ［＃中見出し］ で包むため、
+	 * convertNumToKanji の見出し分岐が URL ガード (line.contains("://")) より先に評価され、
+	 * href 内の数字が ［＃縦中横］ で包まれてリンクが機能しなくなっていた。
+	 */
+	@Test
+	public void testHrefNotBrokenByTcy() throws Exception {
+		String url = "https://www.aozora.gr.jp/cards/000035/files/1567_14913.html";
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "本文です。\n"
+				+ "［＃改ページ］\n"
+				+ "底本： <a href=\"" + url + "\">" + url + "</a>\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		settings.setEnableEnchantMidashi(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		String href = extractFirstHref(result);
+		assertNotNull("href が見つからない: " + result, href);
+		assertFalse("href に注記が混入している: " + href, href.contains("［＃"));
+		assertEquals(url, href);
+
+		// 表示テキスト側（タグ外）は従来どおり縦中横される
+		assertTrue("表示テキスト側の縦中横が失われている: " + result, result.contains("［＃縦中横］"));
+	}
+
+	/**
+	 * 見出しでない通常行のタグ内も変換対象外であること。
+	 *
+	 * href は相対パスにする。絶対 URL だと convertNumToKanji の行レベル URL ガード
+	 * (line.contains("://")) で行ごとスキップされ、タグスキップの検証にならないため。
+	 */
+	@Test
+	public void testHrefNotBrokenInNormalLine() throws Exception {
+		String href = "/a/12345/b.html";
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "参考： <a href=\"" + href + "\">リンク12345です</a>\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		assertEquals("href が変換されている: " + result, href, extractFirstHref(result));
+		// タグの外（表示テキスト）は従来どおり変換される
+		assertFalse("表示テキスト側が変換されていない: " + result, result.contains("リンク12345です"));
+	}
+
+	/** 英字全角化もタグ内には適用されないこと（同じく相対パスで検証） */
+	@Test
+	public void testHrefNotBrokenByAlphabetToZenkaku() throws Exception {
+		String href = "/AB/CD.html";
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "参考： <a href=\"" + href + "\">リンク</a>\n";
+
+		writeTestFile(input);
+		settings.setEnableAlphabetToZenkaku(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		assertEquals("href が変換されている: " + result, href, extractFirstHref(result));
+	}
+
+	/** 裸の '<' は通常テキストとして扱い、以降の変換を止めないこと */
+	@Test
+	public void testBareAngleBracketDoesNotStopConversion() throws Exception {
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "条件は A<B です。12345 も変換されます。\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		assertTrue("行の前半が失われている: " + result, result.contains("条件は A<B です。"));
+		assertTrue("行の後半が失われている: " + result, result.contains("も変換されます。"));
+		assertFalse("裸の '<' 以降で数字変換が止まっている: " + result, result.contains("12345"));
+	}
+
+	/**
+	 * 顔文字などで '<' と '>' が対になっていても、タグと誤検出しないこと。
+	 *
+	 * タグ判定を「'<' の直後が英字」に限定していないと、
+	 * 1 つ目の '<' から後方の '>' までがタグ扱いされ、間の数字が変換されなくなる。
+	 */
+	@Test
+	public void testEmoticonIsNotTreatedAsTag() throws Exception {
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "顔(>_<)文字12345です(>_<)\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		assertTrue("行の前半が失われている: " + result, result.contains("顔(>_<)文字"));
+		assertTrue("行の後半が失われている: " + result, result.contains("です(>_<)"));
+		assertFalse("顔文字がタグと誤検出され数字が変換されていない: " + result, result.contains("12345"));
+	}
+
+	/** 裸の '<' の後ろにある注記が、従来どおり変換対象外のまま保護されること */
+	@Test
+	public void testChukiAfterBareAngleBracketIsStillProtected() throws Exception {
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "条件は A<B です。［＃ここから1字下げ］\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		assertTrue("注記の中身が変換されている: " + result, result.contains("［＃ここから1字下げ］"));
+	}
+
+	/** 閉じ '］' が無い注記は従来どおり残りをそのまま出力すること */
+	@Test
+	public void testUnclosedChukiKeepsRemainderAsIs() throws Exception {
+		String input = "タイトル\n"
+				+ "著者名\n"
+				+ "\n"
+				+ "本文です。［＃閉じ忘れ12345\n";
+
+		writeTestFile(input);
+		settings.setEnableConvertNumToKanji(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+
+		assertTrue("閉じ注記なしの残りが変換されている: " + result, result.contains("［＃閉じ忘れ12345"));
+	}
+
+	/** result から最初の href 属性値を取り出す */
+	private static String extractFirstHref(String result) {
+		java.util.regex.Matcher m =
+			java.util.regex.Pattern.compile("href=\"([^\"]*)\"").matcher(result);
+		return m.find() ? m.group(1) : null;
+	}
 }
