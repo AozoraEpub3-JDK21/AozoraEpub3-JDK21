@@ -132,6 +132,7 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 
 - **Java is not installed** — Download Java 25 LTS from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
 - **JAR file won't open on Windows** — Use the EXE file, or launch from Command Prompt with `java -jar AozoraEpub3.jar`.
+- **"Windows protected your PC" when starting the EXE** — This is a SmartScreen warning, not a malware detection. Right-click the ZIP → Properties → tick **Unblock** **before** extracting, and it will not appear. [Full steps](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe)
 - **Permission denied on Linux/macOS** — Run `chmod +x AozoraEpub3.sh` and try again.
 - **narou.rb says Java is not installed, but Java is installed** — EPUB output has most likely failed. From v1.3.7-jdk21 (upcoming release) the exit code on conversion failure changed from `0` to `1` (an intentional change). See the [narou.rb Setup Guide](narou-setup.html).
 - **Detecting conversion success from a script** — The CLI returns `0` on success and `1` on failure. See [Exit Codes](usage.html#exit-codes) in the usage guide.
