@@ -27,7 +27,7 @@
 | 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | ✅ 対応済 | #42 |
 | 13 | 🟡 中 | 制御文字・末尾空白のパスセグメントで `InvalidPathException`（変換全体が中断） | ✅ 対応済 | #44 |
 | 14 | 🟢 低 | 青空 zip 直接 DL 経路の `replaceInvalidFileChars` が `:` と制御文字を除去しない | ✅ 対応済 | #45 |
-| 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | 未着手 | - |
+| 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | ✅ 対応済（Java 側） | #47 |
 
 ---
 
@@ -510,7 +510,7 @@ Windows では制御文字を含む名前をファイル API が受け付けな�
 **真因**（コードを読んで確認済み）: `src/com/github/hmdev/web/AozoraTextFinalizer.java`
 
 1. `enchantMidashi()`（`:640-`）が `［＃改ページ］` 直後の底本行を `［＃中見出し］` で包む
-2. `convertNumToKanji()`（`:363-386`）で、**見出し分岐（`:369`）が URL ガード（`:378` の `line.contains("://")`）より先に評価される**ため、
+2. `convertNumToKanji()`（`:363-386`）で、**見出し分岐（`:369`）が URL ガード（`:379` の `line.contains("://")`）より先に評価される**ため、
    底本行は URL ガードに到達しない。URL 保護が設計されているのに素通りする
 3. `convertNumToZenkakuLine()` は `［＃...］` 注記区間をスキップするが **`<...>` タグを考慮していない**ため、
    `convertNumsToZenkakuInSegment()`（`:448-466`）が href 内の 2 桁以上の数字を `［＃縦中横］` で包む
@@ -534,10 +534,55 @@ Windows では制御文字を含む名前をファイル API が受け付けな�
 **`.NET` ポートへの影響**: 修正すると EPUB 出力が変わるため `JavaComparisonTests` 5 件のうち複数が落ちる
 （なろうの ncode は数字を含む）。**Java と .NET へ同一修正を同時に入れる必要がある**。
 
-**テスト方針**: `test/AozoraTextFinalizerTest.java` に、`［＃改ページ］` 直後の
-`底本： <a href="...数字...">同URL</a>` 行を finalize して **href 内に `［＃` が含まれないこと**と
-**表示テキスト側の縦中横は維持されること**を検証するケースを追加。見出し行 + タグ / 通常行 + タグ /
-英字全角化のタグ内非適用の 3 変種を用意する。
+**対応（PR #47、Java 側）**: `AozoraTextFinalizer` に共通ヘルパ
+`convertOutsideChukiAndTags(String, UnaryOperator<String>)` を追加し、
+構造が同一だった 3 メソッドを置き換えた。`［＃...］` と `<...>` のうち先に現れた方を境界に読み飛ばす。
+
+**タグ判定は `</?[a-zA-Z][^>]*>` に限定**している（レビューで 2 度修正した箇所）:
+
+- 当初 `<` から次の `>` までを無条件にタグ扱いしていたが、**顔文字 `(>_<)` などが対で誤検出**され、
+  間のテキストが変換されなくなる退行があった（Opus ゲートが検出）
+- また「閉じ `>` が無い場合は残りを変換継続」としていたため、**裸の `<` の後ろにある注記の中身まで変換**されていた
+  （Codex ゲートが検出）。例: `A<B ［＃ここから1字下げ］` の `1` が変換される
+- 「`<` の直後が英字」かつ「閉じ `>` がある」ものだけをタグとみなすことで、両方が同時に解消した。
+  中間テキストに現れるタグは `<a href="...">` と `</a>` のみなので実用上の取りこぼしもない
+
+**真因（`:369` の見出し分岐が `:379` の URL ガードより先）は意図的に残している**。
+順序を入れ替えると底本行が丸ごと変換対象外になり、**表示テキストの縦中横まで失われて見た目が変わる**ため。
+タグ区間だけを保護する本修正なら、href は正常化しつつ表示は従来どおりになる（実測で確認済み）。
+
+**検証**:
+
+| 項目 | 修正前 | 修正後 |
+|---|---|---|
+| 生成 EPUB の `href` 内の注記 | 1 件 | **0 件** |
+| 表示テキストの `class="tcy"` | 3 個 | **3 個（維持）** |
+
+`test/AozoraTextFinalizerTest.java` に 7 件追加（`gradlew test` 全 273 件 PASS）。
+`testHrefNotBrokenByTcy` が修正前に RED であること、
+タグ判定から英字条件を外すミューテーションで `testEmoticonIsNotTreatedAsTag` が RED になることを確認済み。
+
+> **テスト作成時の注意**: 通常行のテストで href に絶対 URL を使うと、
+> `convertNumToKanji` の行レベル URL ガード（`line.contains("://")`）で行ごとスキップされ、
+> **タグスキップを一切通らないトートロジーになる**。相対パス（`/a/12345/b.html`）を使うこと。
+
+**本修正でカバーできない同種問題（`[jump:]` 由来アンカー）**: レビュー（ゲート C）で判明。
+
+`WebAozoraConverter.java:2372` が `[jump:URL]` 記法から生成する `<a href="URL">URL</a>` は、
+**同じ `printText` の中で**タグ非対応の変換を通過するため、ファイナライザに届く前に壊れる。
+
+- `:2486` `convertNumbersToKanji`（`arabicToKanji` は PH 領域しかスキップしない）
+- `:2493` `insertSeparateSpace`（半角 `?` の直後に全角アキを挿入するため、**クエリ付き URL を破壊**する）
+- `:2494` `convertTatechuyoko` ほか
+
+`enableNarouTag` 有効時のみ発現する。本修正は finalize 段の対策なので防げない。
+底本行（`:1182-1189` で生成 → finalize 段で処理）とは経路が違う点に注意。
+**別途 `printText` 側にも同様のタグ保護が必要**。
+
+**残作業**: 上記 `[jump:]` 経路の対応、`.NET` ポートへの移植と `JavaComparisonTests` の期待値更新。移植時の注意点:
+
+- `sb.append(line, start, end)` は Java が **end 排他**、C# の `StringBuilder.Append(string, int, int)` は **count** 指定
+- C# の `string.IndexOf(string)` は既定がカルチャ依存。**`StringComparison.Ordinal` を明示**すること
 
 ### 要確認（未追跡）
 
