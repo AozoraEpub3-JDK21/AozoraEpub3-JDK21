@@ -1,5 +1,9 @@
 package com.github.hmdev.util;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -172,14 +176,59 @@ public class CharUtils
 	}
 	
 	////////////////////////////////////////////////////////////////
+	/** Windows の予約デバイス名（大文字小文字は区別しない）。
+	 * これらと完全一致するパスセグメントは実ファイルではなくデバイスとして解決され得るため、
+	 * escapeUrlToFile で末尾に '_' を付けて無害化する。 */
+	static private final Set<String> WINDOWS_RESERVED_NAMES;
+	static {
+		Set<String> names = new HashSet<>(Arrays.asList("CON", "PRN", "AUX", "NUL"));
+		// COM0〜COM9 / LPT0〜LPT9 と、上付き数字を使う別名（COM¹ COM² COM³ / LPT¹ LPT² LPT³）
+		for (String prefix : new String[]{"COM", "LPT"}) {
+			for (char c : "0123456789¹²³".toCharArray()) names.add(prefix+c);
+		}
+		WINDOWS_RESERVED_NAMES = Set.copyOf(names);
+	}
+
 	/** ファイル名に使えない文字を'_'に置換
 	 * パストラバーサル対策として「..」のみのパスセグメントは「__」に無害化する（多層防御）。
-	 * 「..」セグメントを含まない入力の出力は従来と完全に同一（キャッシュファイル名互換維持） */
+	 * Windows の予約デバイス名と完全一致するパスセグメントは末尾に '_' を付けて無害化する。
+	 * どちらにも該当しない入力の出力は従来と完全に同一（キャッシュファイル名互換維持） */
 	static public String escapeUrlToFile(String str)
 	{
 		String escaped = str.replaceAll("(\\?|\\&)", "/").replaceAll("(:|\\*|\\||\\<|\\>|\"|\\\\)", "_");
 		// 「?」「&」→「/」置換後に現れる「..」セグメントも対象にするため、置換後に無害化する
-		return escaped.replaceAll("(^|/)\\.\\.(?=/|$)", "$1__");
+		escaped = escaped.replaceAll("(^|/)\\.\\.(?=/|$)", "$1__");
+		return escapeReservedDeviceNames(escaped);
+	}
+
+	/** Windows 予約デバイス名と一致するパスセグメントの末尾に '_' を付けて無害化する。
+	 * 該当セグメントが無い場合は引数をそのまま返す */
+	static private String escapeReservedDeviceNames(String path)
+	{
+		String[] segments = path.split("/", -1);
+		boolean modified = false;
+		for (int i=0; i<segments.length; i++) {
+			if (isWindowsReservedName(segments[i])) {
+				segments[i] = segments[i]+"_";
+				modified = true;
+			}
+		}
+		return modified ? String.join("/", segments) : path;
+	}
+
+	/** Windows がデバイスとして解決するセグメント名か判定する。
+	 * Windows は名前末尾の '.' と ' ' を無視するため、それらを除いてから予約名と比較する
+	 * （"NUL." は "NUL" と同じくデバイスに解決され、"NUL" と同じ症状になる）。
+	 * 一方 "NUL.txt" のように予約名の後に拡張子が続くものは Windows 11 実機では実ファイルとして作成できるため対象外
+	 * （Microsoft のドキュメント上は予約扱いだが、リネームすると動作しているキャッシュを無効化するだけになる。
+	 *   判断根拠と残存リスクは docs/code-audit-followups.md の「### 12.」を参照） */
+	static private boolean isWindowsReservedName(String segment)
+	{
+		int end = segment.length();
+		while (end > 0 && (segment.charAt(end-1) == '.' || segment.charAt(end-1) == ' ')) end--;
+		if (end == 0) return false;
+		String name = end == segment.length() ? segment : segment.substring(0, end);
+		return WINDOWS_RESERVED_NAMES.contains(name.toUpperCase(Locale.ROOT));
 	}
 	
 	////////////////////////////////////////////////////////////////
