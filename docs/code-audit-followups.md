@@ -24,7 +24,8 @@
 | 9 | 🟡 中 | パスなし URL 入力で `StringIndexOutOfBoundsException` | ✅ 対応済 | #41 |
 | 10 | 🟢 低 | `getTextInputStream` の null 戻りで NPE | ✅ 対応済 | #41 |
 | 11 | 🟢 低 | ソース内コメントの文字化け（ログ文字列を含む） | ✅ 対応済 | #41 |
-| 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | 未着手 | - |
+| 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | ✅ 対応済 | #42 |
+| 13 | 🟢 低 | 末尾が空白のパスセグメントで `InvalidPathException` | 未着手 | - |
 
 ---
 
@@ -34,7 +35,7 @@
 
 **場所**
 
-- `src/com/github/hmdev/util/CharUtils.java:178` — `escapeUrlToFile`
+- `src/com/github/hmdev/util/CharUtils.java:196` — `escapeUrlToFile`（監査時の `:178` から PR #42 で移動）
 - `src/com/github/hmdev/web/WebAozoraConverter.java:897` / `:998` — 章キャッシュファイル生成
 - `src/com/github/hmdev/web/WebAozoraConverter.java:1621` — 挿絵ファイル生成
 - `src/com/github/hmdev/web/WebAozoraConverter.java:430` — 既存の `safeDstFile`（本文 txt にのみ適用）
@@ -257,7 +258,7 @@ GUI 経路は先に BookInfo を生成するため元から影響なし。
 
 ### 12. Windows 予約デバイス名でキャッシュが毎回無効化される
 
-**場所**: `src/com/github/hmdev/web/WebAozoraConverter.java:1024` 付近（章キャッシュの存在チェック）
+**場所**: `src/com/github/hmdev/web/WebAozoraConverter.java:1056` 付近（章キャッシュの存在チェック。監査時の `:1024` からは PR #37〜#41 の一連の変更で移動している）
 
 URL 由来のパスセグメントが Windows の予約デバイス名（`CON` / `NUL` / `PRN` / `AUX` / `COM1`〜`COM9` / `LPT1`〜`LPT9`）になると、
 `Files.write(Path.of("dir/host.example.com/NUL"), ...)` は成功するのに `Files.exists` は false を返す。
@@ -266,6 +267,77 @@ URL 由来のパスセグメントが Windows の予約デバイス名（`CON` /
 パストラバーサルではなく既存の不具合（#1 の PR スコープ外）。
 `CharUtils.escapeUrlToFile` で予約デバイス名のセグメントをリネームする（末尾に `_` を付ける等）のが対処案。
 ただし**既存キャッシュのファイル名が変わる**ため、影響範囲を評価してから実施すること。
+
+**実測結果（PR #42、Windows 11 26200 + JDK NIO）**: 監査の記述は正しかったが、症状の出る範囲は想定より狭い。
+
+| セグメント名 | `Files.write` | `Files.exists` | 実ファイル生成 |
+|---|---|---|---|
+| `NUL` | 成功 | **false** | されない（`Files.size` も `FileSystemException`） |
+| `NUL.` / `NUL...` | 成功 | **false** | されない |
+| `CON` / `PRN` / `AUX` / `COM0` / `COM1` / `COM¹` / `LPT1` / `CON.` / `COM1.` | 成功 | true | **される**（size 一致） |
+| `NUL.txt` / `NUL.txt.` / `COM9.html` / `con.example.com` | 成功 | true | される |
+
+つまりこの環境で #12 の症状（毎回再ダウンロード → 章欠落）を再現するのは **`NUL`（末尾ドット付きを含む）のみ**。
+Windows は名前末尾の `.` と ` ` を無視するため、`NUL.` は `NUL` と同一視される。
+ただし予約デバイス名の解決は Windows のバージョン・API 経路に依存し、古い Windows では `CON` 等が
+デバイスに解決され得る（その場合キャッシュ読み込みの `Jsoup.parse` がコンソール入力待ちでハングし得るため、`NUL` より悪い）。
+そのため防御的に予約デバイス名の全集合を対象にした。
+
+**対応（PR #42）**: `CharUtils.escapeUrlToFile` に予約デバイス名セグメントの無害化を追加した。
+
+- 対象: `CON` / `PRN` / `AUX` / `NUL` / `COM0`〜`COM9` / `LPT0`〜`LPT9` と上付き数字の別名（`COM¹` `COM²` `COM³` / `LPT¹` `LPT²` `LPT³`）。大文字小文字は区別しない（`Locale.ROOT` で正規化）。
+  Microsoft の「Naming Files, Paths, and Namespaces」が列挙するのは `CON` / `PRN` / `AUX` / `NUL` / `COM1`〜`COM9` / `LPT1`〜`LPT9` と上付き数字別名で、
+  **`COM0` / `LPT0` は列挙に含まれない**が、同ドキュメントの NT Namespaces 節に「`COM0` と `COM1` は `Serial0` / `Serial1` への symlink」とあるため防御的に含めた。
+  `CONIN$` / `CONOUT$` / `CLOCK$` は列挙外（コンソール API / レガシー DOS 由来）のため対象外。
+  Windows 11 実機ではこの 3 つも `COM0` / `LPT0` も実ファイルとして作成できることを確認済み（つまり `COM0` / `LPT0` は過剰リネームだが、該当する実 URL は存在しない）
+- **末尾の `.` と ` ` を除いてから比較する**。Windows がこれらを無視するため `NUL.` も `NUL` と同じ症状になる（上表で実測）
+- 無害化: セグメント末尾に `_` を付ける（既存の `..` → `__` が同長置換なのに対し、こちらは 1 文字付加）。
+  `NUL._` / `NUL_` / `COM1 _` はいずれも実ファイルとして作成できることを実測確認済み
+- **予約名そのもの（末尾 `.` / ` ` を除く）のみを対象とし、`NUL.txt` / `con.example.com` のような「予約名 + 拡張子」「予約名で始まるホスト名」は変更しない**。
+  上表のとおりこれらは Windows 11 で実ファイルとして正常に作れるため、リネームすると**動作しているキャッシュを無効化するだけ**になる。
+  特にホスト名は先頭セグメント（`escapeUrlToFile` の入力の第 1 セグメント）なので、変更するとサイト単位でキャッシュツリーごと移動してしまう。
+  なお `CON` 等は Windows 11 では実ファイルを作れるがリネーム対象に含めている（古い Windows への防御）。
+  「実測で壊れるもの + 古い Windows で壊れ得る予約名そのもの」は対象、「Windows 11 実測で拡張子付きファイルとして扱われるもの」は対象外、という基準。
+  **残存リスク**: Microsoft のドキュメントは "Also avoid these names followed immediately by an extension; for example, NUL.txt and NUL.tar.gz are both equivalent to NUL." と明記しており、
+  仕様上は「予約名 + 拡張子」も予約扱いである。Windows 11 実機ではそうならないことを確認した上で、
+  上記のキャッシュ無効化リスクを避けるためにあえて対象外にしている。
+  古い Windows や別の API 経路では `nul.html` のようなセグメントで #12 が再発し得る（そのような実 URL は現時点で存在しない）
+- **影響範囲**: `escapeUrlToFile` の出力はローカルキャッシュパスだけでなく、
+  `WebAozoraConverter.java:1659-1670` で組み立てた `imagePath` が同 `:1703` で `［＃挿絵（images/...）入る］` として青空注記に埋め込まれ、
+  **生成 EPUB 内の画像ファイル名にもなる**。したがってリネームは EPUB 出力（→ `.NET` ポートの byte-identical 比較テスト）にも波及し得る。
+  ただし対象は予約デバイス名と一致するセグメントのみで、対応 12 サイトの実 URL 形にも比較テストの 5 ケースにも該当がないため、実出力は不変
+- **既存キャッシュへの影響**: リネーム対象になるのは、そもそも Windows で正しくキャッシュできていなかった名前だけなので、
+  Windows では実質的な破棄は発生しない。非 Windows では該当セグメントを含む URL のキャッシュが 1 回だけ再取得になるが、
+  プラットフォーム間でキャッシュパスを一致させるため OS 判定は入れずに無条件適用とした
+- **本 PR のスコープ外（未対応）**: 姉妹関数 `CharUtils.replaceInvalidFileChars` は無害化していない。
+  同関数の唯一の呼び出し元 `src/AozoraEpub3Applet.java:4190` は青空文庫 zip の直接ダウンロード経路で、
+  (a) URL 末尾が `.zip` / `.txtz` / `.rar` の場合しか通らず、(b) 結果を `new File(urlPath).getName()` で最終セグメントだけ使うため、
+  ファイル名は必ず拡張子付き（`NUL.zip` 等）になる。実測でこれは実ファイルとして作成でき、
+  さらにこの経路には `exists()` によるキャッシュ判定が無いため #12 の症状（毎回再ダウンロード → 章欠落）は起きない。
+  古い Windows で `NUL.zip` がデバイスに解決される場合はダウンロード内容が捨てられるが、その場合は後続の変換が明示的に失敗する
+- テスト: `test/com/github/hmdev/util/CharUtilsReservedDeviceNameTest.java`。
+  無害化の網羅に加え、**実 URL 相当の入力で出力が 1 文字も変わらないこと**、
+  空文字列 / 連続スラッシュ / 先頭スラッシュで入力が壊れないこと、
+  無害化後パスが実ファイルとして `write` → `exists` できること（Windows では無害化前の `NUL` / `NUL.` がここで落ちる）を検証
+
+### 13. 末尾が空白のパスセグメントで `InvalidPathException`
+
+**場所**: `src/com/github/hmdev/web/WebAozoraConverter.java` の章キャッシュ / 挿絵パス生成（#12 と同じ経路）
+
+#12 の実測中に発見した別件。Windows の `Path` はセグメント末尾の空白を許さない。
+
+```
+Path.of("dir").resolve("bar ")  → java.nio.file.InvalidPathException: Trailing char < > at index 3: bar
+```
+
+`InvalidPathException` は `RuntimeException` なので、`safeResolve` の `catch (IOException)` では捕まらず上位に伝播する。
+URL 由来のパスセグメントが空白で終わる場合（href に生の空白が含まれるサイト）に、章スキップではなく変換全体が中断し得る。
+
+なお**末尾がドット**のセグメント（`foo.`）は Windows が黙って `foo` に切り詰めるため例外にはならないが、
+`foo.` と `foo` が同じキャッシュファイルに衝突する。実害は小さい。
+（予約名 + 末尾ドット `NUL.` は #12 と同じ症状になるが、こちらは PR #42 で対応済み。）
+
+再現性の確認と、`escapeUrlToFile` 側でのトリム（`..` / 予約名と同じ層で処理）が対処案。
 
 ---
 
@@ -305,3 +377,4 @@ PR 分割案:
 | B | #2 + #3 | 同一 try/finally を触るため分離不可 |
 | C | #4 + #5 + #6 | リソース / ネットワーク堅牢化 |
 | D | #7〜#11 | 低リスクな整理。まとめて 1 PR |
+| E | #12 | キャッシュファイル名が変わるため単独 PR にして影響を切り分ける |
