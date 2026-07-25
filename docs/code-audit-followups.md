@@ -25,7 +25,8 @@
 | 10 | 🟢 低 | `getTextInputStream` の null 戻りで NPE | ✅ 対応済 | #41 |
 | 11 | 🟢 低 | ソース内コメントの文字化け（ログ文字列を含む） | ✅ 対応済 | #41 |
 | 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | ✅ 対応済 | #42 |
-| 13 | 🟢 低 | 末尾が空白のパスセグメントで `InvalidPathException` | 未着手 | - |
+| 13 | 🟡 中 | 制御文字・末尾空白のパスセグメントで `InvalidPathException`（変換全体が中断） | ✅ 対応済 | #44 |
+| 14 | 🟢 低 | 青空 zip 直接 DL 経路の `replaceInvalidFileChars` が制御文字・末尾空白を除去しない | 未着手 | - |
 
 ---
 
@@ -351,9 +352,10 @@ Windows は名前末尾の `.` と ` ` を無視するため、`NUL.` は `NUL` 
   空文字列 / 連続スラッシュ / 先頭スラッシュで入力が壊れないこと、
   無害化後パスが実ファイルとして `write` → `exists` できること（Windows では無害化前の `NUL` / `NUL.` がここで落ちる）を検証
 
-### 13. 末尾が空白のパスセグメントで `InvalidPathException`
+### 13. 制御文字・末尾空白のパスセグメントで `InvalidPathException`
 
-**場所**: `src/com/github/hmdev/web/WebAozoraConverter.java` の章キャッシュ / 挿絵パス生成（#12 と同じ経路）
+**場所**: `src/com/github/hmdev/util/CharUtils.java` の `escapeUrlToFile` と、
+`src/com/github/hmdev/web/WebAozoraConverter.java` の `safeResolve` 呼び出し全 6 箇所（#12 と同じ経路）
 
 #12 の実測中に発見した別件。Windows の `Path` はセグメント末尾の空白を許さない。
 
@@ -368,7 +370,80 @@ URL 由来のパスセグメントが空白で終わる場合（href に生の�
 `foo.` と `foo` が同じキャッシュファイルに衝突する。実害は小さい。
 （予約名 + 末尾ドット `NUL.` は #12 と同じ症状になるが、こちらは PR #42 で対応済み。）
 
-再現性の確認と、`escapeUrlToFile` 側でのトリム（`..` / 予約名と同じ層で処理）が対処案。
+**実測結果（PR #44、Windows 11 26200 + JDK NIO）**: 例外になる条件は当初の想定より広く、また狭かった。
+
+| セグメントの内容 | `Path.resolve` |
+|---|---|
+| **制御文字 (0x00-0x1F、TAB 含む) を含む** — 位置を問わない | **`InvalidPathException`** |
+| **末尾が半角スペース** | **`InvalidPathException`** |
+| 先頭・中間の半角スペース（`" foo"` / `"fo o"`） | OK（実ファイルも作成できる） |
+| 末尾がドット（`"foo."`） | OK（Windows が `foo` に切り詰め） |
+| 末尾が全角スペース（`"foo　"`） | OK |
+| 末尾が「スペース + ドット」（`"foo ."`） | OK（最終文字がドットのため） |
+
+つまり **(a) 制御文字はどこにあってもアウト、(b) 半角スペースは末尾だけアウト**。
+「末尾空白」だけを見ていた当初の想定では制御文字を取りこぼす一方、
+中間・先頭のスペースまで潰すと不要な変更になっていた。深刻度も 🟢 低 → 🟡 中 に訂正
+（章 1 件のスキップで済むはずが**変換全体が中断**するため）。
+
+**対応（PR #44）**: 2 層で修正した。
+
+1. **`CharUtils.escapeUrlToFile` でサニタイズ（根本対処）**
+   - 制御文字 (0x00-0x1F) を位置を問わず `_` に置換
+   - セグメント末尾の半角スペースを `_` に置換（`" (?= *(?:/|$))"`）。連続空白はすべて置換され、空白のみのセグメントは `_` の並びになる
+   - **予約デバイス名の判定（#12）より後**に実行する。`"COM1 "` は先に予約名として `"COM1 _"` になり、その時点で末尾スペースではなくなるため二重処理にならない
+   - 末尾ドットは例外にならないため**対象外**とした（#12 の `NUL.txt` と同じ判断基準。変更すると動作しているキャッシュを無効化するだけになる）
+2. **`WebAozoraConverter.safeResolve` で `InvalidPathException` → `IOException` に変換（多層防御）**
+   - 呼び出し元は 6 箇所あり、扱いは 2 通りに分かれる。変換を `safeResolve` 側に 1 箇所入れるだけで、どちらも既存の扱いに載る
+
+     | 呼び出し元 | `IOException` 時の扱い |
+     |---|---|
+     | `:946` / `:1058`（章キャッシュ）、`:1693`（挿絵） | **その 1 件だけスキップ**して次へ進む |
+     | `:548` / `:552`（本文キャッシュと `dstPath` 検証）、`:639`（`safeDstFile` 経由の出力 txt） | 上位へ伝播し変換を終了（本文が作れない以上これが正しい） |
+
+   - 1 で取りこぼす未知の不正パス（OS 依存の制約など）でも、`RuntimeException` のまま突き抜けて変換全体が中断することを防げる
+   - なお `:477` / `:1692` の `Path.of(this.dstPath)` は `try` の外で評価されるため、`dstPath` 自体が不正な場合はこの変換の対象外。
+     ただし `dstPath` は URL 由来ではなく `:548` の検証を先に通るため、実際には到達しにくい
+
+**既存キャッシュへの影響**: サニタイズ対象になるのは、そもそも Windows では例外で書き込めていなかった名前だけなので、
+Windows では実質的な破棄は発生しない。非 Windows では該当セグメントを含む URL のキャッシュが 1 回だけ再取得になるが、
+プラットフォーム間でキャッシュパスを一致させるため OS 判定は入れずに無条件適用とした（#12 と同じ方針）。
+
+**テスト**: `test/com/github/hmdev/util/CharUtilsInvalidPathCharsTest.java`（17 件）と
+`test/com/github/hmdev/web/WebAozoraConverterSafeResolveTest.java` に 1 件追加。
+上表の「OK」側が従来出力のまま変わらないことと、無害化後パスが実際に解決・書き込みできることを検証。
+`safeResolve` のテストは非 Windows では `Assume` でスキップする。
+
+**将来のリファクタ候補（今回は見送り）**: `escapeUrlToFile` には現在 4 種類のルールが積み上がっている
+（`..` 無害化 = #1 / 予約デバイス名 = #12 / 制御文字・末尾スペース = #13）。
+実装は「全文字列に対する regex 3 パス + セグメント split（`escapeReservedDeviceNames`）」の混成で、
+**順序依存がコメント頼み**になっている。4 ルールとも本質はセグメント単位の処理なので、
+「split → 各セグメントにルールを順に適用 → join」のパイプラインに寄せると順序依存が局所化し、将来のルール追加に強くなる。
+
+ただし現状の順序の健全性は検証済みで、**後段ルールが前段ルールの入力を再生成するケースはない**ため今すぐの必要はない:
+
+- `"NUL "` → 予約名判定で `"NUL _"` になり、末尾が `_` なので末尾スペース regex に不一致
+- 制御文字 → `_` 置換は `..` や予約デバイス名を新たに生成しない
+- `isWindowsReservedName` は末尾の `.` と ` ` しか strip しないため `_` 付きは再判定されない
+
+### 14. 青空 zip 直接ダウンロード経路の `replaceInvalidFileChars` が制御文字・末尾空白を除去しない
+
+**場所**: `src/com/github/hmdev/util/CharUtils.java` の `replaceInvalidFileChars` と、
+唯一の呼び出し元 `src/AozoraEpub3Applet.java:4190-4203`
+
+#13 と同一クラスの問題。`replaceInvalidFileChars` は `[?*&|<>"\\]` を `_` にするだけで、
+制御文字 (0x00-0x1F) と末尾の半角スペースを除去しない。
+`new File(dstPath+"/"+new File(urlPath).getName())` の後、`:4195` の `srcFile.getParentFile().toPath()` や
+`:4203` の `srcFile.toPath()` で `InvalidPathException`（`RuntimeException`）になり得る。
+
+**発生確率は低い**:
+
+- この経路は URL 末尾が `.zip` / `.txtz` / `.rar` の場合しか通らない（`:4188`）ため、**末尾スペースは構造上あり得ない**
+- `new File(urlPath).getName()` で最終セグメントのみを使うので、途中セグメントの不正文字は影響しない
+- 残るのは「最終セグメントの途中に制御文字が含まれる URL」のみ（例 `http://host/foo<0x01>bar.zip`）
+
+**対処案**: `replaceInvalidFileChars` にも制御文字の置換を足す。
+#13 と違い末尾スペースの考慮は不要（上記のとおり構造上発生しない）。
 
 ---
 

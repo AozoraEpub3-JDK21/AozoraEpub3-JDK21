@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -455,7 +456,16 @@ public class WebAozoraConverter
 	 * テストから利用するため package-private */
 	static File safeResolve(Path base, String relative) throws IOException {
 		Path canonicalBase = realPath(base);
-		Path resolved = realPath(canonicalBase.resolve(relative));
+		Path resolved;
+		try {
+			resolved = realPath(canonicalBase.resolve(relative));
+		} catch (InvalidPathException e) {
+			// OS がファイル名として受け付けない文字を含む場合 (Windows の制御文字・末尾スペース等)。
+			// InvalidPathException は RuntimeException のため、そのままだと呼び出し側の
+			// catch (IOException) をすり抜けて変換全体が中断する。IOException に変換して
+			// 「該当の章・画像だけをスキップ」という既存の扱いに載せる
+			throw new IOException("ファイル名に使えない文字を含むパス: " + relative, e);
+		}
 		if (!resolved.startsWith(canonicalBase)) {
 			throw new IOException("安全でないパス: " + resolved);
 		}
@@ -934,8 +944,8 @@ public class WebAozoraConverter
 							//cachePath 配下であることを検証（パストラバーサル対策）
 							chapterCacheFile = safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":""));
 						} catch (IOException e) {
-							logger.error("安全でない章キャッシュパスのためスキップ: {}", chapterHref, e);
-							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 安全でないパスのためスキップします: "+chapterHref);
+							logger.error("章キャッシュパスを扱えないためスキップ: {}", chapterHref, e);
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 扱えないパスのためスキップします: "+chapterHref+" ("+e.getMessage()+")");
 							//failedHrefs には追加しない（同じ href は後段の変換ループでも
 							//同様に弾かれ、そちらで一度だけ記録されるため）
 							chapterIdx++;
@@ -1046,8 +1056,8 @@ public class WebAozoraConverter
 							//cachePath 配下であることを検証（パストラバーサル対策）
 							chapterCacheFile = safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":""));
 						} catch (IOException e) {
-							logger.error("安全でない章キャッシュパスのためスキップ: {}", chapterHref, e);
-							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 安全でないパスのためスキップします: "+chapterHref);
+							logger.error("章キャッシュパスを扱えないためスキップ: {}", chapterHref, e);
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 扱えないパスのためスキップします: "+chapterHref+" ("+e.getMessage()+")");
 							failedHrefs.add(chapterHref);
 							chapterIdx++;
 							continue;
@@ -1681,8 +1691,8 @@ public class WebAozoraConverter
 			try {
 				imageFile = safeResolve(Path.of(this.dstPath), "images/"+imagePath);
 			} catch (IOException e) {
-				logger.error("安全でない画像パスのためスキップ: {}", src, e);
-				LogAppender.println("安全でない画像パスのためスキップします : "+src);
+				logger.error("画像パスを扱えないためスキップ: {}", src, e);
+				LogAppender.println("扱えない画像パスのためスキップします : "+src+" ("+e.getMessage()+")");
 				return;
 			}
 		}
