@@ -27,6 +27,7 @@
 | 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | ✅ 対応済 | #42 |
 | 13 | 🟡 中 | 制御文字・末尾空白のパスセグメントで `InvalidPathException`（変換全体が中断） | ✅ 対応済 | #44 |
 | 14 | 🟢 低 | 青空 zip 直接 DL 経路の `replaceInvalidFileChars` が `:` と制御文字を除去しない | ✅ 対応済 | #45 |
+| 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | 未着手 | - |
 
 ---
 
@@ -493,9 +494,55 @@ Windows では制御文字を含む名前をファイル API が受け付けな�
 - **設定ファイル読み書き**: `chuki_*.txt` / `extract.txt` / `update.txt` 系の Reader/Writer は try-finally または try-with-resources で全てクローズ済み、UTF-8 明示
 - **`convertNarouTags` の `while(true)`** 2 箇所は終了条件あり（無限ループなし）
 
+### 15. 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない
+
+**発見**: 2026-07-25、v1.3.7 リリース前 E2E（`docs/release-procedure.md` §2.1.1）で実際に生成した EPUB を見て発見。
+**v1.3.6 でも同じ壊れ方をするため既存バグ**（今回の変更による回帰ではない）。
+
+**症状**: URL から変換した EPUB の末尾にある出典リンクの `href` に、青空文庫の注記記法が混入する。
+
+```html
+<a href="https://www.aozora.gr.jp/cards/［＃縦中横］000035［＃縦中横終わり］/files/［＃縦中横］1567［＃縦中横終わり］_［＃縦中横］14913［＃縦中横終わり］.html">https://www.aozora.gr.jp/cards/<span class="tcy"><span>000035</span></span>/...</a>
+```
+
+**表示テキスト側は正しく `<span class="tcy">` に変換されている**のに `href` 属性だけが壊れており、**クリックしても飛べない**。
+
+**真因**（コードを読んで確認済み）: `src/com/github/hmdev/web/AozoraTextFinalizer.java`
+
+1. `enchantMidashi()`（`:640-`）が `［＃改ページ］` 直後の底本行を `［＃中見出し］` で包む
+2. `convertNumToKanji()`（`:363-386`）で、**見出し分岐（`:369`）が URL ガード（`:378` の `line.contains("://")`）より先に評価される**ため、
+   底本行は URL ガードに到達しない。URL 保護が設計されているのに素通りする
+3. `convertNumToZenkakuLine()` は `［＃...］` 注記区間をスキップするが **`<...>` タグを考慮していない**ため、
+   `convertNumsToZenkakuInSegment()`（`:448-466`）が href 内の 2 桁以上の数字を `［＃縦中横］` で包む
+
+`src/com/github/hmdev/web/WebAozoraConverter.java:1182-1189` が生の `<a href="URL">` を書き出すのが引き金だが、
+**壊しているのはファイナライザ**。後段の `AozoraEpub3Converter` は `checkTcyPrev` / `checkTcyNext` で
+タグを読み飛ばしており**無実**（当初は converter の自動縦中横を疑ったが誤りだった）。
+
+**修正方針**: `AozoraTextFinalizer` の 3 つのセグメント走査
+（`convertNumToZenkakuLine` / `convertNumToKanjiLine` / `alphabetToZenkakuLine`）に、
+**既存の `［＃...］` スキップと対称な形で `<...>` タグスキップを追加**する共通ヘルパを入れる。
+
+- `［＃縦中横］` で囲む案は不成立（注記自体がスキップされるだけで、間のテキストは変換される）
+- converter 側で抑止する案は的外れ（混入はその前段で発生済み）
+- `<a>` は converter が公式サポートする記法なので、生 HTML の埋め込み自体をやめる案は過剰
+
+**他の自動変換の状況**（調査済み）: `alphabetToZenkaku` は `://` スキップあり、
+`spaceHyphenation` は全角スペースのみ対象、濁点フォントはかな限定で、いずれも実害なし。
+`replace.txt` はユーザー定義の全文置換なので href も対象になるが仕様として容認。
+
+**`.NET` ポートへの影響**: 修正すると EPUB 出力が変わるため `JavaComparisonTests` 5 件のうち複数が落ちる
+（なろうの ncode は数字を含む）。**Java と .NET へ同一修正を同時に入れる必要がある**。
+
+**テスト方針**: `test/AozoraTextFinalizerTest.java` に、`［＃改ページ］` 直後の
+`底本： <a href="...数字...">同URL</a>` 行を finalize して **href 内に `［＃` が含まれないこと**と
+**表示テキスト側の縦中横は維持されること**を検証するケースを追加。見出し行 + タグ / 通常行 + タグ /
+英字全角化のタグ内非適用の 3 変種を用意する。
+
 ### 要確認（未追跡）
 
-- `src/com/github/hmdev/web/WebAozoraConverter.java:2295` — `[jump:URL]` の `<a href>` 生成で URL が非エスケープ。後段の変換でのエスケープ有無を追跡していない
+- ~~`src/com/github/hmdev/web/WebAozoraConverter.java:2295` — `[jump:URL]` の `<a href>` 生成で URL が非エスケープ。後段の変換でのエスケープ有無を追跡していない~~
+  → **後段で壊れることを E2E で実証した**。監査 #15 として起票済み（下記）
 
 ---
 

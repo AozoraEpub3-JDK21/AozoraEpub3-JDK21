@@ -407,6 +407,41 @@ java -jar AozoraEpub3.jar -iw 758 -ih 1024 input.txt
 java -Xmx2g -jar AozoraEpub3.jar input.txt
 ```
 
+### "Windows protected your PC" when launching `AozoraEpub3.exe`
+
+**Problem**: Microsoft Defender SmartScreen shows a warning. **This does not mean malware was detected.**
+
+It appears when two conditions coincide:
+
+1. `AozoraEpub3.exe` is not code-signed (this is an individual open-source project without a signing certificate)
+2. The downloaded ZIP carries the **Mark of the Web**, and extracting it with Windows Explorer **propagates that mark to every file inside**
+
+SmartScreen only reacts to files that carry the Mark of the Web. So if you clear it **before** extracting, the warning never appears. This is also why the behaviour differs between extraction tools — 7-Zip and similar tools do not propagate the Mark of the Web by default.
+
+**Solution (once, before extracting)**
+
+1. Right-click the downloaded `AozoraEpub3-*.zip` → **Properties**
+2. At the bottom of the General tab, tick **Unblock** next to "This file came from another computer..." → OK
+3. **Then** extract the ZIP
+
+The same thing in PowerShell:
+
+```powershell
+Unblock-File .\AozoraEpub3-*.zip
+```
+
+If you already extracted it, run this against the extracted folder:
+
+```powershell
+Get-ChildItem -Recurse .\AozoraEpub3-* | Unblock-File
+```
+
+If the warning is already on screen you can still start the app via "More info" → "Run anyway" (that choice is remembered, so you will not be asked again for the same file). The advantage of unblocking beforehand is that **the warning never appears at all, and the bundled `.jar` and configuration files do not keep the Mark of the Web either**.
+
+> These steps address the SmartScreen warning. On systems where Windows 11 **Smart App Control** is enabled, unsigned apps can be blocked regardless of the Mark of the Web, and this procedure will not help in that case.
+
+You can verify that the download is genuine with the published SHA-256 checksums — see [VERIFY.md](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/VERIFY.md).
+
 ### EPUB Validation Errors
 
 **Problem**: EPUB doesn't open on device

@@ -319,6 +319,41 @@ your-directory/
 - `java` コマンドがインストールされているか確認してください
 - Java 25推奨（Java 21以降であれば動作します。`java -version` で確認）
 
+### `AozoraEpub3.exe` の起動時に「Windows によって PC が保護されました」と出る
+
+Microsoft Defender SmartScreen の警告です。**マルウェアが検出されたわけではありません。**
+
+次の 2 つの条件が重なると表示されます。
+
+1. `AozoraEpub3.exe` にコード署名がない（個人 OSS のため証明書を取得していません）
+2. ダウンロードした ZIP に **Mark of the Web**（インターネット由来を示す印）が付いており、**エクスプローラで展開すると中のファイルすべてに伝播する**
+
+SmartScreen は Mark of the Web が付いたファイルにしか反応しません。裏を返せば、**ZIP を展開する前に「許可する」にしておけば警告自体が出なくなります**。展開ツールによって挙動が変わるのも同じ理由です（7-Zip などは既定で Mark of the Web を伝播しません）。
+
+**推奨手順（展開前に 1 回だけ）**
+
+1. ダウンロードした `AozoraEpub3-*.zip` を右クリック →「プロパティ」
+2. 全般タブ下部の「セキュリティ: このファイルは他のコンピューターから取得したものです。」の**「許可する」にチェック** → OK
+3. **その後で** ZIP を展開する
+
+PowerShell なら次の 1 行でも同じです。
+
+```powershell
+Unblock-File .\AozoraEpub3-*.zip
+```
+
+すでに展開してしまった場合は、展開先フォルダに対して実行してください。
+
+```powershell
+Get-ChildItem -Recurse .\AozoraEpub3-* | Unblock-File
+```
+
+警告画面が出てしまった場合は「詳細情報」→「実行」でも起動できます（この選択は記録されるので、同じファイルに対して繰り返し聞かれることはありません）。展開前に許可しておく利点は、**警告画面自体が出ないことと、同梱の `.jar` や設定ファイルにも Mark of the Web が残らないこと**です。
+
+> この手順は SmartScreen の警告に対するものです。Windows 11 の **Smart App Control** が有効な環境では、Mark of the Web の有無に関わらず未署名アプリがブロックされることがあります。その場合はこの手順では回避できません。
+
+配布物が正規のものであることは SHA-256 チェックサムで検証できます（[VERIFY.md](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/VERIFY.md)）。
+
 ### 表示がおかしい
 
 - 文字コード（エンコード）の指定を確認してください
