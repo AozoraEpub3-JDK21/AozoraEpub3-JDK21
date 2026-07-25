@@ -26,7 +26,7 @@
 | 11 | 🟢 低 | ソース内コメントの文字化け（ログ文字列を含む） | ✅ 対応済 | #41 |
 | 12 | 🟢 低 | Windows 予約デバイス名でキャッシュが毎回無効化される | ✅ 対応済 | #42 |
 | 13 | 🟡 中 | 制御文字・末尾空白のパスセグメントで `InvalidPathException`（変換全体が中断） | ✅ 対応済 | #44 |
-| 14 | 🟢 低 | 青空 zip 直接 DL 経路の `replaceInvalidFileChars` が制御文字・末尾空白を除去しない | 未着手 | - |
+| 14 | 🟢 低 | 青空 zip 直接 DL 経路の `replaceInvalidFileChars` が `:` と制御文字を除去しない | ✅ 対応済 | #45 |
 
 ---
 
@@ -426,24 +426,58 @@ Windows では実質的な破棄は発生しない。非 Windows では該当セ
 - 制御文字 → `_` 置換は `..` や予約デバイス名を新たに生成しない
 - `isWindowsReservedName` は末尾の `.` と ` ` しか strip しないため `_` 付きは再判定されない
 
-### 14. 青空 zip 直接ダウンロード経路の `replaceInvalidFileChars` が制御文字・末尾空白を除去しない
+### 14. 青空 zip 直接ダウンロード経路の `replaceInvalidFileChars` が `:` と制御文字を除去しない
 
 **場所**: `src/com/github/hmdev/util/CharUtils.java` の `replaceInvalidFileChars` と、
 唯一の呼び出し元 `src/AozoraEpub3Applet.java:4190-4203`
 
-#13 と同一クラスの問題。`replaceInvalidFileChars` は `[?*&|<>"\\]` を `_` にするだけで、
-制御文字 (0x00-0x1F) と末尾の半角スペースを除去しない。
-`new File(dstPath+"/"+new File(urlPath).getName())` の後、`:4195` の `srcFile.getParentFile().toPath()` や
-`:4203` の `srcFile.toPath()` で `InvalidPathException`（`RuntimeException`）になり得る。
+`replaceInvalidFileChars` は `[?*&|<>"\\]` を `_` にするだけで、制御文字 (0x00-0x1F) を除去しない。
+Windows では制御文字を含む名前をファイル API が受け付けないため、**サニタイズできたはずの名前でダウンロードが失敗する**。
 
-**発生確率は低い**:
+**訂正（PR #45、実測）**: 当初 #13 と同一クラス（`InvalidPathException` が `catch (IOException)` を
+すり抜ける）と書いていたが**誤り**。Windows 11 + JDK 21 で実測した実際の経路は次のとおり。
 
-- この経路は URL 末尾が `.zip` / `.txtz` / `.rar` の場合しか通らない（`:4188`）ため、**末尾スペースは構造上あり得ない**
-- `new File(urlPath).getName()` で最終セグメントのみを使うので、途中セグメントの不正文字は影響しない
-- 残るのは「最終セグメントの途中に制御文字が含まれる URL」のみ（例 `http://host/foo<0x01>bar.zip`）
+| 呼び出し | 実測結果 |
+|---|---|
+| `:4194` `srcFile.getCanonicalPath()` | **`IOException`（チェック例外）** ← ここで先に落ちる |
+| `:4195` `srcFile.getParentFile().toPath()` | OK（親は `dstPath` で URL 由来文字を含まない） |
+| `:4203` `srcFile.toPath()` | `InvalidPathException` になるが**到達しない** |
 
-**対処案**: `replaceInvalidFileChars` にも制御文字の置換を足す。
-#13 と違い末尾スペースの考慮は不要（上記のとおり構造上発生しない）。
+さらに唯一の生きた呼び出し元 `AozoraEpub3Applet.java:4469` は `:4471` の `catch (Exception e)` 配下なので、
+仮に `RuntimeException` が飛んでも外へは抜けない。
+（`:3199` にも `convertWeb` の呼び出しがあるが、`:3110` から始まる `/*class DropListener ... }*/` の
+**ブロックコメント内の死コード**。監査 #7 と同じ「ブロックコメント内が grep にヒットする」パターンなので注意。）
+
+したがって **#13 のような「未チェック例外のすり抜け」は起きない**。実際の症状は
+「不正な名前のダウンロードが `IOException` で失敗し、ユーザーには `エラーが発生しました` としか出ない」というもの。
+本項は堅牢性・一貫性の改善（監査 #6 でこの関数に持たせたサニタイズ意図の完遂）に位置づけられる。深刻度 🟢 低のまま。
+
+**適用範囲が #13 より狭い理由**:
+
+- この経路は URL 末尾が `.zip` / `.txtz` / `.rar` の場合しか通らない。`:4187` の `ext` 判定は最後の `.` 以降を
+  全部取るため、`foo.zip ` は `"zip "`、`foo.zip?x=1` は `"zip?x=1"` となり不一致になる。
+  よって **URL は必ず拡張子で終わり、末尾スペースは構造上あり得ない**
+- `new File(urlPath).getName()` で最終セグメントのみを使うため、途中セグメントの不正文字・`..`・予約デバイス名は影響しない
+- 残るのは「最終セグメントに `:` または制御文字が含まれる URL」（例 `http://host/a:b.zip` / `http://host/foo<0x01>bar.zip`）
+
+**対応（PR #45）**: `replaceInvalidFileChars` に制御文字 (0x00-0x1F) と **`:`** の置換を追加した。
+
+`:` はレビュー（ゲート C）で発見した積み残し。`escapeUrlToFile` は `:` を `_` にしていたのに
+この関数だけ素通りさせており、**2 つの関数で対策範囲が乖離**していた。
+`:` は RFC 3986 上パスセグメント内で percent-encoding 不要の合法文字なので
+`http://host/a:b.zip` は正規のリンクとして到達し、`a:b.zip` が制御文字と同じく
+`getCanonicalPath()` で `IOException` になることを実測で確認した
+（制御文字は URL 中では通常 `%01` 形式で到達し本経路はデコードしないため、**実際の遭遇確率は `:` の方が高い**）。
+
+再発防止として、制御文字の正規表現を `CharUtils.CONTROL_CHARS` に共有定数化し、
+`escapeUrlToFile` と `replaceInvalidFileChars` の双方から参照するようにした。
+#13 と違い**末尾スペースの考慮は不要**（上記のとおり URL 末尾が拡張子で終わるため構造上発生しない）。
+
+- 上記の「適用範囲が #13 より狭い理由」は `replaceInvalidFileChars` の javadoc にも書き、
+  新しい呼び出し元が生まれたときに前提が崩れないようにした
+- 0x20（半角スペース）と 0x7F（DEL）は Windows のパスとして有効なので置換しない。境界をテストで固定した
+- テスト: `test/com/github/hmdev/util/CharUtilsReplaceInvalidFileCharsTest.java` に 4 件追加（既存 5 件 + 新規 4 件 = 9 件）
+- ミューテーション確認: 制御文字置換を外すと 1 件、`:` を外すと 1 件が赤化
 
 ---
 
@@ -462,6 +496,49 @@ Windows では実質的な破棄は発生しない。非 Windows では該当セ
 ### 要確認（未追跡）
 
 - `src/com/github/hmdev/web/WebAozoraConverter.java:2295` — `[jump:URL]` の `<a href>` 生成で URL が非エスケープ。後段の変換でのエスケープ有無を追跡していない
+
+---
+
+## 依存ライブラリ更新の判断（2026-07-25）
+
+### junrar 7.5.10 → 8.0.0 — **見送り（時期尚早）**
+
+**API 面の移行コストはゼロ**と確認済み。8.0.0 の破壊的変更は 3 点だけで、いずれも本プロジェクトは未使用:
+
+- `UnsupportedRarV5Exception` の削除
+- `FileHeader#getFileNameString` / `getFileNameW` の削除
+- `BaseBlock#getHeaderSize()` の削除
+
+`src/` が使うのは `Archive`（`new Archive(File)` / `getFileHeaders()` / `nextFileHeader()` / `extractFile()`）、
+`FileHeader`（`isDirectory()` / `getFileName()`）、`RarException` のみ（import しているのは 6 ファイル）。
+
+**実利も明確**: RAR5 は WinRAR の既定形式で 7.5.10 では読めない。CBR 入力で普通に遭遇する。
+`.NET` ポートの byte-identical 比較テスト 5 件は txt / zip / Web 経路のみなので影響なし。
+
+**それでも見送る理由**: 8.0.0 は **2026-07-23 公開**（Maven Central の `maven-metadata.xml` の
+`lastUpdated=20260723071908` で確認）で、**RAR5 デコーダの新規実装を含むメジャー版**。
+公開直後で実地の実績情報がなく、8.0.1 も出ていない。
+
+**再検討の条件**: 8.0.1 の公開、または公開から 1〜2 か月経って重大な issue が上がっていないこと。
+
+### Gradle wrapper 9.2.1 → 9.6.1 — **v1.3.7 リリース後に実施**
+
+9.x 系内のマイナー更新で破壊的変更なし。ただし 9.6 の目玉（Configuration Cache のヒット率改善）は
+本プロジェクトが config cache 未使用のため**実利がほぼない**。急ぐ理由はないが、
+放置すると Gradle 10 移行時の差分が肥大するのでパッチ追従として実施する。
+
+進め方: wrapper 更新 + バージョン文字列 5 箇所（`CLAUDE.md` / `AGENTS.md` / `README.md` /
+`docs/release-procedure.md` / `docs/modernization-plan.md`）の更新のみの単独 PR。
+検証は (a) CI matrix（JDK 21 / 25 / 26）で `gradlew test`、
+(b) **9.2.1 と 9.6.1 それぞれで `gradlew dist` を実行し `unzip -l` / `tar -tzf` のファイルリストを diff**
+（過去の include 漏れ事故対策）。**リリース直前には入れない**。
+
+### 先にやるべき準備: RAR 経路のテスト整備
+
+`test_data/` に **RAR / CBR のフィクスチャが 1 件も無く、RAR 経路は完全に無テスト**（2026-07-25 時点で確認）。
+このまま junrar を上げると回帰に気づけない。junrar 更新の前に、
+RAR4 フィクスチャ + 抽出テストを追加して現行動作のベースラインを確立すること。
+これは junrar のバージョン判断と独立して価値がある。
 
 ---
 

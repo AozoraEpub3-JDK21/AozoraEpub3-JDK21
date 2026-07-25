@@ -176,6 +176,12 @@ public class CharUtils
 	}
 	
 	////////////////////////////////////////////////////////////////
+	/** 制御文字 (0x00-0x1F)。Windows のファイル API は位置を問わずこれを含む名前を受け付けず、
+	 * Path 解決では InvalidPathException になる。
+	 * escapeUrlToFile と replaceInvalidFileChars の両方で使うため共有する
+	 * （2 つの関数で対策範囲が食い違うのを防ぐ。経緯は docs/code-audit-followups.md の「### 13.」「### 14.」） */
+	static private final String CONTROL_CHARS = "[\\x00-\\x1F]";
+
 	/** Windows の予約デバイス名（大文字小文字は区別しない）。
 	 * これらと完全一致するパスセグメントは実ファイルではなくデバイスとして解決され得るため、
 	 * escapeUrlToFile で末尾に '_' を付けて無害化する。 */
@@ -198,7 +204,7 @@ public class CharUtils
 	{
 		String escaped = str.replaceAll("(\\?|\\&)", "/").replaceAll("(:|\\*|\\||\\<|\\>|\"|\\\\)", "_");
 		// 制御文字 (0x00-0x1F) は Windows のファイル名に使えず、位置を問わず InvalidPathException になる
-		escaped = escaped.replaceAll("[\\x00-\\x1F]", "_");
+		escaped = escaped.replaceAll(CONTROL_CHARS, "_");
 		// 「?」「&」→「/」置換後に現れる「..」セグメントも対象にするため、置換後に無害化する
 		escaped = escaped.replaceAll("(^|/)\\.\\.(?=/|$)", "$1__");
 		escaped = escapeReservedDeviceNames(escaped);
@@ -242,10 +248,19 @@ public class CharUtils
 	
 	////////////////////////////////////////////////////////////////
 	/** ファイル名に使えない文字を'_'に置換（URL をそのままファイル名にする用途）。
-	 * escapeUrlToFile と違い '?' '&' もディレクトリ区切りにせず '_' にする */
+	 * escapeUrlToFile と違い '?' '&' もディレクトリ区切りにせず '_' にする。
+	 * ':' と制御文字 (0x00-0x1F) も '_' にする（Windows のファイル API が受け付けないため）。
+	 *
+	 * escapeUrlToFile と違い、セグメント末尾の半角スペース・Windows 予約デバイス名・
+	 * 「..」セグメントは扱わない。唯一の呼び出し元 AozoraEpub3Applet の青空 zip 直接
+	 * ダウンロード経路が、(a) URL 末尾が .zip / .txtz / .rar の場合しか通らず末尾スペースが
+	 * 構造上あり得ない、(b) new File(...).getName() で最終セグメントしか使わないため、
+	 * という前提に依存している。**別の用途で呼ぶ場合はこの前提が崩れる**ので、
+	 * その場合は escapeUrlToFile 相当の処理が必要か検討すること
+	 * （経緯は docs/code-audit-followups.md の「### 14.」）。 */
 	static public String replaceInvalidFileChars(String str)
 	{
-		return str.replaceAll("[?*&|<>\"\\\\]", "_");
+		return str.replaceAll("[?*&|<>\":\\\\]", "_").replaceAll(CONTROL_CHARS, "_");
 	}
 
 	////////////////////////////////////////////////////////////////
