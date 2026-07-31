@@ -27,7 +27,7 @@ border:1px solid black;
 #end
 }
 #if (${TITLE_LENGTH} > 45)
-.upper { padding:5% 5% 0 5%; text-align:center; }
+.upper { padding:5% 5% 0 5%; min-height:50%; text-align:center; }
 #else
 .upper { padding:10% 5% 0 5%; height:50%; text-align:center; }
 #end

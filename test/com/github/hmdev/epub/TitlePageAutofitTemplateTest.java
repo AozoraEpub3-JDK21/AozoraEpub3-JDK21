@@ -106,8 +106,9 @@ public class TitlePageAutofitTemplateTest
 	public void longTitleDropsSpacersAndFixedHeight()
 	{
 		String out = renderHorizontal("長いタイトル", 90, null);
-		assertTrue(out.contains(".upper { padding:5% 5% 0 5%; text-align:center; }"));
-		assertFalse(out.contains("height:50%"));
+		//min-height でタイトルが50%を超えた時だけ伸びる(著者名と重ならず、通常は下段位置を維持)
+		assertTrue(out.contains(".upper { padding:5% 5% 0 5%; min-height:50%; text-align:center; }"));
+		assertFalse(out.contains("; height:50%"));
 		assertEquals(0, countOf(out, "<div class=\"space\"></div>"));
 	}
 

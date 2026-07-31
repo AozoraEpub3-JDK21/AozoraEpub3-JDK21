@@ -76,7 +76,10 @@ static int displayTextLength(String html)
 構造調整(**46 文字以上のときのみ**適用 — 45 以下は現行出力を byte 単位で維持):
 
 - `.space` div を出力しない(縦領域の 20% を回収)
-- `.upper` の `height:50%` を外して自然フローにする(著者名との重なりを防止)
+- `.upper` の `height:50%` を `min-height:50%` に変更(タイトルが 50% を超えた時だけ
+  領域が伸びて著者名を押し下げる。重なりを防ぎつつ、通常は著者名の下段位置を維持。
+  600×800 ビューポートの目視 E2E で「height 除去だと著者名がタイトル直下に詰まって
+  上寄りになる」ことを確認して min-height に決定)
 - `.upper` の `padding-top` を 10% → 5% に縮小
 
 後方互換フォールバック(旧 jar + 新テンプレートの組合せ対策):
@@ -110,7 +113,10 @@ static int displayTextLength(String html)
 - **表示文字数 45 以下のタイトルは出力 byte 不変**(directive 行は Velocity が改行ごと
   swallow するため、分岐追加でも出力に影響しない)。実測確認済み(2026-08-01):
   旧 jar+旧テンプレート vs 新 jar+新テンプレートで、10 文字・39 文字・TITLE_MIDDLE の
-  title.xhtml が byte 一致。
+  title.xhtml が byte 一致。SERIES/ORGTITLE 等の有無 11 パターンでも一致(ゲートレビューで検証)。
+  **例外**: ルビ・外字を含むタイトルは判定基準自体が変わる(旧: タグ込み `TITLE.length()` /
+  新: 表示文字数)ため、旧判定で 30 超・表示 30 以下だったタイトルは 1.75em → 2em に変わる。
+  これは過剰縮小の修正であり意図した改善。
 - 比較テスト 5 ケースのタイトル長: aozora_1567_14913=8 / n0063lr=25 /
   kakuyomu_822139840468926025=42 / n8005ls=45 / **n9623lp=100**。
   n9623lp のみ title.xhtml が変化(意図した変更)。Java 側 `JavaAozoraVsReferenceTest` は

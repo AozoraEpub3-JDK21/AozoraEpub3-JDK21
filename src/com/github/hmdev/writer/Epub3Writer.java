@@ -1255,7 +1255,7 @@ public class Epub3Writer
 	static int displayTextLength(String html)
 	{
 		if (html == null) return 0;
-		String text = html.replaceAll("<rt>.*?</rt>", "").replaceAll("<rp>.*?</rp>", "");
+		String text = html.replaceAll("<rt[^>]*>.*?</rt>", "").replaceAll("<rp[^>]*>.*?</rp>", "");
 		text = text.replaceAll("<img[^>]*>", "〓");
 		text = text.replaceAll("<[^>]+>", "");
 		text = text.replaceAll("&[#a-zA-Z0-9]{1,9};", "〓");
