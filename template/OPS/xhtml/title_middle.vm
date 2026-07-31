@@ -13,10 +13,24 @@
 <link rel="stylesheet" type="text/css" href="../css/horizontal_middle.css"/>
 <link rel="stylesheet" type="text/css" href="../css/horizontal.css"/>
 #end
+## TITLE_LENGTHはEpub3Writerが投入する表示文字数(タグ除去済) 旧jarとの組合せ用フォールバック
+#if (!${TITLE_LENGTH})
+#set ($TITLE_LENGTH = ${TITLE.length()})
+#end
+## TITLEも無い場合は上の#setがno-opになるため、未定義なら0にする(タイトル無しでも旧レイアウトを維持)
+#if (!${TITLE_LENGTH})
+#set ($TITLE_LENGTH = 0)
+#end
 <style type="text/css">
 .title, .subtitle, .orgtitle, .suborgtitle, .creator, .subcreator, .publisher, .series { line-height: 1.25; }
 .series { font-size:1.25em; }
+#if (${TITLE_LENGTH} > 80)
+.title { font-size:1.2em; }
+#elseif (${TITLE_LENGTH} > 45)
+.title { font-size:1.4em; }
+#else
 .title { font-size:1.75em; }
+#end
 .title ruby rt { font-size:.4em; }
 .orgtitle { font-size:1.4em; }
 .orgtitle ruby rt { font-size:.5em; }
