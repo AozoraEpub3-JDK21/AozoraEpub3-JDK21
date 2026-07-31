@@ -2,6 +2,14 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
 <head>
+## TITLE_LENGTHはEpub3Writerが投入する表示文字数(タグ除去済) 旧jarとの組合せ用フォールバック
+#if (!${TITLE_LENGTH})
+#set ($TITLE_LENGTH = ${TITLE.length()})
+#end
+## TITLEも無い場合は上の#setがno-opになるため、未定義なら0にする(タイトル無しでも旧レイアウトを維持)
+#if (!${TITLE_LENGTH})
+#set ($TITLE_LENGTH = 0)
+#end
 <style type="text/css">
 @page { margin:0; }
 html {
@@ -18,13 +26,25 @@ body { margin:0; padding:0; height:98%; text-align:center; line-height: 1.5; }
 border:1px solid black;
 #end
 }
+#if (${TITLE_LENGTH} > 45)
+.upper { padding:5% 5% 0 5%; min-height:50%; text-align:center; }
+#else
 .upper { padding:10% 5% 0 5%; height:50%; text-align:center; }
+#end
 .lower { padding:0 5%; height:25%; text-align:center; }
 
 .title, .subtitle, .orgtitle, .suborgtitle, .creator, .subcreator, .series, .publisher { text-align:center; line-height: 1.25; }
 .series { padding-bottom:.5em; font-size:1.25em; }
 .title {
-#if (${TITLE.length()} > 30)
+#if (${TITLE_LENGTH} > 120)
+font-size:1.1em;
+#elseif (${TITLE_LENGTH} > 80)
+font-size:1.25em;
+#elseif (${TITLE_LENGTH} > 60)
+font-size:1.4em;
+#elseif (${TITLE_LENGTH} > 45)
+font-size:1.6em;
+#elseif (${TITLE_LENGTH} > 30)
 font-size:1.75em;
 #else
 font-size:2em;
@@ -63,16 +83,16 @@ letter-spacing: -2px;
 <div class="upper">
 #if (${SERIES})
 	<div class="series">${SERIES}</div>
-#else
+#elseif (${TITLE_LENGTH} <= 45)
 	<div class="space"></div>
 #end
-#if (!${ORGTITLE})
+#if (!${ORGTITLE} && ${TITLE_LENGTH} <= 45)
 	<div class="space"></div>
 #end
-#if (!${SUBTITLE})
+#if (!${SUBTITLE} && ${TITLE_LENGTH} <= 45)
 	<div class="space"></div>
 #end
-#if (!${SUBORGTITLE})
+#if (!${SUBORGTITLE} && ${TITLE_LENGTH} <= 45)
 	<div class="space"></div>
 #end
 	<div class="title">${TITLE}</div>

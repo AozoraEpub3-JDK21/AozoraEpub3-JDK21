@@ -670,7 +670,12 @@ public class Epub3Writer
 			}
 			//ルビと外字画像注記と縦中横注記(縦書きのみ)のみ変換する
 			String line = bookInfo.getTitleText();
-			if (line != null) velocityContext.put("TITLE", converter.convertTitleLineToEpub3(line));
+			if (line != null) {
+				String convertedTitle = converter.convertTitleLineToEpub3(line);
+				velocityContext.put("TITLE", convertedTitle);
+				//タイトルページのfont-size段階調整用 タグを除いた表示文字数
+				velocityContext.put("TITLE_LENGTH", displayTextLength(convertedTitle));
+			}
 			line = bookInfo.getSubTitleText();
 			if (line != null) velocityContext.put("SUBTITLE", converter.convertTitleLineToEpub3(line));
 			line = bookInfo.getOrgTitleText();
@@ -1245,6 +1250,18 @@ public class Epub3Writer
 		}
 	}
 	
+	/** タイトルページの表示文字数を返す
+	 * ルビのrt/rpの中身と全タグを除去し、外字img・文字実体参照は1文字として数える */
+	static int displayTextLength(String html)
+	{
+		if (html == null) return 0;
+		String text = html.replaceAll("<rt[^>]*>.*?</rt>", "").replaceAll("<rp[^>]*>.*?</rp>", "");
+		text = text.replaceAll("<img[^>]*>", "〓");
+		text = text.replaceAll("<[^>]+>", "");
+		text = text.replaceAll("&[#a-zA-Z0-9]{1,9};", "〓");
+		return text.codePointCount(0, text.length());
+	}
+
 	/** 表紙画像を出力 編集済の画像なのでリサイズしない */
 	void writeCoverImage(BufferedImage srcImage, ZipArchiveOutputStream zos, ImageInfo imageInfo) throws IOException
 	{
