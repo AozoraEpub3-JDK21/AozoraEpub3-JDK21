@@ -328,7 +328,7 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
 | `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
-| `-interval <秒>` | ページ取得間隔（デフォルト 0.5秒） | `-interval 1.5` |
+| `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
 | `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
 
 ### 例

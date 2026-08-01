@@ -208,7 +208,7 @@ Available presets (in `presets/` directory):
 -url <URL>          Convert from URL directly (web novel page, or a
                     .zip / .txtz / .rar archive URL)
 -narou              Apply narou.rb-compatible format settings
--interval <seconds> Page fetch interval (default: 0.5)
+-interval <seconds> Page fetch interval (default: 1.0)
 -cache <path>       Cache directory (default: .cache)
 ```
 

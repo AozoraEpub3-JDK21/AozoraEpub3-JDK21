@@ -73,22 +73,27 @@ public final class ArchiveUrlUtils
 		} catch (URISyntaxException e) {
 			throw new IOException(e);
 		}
+		//出力ファイルを開く前（接続失敗など）は削除対象にしない。
+		//削除してしまうと、前回ダウンロード済みの正常なファイルがネットワーク断だけで消える
+		boolean outputOpened = false;
 		boolean downloaded = false;
 		try {
 			//try-with-resources 化（元の GUI 実装は Files.newOutputStream が失敗すると入力側が閉じられなかった）
-			try (BufferedInputStream bis = new BufferedInputStream(NetUtils.openStream(url), 8192);
-				BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()))) {
-				byte[] buf = new byte[8192];
-				int len;
-				while ((len = bis.read(buf)) > 0) {
-					bos.write(buf, 0, len);
+			try (BufferedInputStream bis = new BufferedInputStream(NetUtils.openStream(url), 8192)) {
+				try (BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()))) {
+					outputOpened = true;
+					byte[] buf = new byte[8192];
+					int len;
+					while ((len = bis.read(buf)) > 0) {
+						bos.write(buf, 0, len);
+					}
+					downloaded = true;
 				}
-				downloaded = true;
 			}
 		} finally {
 			//読み込みタイムアウト等で中断した場合、途中まで書かれた zip を残さない
 			//（正常な青空 zip と誤認されて「読み込めません」になるため）
-			if (!downloaded) {
+			if (outputOpened && !downloaded) {
 				try {
 					if (Files.deleteIfExists(srcFile.toPath())) {
 						LogAppender.println("ダウンロードに失敗したため途中のファイルを削除しました : "+srcFile.getPath());

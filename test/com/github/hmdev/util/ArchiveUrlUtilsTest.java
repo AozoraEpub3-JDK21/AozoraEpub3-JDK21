@@ -185,4 +185,22 @@ public class ArchiveUrlUtilsTest {
 		assertFalse("失敗したのにファイルが残っている",
 			Files.exists(dstPath.toPath().resolve("no_such.zip")));
 	}
+
+	/** 接続自体に失敗した場合（1 バイトも書いていない）は、
+	 * 前回ダウンロード済みの正常なファイルを消さないこと。
+	 * 削除は「出力ファイルを開いた後に中断した」場合に限る */
+	@Test
+	public void connectionFailureKeepsPreviouslyDownloadedFile() throws Exception {
+		File dstPath = tempFolder.newFolder("out");
+		byte[] previous = "前回ダウンロードした正常な zip の中身".getBytes(StandardCharsets.UTF_8);
+		Path existing = dstPath.toPath().resolve("no_such.zip");
+		Files.write(existing, previous);
+		//接続時点で失敗する URL（実体の無い file: URL）
+		String missingUrl = tempFolder.getRoot().toPath().resolve("no_such.zip").toUri().toString();
+
+		assertThrows(IOException.class, () -> ArchiveUrlUtils.downloadArchive(missingUrl, dstPath));
+
+		assertTrue("ネットワーク断だけで既存のファイルが削除されている", Files.exists(existing));
+		assertArrayEquals("既存ファイルの内容が変わっている", previous, Files.readAllBytes(existing));
+	}
 }
