@@ -134,6 +134,7 @@ GUI を起動する場合は引数なしで実行します: `java -jar AozoraEpu
 ## 関連ガイド
 
 - **[narou.rb 導入ガイド](narou-setup.html)** — Web小説ダウンローダーの導入と AozoraEpub3 連携
+- **[narou.rs 導入ガイド](narou-rs-setup.html)** — Rust 製互換ツール narou.rs の導入と AozoraEpub3 連携（Windows 11・画像付き）
 
 ---
 

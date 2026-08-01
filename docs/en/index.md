@@ -128,6 +128,13 @@ See the [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#readme) 
 
 ---
 
+## Related Guides
+
+- **[narou.rb Setup Guide](narou-setup.html)** — Installing the web novel downloader and connecting it to AozoraEpub3
+- **[narou.rs Setup Guide](narou-rs-setup.html)** — Setting up the Rust-based compatible tool narou.rs with AozoraEpub3 (Windows 11, with screenshots)
+
+---
+
 ## Troubleshooting
 
 - **Java is not installed** — Download Java 25 LTS from [Temurin](https://adoptium.net/temurin/releases/) and install (Java 21 or later also works).
