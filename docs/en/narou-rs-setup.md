@@ -61,6 +61,8 @@ Throughout this guide you will paste commands into the blue (or black) command w
 - **Right-click the Start button** → choose "**Terminal**"
 - Press the Start button, type "**powershell**" → open "Windows PowerShell"
 
+You can also right-click an empty area inside a folder open in File Explorer and choose "**Open in Terminal**" — this opens a command window (usually PowerShell) **in that folder** (used in steps 4 and 5).
+
 Once you have copied a command, paste it into the PowerShell window with a **right-click** (or `Ctrl+V`). You do not need to run it as an administrator.
 
 ---
@@ -88,7 +90,8 @@ If a version number (`21` or later) is displayed, you are good to go. If you get
 > ⚠️ **Caution**: During initialization, narou.rs rewrites one of AozoraEpub3's configuration files (`chuki_tag.txt`).
 > If you also use AozoraEpub3 for other purposes, **extract a separate copy into its own folder just for narou.rs** (narou.rs itself recommends this).
 
-> ✅ **Checkpoint**: `C:\Tools\AozoraEpub3-jdk21` contains `AozoraEpub3.jar`
+> ✅ **Checkpoint**: opening `C:\Tools\AozoraEpub3-jdk21` shows `AozoraEpub3.jar` **directly inside it**.
+> If everything ended up one folder deeper, move the contents up so they sit directly under `C:\Tools\AozoraEpub3-jdk21`.
 
 ---
 
@@ -121,11 +124,13 @@ C:\Tools\narou\
 
 ## 4. Initialize and Register AozoraEpub3
 
-Create a folder to manage your novels and initialize inside it. Paste the following three lines into PowerShell.
+Create the folder that will hold your novels, then run a single initialization command inside it.
+
+1. In File Explorer, type `C:\Tools` into the address bar to open it, right-click an empty area → "New" → "Folder", type `narou-novels` as the folder name and press Enter.
+2. Open the new `narou-novels` folder, right-click an empty area inside it → choose "**Open in Terminal**" (a window opens whose prompt line shows `C:\Tools\narou-novels`).
+3. Paste the following single line and press Enter.
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "C:\Tools\narou-novels" | Out-Null
-Set-Location "C:\Tools\narou-novels"
 C:\Tools\narou\narou_rs.exe init -p "C:\Tools\AozoraEpub3-jdk21"
 ```
 
@@ -145,6 +150,7 @@ AozoraEpub3 の構成ファイルを書き換えました
 
 > **Point**: `-p` must point to **the folder where you extracted AozoraEpub3 in step 2**.
 > The line height defaults to 1.8× (only add `-l 2.0` or similar if you want to change it).
+> If you use a PowerShell window opened from the Start menu instead, first run `cd C:\Tools\narou-novels` to move there (same for step 5).
 > If the registration fails, just **run `init -p ...` again in the same folder**
 > (it will say the folder is already initialized, but the AozoraEpub3 configuration is redone).
 
@@ -157,10 +163,9 @@ AozoraEpub3 の構成ファイルを書き換えました
 
 ## 5. Open the Web UI
 
-These two lines start the narou.rs screen (the Web UI). **From now on, these same two lines are all you need to start it.**
+Just like in step 4, open `C:\Tools\narou-novels` in File Explorer, right-click an empty area inside it → choose "**Open in Terminal**", and run this single line. **From now on, this is all you need to start it.**
 
 ```powershell
-Set-Location "C:\Tools\narou-novels"
 C:\Tools\narou\narou_rs.exe web
 ```
 
@@ -248,6 +253,7 @@ To undo it: press the Start button → type "environment variables" → open "Ed
 | "Windows protected your PC" | Can appear if you double-click `narou_rs.exe`, for example. Get past it with the same steps as for the [SmartScreen warning](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe) |
 | A Java-related error during conversion | Check that Java is installed → [step 1](#1-install-java) |
 | Conversion runs but there is no `.epub` file | Check that device is set to EPUB → [step 6](#6--set-device-to-epub-required) |
+| Initialization ran but the Web UI shows nothing / the novel list is empty | You may have run the command in a different folder. Check that the prompt line shows `C:\Tools\narou-novels` → [step 4](#4-initialize-and-register-aozoraepub3) |
 | The firewall dialog appeared | Click "Allow access" (it only runs on localhost, so nothing is exposed externally) |
 
 ---

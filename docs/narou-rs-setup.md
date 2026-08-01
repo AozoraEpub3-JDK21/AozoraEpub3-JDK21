@@ -64,6 +64,8 @@ description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB �
 - **スタートボタンを右クリック** → 「**ターミナル**」を選ぶ
 - スタートボタンを押して「**powershell**」と入力 → 「Windows PowerShell」を開く
 
+また、エクスプローラーで開いているフォルダ内の何もない場所を右クリック →「**ターミナルで開く**」を選ぶと、**そのフォルダの場所で**コマンド入力画面（通常は PowerShell）が開きます（手順 4・5 で使います）。
+
 コピーしたコマンドは、PowerShell の画面上で**右クリック**（または `Ctrl+V`）すると貼り付けられます。管理者として実行する必要はありません。
 
 ---
@@ -91,7 +93,8 @@ java -version
 > ⚠️ **注意**: narou.rs は初期化の際に AozoraEpub3 の構成ファイル（`chuki_tag.txt`）を書き換えます。
 > AozoraEpub3 をほかの用途でも使っている場合は、**narou.rs 専用として別のフォルダに展開**してください（narou.rs 自身も専用インストールを推奨しています）。
 
-> ✅ **ここまでの確認**: `C:\Tools\AozoraEpub3-jdk21` の中に `AozoraEpub3.jar` がある
+> ✅ **ここまでの確認**: `C:\Tools\AozoraEpub3-jdk21` を開くと、**その直下に** `AozoraEpub3.jar` がある。
+> さらに一段深いフォルダの中に入ってしまっている場合は、その中身をすべて `C:\Tools\AozoraEpub3-jdk21` の直下に移動してください。
 
 ---
 
@@ -124,11 +127,13 @@ C:\Tools\narou\
 
 ## 4. 初期化と AozoraEpub3 の登録
 
-小説を保存・管理するためのフォルダを作成し、そのフォルダの中で初期化コマンドを実行します。次の 3 行を PowerShell に貼り付けてください。
+小説を保存・管理するフォルダを作り、その中で初期化コマンドを 1 行実行します。
+
+1. エクスプローラーのアドレス欄に `C:\Tools` と入力して開き、何もない場所を右クリック →「新規作成」→「フォルダー」を選び、フォルダ名を `narou-novels` と入力して Enter を押します。
+2. 作成した `narou-novels` フォルダを開き、フォルダ内の何もない場所を右クリック →「**ターミナルで開く**」を選びます（行頭に `C:\Tools\narou-novels` と表示された画面が開きます）。
+3. 開いた画面に次の 1 行を貼り付けて、Enter を押します。
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "C:\Tools\narou-novels" | Out-Null
-Set-Location "C:\Tools\narou-novels"
 C:\Tools\narou\narou_rs.exe init -p "C:\Tools\AozoraEpub3-jdk21"
 ```
 
@@ -148,6 +153,7 @@ AozoraEpub3 の構成ファイルを書き換えました
 
 > **Point**: `-p` には**手順 2 で AozoraEpub3 を展開したフォルダ**を指定します。
 > 行間は標準で 1.8 倍に設定されます（変えたい場合のみ `-l 2.0` のように追加します）。
+> スタートメニューから開いた PowerShell で実行する場合は、先に `cd C:\Tools\narou-novels` と入力して現在地を移動してください（手順 5 も同様です）。
 > 登録に失敗した場合も、**同じフォルダでもう一度 `init -p ...` を実行**すればやり直せます
 > （「既に初期化済みです」と表示されますが、AozoraEpub3 の設定はやり直せます）。
 
@@ -160,10 +166,9 @@ AozoraEpub3 の構成ファイルを書き換えました
 
 ## 5. Web UI の起動
 
-次の 2 行で narou.rs の画面（Web UI）が起動します。**次回以降もこの 2 行だけで起動できます。**
+手順 4 と同じように、エクスプローラーで `C:\Tools\narou-novels` を開き、フォルダ内の何もない場所を右クリック →「**ターミナルで開く**」を選んで、次の 1 行を実行します。**次回以降もこの操作だけで起動できます。**
 
 ```powershell
-Set-Location "C:\Tools\narou-novels"
 C:\Tools\narou\narou_rs.exe web
 ```
 
@@ -249,6 +254,7 @@ $narouPath = "C:\Tools\narou"
 | 「Windows によって PC が保護されました」と表示される | `narou_rs.exe` をダブルクリックで起動した場合などに表示されることがあります。[SmartScreen 警告の回避方法](usage.html#aozoraepub3exe-の起動時にwindows-によって-pc-が保護されましたと出る)と同じ手順で回避できます |
 | 変換時に Java 関連のエラーが出る | Java がインストールされているか確認してください → [手順 1](#1-java-のインストール) |
 | 変換はされるが `.epub` ファイルが見つからない | device が EPUB になっているか確認してください → [手順 6](#6--出力を-epub-に設定必須) |
+| 初期化したのに Web UI に反映されない・小説リストが空 | 別のフォルダでコマンドを実行した可能性があります。コマンド入力画面の行頭に `C:\Tools\narou-novels` と表示されているか確認してください → [手順 4](#4-初期化と-aozoraepub3-の登録) |
 | ファイアウォールの許可画面が表示された | 「アクセスを許可する」を押してください（localhost で動作するだけで、外部には公開されません） |
 
 ---
