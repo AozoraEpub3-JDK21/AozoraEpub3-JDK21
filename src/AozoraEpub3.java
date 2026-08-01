@@ -35,7 +35,7 @@ public class AozoraEpub3
 {
 	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3.class);
 
-	public static final String VERSION = "1.3.7-jdk21";
+	public static final String VERSION = "1.4.0-jdk21";
 	
 	/** コマンドライン実行用。
 	 * 失敗時のみ非 0 で終了する（成功時に System.exit を呼ばないのは、

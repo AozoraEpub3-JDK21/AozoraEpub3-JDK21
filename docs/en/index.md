@@ -19,17 +19,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.3.7-jdk21 (July 25, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.7-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.4.0-jdk21 (August 1, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.4.0-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -39,12 +39,11 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.3.7-jdk21
+## What's New in v1.4.0-jdk21
 
-- **Bug-fix release driven by a full `src/` code audit (#1–#17)**: path traversal, ImageIO resource leaks, missing network timeouts, and Windows filename constraints that silently invalidated the cache or aborted an entire conversion are all fixed
-- **Broken source-URL link fixed**: the `href` of the source link appended to EPUBs converted from a URL could contain Aozora annotation markup, making the link unopenable (a pre-existing bug also present in v1.3.6)
-- **⚠️ Breaking changes**: the CLI now exits with `1` instead of `0` when a conversion fails, and partially written `.epub` files are deleted. With narou.rb, corrupted EPUBs that used to be accepted as successful are now reported as failures (an intentional change)
-- The generated EPUB structure is unchanged (byte-identical comparison tests on the .NET port: 5/5 PASS)
+- **Automatic title-page layout for long titles**: long web-novel titles (up to 100 characters) no longer overflow the title page or overlap the author name. The font size now adjusts automatically in 6 steps based on the displayed title length (thresholds derived from measured title-length distributions of 2,496 works across 3 sites). Output is unchanged for titles of 45 characters or less
+- **CLI now accepts archive URLs directly**: passing a zip / txtz / rar URL to `-url` downloads and converts it in one step (previously GUI / drag-and-drop only)
+- Output changes are limited to the title page (byte-identical comparison tests on the .NET port stay 5/5 PASS via a simultaneous port)
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 

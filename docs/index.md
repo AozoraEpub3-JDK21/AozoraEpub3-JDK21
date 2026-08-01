@@ -22,17 +22,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.3.7-jdk21 (2026年7月25日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.3.7-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.4.0-jdk21 (2026年8月1日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.4.0-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.3.7-jdk21/AozoraEpub3-1.3.7-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -42,12 +42,11 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.3.7-jdk21 の主な変更
+## v1.4.0-jdk21 の主な変更
 
-- **コード監査（#1〜#17）にもとづくバグ修正リリース**: パストラバーサル、ImageIO のリソースリーク、ネットワークタイムアウト欠如、Windows のファイル名制約によるキャッシュ無効化・変換中断などを一括で修正
-- **出典 URL のリンク破損を修正**: URL から変換した EPUB の末尾に付く出典リンクの `href` に注記記法が混入し、リンクを開けなくなっていた問題を修正（v1.3.6 以前にも存在する既存バグ）
-- **⚠️ Breaking changes**: 変換に失敗したとき、CLI の終了コードが `0` → `1` に変わりました。あわせて出力途中の壊れた `.epub` は削除されます。narou.rb 連携では、これまで「成功」として取り込まれていた破損 EPUB が失敗として扱われます（意図した変更）
-- 出力 EPUB の構造は変わりません（`.NET` ポートの byte-identical 比較テスト 5/5 PASS）
+- **表紙（タイトルページ）の長タイトル自動調整**: 小説家になろう等の長いタイトル（最大 100 文字）が表紙に収まらず著者名と重なる問題を修正。タイトルの表示文字数に応じて文字サイズを 6 段階で自動調整します（3 サイト 2,496 作品のタイトル文字数の実測分布に基づく閾値）。45 文字以下のタイトルでは従来と同一の出力です
+- **CLI で青空文庫 zip 等のアーカイブ URL を直接指定可能に**: `-url` に zip / txtz / rar の URL を渡すと、ダウンロードしてそのまま変換します（従来は GUI / ドラッグ&ドロップのみ対応）
+- 出力の変更はタイトルページのみ（`.NET` ポートの byte-identical 比較テスト 5/5 PASS を同時移植で維持）
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 
