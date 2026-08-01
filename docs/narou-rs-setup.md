@@ -26,7 +26,7 @@ description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB �
 > - 本記事は [narou.rs](https://github.com/Rumia-Channel/narou.rs) の公式マニュアルではありません。不明点は **[narou.rs の README](https://github.com/Rumia-Channel/narou.rs) や [Issues](https://github.com/Rumia-Channel/narou.rs/issues)** の最新情報を優先してください。
 > - 検証環境: Windows 11（日本語）、narou.rs v0.3.4、AozoraEpub3 v1.4.0-jdk21
 
-**narou.rs** は、Web 小説のダウンロード・更新・変換を行うツール [narou.rb](narou-setup.html) の互換ツール（Rust 実装）です。narou.rb と同じく変換エンジンに AozoraEpub3 を使います。
+**narou.rs**（開発: [Rumia-Channel](https://github.com/Rumia-Channel) 氏）は、Web 小説のダウンロード・更新・変換を行うツール [narou.rb](narou-setup.html)（whiteleaf7 氏）の互換ツール（Rust 実装）です。narou.rb と同じく変換エンジンに AozoraEpub3 を使います。
 
 このページの手順を上から順に進めると、**ブラウザに小説の URL を貼るだけで EPUB ができる**環境が完成します。所要時間はおよそ 20〜30 分です。
 
@@ -50,6 +50,15 @@ description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB �
 
 > **Point**: ソフトを置くフォルダは、**半角英数字だけのパス**（例: `C:\Tools\narou`）にすると
 > トラブルが起きにくくなります。日本語やスペースを含む場所（`ダウンロード` フォルダ、OneDrive 配下など）は避けてください。
+
+### PowerShell の開き方
+
+このガイドでは、青い（または黒い）コマンド入力画面 = **PowerShell** に何度かコマンドを貼り付けます。開き方は次のどちらでも構いません。
+
+- **スタートボタンを右クリック** → 「**ターミナル**」を選ぶ
+- スタートボタンを押して「**powershell**」と入力 → 「Windows PowerShell」を開く
+
+コピーしたコマンドは、PowerShell の画面上で **右クリック**（または `Ctrl+V`）で貼り付けられます。管理者として実行する必要はありません。
 
 ---
 
@@ -108,10 +117,21 @@ C:\Tools\narou\
 
 どのフォルダからでも `narou_rs` コマンドを呼べるように、`narou_rs.exe` の場所を **PATH（コマンドの検索場所リスト）**に登録します。
 
-- これから行うのは「あなたのユーザーの設定に、フォルダの場所を 1 行追記する」ことだけです。システム全体は変更しません。
-- **元に戻したいとき**: 「環境変数」で検索 →「環境変数を編集」→ 上段の `Path` を選んで「編集」→ 追加した行を選んで「削除」するだけです。
+これから行うのは「**あなたのユーザーの設定に、フォルダの場所を 1 行追記する**」ことだけです。システム全体は変更しませんし、いつでも簡単に元に戻せます（戻し方はこのすぐ下に書いてあります）。
 
-PowerShell に次の 2 行を**そのまま**コピーして貼り付け、Enter を押してください（`C:\Tools\narou` を別の場所にした場合はそこだけ書き換えます）。
+<details markdown="1">
+<summary>💡 元に戻したいとき（登録を削除する手順）</summary>
+
+1. スタートボタンを押して「**環境変数**」と入力し、検索結果の「**アカウントの環境変数を編集**」を開きます
+2. 上の段「（ユーザー名）のユーザー環境変数」の一覧から **Path** をクリックして選び、「**編集...**」を押します
+3. 一覧から `C:\Tools\narou` の行をクリックして選び、右側の「**削除**」を押します
+4. 「OK」→「OK」で閉じます。開いている PowerShell があれば、開き直すと反映されます
+
+これで登録前の状態に戻ります。ほかの行には触らないよう注意してください。
+
+</details>
+
+[PowerShell](#powershell-の開き方) に次の 2 行を**そのまま**コピーして貼り付け、Enter を押してください（`C:\Tools\narou` を別の場所にした場合はそこだけ書き換えます）。
 
 ```powershell
 $narouPath = "C:\Tools\narou"
@@ -123,10 +143,11 @@ $narouPath = "C:\Tools\narou"
 <details markdown="1">
 <summary>コマンドを使わず、設定画面から登録する場合はこちら</summary>
 
-1. スタートボタンを押して「**環境変数**」と入力 →「**環境変数を編集**」を開く
-2. 上段「(ユーザー名) のユーザー環境変数」の **Path** を選んで「**編集**」
-3. 「**新規**」→ `C:\Tools\narou` と入力 → OK → OK
-4. 開いている PowerShell を閉じて開き直す
+1. スタートボタンを押して「**環境変数**」と入力し、検索結果の「**アカウントの環境変数を編集**」を開きます
+2. 上の段「（ユーザー名）のユーザー環境変数」の一覧から **Path** をクリックして選び、「**編集...**」を押します
+3. 「**新規**」を押し、`C:\Tools\narou` と入力します
+4. 「OK」→「OK」で閉じます
+5. 開いている PowerShell を閉じて、開き直します
 
 </details>
 

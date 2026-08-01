@@ -23,7 +23,7 @@ description: Step-by-step beginner's guide to converting web novels into EPUB wi
 > - This article is **not** an official [narou.rs](https://github.com/Rumia-Channel/narou.rs) manual. For anything unclear, prefer the latest information in the **[narou.rs README](https://github.com/Rumia-Channel/narou.rs) and [Issues](https://github.com/Rumia-Channel/narou.rs/issues)**.
 > - Tested environment: Windows 11 (Japanese), narou.rs v0.3.4, AozoraEpub3 v1.4.0-jdk21
 
-**narou.rs** is a compatible reimplementation (in Rust) of [narou.rb](narou-setup.html), the tool that downloads, updates, and converts web novels. Like narou.rb, it uses AozoraEpub3 as its conversion engine.
+**narou.rs** (developed by [Rumia-Channel](https://github.com/Rumia-Channel)) is a compatible reimplementation (in Rust) of [narou.rb](narou-setup.html) (by whiteleaf7), the tool that downloads, updates, and converts web novels. Like narou.rb, it uses AozoraEpub3 as its conversion engine.
 
 Follow the steps on this page from top to bottom and you will end up with a setup where **pasting a novel URL into your browser is all it takes to get an EPUB**. It takes about 20 to 30 minutes.
 
@@ -47,6 +47,15 @@ Follow the steps on this page from top to bottom and you will end up with a setu
 
 > **Point**: Use a path made of **ASCII characters only** (for example `C:\Tools\narou`) for the folders you install into.
 > Avoid locations that contain non-ASCII characters or spaces (your `Downloads` folder in a localized Windows, anything under OneDrive, and so on).
+
+### How to Open PowerShell
+
+Throughout this guide you will paste commands into the blue (or black) command window, which is **PowerShell**. Either way of opening it works:
+
+- **Right-click the Start button** → choose "**Terminal**"
+- Press the Start button, type "**powershell**" → open "Windows PowerShell"
+
+Once you have copied a command, paste it into the PowerShell window with a **right-click** (or `Ctrl+V`). You do not need to run it as an administrator.
 
 ---
 
@@ -105,10 +114,21 @@ C:\Tools\narou\
 
 So that the `narou_rs` command works from any folder, register the location of `narou_rs.exe` in your **PATH** (the list of folders where commands are looked up).
 
-- All you are about to do is **append one line to your own user settings**. Nothing system-wide is changed.
-- **To undo it later**: search for "environment variables" → "Edit environment variables for your account" → select `Path` in the upper box → "Edit" → select the line you added → "Delete".
+All you are about to do is **append one line to your own user settings**. Nothing system-wide is changed, and you can undo it at any time (the steps for that are right below).
 
-Copy the following two lines **as-is** into PowerShell and press Enter (if you put narou.rs somewhere other than `C:\Tools\narou`, change only that part).
+<details markdown="1">
+<summary>💡 To undo it later (how to remove the entry)</summary>
+
+1. Press the Start button, type "**environment variables**" and open "**Edit environment variables for your account**" from the search results
+2. In the upper box ("User variables for (your name)"), click **Path** to select it and press "**Edit...**"
+3. In the list, click the `C:\Tools\narou` line to select it and press "**Delete**" on the right
+4. Close with "OK" → "OK". If a PowerShell window is open, reopen it for the change to take effect
+
+That restores the state before you registered it. Be careful not to touch the other lines.
+
+</details>
+
+Copy the following two lines **as-is** into [PowerShell](#how-to-open-powershell) and press Enter (if you put narou.rs somewhere other than `C:\Tools\narou`, change only that part).
 
 ```powershell
 $narouPath = "C:\Tools\narou"
@@ -120,10 +140,11 @@ $narouPath = "C:\Tools\narou"
 <details markdown="1">
 <summary>Prefer the GUI instead of a command? Click here</summary>
 
-1. Press the Start button, type "**environment variables**" and open "**Edit environment variables for your account**"
-2. In the upper box ("User variables for (your name)"), select **Path** and click "**Edit**"
-3. Click "**New**" → type `C:\Tools\narou` → OK → OK
-4. Close any open PowerShell window and open it again
+1. Press the Start button, type "**environment variables**" and open "**Edit environment variables for your account**" from the search results
+2. In the upper box ("User variables for (your name)"), click **Path** to select it and press "**Edit...**"
+3. Press "**New**" and type `C:\Tools\narou`
+4. Close with "OK" → "OK"
+5. Close any open PowerShell window and open it again
 
 </details>
 
