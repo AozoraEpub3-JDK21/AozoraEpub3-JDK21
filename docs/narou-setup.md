@@ -32,7 +32,7 @@ description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Win
 Web小説ダウンローダー **narou.rb** を導入し、AozoraEpub3 と連携させるための手順です。
 
 <div style="border: 1px solid #0969da; background: #f0f7ff; border-radius: 6px; padding: 0.8em 1em; margin: 1em 0;">
-💡 <strong>narou.rb がうまく動かない場合</strong>: narou.rb 互換の後継ツール <strong>narou.rs</strong>（Rust 実装・開発が活発）を使う選択肢もあります。
+💡 <strong>narou.rb がうまく動かない場合</strong>: narou.rb 互換のツール <strong>narou.rs</strong>（Rust 実装・開発が活発）を使う選択肢もあります。
 👉 <a href="narou-rs-setup.html"><strong>narou.rs 導入ガイド（画像付き）</strong></a>
 </div>
 

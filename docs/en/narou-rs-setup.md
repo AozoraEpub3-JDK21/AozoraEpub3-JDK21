@@ -92,7 +92,7 @@ If a version number (`21` or later) is displayed, you are good to go. If you get
 1. Download the Windows zip (its name contains `x86_64-pc-windows`) from the **[narou.rs Releases page](https://github.com/Rumia-Channel/narou.rs/releases/latest)**.
 2. Right-click the zip → "Extract All". It contains a `narou/` folder — place it so that it ends up at `C:\Tools\narou`.
 
-The extracted folder looks like this (keep `narou_rs.exe` and the `webnovel/` and `preset/` folders together in the same directory):
+The extracted folder has the following structure.
 
 ```text
 C:\Tools\narou\
@@ -100,8 +100,12 @@ C:\Tools\narou\
   narou_rs_updater.exe.new
   webnovel\
   preset\
-  LICENSE / README.md and so on
+  commitversion
+  LICENSE / README.md / Third-Party-License.md
 ```
+
+> ⚠️ **Caution**: `narou_rs.exe` relies on `webnovel\`, `preset\`, and `commitversion` being in the same folder.
+> **Do not move them elsewhere or delete them.**
 
 > ⚠️ **Caution**: If you get "`VCRUNTIME140.dll` was not found" at startup,
 > install the official Microsoft **[Visual C++ Redistributable (x64)](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)**.
@@ -135,7 +139,9 @@ $narouPath = "C:\Tools\narou"
 [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $narouPath, "User")
 ```
 
-**Close PowerShell and open a new window** (the change does not take effect until you reopen it).
+> **Point**: Run this command **only once**. Running it repeatedly registers the same entry over and over (it still works, but it clutters the list).
+
+Once you have run it, **close PowerShell and open a new window**. The change does not take effect until you reopen it.
 
 <details markdown="1">
 <summary>Prefer the GUI instead of a command? Click here</summary>
@@ -188,13 +194,13 @@ AozoraEpub3 の構成ファイルを書き換えました
 
 ## 6. Open the Web UI
 
-Run the following in your novel folder (`C:\narou-novels`).
+Run the following command in the novel folder you created in step 5 (`C:\narou-novels`).
 
 ```powershell
 narou_rs web
 ```
 
-Your browser opens automatically and shows the narou.rs screen (`http://localhost:16230/`).
+Your browser opens automatically and shows the narou.rs screen. The address has the form `http://localhost:(port number)/`, and **the port number is chosen automatically on the first launch and reused from then on**.
 
 > The screenshots below show the Japanese UI; the layout is identical in English. You can switch the Web UI language with the "**Language: 日本語 ↔ English**" item in the "⚙ Options" menu at the top right.
 
@@ -220,7 +226,7 @@ At the very top of the "General" tab, change "**device** (the target device for 
 
 <div style="border-left: 4px solid #cf222e; background: #fff8f8; padding: 0.8em 1em; margin: 1em 0;">
 <strong>Without this setting, no EPUB is produced.</strong>
-If you use a specific device such as a Kindle you may select that device name instead, but if you just want an EPUB, choose EPUB.
+If you read on a specific device such as a Kindle you may select that device name instead, but if you are unsure, choose EPUB.
 </div>
 
 Click "← Back to the novel list" to return to the previous screen.
