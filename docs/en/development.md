@@ -10,6 +10,7 @@ description: AozoraEpub3 developer guide: JDK 21 setup, Gradle build commands, p
   <a href="index.html">Home</a> | 
   <a href="usage.html">Usage</a> | 
   <a href="narou-setup.html">narou.rb Setup</a> |
+  <a href="narou-rs-setup.html">narou.rs</a> |
   <strong>Development</strong> | 
   <a href="epub33.html">EPUB 3.3</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>

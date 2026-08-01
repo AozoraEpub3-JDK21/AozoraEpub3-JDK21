@@ -10,6 +10,7 @@ description: narou.rb installation, known issues (April 2026), and AozoraEpub3 i
    <a href="index.html">Home</a> | 
    <a href="usage.html">Usage</a> | 
    <strong>narou.rb Setup</strong> |
+   <a href="narou-rs-setup.html">narou.rs</a> |
    <a href="development.html">Development</a> | 
    <a href="epub33.html">EPUB 3.3</a> |
    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
@@ -26,6 +27,11 @@ description: narou.rb installation, known issues (April 2026), and AozoraEpub3 i
 > - Tested environment: Windows 11, Ruby 3.4.1, narou 3.9.1
 
 This guide provides steps to install **narou.rb** (a web novel downloader) and integrate it with AozoraEpub3.
+
+<div style="border: 1px solid #0969da; background: #f0f7ff; border-radius: 6px; padding: 0.8em 1em; margin: 1em 0;">
+💡 <strong>If narou.rb does not work for you</strong>: there is also <strong>narou.rs</strong>, a narou.rb-compatible tool written in Rust and under active development.
+👉 <a href="narou-rs-setup.html"><strong>narou.rs Setup Guide (with screenshots)</strong></a>
+</div>
 
 As of narou.rb v3.9.1, the following known issues are reported by the community:
 1. Dependency library (tilt) version mismatch causing startup errors

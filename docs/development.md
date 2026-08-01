@@ -10,6 +10,7 @@ description: AozoraEpub3の開発者向けガイドです。JDK 21環境のセ�
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
   <a href="narou-setup.html">narou.rb</a> |
+  <a href="narou-rs-setup.html">narou.rs</a> |
   <strong>開発者向け</strong> | 
   <a href="epub33-ja.html">EPUB 3.3準拠</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
