@@ -35,7 +35,7 @@ Follow the steps on this page from top to bottom and you will end up with a setu
 4. [Add it to PATH](#4-add-it-to-path-the-tricky-part)
 5. [Initialize and register AozoraEpub3](#5-initialize-and-register-aozoraepub3)
 6. [Open the Web UI](#6-open-the-web-ui)
-7. [★ Set device to EPUB (required)](#7--set-device-to-epub-required)
+7. [★ Set device to EPUB (Required)](#7--set-device-to-epub-required)
 8. [Add a novel and get the EPUB](#8-add-a-novel-and-get-the-epub)
 
 ---
@@ -175,7 +175,7 @@ narou_rs web
 
 Your browser opens automatically and shows the narou.rs screen (`http://localhost:16230/`).
 
-> The screenshots below show the Japanese UI; the layout is identical in English. You can switch the Web UI language from Options → Language.
+> The screenshots below show the Japanese UI; the layout is identical in English. You can switch the Web UI language with the "**Language: 日本語 ↔ English**" item in the "⚙ Options" menu at the top right.
 
 ![The narou.rs Web UI top screen, with the menu at the top, a black log area in the middle, and the novel list below](../assets/narou-rs/02-web-top.png)
 
