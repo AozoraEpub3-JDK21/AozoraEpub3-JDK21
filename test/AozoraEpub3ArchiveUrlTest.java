@@ -1,9 +1,11 @@
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -38,23 +40,27 @@ public class AozoraEpub3ArchiveUrlTest {
 	/** zip URL がスクレイピングではなくダウンロード経路に振り分けられ、
 	 * ダウンロードしたアーカイブが変換対象（ローカルファイル変換経路）に積まれること。
 	 *
-	 * EPUB 生成そのものは Gradle のテスト JVM では template/ が解決できず失敗し得るため
-	 * （AozoraEpub3ExitCodeTest 参照）、ここではダウンロードまでを検証する。
-	 * 分岐が無いと WebAozoraConverter に渡って zip は一切ダウンロードされないので、
-	 * この検証で分岐の有無を判定できる。 */
+	 * EPUB の生成完了までは Gradle のテスト JVM では template/ が解決できず失敗し得るため
+	 * （AozoraEpub3ExitCodeTest 参照）、「ダウンロードされたファイルに対して変換が開始された」
+	 * ところまでをログで検証する。分岐が無ければ WebAozoraConverter に渡って
+	 * zip はダウンロードすらされない。 */
 	@Test
-	public void zipUrlIsDownloadedInsteadOfScraped() throws Exception {
+	public void zipUrlIsDownloadedAndConverted() throws Exception {
 		Path zip = createAozoraZip(tempFolder.newFile("1567_ruby_4948.zip").toPath());
 		File outDir = tempFolder.newFolder("out");
 		File cacheDir = tempFolder.newFolder("cache");
 
-		AozoraEpub3.run(new String[]{
+		String log = runCapturingLog(new String[]{
 			"-url", zip.toUri().toString(),
 			"-cache", cacheDir.getPath(),
 			"-of", "-d", outDir.getPath()});
 
+		File downloaded = outDir.toPath().resolve("1567_ruby_4948.zip").toFile();
 		assertTrue("zip がダウンロードされていない（アーカイブ分岐が働いていない）",
-			Files.exists(outDir.toPath().resolve("1567_ruby_4948.zip")));
+			downloaded.exists());
+		//ダウンロードしたファイルがローカルファイル変換経路に積まれたこと
+		assertTrue("ダウンロードした zip の変換が開始されていない:\n" + log,
+			log.contains("変換開始 : " + downloaded.getPath()));
 	}
 
 	/** アーカイブでない URL は従来どおり Web 変換経路に渡り、
@@ -81,12 +87,19 @@ public class AozoraEpub3ArchiveUrlTest {
 		File cacheDir = tempFolder.newFolder("cache");
 		String missingUrl = tempFolder.getRoot().toPath().resolve("no_such.zip").toUri().toString();
 
-		int exitCode = AozoraEpub3.run(new String[]{
+		exitCode = -1;
+		String log = runCapturingLog(new String[]{
 			"-url", missingUrl,
 			"-cache", cacheDir.getPath(),
 			"-of", "-d", outDir.getPath()});
 
 		assertEquals(1, exitCode);
+		//Web 変換ではなくダウンロード経路で失敗していること
+		assertTrue("ダウンロード経路を通っていない:\n" + log,
+			log.contains("出力先にダウンロードします"));
+		assertTrue("失敗が報告されていない:\n" + log,
+			log.contains(" は変換できませんでした"));
+		assertEquals("失敗したのにファイルが残っている", 0, outDir.list().length);
 	}
 
 	/** 実ネットワークでの E2E（opt-in）。
@@ -129,6 +142,24 @@ public class AozoraEpub3ArchiveUrlTest {
 	// ================================================================
 	// ユーティリティ
 	// ================================================================
+
+	/** 直前の runCapturingLog の終了コード */
+	private int exitCode;
+
+	/** AozoraEpub3.run を実行し、LogAppender の出力（JTextArea 未設定なので System.out）を取得する */
+	private String runCapturingLog(String[] args) {
+		PrintStream orgOut = System.out;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		try {
+			System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
+			exitCode = AozoraEpub3.run(args);
+		} finally {
+			System.setOut(orgOut);
+		}
+		String log = baos.toString(StandardCharsets.UTF_8);
+		System.out.println(log);
+		return log;
+	}
 
 	/** 青空文庫テキスト zip 相当（Shift_JIS の txt を 1 件含む zip）を生成 */
 	private Path createAozoraZip(Path zipPath) throws Exception {

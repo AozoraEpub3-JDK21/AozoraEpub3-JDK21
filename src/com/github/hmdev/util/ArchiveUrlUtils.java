@@ -5,6 +5,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
 
 import org.slf4j.Logger;
@@ -66,24 +67,25 @@ public final class ArchiveUrlUtils
 		LogAppender.println("出力先にダウンロードします : "+srcFile.getCanonicalPath());
 		Files.createDirectories(srcFile.getParentFile().toPath());
 		//ダウンロード
-		BufferedInputStream bis;
+		URL url;
 		try {
-			bis = new BufferedInputStream(NetUtils.openStream(new java.net.URI(urlString).toURL()), 8192);
+			url = new java.net.URI(urlString).toURL();
 		} catch (URISyntaxException e) {
 			throw new IOException(e);
 		}
-		BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()));
 		boolean downloaded = false;
 		try {
-			byte[] buf = new byte[8192];
-			int len;
-			while ((len = bis.read(buf)) > 0) {
-				bos.write(buf, 0, len);
+			//try-with-resources 化（元の GUI 実装は Files.newOutputStream が失敗すると入力側が閉じられなかった）
+			try (BufferedInputStream bis = new BufferedInputStream(NetUtils.openStream(url), 8192);
+				BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()))) {
+				byte[] buf = new byte[8192];
+				int len;
+				while ((len = bis.read(buf)) > 0) {
+					bos.write(buf, 0, len);
+				}
+				downloaded = true;
 			}
-			downloaded = true;
 		} finally {
-			bos.close();
-			bis.close();
 			//読み込みタイムアウト等で中断した場合、途中まで書かれた zip を残さない
 			//（正常な青空 zip と誤認されて「読み込めません」になるため）
 			if (!downloaded) {

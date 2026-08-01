@@ -8,6 +8,10 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -133,6 +137,41 @@ public class ArchiveUrlUtilsTest {
 		ArchiveUrlUtils.downloadArchive(srcZip.toUri().toString(), dstPath);
 
 		assertArrayEquals(content, Files.readAllBytes(stale));
+	}
+
+	/** 転送が途中で切れた場合は例外を投げ、途中まで書かれたファイルを削除すること。
+	 * 壊れた zip が残ると次回以降「読み込めません」になるため（監査 #5 の対応） */
+	@Test
+	public void interruptedDownloadDeletesPartialFile() throws Exception {
+		File dstPath = tempFolder.newFolder("out");
+		try (ServerSocket server = new ServerSocket(0, 1)) {
+			Thread responder = new Thread(() -> {
+				try (Socket socket = server.accept()) {
+					//リクエストヘッダを読み捨てる
+					InputStream is = socket.getInputStream();
+					int prev = -1, c;
+					while ((c = is.read()) != -1) {
+						if (prev == '\n' && c == '\n') break;
+						if (c != '\r') prev = c;
+					}
+					OutputStream os = socket.getOutputStream();
+					os.write(("HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\n"
+						+ "Content-Length: 100000\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+					os.write(new byte[1000]);
+					os.flush();
+					//RST で切断して転送を中断させる
+					socket.setSoLinger(true, 0);
+				} catch (Exception e) { /* テスト用スタブなので握り潰す */ }
+			});
+			responder.setDaemon(true);
+			responder.start();
+
+			String url = "http://127.0.0.1:" + server.getLocalPort() + "/book.zip";
+			assertThrows(IOException.class, () -> ArchiveUrlUtils.downloadArchive(url, dstPath));
+
+			assertFalse("転送が中断したのに途中のファイルが残っている",
+				Files.exists(dstPath.toPath().resolve("book.zip")));
+		}
 	}
 
 	/** 取得に失敗した場合は例外を投げ、中途半端なファイルを残さない */

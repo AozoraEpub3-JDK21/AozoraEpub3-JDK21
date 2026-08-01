@@ -683,6 +683,10 @@ $ java -jar AozoraEpub3.jar -url "https://www.aozora.gr.jp/cards/000035/files/15
 `test/AozoraEpub3ArchiveUrlTest.java`（CLI 経路の振り分け。ネットワークを使う E2E は
 `-DarchiveUrlE2E=true` で opt-in）。
 
+> **既知の制限**: 保存先ファイル名は URL の末尾要素だけで決まるため、
+> 別サイト・別ディレクトリの同名アーカイブ（`.../000035/files/1567.zip` と `.../000148/files/1567.zip` など）を
+> 1 回の実行でまとめて指定すると後勝ちで上書きされる。GUI から引き継いだ命名規則をそのまま使っている。
+
 > **GUI 側の既知の挙動（本修正では変更なし）**: GUI の zip URL 経路はダウンロードのみを行い、
 > 変換までは実行しない（ダウンロード後に `continue` している）。共通化にあたってもこの挙動は維持した。
 > 変換まで行うべきかは別途判断が必要。
