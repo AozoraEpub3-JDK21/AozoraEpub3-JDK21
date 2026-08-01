@@ -326,9 +326,9 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-of` | ファイル名から表題を生成 | |
 | `-hor` | 横書きで出力 | |
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
-| `-url <URL>` | Web小説URLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
+| `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
-| `-interval <秒>` | ページ取得間隔（デフォルト 0.5秒） | `-interval 1.5` |
+| `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
 | `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
 
 ### 例
@@ -354,6 +354,9 @@ java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -d ./output/
 
 # narou.rb互換設定で変換
 java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d ./output/
+
+# 青空文庫のテキストzip URLから直接変換（v1.4.0〜。.txtz / .rar も同様）
+java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_ruby_4948.zip -d ./output/
 ```
 
 ### 終了コード

@@ -205,9 +205,10 @@ Available presets (in `presets/` directory):
 
 #### Web Novel URL
 ```bash
--url <URL>          Convert web novel from URL directly
+-url <URL>          Convert from URL directly (web novel page, or a
+                    .zip / .txtz / .rar archive URL)
 -narou              Apply narou.rb-compatible format settings
--interval <seconds> Page fetch interval (default: 0.5)
+-interval <seconds> Page fetch interval (default: 1.0)
 -cache <path>       Cache directory (default: .cache)
 ```
 
@@ -250,6 +251,16 @@ java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -d output
 # With narou.rb-compatible settings
 java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d output
 ```
+
+#### Convert an archive URL directly (v1.4.0+)
+```bash
+java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_ruby_4948.zip -d output
+```
+
+> When `-url` points at a `.zip` / `.txtz` / `.rar` file, the archive is downloaded into the
+> output directory (`-d`, or the current directory if omitted) instead of being scraped as HTML,
+> and is then converted through exactly the same path as a local archive input.
+> Aozora Bunko text ZIPs are Shift_JIS, so the default `-enc MS932` is correct.
 
 ### Exit Codes
 

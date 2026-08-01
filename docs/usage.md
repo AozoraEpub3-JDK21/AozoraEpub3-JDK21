@@ -189,9 +189,9 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-of` | ファイル名から表題を生成 | |
 | `-hor` | 横書きで出力 | |
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
-| `-url <URL>` | Web小説URLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
+| `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
-| `-interval <秒>` | ページ取得間隔（デフォルト 0.5秒） | `-interval 1.5` |
+| `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
 | `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
 
 ### 実行例
@@ -217,7 +217,15 @@ java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -d ./output/
 
 ## narou.rb互換設定で変換
 java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d ./output/
+
+## 青空文庫のテキストzip URLから直接変換（v1.4.0〜）
+java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_ruby_4948.zip -d ./output/
 ```
+
+> `-url` に `.zip` / `.txtz` / `.rar` を指すURLを渡した場合は、HTMLの取得ではなく
+> アーカイブを出力先（`-d`、未指定ならカレントディレクトリ）にダウンロードしてから、
+> ローカルのアーカイブを指定した場合とまったく同じ経路で変換します。
+> 青空文庫のテキストzipは Shift_JIS のため、`-enc` は既定の `MS932` のままで構いません。
 
 > 注記: CLIのヘルプ表示は Commons CLI の新パッケージ `org.apache.commons.cli.help.HelpFormatter` を使用しており、従来と同等の形式で出力されます（内部非推奨APIの解消）。
 

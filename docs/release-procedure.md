@@ -48,8 +48,9 @@
 - [ ] **なろう短編 1 件**: URL → 変換 → EPUB 生成を確認
 - [ ] **同じ URL で再実行** → 「キャッシュファイルを利用します」が出て再ダウンロードが走らないこと
 - [ ] **青空文庫 URL 1 件**（`cards/NNNNNN/files/NNNN_NNNNN.html` の単話ページ）
-      ※ zip URL（`NNNN_ruby_NNNN.zip`）の直接指定は **CLI では未対応**（GUI/DnD 経路にしか分岐がない。
-      `docs/code-audit-followups.md` の「16.」）。CLI で試すと「タイトルがありません」で exit 1 になる
+      ※ zip URL（`NNNN_ruby_NNNN.zip`）の直接指定は **v1.4.0 で CLI も対応済み**
+      （`docs/code-audit-followups.md` の「16.」）。zip を出力先にダウンロードしてから
+      ローカル zip 入力と同じ経路で変換する。余力があれば zip URL も 1 件試す
 - [ ] **旧バージョンのキャッシュ互換**: 前リリースで生成したキャッシュディレクトリに対して新バージョンを実行し、
       **キャッシュが再利用される（パスが変わって全再取得にならない）**こと
       ※ `CharUtils.escapeUrlToFile` / `replaceInvalidFileChars` を触ったリリースでは**最重要**
@@ -449,7 +450,8 @@ cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 
 > **注意**: jar が無い状態で `epubcheck` タスクを実行すると「epubcheck failed for N file(s)」という
 > **EPUB 側に問題があるかのようなメッセージ**で落ちる。実体は jar 不在なので、まず jar の存在を確認する。
-> ワークツリーの `tools/epubcheck-5.2.0.jar`（未追跡）は 9 bytes の `Not Found` で壊れているため使わないこと。
+> 壊れていた `tools/epubcheck-5.2.0.jar`（未追跡・9 bytes の `Not Found`）は削除済み。
+> ローカル検証には `tools/epubcheck-5.1.0/epubcheck.jar` が使える。
 
 ---
 
@@ -484,5 +486,6 @@ gh release edit v1.x.x-jdk21 --draft
 
 ## 9. 改訂履歴
 
+- 2026-08-01: 監査 #16 の修正（CLI `-url` の zip / txtz / rar 対応）に合わせて §2.1.1 を更新。§6.11 の epubcheck jar の記述を現状に合わせて更新
 - 2026-07-25: v1.3.7-jdk21 リリース時の実施結果を反映。§2.1.1 の青空文庫 URL の記述を訂正（zip URL 直接指定は CLI 未対応）、§6.11 に epubcheck の手動取得手順と紛らわしい失敗メッセージの注意を追記
 - 2026-04-30: 初版作成（v1.3.5-jdk21 リリースに向けた整備）

@@ -42,7 +42,8 @@ v1.3.6 にも存在するため回帰ではないが、**ユニットテスト�
 **発見した既存バグ 2 件**（いずれも本リリースの回帰ではない）:
 
 - CLI `-url` に zip URL を直接指定すると変換できない（GUI 経路にしかない分岐）。
-  `docs/code-audit-followups.md` の「16.」に起票（未修正）
+  `docs/code-audit-followups.md` の「16.」に起票し、**v1.4.0 で修正済み**
+  （判定・ダウンロードを `ArchiveUrlUtils` に共通化し、CLI はローカル zip 入力と同じ経路で変換する）
 - `generateLocalSamples` の 1 件が epubcheck `RSC-007`（タイトルページの外字画像が `<img src="null"/>`）。
   同「17.」に起票し、**v1.3.7 で修正済み**。CI がこれを検出できていなかった理由も同項に記録した
 

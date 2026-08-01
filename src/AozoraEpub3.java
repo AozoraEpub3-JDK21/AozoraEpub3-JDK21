@@ -5,6 +5,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.commons.cli.DefaultParser;
@@ -18,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
+import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.pipeline.WriterConfigurator;
@@ -104,6 +108,8 @@ public class AozoraEpub3
 			}
 			//オプションの後ろをファイル名に設定
 			String[] fileNames = commandLine.getArgs();
+			//変換対象ファイル (コマンドライン引数 + -url で直接ダウンロードしたアーカイブ)
+			List<String> targetFileNames = new ArrayList<>(Arrays.asList(fileNames));
 			
 			//ヘルプ出力（-h は入力ファイル無しで指定されるため、ファイル数チェックより先に処理する）
 			if (commandLine.hasOption('h') ) {
@@ -279,6 +285,21 @@ public class AozoraEpub3
 					LogAppender.println("--------");
 					LogAppender.append(urlString);
 					LogAppender.println(" を読み込みます");
+					//URL が zip / txtz / rar を直接指している場合はスクレイピングせずダウンロードし、
+					//ローカルファイルと同じ変換経路 (下の各ファイル変換処理) に流す
+					if (ArchiveUrlUtils.isArchiveUrl(urlString)) {
+						File archiveDstPath = (dstPath != null) ? dstPath : new File(".");
+						try {
+							File archiveFile = ArchiveUrlUtils.downloadArchive(urlString, archiveDstPath);
+							targetFileNames.add(archiveFile.getPath());
+						} catch (Exception e) {
+							logger.error("アーカイブ URL のダウンロードに失敗: {}", urlString, e);
+							LogAppender.append(urlString);
+							LogAppender.println(" は変換できませんでした");
+							errorCount++;
+						}
+						continue;
+					}
 					try {
 						WebAozoraConverter webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
 						if (webConverter == null) {
@@ -341,7 +362,7 @@ public class AozoraEpub3
 			////////////////////////////////
 			//各ファイルを変換処理
 			////////////////////////////////
-			for (String fileName : fileNames) {
+			for (String fileName : targetFileNames) {
 				LogAppender.println("--------");
 				File srcFile = new File(fileName);
 				if (srcFile == null || !srcFile.isFile()) {

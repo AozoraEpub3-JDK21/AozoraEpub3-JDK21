@@ -28,6 +28,8 @@
 | 13 | 🟡 中 | 制御文字・末尾空白のパスセグメントで `InvalidPathException`（変換全体が中断） | ✅ 対応済 | #44 |
 | 14 | 🟢 低 | 青空 zip 直接 DL 経路の `replaceInvalidFileChars` が `:` と制御文字を除去しない | ✅ 対応済 | #45 |
 | 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | ✅ 対応済（Java 側） | #47 |
+| 16 | 🟡 中 | CLI `-url` に zip / txtz / rar の URL を渡すと変換できない | ✅ 対応済 | #51 |
+| 17 | 🟡 中 | タイトルページの外字画像が `<img src="null"/>` になる | ✅ 対応済 | #49 |
 
 ---
 
@@ -626,7 +628,7 @@ Java の `convertNumsToZenkakuInSegment` は `digits.length() >= 2` で縦中横
 
 ---
 
-## 16. CLI `-url` に zip / txtz / rar の URL を渡すと変換できない（GUI 経路との乖離）
+## 16. CLI `-url` に zip / txtz / rar の URL を渡すと変換できない（GUI 経路との乖離） — ✅ 修正済み
 
 **発見**: v1.3.7 リリース前 E2E（2026-07-25、2 回目）。**既存仕様であり本リリースの回帰ではない**。
 
@@ -651,12 +653,46 @@ https://www.aozora.gr.jp/.../1567_ruby_4948.zip は変換できませんでし�
 **影響**: 青空文庫のテキスト zip（`NNNN_ruby_NNNN.zip`）を CLI から直接指定できない。
 回避策は zip を手元にダウンロードして入力ファイルとして渡すこと（この経路は正常に動作する）。
 
-**対応方針（未着手）**: `AozoraEpub3.java` の `-url` ループに GUI と同じ拡張子分岐を追加し、
-`convertArchive` 相当の処理へ振り分ける。GUI 側の実装（`AozoraEpub3Applet.convertWeb` の zip 分岐、
-監査 #14 で `replaceInvalidFileChars` を修正した箇所）を共通化して両経路で使うのが望ましい。
+**対応**: 拡張子判定とダウンロード処理を `com.github.hmdev.util.ArchiveUrlUtils` に切り出し、
+GUI（`AozoraEpub3Applet.convertWeb`）と CLI（`AozoraEpub3.run` の `-url` ループ）の両方から呼ぶようにした。
+
+- `ArchiveUrlUtils.isArchiveUrl(url)` — GUI にあった判定（`lastIndexOf('.')` 以降を小文字化して
+  `zip` / `txtz` / `rar` と比較）をそのまま移設。クエリ文字列付き URL の扱いを変えると
+  GUI の既存挙動が変わるため意図的に据え置いている
+- `ArchiveUrlUtils.downloadArchive(url, dstPath)` — 出力先へのダウンロード。
+  ファイル名は `CharUtils.replaceInvalidFileChars`（監査 #14）でサニタイズし、
+  取得は `NetUtils.openStream`（監査 #5 のタイムアウト付き）で行う。
+  失敗時は途中まで書かれたファイルを削除する。同名ファイルは上書き（GUI と同じ挙動）
+- CLI はダウンロードしたファイルを変換対象リストに積み、**ローカルの zip / rar 入力と
+  まったく同じ変換経路**（`targetFileNames` のループ）で処理する。
+  ダウンロード失敗は `errorCount` に加算され exit 1、成功時は従来どおり exit 0 と
+  stdout の「変換完了」（narou.rb 互換シグナル）を維持する
+- `-d` 未指定時のダウンロード先はカレントディレクトリ
+
+実測（修正後）:
+
+```
+$ java -jar AozoraEpub3.jar -url "https://www.aozora.gr.jp/cards/000035/files/1567_ruby_4948.zip" -d out
+出力先にダウンロードします : ...\out\1567_ruby_4948.zip
+変換開始 : out\1567_ruby_4948.zip
+変換完了[0.1s] : ...\out\[太宰治] 走れメロス.epub    ← exit 0
+```
+
+テスト: `test/com/github/hmdev/util/ArchiveUrlUtilsTest.java`（拡張子判定・保存先ファイル名・
+`file:` URL でのダウンロード／上書き／失敗時のクリーンアップ）と
+`test/AozoraEpub3ArchiveUrlTest.java`（CLI 経路の振り分け。ネットワークを使う E2E は
+`-DarchiveUrlE2E=true` で opt-in）。
+
+> **既知の制限**: 保存先ファイル名は URL の末尾要素だけで決まるため、
+> 別サイト・別ディレクトリの同名アーカイブ（`.../000035/files/1567.zip` と `.../000148/files/1567.zip` など）を
+> 1 回の実行でまとめて指定すると後勝ちで上書きされる。GUI から引き継いだ命名規則をそのまま使っている。
+
+> **GUI 側の既知の挙動（本修正では変更なし）**: GUI の zip URL 経路はダウンロードのみを行い、
+> 変換までは実行しない（ダウンロード後に `continue` している）。共通化にあたってもこの挙動は維持した。
+> 変換まで行うべきかは別途判断が必要。
 
 > **注**: `docs/release-procedure.md` §2.1.1 の「青空文庫 URL 1 件（`_ruby_` を含む zip パターンを推奨）」は
-> **card ページ URL または HTML 単話ページ**を指す。zip URL の直接指定は上記のとおり CLI では未対応。
+> **card ページ URL または HTML 単話ページ**を指す。zip URL の直接指定は v1.4.0 以降 CLI でも利用できる。
 
 ---
 
