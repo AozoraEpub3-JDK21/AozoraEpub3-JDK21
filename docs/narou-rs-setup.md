@@ -2,7 +2,7 @@
 layout: default
 lang: ja
 title: narou.rs 導入ガイド（Windows 11・画像付き）
-description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB に変換する手順を、Windows 11 の初心者向けに画像付きで解説します。narou.rs のダウンロードと PATH 登録、narou_rs init による AozoraEpub3 の登録、Web UI の環境設定で device を EPUB にする必須設定、小説の登録から EPUB の取り出し、VCRUNTIME140.dll エラー・SmartScreen 警告・Java 未導入時の対処まで。
+description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB に変換する手順を、Windows 11 の初心者向けに画像付きで解説します。narou.rs のダウンロードから narou_rs init による AozoraEpub3 の登録、Web UI の環境設定で device を EPUB にする必須設定、小説の登録から EPUB の取り出し、VCRUNTIME140.dll エラー・SmartScreen 警告・Java 未導入時の対処まで。
 ---
 
 <div style="text-align: right; margin-bottom: 1em;">
@@ -28,27 +28,33 @@ description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB �
 
 **narou.rs**（開発: [Rumia-Channel](https://github.com/Rumia-Channel) 氏）は、Web 小説のダウンロード・更新・変換を行うツール [narou.rb](narou-setup.html)（whiteleaf7 氏作）の互換ツールです。Rust で実装されており、narou.rb と同じく変換エンジンに AozoraEpub3 を使用します。
 
-本ガイドの手順を上から順に進めると、**小説の URL を貼り付けるだけで EPUB が生成される**環境が完成します。所要時間は 20〜30 分程度です。
+本ガイドの手順を上から順に進めると、**小説の URL を貼り付けるだけで EPUB が生成される**環境が完成します。所要時間は 15〜20 分程度です。
 
 ### 全体の流れ
 
 1. [Java のインストール](#1-java-のインストール)
 2. [AozoraEpub3 の準備](#2-aozoraepub3-の準備narours-専用フォルダ)
 3. [narou.rs のダウンロードと展開](#3-narours-のダウンロードと展開)
-4. [PATH への登録](#4-path-への登録)
-5. [初期化と AozoraEpub3 の登録](#5-初期化と-aozoraepub3-の登録)
-6. [Web UI の起動](#6-web-ui-の起動)
-7. [★ 出力を EPUB に設定（必須）](#7--出力を-epub-に設定必須)
-8. [小説の登録と EPUB の取り出し](#8-小説の登録と-epub-の取り出し)
+4. [初期化と AozoraEpub3 の登録](#4-初期化と-aozoraepub3-の登録)
+5. [Web UI の起動](#5-web-ui-の起動)
+6. [★ 出力を EPUB に設定（必須）](#6--出力を-epub-に設定必須)
+7. [小説の登録と EPUB の取り出し](#7-小説の登録と-epub-の取り出し)
 
 ---
 
 ## 0. 準備するもの
 
 - Windows 11 の PC とインターネット接続
-- ソフトのインストール先（本ガイドでは `C:\Tools\` を例に説明します）
 
-> **Point**: インストール先は**半角英数字だけのパス**（例: `C:\Tools\narou`）にするとトラブルを避けられます。
+本ガイドでは、次の 3 つのフォルダ構成で説明します。別の場所に置く場合は、コマンド内のパスを読み替えてください。
+
+| フォルダ | 用途 |
+|---|---|
+| `C:\Tools\AozoraEpub3-jdk21` | AozoraEpub3（変換エンジン） |
+| `C:\Tools\narou` | narou.rs 本体 |
+| `C:\Tools\narou-novels` | 小説の保存・管理フォルダ |
+
+> **Point**: インストール先は**半角英数字だけのパス**にするとトラブルを避けられます。
 > 日本語やスペースを含む場所（`ダウンロード` フォルダや OneDrive 配下など）は避けてください。
 
 ### PowerShell の開き方
@@ -80,13 +86,12 @@ java -version
 ## 2. AozoraEpub3 の準備（narou.rs 専用フォルダ）
 
 1. **[AozoraEpub3-JDK21 のダウンロードページ](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/latest)** から `AozoraEpub3-x.x.x-jdk21.zip` をダウンロードします。
-2. ダウンロードした zip を右クリック →「プロパティ」を開き、下部に「許可する」チェックがあればオンにして「OK」を押します（[SmartScreen 警告の回避](usage.html#aozoraepub3exe-の起動時にwindows-によって-pc-が保護されましたと出る)）。
-3. zip を右クリック →「すべて展開」で、`C:\Tools\AozoraEpub3-narou` のような**専用フォルダ**に展開します。
+2. zip を右クリック →「すべて展開」を選び、展開先の欄に `C:\Tools\AozoraEpub3-jdk21` と入力して展開します。
 
 > ⚠️ **注意**: narou.rs は初期化の際に AozoraEpub3 の構成ファイル（`chuki_tag.txt`）を書き換えます。
 > AozoraEpub3 をほかの用途でも使っている場合は、**narou.rs 専用として別のフォルダに展開**してください（narou.rs 自身も専用インストールを推奨しています）。
 
-> ✅ **ここまでの確認**: 展開したフォルダの中に `AozoraEpub3.jar` がある
+> ✅ **ここまでの確認**: `C:\Tools\AozoraEpub3-jdk21` の中に `AozoraEpub3.jar` がある
 
 ---
 
@@ -113,62 +118,18 @@ C:\Tools\narou\
 > ⚠️ **注意**: 起動時に「`VCRUNTIME140.dll` が見つかりません」と表示された場合は、
 > Microsoft 公式の **[Visual C++ 再頒布可能パッケージ (x64)](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)** をインストールしてください。
 
-> ✅ **ここまでの確認**: `C:\Tools\narou` の中に `narou_rs.exe` がある
+> ✅ **ここまでの確認**: PowerShell で `C:\Tools\narou\narou_rs.exe version` と入力すると、バージョン番号（例: `0.3.4`）が表示される
 
 ---
 
-## 4. PATH への登録
+## 4. 初期化と AozoraEpub3 の登録
 
-どのフォルダからでも `narou_rs` コマンドを使えるように、`narou_rs.exe` のあるフォルダを **PATH**（Windows がコマンドを探す場所の一覧）に登録します。
-
-ここで行うのは、**現在サインインしているユーザーの設定に、フォルダの場所を 1 行追加する**ことだけです。システム全体の設定は変更しませんし、いつでも元に戻せます（戻し方は次の折りたたみ内にあります）。
-
-<details markdown="1">
-<summary>💡 元に戻したいとき（登録を削除する手順）</summary>
-
-1. スタートボタンを押して「**環境変数**」と入力し、検索結果の「**アカウントの環境変数を編集**」を開きます
-2. 上の段「（ユーザー名）のユーザー環境変数」の一覧から **Path** をクリックして選択し、「**編集...**」を押します
-3. 一覧から `C:\Tools\narou` の行をクリックして選択し、右側の「**削除**」を押します
-4. 「OK」→「OK」で閉じます。PowerShell を開いている場合は、開き直すと反映されます
-
-これで登録前の状態に戻ります。ほかの行には触らないよう注意してください。
-
-</details>
-
-[PowerShell](#powershell-の開き方) に次の 2 行を**そのまま**コピーして貼り付け、Enter を押します（`C:\Tools\narou` 以外の場所に展開した場合は、そこだけ書き換えてください）。
+小説を保存・管理するためのフォルダを作成し、そのフォルダの中で初期化コマンドを実行します。次の 3 行を PowerShell に貼り付けてください。
 
 ```powershell
-$narouPath = "C:\Tools\narou"
-[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $narouPath, "User")
-```
-
-> **Point**: このコマンドを実行するのは **1 回だけ**にしてください。繰り返し実行すると、同じ内容が重複して登録されます（動作に支障はありませんが、一覧が汚れます）。
-
-実行したら、**PowerShell をいったん閉じて、新しく開き直してください**。開き直すまで設定は反映されません。
-
-<details markdown="1">
-<summary>コマンドを使わず、設定画面から登録する場合はこちら</summary>
-
-1. スタートボタンを押して「**環境変数**」と入力し、検索結果の「**アカウントの環境変数を編集**」を開きます
-2. 上の段「（ユーザー名）のユーザー環境変数」の一覧から **Path** をクリックして選択し、「**編集...**」を押します
-3. 「**新規**」を押し、`C:\Tools\narou` と入力します
-4. 「OK」→「OK」で閉じます
-5. PowerShell を開いている場合は、閉じて開き直します
-
-</details>
-
-> ✅ **ここまでの確認**: **新しく開いた** PowerShell で `narou_rs version` と入力すると、バージョン番号（例: `0.3.4`）が表示される
-
----
-
-## 5. 初期化と AozoraEpub3 の登録
-
-小説を保存・管理するためのフォルダを作成し、そのフォルダの中で初期化コマンドを実行します。次の 3 行を PowerShell に貼り付けてください。`-p` には**手順 2 で AozoraEpub3 を展開したフォルダ**を指定します。
-
-```powershell
-New-Item -ItemType Directory -Force -Path "C:\narou-novels" | Out-Null
-Set-Location "C:\narou-novels"
-narou_rs init -p "C:\Tools\AozoraEpub3-narou" -l 1.8
+New-Item -ItemType Directory -Force -Path "C:\Tools\narou-novels" | Out-Null
+Set-Location "C:\Tools\narou-novels"
+C:\Tools\narou\narou_rs.exe init -p "C:\Tools\AozoraEpub3-jdk21"
 ```
 
 成功すると、次のように表示されます。
@@ -185,21 +146,25 @@ AozoraEpub3 の構成ファイルを書き換えました
 初期化が完了しました！
 ```
 
-> **Point**: `-p` は AozoraEpub3 の場所、`-l 1.8` は行間（1.8 倍）の指定です。
-> `-p` を付けずに `narou_rs init` だけを実行した場合は、AozoraEpub3 の場所を対話形式で質問されます。
-> その場で設定しなかった場合も、**同じフォルダでもう一度 `narou_rs init -p ...` を実行**すれば登録できます
+> **Point**: `-p` には**手順 2 で AozoraEpub3 を展開したフォルダ**を指定します。
+> 行間は標準で 1.8 倍に設定されます（変えたい場合のみ `-l 2.0` のように追加します）。
+> 登録に失敗した場合も、**同じフォルダでもう一度 `init -p ...` を実行**すればやり直せます
 > （「既に初期化済みです」と表示されますが、AozoraEpub3 の設定はやり直せます）。
+
+> ⚠️ **注意**: 小説管理フォルダは、narou.rs 本体のフォルダ（`C:\Tools\narou`）の**中には作らないでください**。
+> narou.rs は本体フォルダと小説管理フォルダを分ける前提で設計されています（公式 README の指示）。
 
 > ✅ **ここまでの確認**: 「初期化が完了しました！」と表示される
 
 ---
 
-## 6. Web UI の起動
+## 5. Web UI の起動
 
-手順 5 で作成した小説管理フォルダ（`C:\narou-novels`）で、次のコマンドを実行します。
+次の 2 行で narou.rs の画面（Web UI）が起動します。**次回以降もこの 2 行だけで起動できます。**
 
 ```powershell
-narou_rs web
+Set-Location "C:\Tools\narou-novels"
+C:\Tools\narou\narou_rs.exe web
 ```
 
 ブラウザが自動的に開き、narou.rs の画面が表示されます。アドレスは `http://localhost:（ポート番号）/` の形式で、**ポート番号は初回起動時に自動で決まり、次回以降も同じ番号が使われます**。
@@ -214,7 +179,7 @@ narou_rs web
 
 ---
 
-## 7. ★ 出力を EPUB に設定（必須）
+## 6. ★ 出力を EPUB に設定（必須）
 
 画面右上の「**⚙ オプション**」→「**環境設定...**」を開きます。
 
@@ -235,7 +200,7 @@ Kindle など特定の端末で読む場合はその端末名を選んでも構�
 
 ---
 
-## 8. 小説の登録と EPUB の取り出し
+## 7. 小説の登録と EPUB の取り出し
 
 画面左上の「**Download**」ボタンを押すと、URL の入力画面が開きます。読みたい小説のページ（小説家になろう・カクヨムなど）の **URL を貼り付けて「ダウンロード」**を押してください。
 
@@ -245,7 +210,7 @@ Kindle など特定の端末で読む場合はその端末名を選んでも構�
 
 ![小説リストに登録された作品の行。保存先のフォルダボタンを赤枠で強調](assets/narou-rs/06-novel-list.png)
 
-EPUB の保存先は `C:\narou-novels\小説データ\（サイト名）\（作品名）\` です。この `.epub` ファイルをお使いのリーダー（スマートフォンのアプリや Kindle など）に転送すれば読めます。
+EPUB の保存先は `C:\Tools\narou-novels\小説データ\（サイト名）\（作品名）\` です。この `.epub` ファイルをお使いのリーダー（スマートフォンのアプリや Kindle など）に転送すれば読めます。
 
 > **Point**: 連載の続きが公開されたら、「**Update**」ボタンを押してください。新しい話を取得して EPUB を作り直します。
 
@@ -253,15 +218,37 @@ EPUB の保存先は `C:\narou-novels\小説データ\（サイト名）\（作�
 
 ---
 
+## PATH への登録（任意）
+
+毎回 `C:\Tools\narou\narou_rs.exe` と入力する代わりに、`narou_rs` だけで呼び出せるようにする設定です。**なくても本ガイドの手順はすべて動作します**（narou.rs 公式 README は PATH 登録を前提に説明していますが、本ガイドのフルパス実行でも動作は同じです）。
+
+<details markdown="1">
+<summary>設定手順を見る</summary>
+
+PowerShell に次の 2 行を**そのまま**貼り付けて Enter を押し（実行するのは **1 回だけ**）、**PowerShell を開き直します**。
+
+```powershell
+$narouPath = "C:\Tools\narou"
+[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $narouPath, "User")
+```
+
+以降は新しく開いた PowerShell で `narou_rs web` のように短く入力できます。
+
+元に戻すには: スタートボタン → 「環境変数」と入力 → 「アカウントの環境変数を編集」→ 上段の **Path** を選んで「編集...」→ `C:\Tools\narou` の行を選んで「削除」→ 「OK」で閉じます。
+
+</details>
+
+---
+
 ## 困ったときは
 
 | 症状 | 対処 |
 |------|------|
-| `narou_rs` が「認識されません」と表示される | PATH 登録後に PowerShell を開き直したか確認してください → [手順 4](#4-path-への登録) |
 | 「`VCRUNTIME140.dll` が見つかりません」と表示される | Visual C++ 再頒布可能パッケージをインストールしてください → [手順 3](#3-narours-のダウンロードと展開) |
-| 「Windows によって PC が保護されました」と表示される | [SmartScreen 警告の回避方法](usage.html#aozoraepub3exe-の起動時にwindows-によって-pc-が保護されましたと出る)を参照してください |
+| `narou_rs` が「認識されません」と表示される | フルパス（`C:\Tools\narou\narou_rs.exe`）で実行してください。短く呼びたい場合は [PATH への登録（任意）](#path-への登録任意)を参照してください |
+| 「Windows によって PC が保護されました」と表示される | `narou_rs.exe` をダブルクリックで起動した場合などに表示されることがあります。[SmartScreen 警告の回避方法](usage.html#aozoraepub3exe-の起動時にwindows-によって-pc-が保護されましたと出る)と同じ手順で回避できます |
 | 変換時に Java 関連のエラーが出る | Java がインストールされているか確認してください → [手順 1](#1-java-のインストール) |
-| 変換はされるが `.epub` ファイルが見つからない | device が EPUB になっているか確認してください → [手順 7](#7--出力を-epub-に設定必須) |
+| 変換はされるが `.epub` ファイルが見つからない | device が EPUB になっているか確認してください → [手順 6](#6--出力を-epub-に設定必須) |
 | ファイアウォールの許可画面が表示された | 「アクセスを許可する」を押してください（localhost で動作するだけで、外部には公開されません） |
 
 ---

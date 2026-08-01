@@ -2,7 +2,7 @@
 layout: default
 lang: en
 title: narou.rs Setup Guide (Windows 11, with Screenshots)
-description: Step-by-step beginner's guide to converting web novels into EPUB with narou.rs and AozoraEpub3-JDK21 on Windows 11. Covers downloading narou.rs and adding it to PATH, registering AozoraEpub3 with narou_rs init, the required device=EPUB setting in the Web UI, downloading a novel and locating the generated EPUB, plus fixes for VCRUNTIME140.dll errors, SmartScreen warnings, and a missing Java installation.
+description: Step-by-step beginner's guide to converting web novels into EPUB with narou.rs and AozoraEpub3-JDK21 on Windows 11. Covers downloading narou.rs, registering AozoraEpub3 with narou_rs init, the required device=EPUB setting in the Web UI, downloading a novel and locating the generated EPUB, plus fixes for VCRUNTIME140.dll errors, SmartScreen warnings, and a missing Java installation.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
@@ -25,27 +25,33 @@ description: Step-by-step beginner's guide to converting web novels into EPUB wi
 
 **narou.rs** (developed by [Rumia-Channel](https://github.com/Rumia-Channel)) is a compatible reimplementation (in Rust) of [narou.rb](narou-setup.html) (by whiteleaf7), the tool that downloads, updates, and converts web novels. Like narou.rb, it uses AozoraEpub3 as its conversion engine.
 
-Follow the steps on this page from top to bottom and you will end up with a setup where **pasting a novel URL into your browser is all it takes to get an EPUB**. It takes about 20 to 30 minutes.
+Follow the steps on this page from top to bottom and you will end up with a setup where **pasting a novel URL into your browser is all it takes to get an EPUB**. It takes about 15 to 20 minutes.
 
 ### Overview
 
 1. [Install Java](#1-install-java)
 2. [Install AozoraEpub3](#2-install-aozoraepub3-in-a-dedicated-folder-for-narours)
 3. [Install narou.rs](#3-install-narours)
-4. [Add it to PATH](#4-add-it-to-path)
-5. [Initialize and register AozoraEpub3](#5-initialize-and-register-aozoraepub3)
-6. [Open the Web UI](#6-open-the-web-ui)
-7. [★ Set device to EPUB (Required)](#7--set-device-to-epub-required)
-8. [Add a novel and get the EPUB](#8-add-a-novel-and-get-the-epub)
+4. [Initialize and register AozoraEpub3](#4-initialize-and-register-aozoraepub3)
+5. [Open the Web UI](#5-open-the-web-ui)
+6. [★ Set device to EPUB (Required)](#6--set-device-to-epub-required)
+7. [Add a novel and get the EPUB](#7-add-a-novel-and-get-the-epub)
 
 ---
 
 ## 0. What You Need
 
 - A Windows 11 PC and an internet connection
-- A place to put the software (this guide uses `C:\Tools\` as the example location)
 
-> **Point**: Use a path made of **ASCII characters only** (for example `C:\Tools\narou`) for the folders you install into.
+This guide uses the following three folders. If you put things elsewhere, adjust the paths in the commands accordingly.
+
+| Folder | Purpose |
+|---|---|
+| `C:\Tools\AozoraEpub3-jdk21` | AozoraEpub3 (the conversion engine) |
+| `C:\Tools\narou` | narou.rs itself |
+| `C:\Tools\narou-novels` | Where your novels are stored and managed |
+
+> **Point**: Use paths made of **ASCII characters only** for the folders you install into.
 > Avoid locations that contain non-ASCII characters or spaces (your `Downloads` folder in a localized Windows, anything under OneDrive, and so on).
 
 ### How to Open PowerShell
@@ -61,7 +67,7 @@ Once you have copied a command, paste it into the PowerShell window with a **rig
 
 ## 1. Install Java
 
-AozoraEpub3 needs Java to run. Open PowerShell (right-click the Start button → "Terminal") and check with:
+AozoraEpub3 needs Java to run. Open PowerShell and check with:
 
 ```powershell
 java -version
@@ -77,13 +83,12 @@ If a version number (`21` or later) is displayed, you are good to go. If you get
 ## 2. Install AozoraEpub3 (in a Dedicated Folder for narou.rs)
 
 1. Download `AozoraEpub3-x.x.x-jdk21.zip` from the **[AozoraEpub3-JDK21 download page](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/latest)**.
-2. Right-click the zip → "Properties" → if there is an "Unblock" checkbox at the bottom, tick it and click "OK" ([how to get past the SmartScreen warning](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe)).
-3. Right-click the zip → "Extract All" and extract it into a **dedicated folder** such as `C:\Tools\AozoraEpub3-narou`.
+2. Right-click the zip → "Extract All", type `C:\Tools\AozoraEpub3-jdk21` into the destination box, and extract.
 
 > ⚠️ **Caution**: During initialization, narou.rs rewrites one of AozoraEpub3's configuration files (`chuki_tag.txt`).
 > If you also use AozoraEpub3 for other purposes, **extract a separate copy into its own folder just for narou.rs** (narou.rs itself recommends this).
 
-> ✅ **Checkpoint**: the extracted folder contains `AozoraEpub3.jar`
+> ✅ **Checkpoint**: `C:\Tools\AozoraEpub3-jdk21` contains `AozoraEpub3.jar`
 
 ---
 
@@ -110,63 +115,18 @@ C:\Tools\narou\
 > ⚠️ **Caution**: If you get "`VCRUNTIME140.dll` was not found" at startup,
 > install the official Microsoft **[Visual C++ Redistributable (x64)](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)**.
 
-> ✅ **Checkpoint**: `narou_rs.exe` is inside `C:\Tools\narou`
+> ✅ **Checkpoint**: typing `C:\Tools\narou\narou_rs.exe version` in PowerShell prints a version number (for example `0.3.4`)
 
 ---
 
-## 4. Add It to PATH
+## 4. Initialize and Register AozoraEpub3
 
-So that the `narou_rs` command works from any folder, register the location of `narou_rs.exe` in your **PATH** (the list of folders where commands are looked up).
-
-All you are about to do is **append one line to your own user settings**. Nothing system-wide is changed, and you can undo it at any time (the steps for that are right below).
-
-<details markdown="1">
-<summary>💡 To undo it later (how to remove the entry)</summary>
-
-1. Press the Start button, type "**environment variables**" and open "**Edit environment variables for your account**" from the search results
-2. In the upper box ("User variables for (your name)"), click **Path** to select it and press "**Edit...**"
-3. In the list, click the `C:\Tools\narou` line to select it and press "**Delete**" on the right
-4. Close with "OK" → "OK". If a PowerShell window is open, reopen it for the change to take effect
-
-That restores the state before you registered it. Be careful not to touch the other lines.
-
-</details>
-
-Copy the following two lines **as-is** into [PowerShell](#how-to-open-powershell) and press Enter (if you put narou.rs somewhere other than `C:\Tools\narou`, change only that part).
+Create a folder to manage your novels and initialize inside it. Paste the following three lines into PowerShell.
 
 ```powershell
-$narouPath = "C:\Tools\narou"
-[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $narouPath, "User")
-```
-
-> **Point**: Run this command **only once**. Running it repeatedly registers the same entry over and over (it still works, but it clutters the list).
-
-Once you have run it, **close PowerShell and open a new window**. The change does not take effect until you reopen it.
-
-<details markdown="1">
-<summary>Prefer the GUI instead of a command? Click here</summary>
-
-1. Press the Start button, type "**environment variables**" and open "**Edit environment variables for your account**" from the search results
-2. In the upper box ("User variables for (your name)"), click **Path** to select it and press "**Edit...**"
-3. Press "**New**" and type `C:\Tools\narou`
-4. Close with "OK" → "OK"
-5. Close any open PowerShell window and open it again
-
-</details>
-
-> ✅ **Checkpoint**: in a **newly opened** PowerShell, `narou_rs version` prints a version number (for example `0.3.4`)
-
----
-
-## 5. Initialize and Register AozoraEpub3
-
-Create a folder to manage your novels and initialize inside it. Paste the following three lines into PowerShell
-(the path after `-p` must match **the folder where you extracted AozoraEpub3 in step 2**).
-
-```powershell
-New-Item -ItemType Directory -Force -Path "C:\narou-novels" | Out-Null
-Set-Location "C:\narou-novels"
-narou_rs init -p "C:\Tools\AozoraEpub3-narou" -l 1.8
+New-Item -ItemType Directory -Force -Path "C:\Tools\narou-novels" | Out-Null
+Set-Location "C:\Tools\narou-novels"
+C:\Tools\narou\narou_rs.exe init -p "C:\Tools\AozoraEpub3-jdk21"
 ```
 
 On success you will see output like this (narou.rs prints its messages in Japanese):
@@ -183,21 +143,25 @@ AozoraEpub3 の構成ファイルを書き換えました
 初期化が完了しました！
 ```
 
-> **Point**: `-p` sets the AozoraEpub3 location and `-l 1.8` sets the line height (1.8×) at the same time.
-> If you run plain `narou_rs init` without `-p`, it asks for the AozoraEpub3 location interactively.
-> Even if you skipped that prompt, you can still register it by **running `narou_rs init -p ...` again in the same folder**
+> **Point**: `-p` must point to **the folder where you extracted AozoraEpub3 in step 2**.
+> The line height defaults to 1.8× (only add `-l 2.0` or similar if you want to change it).
+> If the registration fails, just **run `init -p ...` again in the same folder**
 > (it will say the folder is already initialized, but the AozoraEpub3 configuration is redone).
+
+> ⚠️ **Caution**: Do **not** create the novel folder **inside** the narou.rs folder (`C:\Tools\narou`).
+> narou.rs is designed to keep its own folder and your novel folder separate (as instructed by the official README).
 
 > ✅ **Checkpoint**: `初期化が完了しました！` ("initialization complete") is displayed
 
 ---
 
-## 6. Open the Web UI
+## 5. Open the Web UI
 
-Run the following command in the novel folder you created in step 5 (`C:\narou-novels`).
+These two lines start the narou.rs screen (the Web UI). **From now on, these same two lines are all you need to start it.**
 
 ```powershell
-narou_rs web
+Set-Location "C:\Tools\narou-novels"
+C:\Tools\narou\narou_rs.exe web
 ```
 
 Your browser opens automatically and shows the narou.rs screen. The address has the form `http://localhost:(port number)/`, and **the port number is chosen automatically on the first launch and reused from then on**.
@@ -214,7 +178,7 @@ Your browser opens automatically and shows the narou.rs screen. The address has 
 
 ---
 
-## 7. ★ Set device to EPUB (Required)
+## 6. ★ Set device to EPUB (Required)
 
 Open "**⚙ Options**" at the top right of the screen → "**Settings...**".
 
@@ -235,7 +199,7 @@ Click "← Back to the novel list" to return to the previous screen.
 
 ---
 
-## 8. Add a Novel and Get the EPUB
+## 7. Add a Novel and Get the EPUB
 
 Click the "**Download**" button at the top left to open the input field. **Paste the URL** of the novel page you want to read (Syosetu, Kakuyomu, and so on) and press "**Download**".
 
@@ -245,7 +209,7 @@ Everything from downloading to EPUB conversion runs automatically. When it finis
 
 ![A row for a registered novel in the novel list, with the save-location folder button highlighted in a red box](../assets/narou-rs/06-novel-list.png)
 
-The EPUB is stored under `C:\narou-novels\小説データ\(site name)\(title)\`. From there, just send it to your reader of choice (a smartphone app, a Kindle, and so on).
+The EPUB is stored under `C:\Tools\narou-novels\小説データ\(site name)\(title)\`. From there, just send it to your reader of choice (a smartphone app, a Kindle, and so on).
 
 > **Point**: To pull in newly published chapters of an ongoing series, just press the "**Update**" button. It fetches the new episodes and rebuilds the EPUB.
 
@@ -253,15 +217,37 @@ The EPUB is stored under `C:\narou-novels\小説データ\(site name)\(title)\`.
 
 ---
 
+## Add narou.rs to PATH (Optional)
+
+This lets you type just `narou_rs` instead of the full `C:\Tools\narou\narou_rs.exe` every time. **Everything in this guide works without it** (the official narou.rs README assumes a PATH-based setup, but running by full path as in this guide behaves the same).
+
+<details markdown="1">
+<summary>Show the steps</summary>
+
+Paste the following two lines **as-is** into PowerShell and press Enter (run it **only once**), then **close PowerShell and open a new window**.
+
+```powershell
+$narouPath = "C:\Tools\narou"
+[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $narouPath, "User")
+```
+
+From then on, a newly opened PowerShell accepts the short form, such as `narou_rs web`.
+
+To undo it: press the Start button → type "environment variables" → open "Edit environment variables for your account" → select **Path** in the upper box and press "Edit..." → select the `C:\Tools\narou` line and press "Delete" → close with "OK".
+
+</details>
+
+---
+
 ## Troubleshooting
 
 | Symptom | What to do |
 |------|------|
-| `narou_rs` is "not recognized" | Make sure you reopened PowerShell after editing PATH → [step 4](#4-add-it-to-path) |
 | `VCRUNTIME140.dll was not found` | Install the Visual C++ Redistributable → [step 3](#3-install-narours) |
-| "Windows protected your PC" | [How to get past the SmartScreen warning](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe) |
+| `narou_rs` is "not recognized" | Run it with the full path (`C:\Tools\narou\narou_rs.exe`), or see [Add narou.rs to PATH (Optional)](#add-narours-to-path-optional) |
+| "Windows protected your PC" | Can appear if you double-click `narou_rs.exe`, for example. Get past it with the same steps as for the [SmartScreen warning](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe) |
 | A Java-related error during conversion | Check that Java is installed → [step 1](#1-install-java) |
-| Conversion runs but there is no `.epub` file | Check that device is set to EPUB → [step 7](#7--set-device-to-epub-required) |
+| Conversion runs but there is no `.epub` file | Check that device is set to EPUB → [step 6](#6--set-device-to-epub-required) |
 | The firewall dialog appeared | Click "Allow access" (it only runs on localhost, so nothing is exposed externally) |
 
 ---
