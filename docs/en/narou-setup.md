@@ -29,7 +29,7 @@ description: narou.rb installation, known issues (April 2026), and AozoraEpub3 i
 This guide provides steps to install **narou.rb** (a web novel downloader) and integrate it with AozoraEpub3.
 
 <div style="border: 1px solid #0969da; background: #f0f7ff; border-radius: 6px; padding: 0.8em 1em; margin: 1em 0;">
-💡 <strong>If narou.rb does not work for you</strong>: there is also <strong>narou.rs</strong>, a narou.rb-compatible tool written in Rust and under active development.
+💡 <strong>Recommendation</strong>: <strong>narou.rs</strong>, a narou.rb-compatible tool written in Rust, keeps receiving feature updates and security fixes, so it is the safer choice if you are starting fresh. It also works as an alternative when narou.rb does not work for you.
 👉 <a href="narou-rs-setup.html"><strong>narou.rs Setup Guide (with screenshots)</strong></a>
 </div>
 
