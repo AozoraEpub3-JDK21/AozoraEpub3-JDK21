@@ -35,7 +35,7 @@ description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB �
 1. [Java のインストール](#1-java-のインストール)
 2. [AozoraEpub3 の準備](#2-aozoraepub3-の準備narours-専用フォルダ)
 3. [narou.rs のダウンロードと展開](#3-narours-のダウンロードと展開)
-4. [PATH への登録](#4-path-への登録つまずきやすいポイント)
+4. [PATH への登録](#4-path-への登録)
 5. [初期化と AozoraEpub3 の登録](#5-初期化と-aozoraepub3-の登録)
 6. [Web UI の起動](#6-web-ui-の起動)
 7. [★ 出力を EPUB に設定（必須）](#7--出力を-epub-に設定必須)
@@ -117,7 +117,7 @@ C:\Tools\narou\
 
 ---
 
-## 4. PATH への登録（つまずきやすいポイント）
+## 4. PATH への登録
 
 どのフォルダからでも `narou_rs` コマンドを使えるように、`narou_rs.exe` のあるフォルダを **PATH**（Windows がコマンドを探す場所の一覧）に登録します。
 
@@ -257,7 +257,7 @@ EPUB の保存先は `C:\narou-novels\小説データ\（サイト名）\（作�
 
 | 症状 | 対処 |
 |------|------|
-| `narou_rs` が「認識されません」と表示される | PATH 登録後に PowerShell を開き直したか確認してください → [手順 4](#4-path-への登録つまずきやすいポイント) |
+| `narou_rs` が「認識されません」と表示される | PATH 登録後に PowerShell を開き直したか確認してください → [手順 4](#4-path-への登録) |
 | 「`VCRUNTIME140.dll` が見つかりません」と表示される | Visual C++ 再頒布可能パッケージをインストールしてください → [手順 3](#3-narours-のダウンロードと展開) |
 | 「Windows によって PC が保護されました」と表示される | [SmartScreen 警告の回避方法](usage.html#aozoraepub3exe-の起動時にwindows-によって-pc-が保護されましたと出る)を参照してください |
 | 変換時に Java 関連のエラーが出る | Java がインストールされているか確認してください → [手順 1](#1-java-のインストール) |

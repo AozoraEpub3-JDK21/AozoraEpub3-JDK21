@@ -32,7 +32,7 @@ Follow the steps on this page from top to bottom and you will end up with a setu
 1. [Install Java](#1-install-java)
 2. [Install AozoraEpub3](#2-install-aozoraepub3-in-a-dedicated-folder-for-narours)
 3. [Install narou.rs](#3-install-narours)
-4. [Add it to PATH](#4-add-it-to-path-the-tricky-part)
+4. [Add it to PATH](#4-add-it-to-path)
 5. [Initialize and register AozoraEpub3](#5-initialize-and-register-aozoraepub3)
 6. [Open the Web UI](#6-open-the-web-ui)
 7. [★ Set device to EPUB (Required)](#7--set-device-to-epub-required)
@@ -114,7 +114,7 @@ C:\Tools\narou\
 
 ---
 
-## 4. Add It to PATH (the Tricky Part)
+## 4. Add It to PATH
 
 So that the `narou_rs` command works from any folder, register the location of `narou_rs.exe` in your **PATH** (the list of folders where commands are looked up).
 
@@ -257,7 +257,7 @@ The EPUB is stored under `C:\narou-novels\小説データ\(site name)\(title)\`.
 
 | Symptom | What to do |
 |------|------|
-| `narou_rs` is "not recognized" | Make sure you reopened PowerShell after editing PATH → [step 4](#4-add-it-to-path-the-tricky-part) |
+| `narou_rs` is "not recognized" | Make sure you reopened PowerShell after editing PATH → [step 4](#4-add-it-to-path) |
 | `VCRUNTIME140.dll was not found` | Install the Visual C++ Redistributable → [step 3](#3-install-narours) |
 | "Windows protected your PC" | [How to get past the SmartScreen warning](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe) |
 | A Java-related error during conversion | Check that Java is installed → [step 1](#1-install-java) |
