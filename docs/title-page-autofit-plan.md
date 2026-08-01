@@ -121,9 +121,15 @@ static int displayTextLength(String html)
   kakuyomu_822139840468926025=42 / n8005ls=45 / **n9623lp=100**。
   n9623lp のみ title.xhtml が変化(意図した変更)。Java 側 `JavaAozoraVsReferenceTest` は
   n9623lp の reference.epub を新出力で再生成して 5/5 PASS を確認済み。
-- **残件(.NET ポート側)**: `aozoraepub3-dotnet` に本機能を移植するまで、.NET の
-  `JavaComparisonTests[n9623lp]` は fail する。移植内容 = `TITLE_LENGTH` 投入
-  (displayTextLength 相当)+ テンプレート 2 本の変更。
+- **.NET ポート移植: 完了**(dotnet PR #29、2026-08-01 マージ、`JavaComparisonTests` 5/5 PASS)。
+  移植時に判明した事実:
+  - `tests/integration/reference/` は dotnet 側 `.gitignore` 対象。reference.epub は
+    各環境のローカルフィクスチャであり、コミット不要(Java 側から再生成する運用)
+  - Scriban は null メンバアクセスで例外になるため、フォールバックは
+    `if TITLE_LENGTH == null && TITLE != null` 形式(Velocity の `#if(!$x)` と非等価)
+  - **未対応の既存乖離**: `title_middle.sbn` の既存ディレクティブに `-}}` が無く空行が
+    Java 出力と乖離(比較テスト対象外のため未検出)。dotnet ルートの `template/OPS/xhtml/*.vm`
+    は読み込まれない dead file(実装は Resources 配下の `.sbn` を使用)— 編集しても効かない罠
 - narou.rb / MyNobel_rs 経由の変換でも、配布物の `template/` 差し替えだけで有効
   (テンプレートは jar 内にも同梱されるため、jar 更新でも有効)。
 
