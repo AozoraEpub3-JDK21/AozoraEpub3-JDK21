@@ -28,8 +28,6 @@ import java.awt.event.MouseListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -110,9 +108,8 @@ import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.swing.JConfirmDialog;
 import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
-import com.github.hmdev.util.CharUtils;
+import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
-import com.github.hmdev.util.NetUtils;
 import com.github.hmdev.util.I18n;
 import com.github.hmdev.web.WebAozoraConverter;
 import com.github.hmdev.writer.Epub3ImageWriter;
@@ -4184,47 +4181,10 @@ public class AozoraEpub3Applet extends JPanel
 			File urSrcFile = null;
 			if (vecUrlSrcFile != null && vecUrlSrcFile.size() > i) urSrcFile = vecUrlSrcFile.get(i);
 			//URL変換 の最後が .zip .txtz .rar
-			String ext = urlString.substring(urlString.lastIndexOf('.')+1).toLowerCase();
-			if (ext.equals("zip") || ext.equals("txtz") || ext.equals("rar")) {
-				
-				String urlPath = CharUtils.replaceInvalidFileChars(urlString.substring(urlString.indexOf("//")+2));
-				//青空zipのURLをキャッシュして変換
-				//出力先 出力パスに保存
-				File srcFile = new File(dstPath+"/"+new File(urlPath).getName());
-				LogAppender.println("出力先にダウンロードします : "+srcFile.getCanonicalPath());
-				Files.createDirectories(srcFile.getParentFile().toPath());
-				//ダウンロード
-				BufferedInputStream bis;
-				try {
-					bis = new BufferedInputStream(NetUtils.openStream(new java.net.URI(urlString).toURL()), 8192);
-				} catch (java.net.URISyntaxException e) {
-					throw new IOException(e);
-				}
-				BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(srcFile.toPath()));
-			boolean downloaded = false;
-			try {
-				byte[] buf = new byte[8192];
-				int len;
-				while ((len = bis.read(buf)) > 0) {
-					bos.write(buf, 0, len);
-				}
-				downloaded = true;
-			} finally {
-				bos.close();
-				bis.close();
-				//読み込みタイムアウト等で中断した場合、途中まで書かれた zip を残さない
-				//（正常な青空 zip と誤認されて「読み込めません」になるため）
-				if (!downloaded) {
-					try {
-						if (Files.deleteIfExists(srcFile.toPath())) {
-							LogAppender.println("ダウンロードに失敗したため途中のファイルを削除しました : "+srcFile.getPath());
-						}
-					} catch (Exception e) {
-						logger.warn("ダウンロード途中ファイルの削除に失敗: {}", srcFile, e);
-					}
-				}
-			}
-				
+			//判定・ダウンロード処理は CLI (AozoraEpub3 の -url 処理) と共通化してある
+			if (ArchiveUrlUtils.isArchiveUrl(urlString)) {
+				//青空zipのURLを出力先にダウンロードする（GUI では変換までは行わない従来動作）
+				ArchiveUrlUtils.downloadArchive(urlString, dstPath);
 				continue;
 			}
 			
