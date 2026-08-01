@@ -10,6 +10,7 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21â€
   <a href="./">Home</a> | 
   <a href="usage.html">Usage</a> | 
   <a href="narou-setup.html">narou.rb Setup</a> |
+  <a href="narou-rs-setup.html">narou.rs</a> |
   <a href="development.html">Development</a> | 
   <a href="epub33.html">EPUB 3.3</a> |
   <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>

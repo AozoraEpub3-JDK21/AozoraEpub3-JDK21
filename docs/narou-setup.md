@@ -14,6 +14,7 @@ description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Win
    <a href="./">ホーム</a> | 
    <a href="usage.html">使い方</a> | 
    <strong>narou.rb</strong> |
+   <a href="narou-rs-setup.html">narou.rs</a> |
    <a href="development.html">開発者向け</a> | 
    <a href="epub33-ja.html">EPUB 3.3準拠</a> |
    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21">GitHub</a>
@@ -29,6 +30,11 @@ description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Win
 > - 検証環境: Windows 11, Ruby 3.4.1, narou 3.9.1
 
 Web小説ダウンローダー **narou.rb** を導入し、AozoraEpub3 と連携させるための手順です。
+
+<div style="border: 1px solid #0969da; background: #f0f7ff; border-radius: 6px; padding: 0.8em 1em; margin: 1em 0;">
+💡 <strong>narou.rb がうまく動かない場合</strong>: narou.rb 互換のツール <strong>narou.rs</strong>（Rust 実装・開発が活発）を使う選択肢もあります。
+👉 <a href="narou-rs-setup.html"><strong>narou.rs 導入ガイド（画像付き）</strong></a>
+</div>
 
 現行の narou.rb（v3.9.1 時点）では、以下の既知の不具合がコミュニティで報告されています：
 1. 依存ライブラリ（tilt）のバージョン不整合による起動エラー
@@ -231,7 +237,7 @@ AozoraEpub3 は **v1.3.7-jdk21 から、変換に失敗した場合に終了コ�
 - **[narou.rb 公式 Wiki](https://github.com/whiteleaf7/narou/wiki)** — 公式マニュアル・最新情報
 - **[narou.rb Issues](https://github.com/whiteleaf7/narou/issues)** — バグ報告・既知問題
 - **[narou.rb 公式掲示板](https://jbbs.shitaraba.net/computer/44668/)** — ユーザーコミュニティ・情報交換
-- **[AozoraEpub3 使い方](../usage.html)** — AozoraEpub3 の詳細設定
+- **[AozoraEpub3 使い方](usage.html)** — AozoraEpub3 の詳細設定
 - **[Send to Kindle (Web/メール)](https://www.amazon.co.jp/sendtokindle/)** — Kindleで読む場合に便利。※narou.rb の既知障害として、自動メール送信時に電子書籍タイトルが数字化する事象があります。
 
 ---
