@@ -1,4 +1,4 @@
-# AozoraEpub3
+# AozoraEpub3-JDK21
 
 **Java 21〜26対応 / Gradle対応版**
 
