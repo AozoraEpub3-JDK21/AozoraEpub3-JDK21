@@ -273,6 +273,10 @@ public class AozoraEpub3Applet extends JPanel
 	
 	/** ファイル選択ボタン */
 	JButton jButtonFile;
+	/** 変換後の EPUB をブラウザでプレビューする */
+	JButton jButtonPreview;
+	/** プレビュー対象。変換が成功するたびに最後の出力で更新される */
+	File previewTargetFile;
 	
 	//画像関連
 	/** 挿絵なし */
@@ -453,7 +457,8 @@ public class AozoraEpub3Applet extends JPanel
 	/** 変換をキャンセルした場合true */
 	boolean convertCanceled = false;
 	/** 変換実行中 */
-	boolean running = false;
+	/** 変換処理中か。worker スレッドが書き、EDT (プレビューボタンの状態判定) が読む */
+	volatile boolean running = false;
 	
 	Process kindleProcess;
 	
@@ -1083,6 +1088,17 @@ public class AozoraEpub3Applet extends JPanel
 		jButtonFile.setFocusPainted(false);
 		jButtonFile.addActionListener(new FileChooserListener(this));
 		panel2.add(jButtonFile);
+		//プレビュー (変換後の EPUB を既定ブラウザで開く。ロジックは com.github.hmdev.preview 側)
+		jButtonPreview = new JButton(I18n.t("ui.button.preview"));
+		jButtonPreview.setToolTipText(I18n.t("ui.tooltip.preview"));
+		jButtonPreview.setBorder(padding5H3V);
+		jButtonPreview.setIcon(new ImageIcon(AozoraEpub3Applet.class.getResource("images/epub.png")));
+		jButtonPreview.setFocusPainted(false);
+		jButtonPreview.setEnabled(false);
+		jButtonPreview.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			openPreview();
+		}});
+		panel2.add(jButtonPreview);
 		panel.add(panel2);
 		
 		////////////////////////////////////////////////////////////////
@@ -4105,6 +4121,8 @@ public class AozoraEpub3Applet extends JPanel
 			LogAppender.error("変換に失敗しました : "+srcFile.getAbsolutePath());
 			return;
 		}
+		//プレビュー対象を更新 (kindlegen 経路では後段のリネーム後に上書きする)
+		this.setPreviewTarget(outFile);
 		
 		////////////////////////////////
 		//kindlegen.exeがあれば実行
@@ -4156,8 +4174,11 @@ public class AozoraEpub3Applet extends JPanel
 							//epubリネーム
 							if (outFileOrg.exists()) outFileOrg.delete();
 							Files.move(outFile.toPath(), outFileOrg.toPath(), StandardCopyOption.REPLACE_EXISTING);
+							this.setPreviewTarget(outFileOrg);
 						} else {
 							outFile.delete();
+							//epub を残さない設定なのでプレビュー対象も無くなる
+							this.setPreviewTarget(null);
 						}
 						LogAppender.println("\n"+msg+"\nkindlegen変換完了 ["+(((System.currentTimeMillis()-time)/100)/10f)+"s] -> "+mobiFile.getName());
 					}
@@ -4432,8 +4453,11 @@ public class AozoraEpub3Applet extends JPanel
 				logger.error("変換 SwingWorker でエラー", e);
 				LogAppender.println("エラーが発生しました");
 			} finally {
-				this.applet.setConvertEnabled(true);
+				//running を先にクリアする。setConvertEnabled(true) は
+				//プレビューボタンの有効状態を isRunning() で判定するため、
+				//順序を逆にすると変換完了後もプレビューが押せないままになる
 				this.applet.running = false;
+				this.applet.setConvertEnabled(true);
 			}
 			return null;
 		}
@@ -4442,8 +4466,9 @@ public class AozoraEpub3Applet extends JPanel
 		protected void done()
 		{
 			super.done();
-			this.applet.setConvertEnabled(true);
+			//doInBackground の finally と同じ理由で running を先にクリアする
 			this.applet.running = false;
+			this.applet.setConvertEnabled(true);
 		}
 	}
 	
@@ -4470,8 +4495,58 @@ public class AozoraEpub3Applet extends JPanel
 		//disabledになっているものは再チェック
 		if (enabled) {
 			this.setProfileMoveEnable();
+			//プレビューは対象 EPUB がある場合のみ有効
+			this.updatePreviewButton();
 		}
-		
+
+	}
+	/** プレビュー対象を設定し、ボタンの有効状態を更新する */
+	private void setPreviewTarget(File file)
+	{
+		boolean valid = file != null && file.isFile()
+			&& file.getName().toLowerCase(Locale.ROOT).endsWith(".epub");
+		this.previewTargetFile = valid ? file : null;
+		SwingUtilities.invokeLater(this::updatePreviewButton);
+	}
+	/** プレビューボタンの有効状態を反映する。
+	 * 変換処理中は有効化しない — kindlegen 経路では変換後に対象 EPUB が
+	 * リネーム・削除されるため、途中で開かれると展開に失敗する */
+	private void updatePreviewButton()
+	{
+		if (this.jButtonPreview == null) return;
+		this.jButtonPreview.setEnabled(this.previewTargetFile != null && !this.isRunning());
+	}
+	/** プレビュー対象の EPUB を既定ブラウザで開く */
+	private void openPreview()
+	{
+		File target = this.previewTargetFile;
+		if (target == null || !target.isFile()) {
+			JOptionPane.showMessageDialog(this, I18n.t("ui.preview.noTarget"),
+				I18n.t("ui.error"), JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		//EPUB の展開・フォント一覧の取得・ブラウザ起動はいずれも時間がかかるため
+		//EDT では実行しない (UI が固まる)
+		this.jButtonPreview.setEnabled(false);
+		Thread worker = new Thread(() -> {
+			try {
+				String url = com.github.hmdev.preview.PreviewLauncher.preview(target);
+				SwingUtilities.invokeLater(() -> LogAppender.println(I18n.t("ui.preview.opened")+" : "+url));
+			} catch (IOException | RuntimeException e) {
+				//InvalidPathException など非検査例外もここで受ける。
+				//取りこぼすとダイアログが出ず「押しても何も起きない」ように見える
+				logger.error("プレビューの起動に失敗: {}", target, e);
+				//getMessage() が null の例外でも「null」と表示しない
+				String detail = (e.getMessage() != null) ? e.getMessage() : e.toString();
+				SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
+					I18n.t("ui.preview.failed")+"\n"+detail,
+					I18n.t("ui.error"), JOptionPane.ERROR_MESSAGE));
+			} finally {
+				SwingUtilities.invokeLater(this::updatePreviewButton);
+			}
+		}, "aozora-preview-launch");
+		worker.setDaemon(true);
+		worker.start();
 	}
 	/** コンポーネント内をすべてsetEnabled */
 	private void setEnabledAll(Component c, boolean b)

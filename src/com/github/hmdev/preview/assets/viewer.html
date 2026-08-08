@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AozoraEpub3 プレビュー</title>
+<link rel="stylesheet" href="asset/viewer.css">
+</head>
+<body data-theme="system">
+
+<header class="bar">
+	<button id="tocToggle" class="icon" type="button" title="目次 (t)" aria-label="目次">☰</button>
+	<div class="title">
+		<span id="bookTitle">読み込み中…</span>
+		<span id="bookCreator" class="sub"></span>
+	</div>
+	<div class="spacer"></div>
+
+	<div class="group nav">
+		<button id="prevSection" class="icon" type="button" title="前のセクション ([)">◀</button>
+		<select id="sectionSelect" title="セクション"></select>
+		<button id="nextSection" class="icon" type="button" title="次のセクション (])">▶</button>
+	</div>
+
+	<div class="group">
+		<button id="settingsToggle" class="icon" type="button" title="表示設定">Aa</button>
+		<button id="themeToggle" class="icon" type="button" title="テーマ切り替え">◐</button>
+		<button id="inspectToggle" class="icon" type="button" title="EPUB 情報 (i)">ⓘ</button>
+	</div>
+</header>
+
+<div class="body">
+	<aside id="tocPanel" class="panel left">
+		<div class="panel-head">目次</div>
+		<nav id="tocTree" class="toc"></nav>
+	</aside>
+
+	<main class="stage">
+		<!--
+		sandbox に allow-scripts を与えないことで EPUB 内のスクリプトを実行させない。
+		allow-same-origin は残すため、親からの CSS 注入と getComputedStyle は従来どおり動く。
+		信頼できない EPUB を開いても、セッション情報や他の書籍へ到達できない。
+		-->
+		<iframe id="frame" title="EPUB 本文" sandbox="allow-same-origin"></iframe>
+		<!-- ページ送り。本文の左右端にホバーで現れる。書字方向に応じて進む向きが変わる -->
+		<button id="pageLeft" class="edge left" type="button" aria-label="左へページ送り">‹</button>
+		<button id="pageRight" class="edge right" type="button" aria-label="右へページ送り">›</button>
+		<div id="pageHint" class="hint"></div>
+	</main>
+
+	<aside id="inspectPanel" class="panel right" hidden>
+		<div class="panel-head">
+			EPUB 情報
+			<button id="inspectClose" class="icon small" type="button" aria-label="閉じる">✕</button>
+		</div>
+		<div class="tabs" id="inspectTabs">
+			<button type="button" data-tab="summary" class="active">概要</button>
+			<button type="button" data-tab="effective">実効スタイル</button>
+			<button type="button" data-tab="css">CSS</button>
+			<button type="button" data-tab="fonts">フォント</button>
+		</div>
+		<div class="panel-body">
+			<section data-pane="summary"></section>
+			<section data-pane="effective" hidden></section>
+			<section data-pane="css" hidden></section>
+			<section data-pane="fonts" hidden></section>
+		</div>
+	</aside>
+</div>
+
+<div id="settingsPopover" class="popover" hidden>
+	<div class="popover-head">表示設定</div>
+
+	<label class="field">
+		<span>本文フォント</span>
+		<select id="fontSelect"></select>
+	</label>
+	<label class="field">
+		<span>強調・見出しフォント</span>
+		<select id="gothicSelect"></select>
+	</label>
+	<label class="field">
+		<span>文字サイズ <output id="fontScaleOut">100%</output></span>
+		<input id="fontScale" type="range" min="70" max="180" step="5" value="100">
+	</label>
+	<label class="field">
+		<span>行間 <output id="lineHeightOut">1.8</output></span>
+		<input id="lineHeight" type="range" min="1.2" max="2.6" step="0.05" value="1.8">
+	</label>
+	<label class="field">
+		<span>上下の余白 <output id="marginBlockOut">1.5em</output></span>
+		<input id="marginBlock" type="range" min="0" max="6" step="0.25" value="1.5">
+	</label>
+	<label class="field">
+		<span>左右の余白 <output id="marginInlineOut">1.5em</output></span>
+		<input id="marginInline" type="range" min="0" max="6" step="0.25" value="1.5">
+	</label>
+	<label class="field">
+		<span>テーマ</span>
+		<select id="themeSelect">
+			<option value="system">システムに従う</option>
+			<option value="light">ライト</option>
+			<option value="dark">ダーク</option>
+		</select>
+	</label>
+
+	<button id="settingsReset" type="button" class="reset">既定に戻す</button>
+
+	<p class="note">
+		本文 CSS は <code>@ＭＳ 明朝</code> のような Windows 向けの
+		縦書き用フォント名を指定しています。どのフォントが実際に使われるかは
+		閲覧環境にインストールされたフォント次第で、
+		Kindle / Kobo / Apple Books の実機既定フォントとは一致しません。
+		実効値は「EPUB 情報 → 実効スタイル」で確認できます。
+	</p>
+</div>
+
+<footer class="disclaimer">
+	画面サイズ・フォントの近似表示です。Kindle / Kobo / Apple Books の実機とは描画が異なります。
+</footer>
+
+<script src="asset/viewer.js"></script>
+</body>
+</html>

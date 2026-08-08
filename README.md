@@ -334,6 +334,35 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
 | `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
 | `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
+| `--preview` | 変換した EPUB を既定ブラウザでプレビュー表示 | `--preview foo.epub` |
+
+### EPUB プレビュー
+
+変換した EPUB を Kindle 等の実機へ転送する前に、既定のブラウザで確認できます。
+縦書きの行折り・ルビの衝突・挿絵の収まり・濁点合成フォントの見え方を確かめる用途です。
+
+```bash
+# 既存の EPUB をそのまま表示（変換しない）
+java -jar AozoraEpub3.jar --preview foo.epub
+
+# 変換してから表示
+java -jar AozoraEpub3.jar -of -d ./output/ --preview input.txt
+```
+
+GUI では変換完了後に「プレビュー」ボタンが有効になります。
+
+- 目次パネルから章・見出しへジャンプ
+- フォント（既定は UD デジタル教科書体）・文字サイズ・行間・上下左右の余白を調整
+- ダークモード（システム追従 / ライト / ダーク）
+- EPUB 情報（書誌・構成・manifest 内訳・実効スタイル・CSS・埋め込みフォント）の確認
+- ページ送り: 本文の左右端クリック / ホイール / ← → / Space
+
+サーバは `127.0.0.1` のランダムポートに URL トークン付きで待ち受け、外部からは接続できません。
+CLI ではブラウザを閉じると自動的に終了します（Ctrl-C でも終了）。
+表示設定は `~/.aozoraepub3/preview-settings.json` に保存されます。
+
+> 画面サイズ・フォントの近似表示です。Kindle / Kobo / Apple Books は独自の描画エンジンを
+> 使うため、実機とまったく同じ見た目にはなりません。
 
 ### 例
 

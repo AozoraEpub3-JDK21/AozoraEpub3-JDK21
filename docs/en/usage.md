@@ -213,6 +213,45 @@ Available presets (in `presets/` directory):
 -cache <path>       Cache directory (default: .cache)
 ```
 
+#### Preview
+```bash
+--preview           Open the converted EPUB in your default browser
+```
+
+### EPUB Preview
+
+Check the result in a browser before transferring it to a device.
+
+```bash
+# Show an existing EPUB as-is (no conversion)
+java -jar AozoraEpub3.jar --preview foo.epub
+
+# Convert, then show the result
+java -jar AozoraEpub3.jar -of -d ./output/ --preview input.txt
+```
+
+In the GUI, the "Preview" button becomes available once a conversion finishes.
+
+| Control | What it does |
+|---------|--------------|
+| Table of contents panel (`☰` / `t`) | Jump to a chapter or heading |
+| `Aa` button | Font, text size, line height, margins |
+| `◐` button | Theme (follow system / light / dark) |
+| `ⓘ` button | Metadata, structure, manifest breakdown, effective style, CSS, embedded fonts |
+| Click the left/right edge, wheel, ← →, Space | Turn the page |
+| `[` `]` | Previous / next section |
+
+The default body font is UD Digi Kyokasho, falling back to Yu Mincho and others when it is
+not installed. Display settings are stored in `~/.aozoraepub3/preview-settings.json` and
+restored on the next run.
+
+The server listens on a random port on `127.0.0.1` behind a URL token, so it is not reachable
+from other machines. In CLI mode it shuts down automatically once you close the browser
+(Ctrl-C also works).
+
+> This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
+> rendering engines, so the result will not match a real device exactly.
+
 ### Examples
 
 #### Convert UTF-8 text (vertical)
