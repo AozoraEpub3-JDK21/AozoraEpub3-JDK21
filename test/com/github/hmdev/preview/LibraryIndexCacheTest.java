@@ -185,6 +185,44 @@ public class LibraryIndexCacheTest
 	}
 
 	@Test
+	public void loadingAlsoRespectsTheEntryLimit() throws Exception
+	{
+		// 上限を超える行数のファイルを手で置かれても、メモリ上の件数は守る
+		StringBuilder buf = new StringBuilder();
+		buf.append(LibraryIndexCache.HEADER).append('\n');
+		for (int i = 0; i < LibraryIndexCache.MAX_ENTRIES + 25; i++) {
+			buf.append(LibraryIndexCache.formatLine(
+				entry(temp.getRoot().toPath().resolve("b" + i + ".epub"), "t" + i, null, null)))
+				.append('\n');
+		}
+		Files.writeString(cacheFile(), buf.toString(), StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.load();
+		assertEquals(LibraryIndexCache.MAX_ENTRIES, cache.size());
+		assertNull(cache.get(temp.getRoot().toPath().resolve("b0.epub")));
+		assertNotNull(cache.get(temp.getRoot().toPath().resolve(
+			"b" + (LibraryIndexCache.MAX_ENTRIES + 24) + ".epub")));
+	}
+
+	@Test
+	public void anOversizedCacheFileIsDiscardedWithoutReadingIt() throws Exception
+	{
+		// 読んでから件数で切るのでは、その前に巨大なファイルを全部メモリに載せてしまう
+		Path book = temp.getRoot().toPath().resolve("a.epub");
+		StringBuilder buf = new StringBuilder();
+		buf.append(LibraryIndexCache.HEADER).append('\n');
+		buf.append(LibraryIndexCache.formatLine(entry(book, "書名", null, null))).append('\n');
+		buf.append("#").append("x".repeat((int)LibraryIndexCache.MAX_FILE_BYTES)).append('\n');
+		Files.writeString(cacheFile(), buf.toString(), StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.load();
+		assertEquals(0, cache.size());
+		assertNull(cache.get(book));
+	}
+
+	@Test
 	public void aCacheFileWithInvalidUtf8IsDiscarded() throws Exception
 	{
 		// readAllLines は不正な UTF-8 で MalformedInputException を投げる。

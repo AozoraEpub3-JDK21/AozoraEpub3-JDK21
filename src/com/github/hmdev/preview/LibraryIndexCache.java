@@ -50,6 +50,14 @@ public class LibraryIndexCache
 	 */
 	static final int MAX_ENTRIES = 5000;
 
+	/**
+	 * 読み込むキャッシュファイルの上限バイト数。
+	 * {@link #MAX_ENTRIES} 行 × 1 行あたり 1KB 強を見込んだ余裕を持たせた値。
+	 * これを超えるファイルは (手で壊された・別物が置かれた等) 丸ごと捨てる。
+	 * 読んでから件数で切るのでは、その前に巨大なファイルを全部メモリに載せてしまう。
+	 */
+	static final long MAX_FILE_BYTES = 8L * 1024 * 1024;
+
 	private final Path file;
 	/** キーは絶対パスの文字列。読み込み順を保って保存する */
 	private final Map<String, LibraryEntry> entries = new LinkedHashMap<>();
@@ -74,6 +82,10 @@ public class LibraryIndexCache
 		this.entries.clear();
 		try {
 			if (!Files.isRegularFile(this.file)) return;
+			if (Files.size(this.file) > MAX_FILE_BYTES) {
+				logger.debug("本棚キャッシュが大きすぎるため読み捨てます: {}", this.file);
+				return;
+			}
 			List<String> lines = Files.readAllLines(this.file, StandardCharsets.UTF_8);
 			if (lines.isEmpty() || !HEADER.equals(lines.get(0))) {
 				logger.debug("本棚キャッシュの形式が古いため読み捨てます: {}", this.file);
@@ -83,6 +95,9 @@ public class LibraryIndexCache
 				LibraryEntry entry = parseLine(line);
 				if (entry != null) this.entries.put(key(entry.file()), entry);
 			}
+			// 上限を超える行数のファイルを読んだ場合もメモリ上の件数を守る
+			// (save 側だけで切ると、読み込み直後だけ上限を超えた状態になる)
+			evictOverflow();
 		} catch (IOException | RuntimeException e) {
 			/* 意図的: キャッシュは再生成できる。読めなければ空で続行する */
 			logger.debug("本棚キャッシュを読み込めませんでした: {}", this.file, e);
