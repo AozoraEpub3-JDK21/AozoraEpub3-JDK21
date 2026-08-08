@@ -145,9 +145,14 @@ public class OpfPackage
 		return null;
 	}
 
+	/**
+	 * media-type が画像か。
+	 * MIME のタイプ / サブタイプは大小文字を区別しないため、{@code IMAGE/JPEG} も画像として扱う。
+	 */
 	private static boolean isImage(ManifestItem item)
 	{
-		return item.mediaType() != null && item.mediaType().startsWith("image/");
+		return item.mediaType() != null
+			&& item.mediaType().toLowerCase(java.util.Locale.ROOT).startsWith("image/");
 	}
 
 	void setVersion(String version) { this.version = (version == null) ? "" : version; }

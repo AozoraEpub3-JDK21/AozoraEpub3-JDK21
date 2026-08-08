@@ -169,6 +169,12 @@ public class LibraryIndexCacheTest
 		}
 		cache.update(many);
 
+		// 書き出す分だけでなくメモリ上も切り詰めること。片方だけだと、GUI を
+		// 起動したまま本棚を渡り歩いたときにマップが際限なく育ち、
+		// 「捨てたはずの記録」が再利用され続ける
+		assertEquals(LibraryIndexCache.MAX_ENTRIES, cache.size());
+		assertNull(cache.get(temp.getRoot().toPath().resolve("b0.epub")));
+
 		LibraryIndexCache reloaded = new LibraryIndexCache(cacheFile());
 		reloaded.load();
 		assertNull("溢れた分は古い方から捨てる",
@@ -176,5 +182,17 @@ public class LibraryIndexCacheTest
 		assertNotNull("直近のものは残る",
 			reloaded.get(temp.getRoot().toPath().resolve(
 				"b" + (LibraryIndexCache.MAX_ENTRIES + 9) + ".epub")));
+	}
+
+	@Test
+	public void aCacheFileWithInvalidUtf8IsDiscarded() throws Exception
+	{
+		// readAllLines は不正な UTF-8 で MalformedInputException を投げる。
+		// キャッシュが壊れているだけでプレビューが起動しなくなってはいけない
+		Files.write(cacheFile(), new byte[] {(byte)0xFF, (byte)0xFE, (byte)0xFF, '\n'});
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.load();
+		assertEquals(0, cache.size());
+		assertNull(cache.get(temp.getRoot().toPath().resolve("a.epub")));
 	}
 }

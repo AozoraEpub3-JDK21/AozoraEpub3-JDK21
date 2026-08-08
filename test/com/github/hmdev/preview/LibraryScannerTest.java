@@ -126,6 +126,24 @@ public class LibraryScannerTest
 	}
 
 	@Test
+	public void mediaTypeIsMatchedCaseInsensitively() throws Exception
+	{
+		// MIME のタイプ / サブタイプは大小文字を区別しない。
+		// IMAGE/PNG を画像でないと判定すると、宣言された表紙を取り落とす
+		EpubFixture fixture = EpubFixture.standard();
+		fixture.putBytes("OPS/images/pic.png", EpubFixture.PNG_1PX);
+		fixture.put("OPS/package.opf", EpubFixture.packageOpf()
+			.replace("    <item id=\"ncx\"",
+				"    <item id=\"pic\" href=\"images/pic.png\" media-type=\"IMAGE/PNG\"/>\n"
+				+ "    <item id=\"ncx\"")
+			.replace("  </metadata>", "    <meta name=\"cover\" content=\"pic\"/>\n  </metadata>"));
+		fixture.writeTo(root().resolve("a.epub"));
+
+		List<LibraryEntry> entries = LibraryScanner.scan(root(), LibraryScanner.DEFAULT_MAX_DEPTH, null);
+		assertEquals("OPS/images/pic.png", entries.get(0).coverEntry());
+	}
+
+	@Test
 	public void coverIsGuessedFromTheNameWhenNothingIsDeclared() throws Exception
 	{
 		// 表紙の宣言が無い EPUB でも、名前で分かるものは本棚に絵を出したい。
@@ -174,6 +192,65 @@ public class LibraryScannerTest
 		assertTrue(shallow.get(0).file().toString().endsWith("top.epub"));
 
 		assertEquals(2, LibraryScanner.scan(root(), 3, null).size());
+	}
+
+	@Test
+	public void theBookLimitCountsBooksThatCouldBeRead() throws Exception
+	{
+		// 上限を「候補」で数えると、壊れた .epub が先に並んでいるだけで
+		// 後ろの正常な本が丸ごと落ちる
+		Files.writeString(root().resolve("1-broken.epub"), "not a zip", StandardCharsets.UTF_8);
+		Files.writeString(root().resolve("2-broken.epub"), "not a zip", StandardCharsets.UTF_8);
+		EpubFixture.standard().writeTo(root().resolve("3-good.epub"));
+		EpubFixture.standard().writeTo(root().resolve("4-good.epub"));
+
+		List<LibraryEntry> entries = LibraryScanner.scan(root(), 3, null, 2);
+		assertEquals(2, entries.size());
+		assertTrue(entries.get(0).file().toString().endsWith("3-good.epub"));
+		assertTrue(entries.get(1).file().toString().endsWith("4-good.epub"));
+	}
+
+	@Test
+	public void theBookLimitTruncatesTheList() throws Exception
+	{
+		for (int i = 1; i <= 4; i++) {
+			EpubFixture.standard().writeTo(root().resolve("book" + i + ".epub"));
+		}
+		assertEquals(2, LibraryScanner.scan(root(), 3, null, 2).size());
+		assertEquals(4, LibraryScanner.scan(root(), 3, null, 10).size());
+	}
+
+	@Test
+	public void aDirectoryThatVanishesMidScanDoesNotAbortTheScan() throws Exception
+	{
+		// SimpleFileVisitor の既定 postVisitDirectory は、列挙が I/O エラーで
+		// 中断した場合その例外を再スローする。握り潰していないと
+		// ネットワークドライブや消えたフォルダで本棚全体が落ちる。
+		// ここでは「読めないディレクトリがあっても走査が続く」ことを確認する
+		EpubFixture.standard().writeTo(root().resolve("a.epub"));
+		Files.createDirectories(root().resolve("sub"));
+		EpubFixture.standard().writeTo(root().resolve("sub").resolve("b.epub"));
+
+		List<LibraryEntry> entries = LibraryScanner.scan(root(), 5, null);
+		assertEquals(2, entries.size());
+	}
+
+	@Test
+	public void metadataLargerThanTheLimitIsRejected() throws Exception
+	{
+		// 高圧縮の悪意ある EPUB で巨大な OPF を掴まされないこと。
+		// 宣言サイズと実読み込み量の両方で上限を掛けている
+		StringBuilder huge = new StringBuilder((int)XmlUtils.MAX_METADATA_BYTES + 1024);
+		huge.append("<?xml version=\"1.0\"?><package><metadata><title>x</title></metadata>");
+		while (huge.length() <= XmlUtils.MAX_METADATA_BYTES) huge.append("<!-- padding -->");
+		huge.append("</package>");
+		EpubFixture.standard().put("OPS/package.opf", huge.toString())
+			.writeTo(root().resolve("huge.epub"));
+		EpubFixture.standard().writeTo(root().resolve("normal.epub"));
+
+		List<LibraryEntry> entries = LibraryScanner.scan(root(), 3, null);
+		assertEquals("上限超過の本だけを落とす", 1, entries.size());
+		assertTrue(entries.get(0).file().toString().endsWith("normal.epub"));
 	}
 
 	@Test

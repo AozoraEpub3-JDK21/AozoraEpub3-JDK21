@@ -114,17 +114,33 @@ public class LibraryIndexCache
 		save();
 	}
 
+	/**
+	 * 上限を超えた分を古い方 (LinkedHashMap の先頭側 = 最近見ていないもの) から捨てる。
+	 *
+	 * <p><b>ファイルに書く分だけでなくメモリ上の {@link #entries} からも消す。</b>
+	 * 片方だけ切り詰めると、GUI を起動したまま本棚をいくつも渡り歩いたときに
+	 * マップだけが際限なく育ち、「捨てたはずの記録」が再利用され続ける。</p>
+	 */
+	private void evictOverflow()
+	{
+		if (this.entries.size() <= MAX_ENTRIES) return;
+		int excess = this.entries.size() - MAX_ENTRIES;
+		var iterator = this.entries.keySet().iterator();
+		for (int i = 0; i < excess && iterator.hasNext(); i++) {
+			iterator.next();
+			iterator.remove();
+		}
+	}
+
 	/** 現在の内容をファイルへ書き出す */
 	void save()
 	{
+		evictOverflow();
 		try {
 			Path parent = this.file.getParent();
 			if (parent != null) Files.createDirectories(parent);
 
 			List<LibraryEntry> keep = new ArrayList<>(this.entries.values());
-			// 溢れる場合は古い方 (LinkedHashMap の先頭側) から捨てる
-			if (keep.size() > MAX_ENTRIES) keep = keep.subList(keep.size() - MAX_ENTRIES, keep.size());
-
 			StringBuilder buf = new StringBuilder(keep.size() * 128 + 64);
 			buf.append(HEADER).append('\n');
 			for (LibraryEntry entry : keep) buf.append(formatLine(entry)).append('\n');
@@ -134,6 +150,9 @@ public class LibraryIndexCache
 			logger.debug("本棚キャッシュを保存できませんでした: {}", this.file, e);
 		}
 	}
+
+	/** 現在メモリに保持している件数 (上限の検証用) */
+	int size() { return this.entries.size(); }
 
 	// ------------------------------------------------------------------
 

@@ -49,6 +49,16 @@ public class LibraryScanner
 	 */
 	public static final int MAX_BOOKS = 2000;
 
+	/**
+	 * 走査中に覚えておく候補パスの上限を決める倍率。
+	 *
+	 * <p>上限を「候補」ではなく「読めた本」で数えるため、壊れた本が混ざっていても
+	 * {@link #MAX_BOOKS} 冊に届くだけの候補を集めておく必要がある。
+	 * 一方で候補を無制限に溜めると、フォルダを取り違えたときに巨大なツリーを
+	 * 最後まで舐めることになるので倍率で頭を押さえる。</p>
+	 */
+	static final int CANDIDATE_MULTIPLIER = 10;
+
 	private LibraryScanner() {}
 
 	/** 拡張子から EPUB とみなせるか。Kobo の {@code .kepub.epub} も対象 */
@@ -68,14 +78,27 @@ public class LibraryScanner
 	 */
 	public static List<LibraryEntry> scan(Path root, int maxDepth, LibraryIndexCache cache) throws IOException
 	{
+		return scan(root, maxDepth, cache, MAX_BOOKS);
+	}
+
+	/** 上限冊数を指定できる版 (テスト用) */
+	static List<LibraryEntry> scan(Path root, int maxDepth, LibraryIndexCache cache, int maxBooks)
+		throws IOException
+	{
 		if (root == null || !Files.isDirectory(root)) {
 			throw new IOException("フォルダが見つかりません: " + root);
 		}
-		List<Path> files = collectEpubFiles(root, maxDepth);
+		List<Path> files = collectEpubFiles(root, maxDepth, maxBooks * CANDIDATE_MULTIPLIER);
 		files.sort(Comparator.comparing(Path::toString, String.CASE_INSENSITIVE_ORDER));
 
-		List<LibraryEntry> entries = new ArrayList<>(files.size());
+		List<LibraryEntry> entries = new ArrayList<>(Math.min(files.size(), maxBooks));
 		for (Path file : files) {
+			// 上限は「候補」ではなく「読めた本」で数える。候補で数えると、
+			// 壊れた .epub が先に並んでいるだけで、後ろの正常な本が丸ごと落ちる
+			if (entries.size() >= maxBooks) {
+				logger.warn("本棚の上限 {} 冊に達したため、以降の本は一覧に含めません: {}", maxBooks, root);
+				break;
+			}
 			LibraryEntry entry = readOrReuse(file, cache);
 			if (entry != null) entries.add(entry);
 		}
@@ -144,8 +167,10 @@ public class LibraryScanner
 		}
 		try (InputStream is = zip.getInputStream(entry)) {
 			// 宣言サイズは信用できないので、実際の読み込み量でも上限を掛ける。
-			// 上限 + 1 バイト読んで、超えていたら不正とみなす
-			byte[] bytes = is.readNBytes((int)XmlUtils.MAX_METADATA_BYTES + 1);
+			// 上限 + 1 バイト読んで、超えていたら不正とみなす。
+			// toIntExact にしておくと、将来 MAX_METADATA_BYTES を上げたときに
+			// 黙って負値に化けず即座に落ちる
+			byte[] bytes = is.readNBytes(Math.toIntExact(XmlUtils.MAX_METADATA_BYTES + 1));
 			if (bytes.length > XmlUtils.MAX_METADATA_BYTES) {
 				throw new IOException("メタデータが大きすぎます: " + name);
 			}
@@ -154,20 +179,19 @@ public class LibraryScanner
 	}
 
 	/** 配下の .epub を集める。読めないディレクトリがあっても走査を止めない */
-	private static List<Path> collectEpubFiles(Path root, int maxDepth) throws IOException
+	private static List<Path> collectEpubFiles(Path root, int maxDepth, int maxCandidates) throws IOException
 	{
 		List<Path> files = new ArrayList<>();
-		// シンボリックリンクは辿らない。ループや本棚の外への脱出を避けるため
+		// ディレクトリのシンボリックリンクは辿らない。ループと本棚の外への脱出を避けるため
 		Files.walkFileTree(root, EnumSet.noneOf(FileVisitOption.class), Math.max(1, maxDepth),
 			new SimpleFileVisitor<Path>() {
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
 				{
-					if (!attrs.isRegularFile() || !isEpub(file)) return FileVisitResult.CONTINUE;
+					if (!isEpub(file) || !isReadableFile(file, attrs)) return FileVisitResult.CONTINUE;
 					files.add(file.toAbsolutePath().normalize());
-					if (files.size() >= MAX_BOOKS) {
-						logger.warn("本棚の上限 {} 冊に達したため、以降のファイルは一覧に含めません: {}",
-							MAX_BOOKS, root);
+					if (files.size() >= maxCandidates) {
+						logger.warn("候補が {} 件に達したため走査を打ち切ります: {}", maxCandidates, root);
 						return FileVisitResult.TERMINATE;
 					}
 					return FileVisitResult.CONTINUE;
@@ -180,7 +204,31 @@ public class LibraryScanner
 					logger.debug("走査できませんでした: {}", file, e);
 					return FileVisitResult.CONTINUE;
 				}
+
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException e)
+				{
+					// SimpleFileVisitor の既定実装は、ディレクトリの列挙が I/O エラーで
+					// 中断した場合その例外を再スローする。ネットワークドライブや
+					// 走査中に消えたフォルダで本棚全体が落ちてしまうため握り潰す
+					if (e != null) logger.debug("走査を完了できませんでした: {}", dir, e);
+					return FileVisitResult.CONTINUE;
+				}
 			});
 		return files;
+	}
+
+	/**
+	 * 読み出せる通常ファイルか。
+	 *
+	 * <p>リンクを辿らずに走査しているため、<b>ファイルへのシンボリックリンクは
+	 * 属性上「通常ファイル」にならない</b>。Linux / macOS で本棚に本を集める運用では
+	 * リンクを張るのが普通なので、リンク先が通常ファイルなら受け入れる。
+	 * ディレクトリのリンクを辿らない方針 (ループ回避) はそのまま。</p>
+	 */
+	private static boolean isReadableFile(Path file, BasicFileAttributes attrs)
+	{
+		if (attrs.isRegularFile()) return true;
+		return attrs.isSymbolicLink() && Files.isRegularFile(file);
 	}
 }
