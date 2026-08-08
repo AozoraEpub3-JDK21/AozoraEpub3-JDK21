@@ -648,6 +648,34 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 将来対応する場合は Phase 3 以降で、(a) を「表示専用の書き換え」として
 明示的にオン/オフできる形にするのが妥当。
 
+### プラットフォーム差 (Windows / macOS / Linux)
+
+2026-08-08 の 3 ゲートレビューで洗い出した OS 依存の残差。
+**「展開先ルートの外へ出さない」という安全性の保証は `PathUtils` が文字列段階で全 OS 同一に行う**
+(`..` とドライブ修飾)。OS のパス解決に判定を委ねていた実装は CI で Linux だけ落ちたため修正済み。
+
+一方、**ファイル名を表現できるかは OS 依存で、意図的に揃えていない**。
+W3C EPUB 3.3 OCF はファイル名に `" * : < > ? \ |`・末尾ドット・制御文字を使ってはならない
+(MUST NOT) と定めているが、Linux / macOS は実際には受け付けるため、
+仕様違反の EPUB でも Linux では表示できている。
+これを全 OS で一律に拒否すると「今まで読めていた本が読めなくなる」ので、次の扱いとする。
+
+| 事象 | 挙動 | 実装 |
+|---|---|---|
+| その OS で表現できない名前 (`a?b.jpg` を Windows で) | 該当エントリのみ欠落 + `warn` ログ | `PathUtils.resolveInside` が null、`EpubExtractor` が skip |
+| Windows 予約デバイス名 (`OPS/NUL`) | 書き込みが成功したように見えて実体が残らない → `warn` ログ | `EpubExtractor` の展開後 `Files.exists` チェック |
+| 予約名ディレクトリ配下 (`OPS/NUL/x.jpg`) | 当該エントリのみ skip (以前は展開全体が失敗) | `createDirectories` は例外を投げずに何も作らないため、`isDirectory` で作成を確認 |
+| 大文字小文字を区別しない FS での衝突 (`Text.xhtml` / `text.xhtml`) | 先勝ちで後を skip + `warn` (以前は無警告で後勝ち上書き) | `EpubExtractor` の畳み込みキー照合 |
+| Unicode 正規化 (NFC/NFD) の揺れ | 吸収しない。href と ZIP エントリ名で正規化形が異なる EPUB は Linux で 404 になりうる | 未対応 |
+
+### 残件: 推奨フォントリストが Windows 実測のみ
+
+`FontCatalog` の推奨フォント判定は `installed.contains()` の完全一致で、
+Windows 11 の実測フォント名に基づいている。macOS の `ヒラギノ明朝 ProN W3` 等では
+1 件も一致せず `getDefaultBody()` / `getDefaultMincho()` が null になり、
+推奨欄が空になる可能性がある (mac / Linux 実機未検証)。
+実機で確認し、OS ごとの候補名を持たせるか、部分一致に緩めるかを決めること。
+
 ## 落とし穴 (実装時に踏まないこと)
 
 - **`file://` で直接開かない** — フォントと XHTML MIME で破綻する

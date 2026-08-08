@@ -57,6 +57,10 @@ public class OpfParser
 		for (Element rootfile : XmlUtils.findAll(doc, "rootfile")) {
 			String fullPath = XmlUtils.attr(rootfile, "full-path");
 			if (fullPath.isEmpty()) continue;
+			if (PathUtils.escapesRoot(fullPath)) {
+				// "../" やドライブ修飾でホスト上のファイルを指そうとしている
+				throw new IOException("container.xml の full-path が展開先の外を指しています: " + fullPath);
+			}
 			String normalized = PathUtils.normalizeRelative(fullPath);
 			if (normalized == null) {
 				throw new IOException("container.xml の full-path が不正です: " + fullPath);

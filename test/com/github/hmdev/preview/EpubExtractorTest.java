@@ -173,4 +173,93 @@ public class EpubExtractorTest
 			assertTrue(expected.getMessage().contains("不正なエントリ"));
 		}
 	}
+
+	@Test
+	public void rejectsDriveQualifiedEntryOnEveryPlatform() throws IOException
+	{
+		// 以前は Windows の Path#resolve が絶対パス扱いすることに頼っていたため、
+		// Linux / macOS ではルート配下に収まってしまい拒否できなかった
+		Path epub = temp.getRoot().toPath().resolve("drive.epub");
+		try (OutputStream out = Files.newOutputStream(epub);
+			 ZipOutputStream zip = new ZipOutputStream(out)) {
+			zip.putNextEntry(new ZipEntry("C:/Windows/win.ini"));
+			zip.write("pwned".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+		try {
+			EpubExtractor.extract(epub, temp.getRoot().toPath().resolve("drive-out"));
+			fail("ドライブ修飾のエントリを受け入れてはならない");
+		} catch (IOException expected) {
+			assertTrue(expected.getMessage().contains("不正なエントリ"));
+		}
+	}
+
+	@Test
+	public void nestedColonEntryDoesNotRejectTheWholeEpub() throws IOException
+	{
+		// 先頭以外の ":" はルート外に出られない。OCF 上は不正な名前だが、
+		// これで EPUB 全体を拒否すると Linux で読めていた本が開けなくなる。
+		// Windows では当該エントリのみ読み飛ばされる (どちらでも本体は開ける)
+		Path epub = temp.getRoot().toPath().resolve("colon.epub");
+		try (OutputStream out = Files.newOutputStream(epub);
+			 ZipOutputStream zip = new ZipOutputStream(out)) {
+			zip.putNextEntry(new ZipEntry("OPS/xhtml/a:chapter.xhtml"));
+			zip.write("<html/>".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+			zip.putNextEntry(new ZipEntry("mimetype"));
+			zip.write("application/epub+zip".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+		Path target = temp.getRoot().toPath().resolve("colon-out");
+
+		EpubExtractor.extract(epub, target);
+
+		assertTrue(Files.isRegularFile(target.resolve("mimetype")));
+	}
+
+	@Test
+	public void entryUnderUncreatableDirectoryDoesNotFailTheWholeEpub() throws IOException
+	{
+		// Windows では NUL が予約デバイス名で、createDirectories が例外を投げずに何も作らないため
+		// 続く書き込みが NoSuchFileException になり展開全体が失敗していた。
+		// Linux ではただのディレクトリ名として展開される。どちらでも本体は開けること
+		Path epub = temp.getRoot().toPath().resolve("device.epub");
+		try (OutputStream out = Files.newOutputStream(epub);
+			 ZipOutputStream zip = new ZipOutputStream(out)) {
+			zip.putNextEntry(new ZipEntry("OPS/NUL/x.jpg"));
+			zip.write("img".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+			zip.putNextEntry(new ZipEntry("mimetype"));
+			zip.write("application/epub+zip".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+		Path target = temp.getRoot().toPath().resolve("device-out");
+
+		EpubExtractor.extract(epub, target);
+
+		assertTrue(Files.isRegularFile(target.resolve("mimetype")));
+	}
+
+	@Test
+	public void collidingEntriesKeepTheFirstInsteadOfOverwriting() throws IOException
+	{
+		// 大文字小文字を区別しない FS (Windows / 既定の APFS) では両者が同一ファイルになる。
+		// 従来は後勝ちで無警告に上書きされ「章の中身が別章」になっていた。
+		// 区別する FS (Linux) では両方が残るので、先頭の中身が保たれることを表明する
+		Path epub = temp.getRoot().toPath().resolve("case.epub");
+		try (OutputStream out = Files.newOutputStream(epub);
+			 ZipOutputStream zip = new ZipOutputStream(out)) {
+			zip.putNextEntry(new ZipEntry("OPS/Text.xhtml"));
+			zip.write("A".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+			zip.putNextEntry(new ZipEntry("OPS/text.xhtml"));
+			zip.write("B".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+		Path target = temp.getRoot().toPath().resolve("case-out");
+
+		EpubExtractor.extract(epub, target);
+
+		assertEquals("A", Files.readString(target.resolve("OPS/Text.xhtml"), StandardCharsets.UTF_8));
+	}
 }

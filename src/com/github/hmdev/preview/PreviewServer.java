@@ -404,9 +404,11 @@ public class PreviewServer implements AutoCloseable
 			return;
 		}
 		Path root = book.getDir().toRealPath();
-		Path target = root.resolve(normalized).normalize();
-		// 正規化後にルート配下であることを必ず検証する (パストラバーサル防止)
-		if (!target.startsWith(root) || !Files.isRegularFile(target)) {
+		// 正規化後にルート配下であることを必ず検証する (パストラバーサル防止)。
+		// resolveInside は Windows で ':' '?' 等を含む名前が InvalidPathException になる件も吸収する
+		// (非チェック例外がハンドラを抜けると 404 ではなく接続断になる)
+		Path target = PathUtils.resolveInside(root, normalized);
+		if (target == null || !Files.isRegularFile(target)) {
 			respond(exchange, 404, "text/plain; charset=utf-8", "Not Found".getBytes(StandardCharsets.UTF_8));
 			return;
 		}

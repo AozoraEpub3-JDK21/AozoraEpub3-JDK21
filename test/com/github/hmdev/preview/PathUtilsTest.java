@@ -44,6 +44,27 @@ public class PathUtilsTest
 	}
 
 	@Test
+	public void driveQualifiedPathsAreRejectedOnEveryPlatform()
+	{
+		// OS の resolve 任せにすると Windows だけルート外を指し、Linux / macOS では
+		// ":" を含むただのファイル名として通ってしまう。文字列の段階で弾いて挙動を揃える
+		assertTrue(PathUtils.escapesRoot("C:/Windows/win.ini"));
+		assertTrue(PathUtils.escapesRoot("C:\\Windows\\win.ini"));
+		assertNull(PathUtils.normalizeRelative("C:/Windows/win.ini"));
+		assertNull(PathUtils.normalizeRelative("C:Windows/win.ini"));
+
+		// ".." の解決で先頭へ来る場合もドライブとして解釈されうる
+		assertTrue(PathUtils.escapesRoot("OPS/../C:/Windows/win.ini"));
+		assertNull(PathUtils.normalizeRelative("OPS/../C:/Windows/win.ini"));
+
+		// 先頭以外の ":" はルート外へ出られないので「危険」ではない。
+		// ここを危険扱いすると EpubExtractor が EPUB 全体を拒否してしまう
+		// (OCF 上は不正なファイル名だが、Linux で実際に読めている本を落とさない)
+		assertFalse(PathUtils.escapesRoot("OPS/xhtml/a:chapter.xhtml"));
+		assertEquals("OPS/xhtml/a:chapter.xhtml", PathUtils.normalizeRelative("OPS/xhtml/a:chapter.xhtml"));
+	}
+
+	@Test
 	public void resolveInsideRejectsDriveQualifiedPaths()
 	{
 		// 細工した container.xml の full-path でホスト上のファイルを読ませない。
@@ -57,6 +78,25 @@ public class PathUtilsTest
 
 		assertEquals(root.resolve("OPS").resolve("package.opf"),
 			PathUtils.resolveInside(root, "OPS/package.opf"));
+	}
+
+	@Test
+	public void osUnrepresentableNamesResolveToNullInsteadOfThrowing()
+	{
+		// Windows は ':' '?' '*' を含む名前で InvalidPathException (非チェック例外) を投げるが、
+		// Linux / macOS では合法。Linux 製 EPUB を Windows で開いたときに
+		// 例外が呼び出し側の catch(IOException) をすり抜けないこと
+		java.nio.file.Path root = java.nio.file.Paths.get("D:", "tmp", "epub-root");
+
+		// NUL は 3 OS すべてで InvalidPathException になるため、
+		// catch を外したら必ず落ちる形で表明できる (OS 依存の抜けを作らない)
+		assertNull(PathUtils.resolveInside(root, "OPS/a" + ((char) 0) + "b.jpg"));
+
+		for (String name : new String[] {"OPS/a?b.jpg", "OPS/a*b.jpg", "OPS/xhtml/12:34.xhtml"}) {
+			java.nio.file.Path resolved = PathUtils.resolveInside(root, name);
+			// 表現できる OS では通し、できない OS では null。どちらでもルート外は指さない
+			if (resolved != null) assertTrue(resolved.startsWith(root.normalize()));
+		}
 	}
 
 	@Test

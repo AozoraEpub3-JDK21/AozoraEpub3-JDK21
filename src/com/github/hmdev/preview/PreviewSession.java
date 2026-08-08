@@ -347,7 +347,11 @@ public class PreviewSession implements AutoCloseable
 			return;
 		}
 		Path lockFile = dir.resolve(LOCK_FILE);
-		if (!Files.exists(lockFile)) {
+		// notExists は「無いと確認できた」ときだけ true。exists の否定だと、権限不足で
+		// 確認できない場合 (POSIX の共有 /tmp で他ユーザーの 700 ディレクトリ) も
+		// 「.lock 無し = 残骸」と誤判定して生存セッションを消しうる (Windows の %TEMP% は
+		// ユーザー毎なので起きない = OS 依存の穴になる)
+		if (Files.notExists(lockFile)) {
 			// 十分に古く .lock も無いなら、古い版が残した残骸。回収してよい
 			deleteRecursively(dir);
 			return;

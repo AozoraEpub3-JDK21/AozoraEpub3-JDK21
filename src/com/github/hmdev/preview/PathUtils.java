@@ -9,6 +9,23 @@ import java.util.Deque;
  *
  * <p>OS のファイルシステムに触れる前に文字列として正規化することで、
  * {@code ../} を含むパスがルート外へ抜けることを検知できるようにする。</p>
+ *
+ * <h2>プラットフォーム間の保証範囲</h2>
+ * <p><b>「展開先ルートの外へ出さない」という保証はこのクラスが一次的に負い、Windows / macOS / Linux で
+ * 同一に判定する</b> ({@code ..} とドライブ修飾を文字列段階で弾く)。OS のパス解決に判定を委ねない。</p>
+ *
+ * <p>一方、<b>ファイル名を表現できるかどうかは OS 依存で、意図的に揃えていない</b>。
+ * W3C EPUB 3.3 OCF はファイル名に {@code " * : < > ? \ |}・末尾のドット・制御文字を
+ * 使ってはならないと定めているが、Linux / macOS はそれらを実際には受け付けるため、
+ * 仕様違反の EPUB でも Linux では表示できる。これを全 OS で一律に拒否すると
+ * 「今まで読めていた本が読めなくなる」ため、次の扱いとする。</p>
+ * <ul>
+ *   <li>その OS で表現できない名前 &rarr; {@link #resolveInside} が null。該当ファイルのみ欠落 (Windows で発生)</li>
+ *   <li>大文字小文字を区別しないファイルシステム (Windows / 既定の APFS) では
+ *       {@code Text.xhtml} と {@code text.xhtml} が衝突する。検出は {@code EpubExtractor} 側で行う</li>
+ *   <li>Unicode 正規化 (NFC/NFD) の揺れは吸収しない。href と ZIP エントリ名で正規化形が異なる EPUB は
+ *       Linux で 404 になりうる (macOS は FS 側が正規化非依存で照合するため引ける)</li>
+ * </ul>
  */
 final class PathUtils
 {
@@ -31,14 +48,33 @@ final class PathUtils
 				depth--;
 				continue;
 			}
+			// ドライブ修飾が意味を持つのは解決後の先頭に来る場合だけ。
+			// ネストした "OPS/a:b.xhtml" はルート外に出られないので危険ではない
+			// (ここで true にすると EPUB 全体を拒否してしまう)
+			if (depth == 0 && isDriveQualified(segment)) return true;
 			depth++;
 		}
 		return false;
 	}
 
 	/**
+	 * {@code C:} や {@code C:Windows} のようなドライブ修飾セグメントか。
+	 *
+	 * <p>Windows では {@code Path#resolve} がこれを絶対パスとして扱うためルート外を指すが、
+	 * Linux / macOS では {@code :} を含むだけの普通のファイル名として通ってしまう。
+	 * 本アプリはマルチプラットフォーム対応なので、OS のパス解決に判定を委ねず
+	 * 文字列の段階で弾いて挙動を揃える。</p>
+	 */
+	private static boolean isDriveQualified(String segment)
+	{
+		if (segment.length() < 2 || segment.charAt(1) != ':') return false;
+		char drive = segment.charAt(0);
+		return (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z');
+	}
+
+	/**
 	 * 相対パスを正規化する。{@code .} を除去し {@code ..} を解決する。
-	 * ルートより上に出る場合と、解決結果が空になる場合は null を返す。
+	 * ルートより上に出る場合、ドライブ修飾を含む場合、解決結果が空になる場合は null を返す。
 	 */
 	static String normalizeRelative(String path)
 	{
@@ -53,6 +89,9 @@ final class PathUtils
 				stack.removeLast();
 				continue;
 			}
+			// "C:/Windows/win.ini" のように解決後の先頭へ来るものだけを弾く。
+			// "OPS/../C:/x" も ".." の解決で先頭に来るのでここで捕まる
+			if (stack.isEmpty() && isDriveQualified(segment)) return null;
 			stack.addLast(segment);
 		}
 		if (stack.isEmpty()) return null;
@@ -60,10 +99,12 @@ final class PathUtils
 	}
 
 	/**
-	 * EPUB 内の相対パスを展開先の実パスへ解決する。ルート外に出る場合は null。
+	 * EPUB 内の相対パスを展開先の実パスへ解決する。
+	 * ルート外に出る場合と、この OS のファイル名として表現できない場合は null。
 	 *
-	 * <p>Windows では {@code C:/Windows/win.ini} のようなドライブ付きの文字列を
-	 * {@code resolve} すると絶対パスとして扱われ、ルート外を指してしまう。
+	 * <p>{@code C:/Windows/win.ini} のようなドライブ付きの文字列は
+	 * {@link #normalizeRelative} が弾くため、Windows / macOS / Linux のいずれでも null になる
+	 * (OS の {@code resolve} 任せにすると Windows だけルート外、他 OS ではただのファイル名、と挙動が割れる)。
 	 * 細工した {@code container.xml} の {@code full-path} や manifest の href で
 	 * ホスト上のファイルを読まされないよう、<b>ファイルを開く全ての箇所でこれを通す</b>。</p>
 	 */
@@ -73,7 +114,15 @@ final class PathUtils
 		String normalized = normalizeRelative(relativePath);
 		if (normalized == null) return null;
 		Path base = root.normalize();
-		Path target = base.resolve(normalized).normalize();
+		Path target;
+		try {
+			target = base.resolve(normalized).normalize();
+		} catch (java.nio.file.InvalidPathException e) {
+			// Windows では ':' '?' '*' 等を含む名前が InvalidPathException になる (Linux/macOS では合法)。
+			// 非チェック例外なので、ここで飲まないと呼び出し側の catch(IOException) をすり抜けて
+			// プレビューが落ちる。この OS で開けないファイル = 見つからない、として扱う
+			return null;
+		}
 		return target.startsWith(base) ? target : null;
 	}
 
