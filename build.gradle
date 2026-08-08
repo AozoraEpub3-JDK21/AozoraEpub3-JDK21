@@ -28,6 +28,7 @@ tasks.withType(Test) {
     exclude '**/AozoraFullFlowTest.class'   // main() 実行スクリプト (runFullFlowTest task で実行)
     exclude '**/AozoraRealTest.class'       // main() 実行スクリプト (runRealTest task で実行)
     exclude '**/VelocityTestUtils.class'    // テストヘルパー (final class)
+    exclude '**/EpubFixture.class'          // テストヘルパー (プレビュー用 EPUB 生成)
     exclude '**/*$*.class'                  // inner / anonymous class (data holder / stub)
 }
 

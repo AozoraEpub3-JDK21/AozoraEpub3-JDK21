@@ -36,7 +36,11 @@ public class AozoraEpub3
 	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3.class);
 
 	public static final String VERSION = "1.4.0-jdk21";
-	
+
+	/** 最後に出力に成功した EPUB。CLI の --preview が変換後に開く対象。
+	 * GUI は変換経路が異なるため AozoraEpub3Applet.previewTargetFile を使う */
+	private static volatile File lastOutputFile;
+
 	/** コマンドライン実行用。
 	 * 失敗時のみ非 0 で終了する（成功時に System.exit を呼ばないのは、
 	 * main() を in-process で直接呼ぶテストを終了させないため）。 */
@@ -52,6 +56,9 @@ public class AozoraEpub3
 	{
 		//変換に失敗した件数。1 件でもあれば非 0 で終了する
 		int errorCount = 0;
+		//テストは main() を in-process で複数回呼ぶため、前回実行の出力を引き継がないよう毎回クリアする
+		//（引き継ぐと、変換に失敗した --preview が前回の EPUB を開いて待機してしまう）
+		lastOutputFile = null;
 		String jarPath = System.getProperty("java.class.path");
 		int idx = jarPath.indexOf(";");
 		if (idx > 0) jarPath = jarPath.substring(0, idx);
@@ -98,6 +105,8 @@ public class AozoraEpub3
 			options.addOption("interval", true, "ページ取得間隔(秒) [1.0] (デフォルト)");
 			options.addOption("cache", true, "キャッシュパス [.cache]");
 			options.addOption("narou", false, "narou.rb互換フォーマット設定(setting_narourb.ini)を適用");
+			options.addOption("preview", "preview", false,
+				"変換後の EPUB を既定ブラウザでプレビュー表示 (入力が .epub のみなら変換せずそのまま表示)\nブラウザを閉じるか Ctrl-C で終了します");
 
 			CommandLine commandLine;
 			try {
@@ -119,6 +128,12 @@ public class AozoraEpub3
 			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return 1;
+			}
+			boolean preview = commandLine.hasOption("preview");
+			//入力が EPUB だけなら変換せずそのままプレビューする。
+			//-url が併用されている場合は変換対象があるので通常の変換フローに進める
+			if (preview && fileNames.length > 0 && !commandLine.hasOption("url") && isAllEpub(fileNames)) {
+				return previewFiles(fileNames);
 			}
 			//iniファイル確認
 			if (commandLine.hasOption("i")) {
@@ -499,11 +514,94 @@ public class AozoraEpub3
 							encType, bookInfo, imageInfoReader, txtIdx)) errorCount++;
 				}
 			}
+			//変換後のプレビュー
+			if (preview) {
+				if (lastOutputFile == null || !lastOutputFile.isFile()) {
+					LogAppender.println("プレビューできる EPUB がありません");
+				} else if (openPreview(lastOutputFile)) {
+					awaitTermination();
+				} else {
+					//起動に失敗しているので待たずに終わる (待っても表示されない)
+					errorCount++;
+				}
+			}
 		} catch (Exception e) {
 			logger.error("バッチ変換処理でエラー", e);
 			return 1;
 		}
 		return errorCount > 0 ? 1 : 0;
+	}
+
+	/** 全ての入力ファイルが EPUB か */
+	static boolean isAllEpub(String[] fileNames)
+	{
+		for (String fileName : fileNames) {
+			if (!fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".epub")) return false;
+		}
+		return true;
+	}
+
+	/** EPUB を変換せずにプレビューし、ブラウザが閉じられるか Ctrl-C まで待機する */
+	static int previewFiles(String[] fileNames)
+	{
+		int errorCount = 0;
+		for (String fileName : fileNames) {
+			File file = new File(fileName);
+			if (!file.isFile()) {
+				LogAppender.error("EPUB が見つかりません : "+file.getAbsolutePath());
+				errorCount++;
+				continue;
+			}
+			if (!openPreview(file)) errorCount++;
+		}
+		if (errorCount < fileNames.length) awaitTermination();
+		return errorCount > 0 ? 1 : 0;
+	}
+
+	/** 待機ループの間隔。終了条件そのものは PreviewServer が持つ */
+	static final long PREVIEW_POLL_MILLIS = 2_000L;
+
+	/** プレビューをブラウザで開く。成功したら true */
+	static boolean openPreview(File epubFile)
+	{
+		try {
+			String url = com.github.hmdev.preview.PreviewLauncher.preview(epubFile);
+			LogAppender.println("プレビューを開きました : "+url);
+			return true;
+		} catch (IOException e) {
+			logger.error("プレビューの起動に失敗: {}", epubFile, e);
+			LogAppender.error("プレビューの起動に失敗しました : "+e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * ブラウザが閉じられるか Ctrl-C まで待機する。
+	 *
+	 * <p>プレビューはローカル HTTP サーバでブラウザへ配信しているため、
+	 * すぐ終了するとサーバも落ちてブラウザから読めなくなる。
+	 * 一方でブラウザを閉じた後も待ち続けると、プロセスが裏に残り続けてしまう。
+	 * 終了してよいかの判断は
+	 * {@link com.github.hmdev.preview.PreviewServer#isViewerGone()} が持つ。</p>
+	 */
+	static void awaitTermination()
+	{
+		com.github.hmdev.preview.PreviewLauncher launcher =
+			com.github.hmdev.preview.PreviewLauncher.getCurrent();
+		if (launcher == null) return;
+
+		LogAppender.println("プレビューを表示中です。ブラウザを閉じるか Ctrl-C で終了します。");
+		com.github.hmdev.preview.PreviewServer server = launcher.getServer();
+		try {
+			while (!server.isViewerGone()) {
+				Thread.sleep(PREVIEW_POLL_MILLIS);
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return;
+		}
+		LogAppender.println("ブラウザが閉じられたためプレビューを終了します。");
+		com.github.hmdev.preview.PreviewLauncher.shutdown();
 	}
 	
 	/** 出力ファイルを生成 */
@@ -606,6 +704,10 @@ public class AozoraEpub3
 			} else {
 				LogAppender.append("変換完了["+(((System.currentTimeMillis()-time)/100)/10f)+"s] : ");
 				LogAppender.println(outFile.getPath());
+				//プレビュー対象として最後の出力を覚えておく (CLI の --preview / GUI のプレビューボタン用)
+				if (outFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".epub")) {
+					lastOutputFile = outFile;
+				}
 			}
 
 			// アーカイブキャッシュをクリア（メモリ解放）
