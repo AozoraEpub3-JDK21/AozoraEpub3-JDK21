@@ -380,6 +380,14 @@ package version は何か、フォントが埋まっているか) をその場�
 
 `/p/{token}` (末尾スラッシュ無し) は `308` でクエリごと `/p/{token}/` へ送る。
 
+> **エンドポイントを足すときの不変条件: 状態を変える操作は必ず POST にする。**
+> 発信元検査 (後述の Origin 検査) は「GET / HEAD 以外」を条件に掛かっているため、
+> 状態を変える操作を GET で足すと**無検査で通る**。
+> 既に `api/book/{bookId}` / `.../inspect` / `book/**` の GET は
+> `PreviewSession.ensureExtracted` (ZIP 展開) を誘発する前例があるので、
+> 「GET は副作用ゼロ」という前提には寄りかからないこと。
+> Phase 2 で本棚の再スキャンや削除を足す場合は POST にする。
+
 ### セキュリティ設計
 
 ローカル HTTP サーバであるため以下を必須とする。
@@ -413,6 +421,9 @@ package version は何か、フォントが埋まっているか) をその場�
     パーセントエスケープのみを解き、壊れていれば 400 を返す
 11. ハンドラは `Exception` を捕捉する。`InvalidPathException` などの非検査例外で
     接続が切れると原因が追えなくなるため、必ず応答を返す
+12. **状態を変える POST は発信元を検査する** (CSRF)。`Origin` / `Sec-Fetch-Site` を
+    ルーティングで一括して見て、他所を指していれば 403。詳細は後述の
+    「POST エンドポイントの Origin 検査」
 
 ### 表示設定の永続化
 
@@ -695,7 +706,9 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
   iframe の sandbox に `allow-scripts` が無いこと、`script-src 'none'` の付与、
   `api/session` が絶対パスを漏らさないこと、
   ファイル名の `+` が空白に化けないこと、壊れたエスケープで 400 を返すこと、
-  設定 API の往復
+  設定 API の往復、
+  他オリジンからの POST を 403 にすること (`Origin` / `Sec-Fetch-Site` / `Origin: null` /
+  ポート違い)、両ヘッダとも無い POST は従来どおり通ること
 - `PreviewSessionTest` — 遅延展開、二重展開しないこと、
   **実行中セッションの展開先を掃除で消さないこと**、持ち主の居ない残骸は消すこと
 - `PreviewSettingsStoreTest` — 保存と読み込み、オブジェクト以外の拒否、サイズ上限
@@ -749,19 +762,48 @@ W3C EPUB 3.3 OCF はファイル名に `" * : < > ? \ |`・末尾ドット・制
 | 大文字小文字を区別しない FS での衝突 (`Text.xhtml` / `text.xhtml`) | 先勝ちで後を skip + `warn` (以前は無警告で後勝ち上書き) | `EpubExtractor` の畳み込みキー照合 |
 | Unicode 正規化 (NFC/NFD) の揺れ | 吸収しない。href と ZIP エントリ名で正規化形が異なる EPUB は Linux で 404 になりうる | 未対応 |
 
-### 残件: POST エンドポイントに Origin 検査が無い (CSRF)
+### POST エンドポイントの Origin 検査 (CSRF) — 対応済み (2026-08-09)
 
-2026-08-08 のレビューで指摘。現状、サーバ内に `Origin` / `Host` / `Sec-Fetch-Site` の
-検査は 1 件も無く、防御はパスに載せたトークン単独。単純 POST はプリフライトを伴わないため、
-**トークンを知る第三者のページからクロスオリジンで POST を打てる**。
+2026-08-08 のレビューで指摘。当時サーバ内に `Origin` / `Host` / `Sec-Fetch-Site` の
+検査は 1 件も無く、防御はパスに載せたトークン単独だった。単純 POST はプリフライトを
+伴わないため、**トークンを知る第三者のページからクロスオリジンで POST を打てる**。
+`reveal` の追加で影響が「ローカル閲覧」から**「プロセス (ファイラ) の起動」へ昇格**し、
+加えて `bookId` は `b1` 連番 (`PreviewSession`) で推測が容易だった。
 
-本 PR で追加した `reveal` により、影響が「ローカル閲覧」から
-**「プロセス (ファイラ) の起動」へ昇格**した点が新しい。加えて `bookId` は
-`b1` 連番 (`PreviewSession`) で推測が容易。
+**対応**: `PreviewServer.handle` のルーティングで、POST と判定した直後に
+`isAllowedPostSource()` を 1 回だけ通す。個々のハンドラに置くとエンドポイントを
+足したときに漏れるため、経路を 1 箇所に絞っている。これで
+`api/heartbeat` / `api/bye` / `api/settings` / `api/book/{id}/reveal` が一律に守られる。
+不一致は **403** を返す。
 
-対処は `api/heartbeat` / `api/bye` / `api/settings` / `api/*/reveal` の POST 系すべてに
-Origin 検査を入れることになり、既存エンドポイントの挙動に影響する
-(特に `sendBeacon` で送る `api/bye`) ため、本 PR とは分けて対応する。
+判定は 2 つのヘッダを**独立に**見て、どちらか一方でも他所を指していたら拒否する。
+いずれも Forbidden header name なのでページの JavaScript からは詐称できない。
+
+| ヘッダ | 受け付ける値 |
+|---|---|
+| `Sec-Fetch-Site` | `same-origin` / `none` (`cross-site` / `same-site` は拒否) |
+| `Origin` | `loopbackOrigins()` が列挙する自分自身のオリジンのみ |
+
+**両方とも無い場合は許可する。** ブラウザは GET / HEAD 以外では常に `Origin` を付ける
+(Fetch 仕様) ため、無いということはブラウザ発ではない。CSRF は被害者のブラウザを
+踏み台にする攻撃なので、ブラウザ以外からの POST はこの脅威の対象外であり、
+弾いても防御にはならない (ローカルでコードを実行できる相手には元より意味がない)。
+一方で弾くと curl / `java.net.http` からの利用が壊れる。
+
+**Origin はホスト名を解決せず表記を列挙して比較する** (`loopbackOrigins`)。
+`InetAddress.getByName(origin のホスト)` で判定すると、攻撃者が指定した文字列で
+名前解決が走ることになる。ブラウザに渡すのは `urlHost()` 由来の 1 つだけだが、
+URL はログにも出るためユーザーが `localhost` で開き直すことがある。そこで
+`urlHost` 由来 / `localhost` / `127.0.0.1` / `[::1]` の 4 表記 (実ポート付き) を許可する。
+`Set.of` は重複を許さず、bind 先が IPv4 のとき `urlHost` が `127.0.0.1` と衝突して
+落ちるため `Set.copyOf(List.of(...))` を使っている。
+
+ビューアー側 (`viewer-*.js`) の変更は不要。`fetch` も `sendBeacon` も同一オリジンなので
+ブラウザが `Origin` と `Sec-Fetch-Site: same-origin` を自動で付ける。
+
+**DNS リバインディングは対象外とした**。攻撃者が自ドメインを 127.0.0.1 に再解決させても、
+`/p/{token}/` の UUID トークンとランダムポートの両方を知らなければ何も読めない。
+`Host` ヘッダ検査を足しても、この構成では得られる防御が無い。
 
 ### 残件: 推奨フォントリストが Windows 実測のみ
 
