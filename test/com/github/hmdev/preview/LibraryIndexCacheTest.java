@@ -116,8 +116,26 @@ public class LibraryIndexCacheTest
 		// String.split は既定で末尾の空文字列を落とす。-1 を忘れると
 		// 最後の列が空の行だけが「列数不足」として捨てられる
 		LibraryEntry parsed = LibraryIndexCache.parseLine("C:\\x\\a.epub\t1\t2\t書名\t著者\t");
-		assertNotNull(parsed);
-		assertEquals("", parsed.coverEntry());
+		assertNotNull("列数不足として捨てられている", parsed);
+		assertEquals("書名", parsed.title());
+		// 空の表紙は「表紙なし」に正規化される
+		assertNull(parsed.coverEntry());
+	}
+
+	@Test
+	public void restoredValuesGoThroughTheSameConstraintsAsAFreshScan()
+	{
+		// キャッシュはホーム配下の平文で手で書き換えられる。復元した値を
+		// そのまま信じると、512 文字上限も「表紙はルート相対で .. を含まない」も
+		// キャッシュ経由だけすり抜ける
+		LibraryEntry tampered = LibraryIndexCache.parseLine(String.join("\t",
+			"C:\\x\\a.epub", "1", "2",
+			"あ".repeat(LibraryScanner.MAX_FIELD_CHARS + 50),
+			"著者",
+			"../../../etc/passwd"));
+		assertNotNull(tampered);
+		assertEquals(LibraryScanner.MAX_FIELD_CHARS, tampered.title().length());
+		assertNull("展開先の外を指す表紙は捨てる", tampered.coverEntry());
 	}
 
 	@Test
@@ -203,6 +221,29 @@ public class LibraryIndexCacheTest
 		assertNull(cache.get(temp.getRoot().toPath().resolve("b0.epub")));
 		assertNotNull(cache.get(temp.getRoot().toPath().resolve(
 			"b" + (LibraryIndexCache.MAX_ENTRIES + 24) + ".epub")));
+	}
+
+	@Test
+	public void whatIsWrittenCanAlwaysBeReadBack() throws Exception
+	{
+		// 件数だけで縛ると、長い書名が並んだときに MAX_ENTRIES × MAX_FIELD_CHARS で
+		// ファイルサイズ上限を超え、書いた直後の自分のファイルを読み捨てることになる
+		String longTitle = "あ".repeat(LibraryScanner.MAX_FIELD_CHARS);
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		List<LibraryEntry> many = new ArrayList<>();
+		for (int i = 0; i < LibraryIndexCache.MAX_ENTRIES; i++) {
+			many.add(entry(temp.getRoot().toPath().resolve("b" + i + ".epub"),
+				longTitle, longTitle, null));
+		}
+		cache.update(many);
+
+		assertTrue("上限を超えるサイズで書き出している",
+			Files.size(cacheFile()) <= LibraryIndexCache.MAX_FILE_BYTES);
+
+		LibraryIndexCache reloaded = new LibraryIndexCache(cacheFile());
+		reloaded.load();
+		assertTrue("書いた内容が 1 件も読み戻せていない", reloaded.size() > 0);
+		assertEquals("メモリとファイルの件数が食い違っている", cache.size(), reloaded.size());
 	}
 
 	@Test

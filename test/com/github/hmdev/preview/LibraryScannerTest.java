@@ -221,18 +221,36 @@ public class LibraryScannerTest
 	}
 
 	@Test
-	public void aDirectoryThatVanishesMidScanDoesNotAbortTheScan() throws Exception
+	public void aFailedDirectoryListingDoesNotAbortTheWalk() throws Exception
 	{
-		// SimpleFileVisitor の既定 postVisitDirectory は、列挙が I/O エラーで
-		// 中断した場合その例外を再スローする。握り潰していないと
-		// ネットワークドライブや消えたフォルダで本棚全体が落ちる。
-		// ここでは「読めないディレクトリがあっても走査が続く」ことを確認する
-		EpubFixture.standard().writeTo(root().resolve("a.epub"));
-		Files.createDirectories(root().resolve("sub"));
-		EpubFixture.standard().writeTo(root().resolve("sub").resolve("b.epub"));
+		// SimpleFileVisitor の既定 postVisitDirectory / visitFileFailed は、
+		// 列挙が I/O エラーで中断した場合その例外を再スローする。握り潰していないと
+		// ネットワークドライブや走査中に消えたフォルダで本棚全体が落ちる。
+		// walkFileTree にエラーを起こさせるのは環境依存なので visitor を直接叩く
+		LibraryScanner.EpubCollector collector =
+			new LibraryScanner.EpubCollector(root(), LibraryScanner.MAX_BOOKS);
 
-		List<LibraryEntry> entries = LibraryScanner.scan(root(), 5, null);
-		assertEquals(2, entries.size());
+		assertEquals(java.nio.file.FileVisitResult.CONTINUE,
+			collector.postVisitDirectory(root().resolve("gone"), new IOException("列挙に失敗")));
+		assertEquals(java.nio.file.FileVisitResult.CONTINUE,
+			collector.postVisitDirectory(root().resolve("ok"), null));
+		assertEquals(java.nio.file.FileVisitResult.CONTINUE,
+			collector.visitFileFailed(root().resolve("denied.epub"), new IOException("権限なし")));
+	}
+
+	@Test
+	public void theCandidateCeilingStopsTheWalk() throws Exception
+	{
+		LibraryScanner.EpubCollector collector = new LibraryScanner.EpubCollector(root(), 2);
+		java.nio.file.attribute.BasicFileAttributes attrs =
+			Files.readAttributes(EpubFixture.standard().writeTo(root().resolve("a.epub")),
+				java.nio.file.attribute.BasicFileAttributes.class);
+
+		assertEquals(java.nio.file.FileVisitResult.CONTINUE,
+			collector.visitFile(root().resolve("1.epub"), attrs));
+		assertEquals("上限に達したら走査を打ち切る", java.nio.file.FileVisitResult.TERMINATE,
+			collector.visitFile(root().resolve("2.epub"), attrs));
+		assertEquals(2, collector.files.size());
 	}
 
 	@Test

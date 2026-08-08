@@ -81,6 +81,10 @@ public class LibraryScanner
 	/**
 	 * フォルダ配下を再帰スキャンして本棚の一覧を作る。
 	 *
+	 * <p><b>このメソッドはキャッシュを読むだけで更新しない。</b>
+	 * 呼び出し側が結果を {@link LibraryIndexCache#update} に渡すこと。
+	 * 忘れると、以後も毎回全冊を再パースし続ける。</p>
+	 *
 	 * @param root 走査の起点
 	 * @param maxDepth 再帰の深さ上限
 	 * @param cache 前回のインデックス。サイズと更新時刻が一致する本は再パースを省く。null 可
@@ -151,7 +155,9 @@ public class LibraryScanner
 			String opfPath = OpfParser.findOpfPath(containerDoc);
 			OpfPackage opf = OpfParser.parse(XmlUtils.parse(readEntry(zip, opfPath), opfPath), opfPath);
 
-			String coverEntry = opf.getCoverImagePath();
+			// 表紙は「切り詰めてはいけない」フィールド。途中で切ると
+			// 実在するパスが実在しないパスに化ける。長すぎるものは表紙なしにする
+			String coverEntry = sanitizeCoverEntry(opf.getCoverImagePath());
 			// manifest にあっても ZIP に無いことがある。無い表紙を持たせると
 			// サムネイル要求のたびに 404 になるので、ここで確かめて落とす
 			if (coverEntry != null && zip.getEntry(coverEntry) == null) {
@@ -159,7 +165,7 @@ public class LibraryScanner
 				coverEntry = null;
 			}
 			return new LibraryEntry(file.toAbsolutePath().normalize(), size, modifiedMillis,
-				truncate(opf.getTitle()), truncate(opf.getCreator()), truncate(coverEntry));
+				truncate(opf.getTitle()), truncate(opf.getCreator()), coverEntry);
 		}
 	}
 
@@ -168,6 +174,26 @@ public class LibraryScanner
 	{
 		if (value == null || value.length() <= MAX_FIELD_CHARS) return value;
 		return value.substring(0, MAX_FIELD_CHARS);
+	}
+
+	/**
+	 * 表紙エントリ名を、そのまま ZIP 照合と配信に使える形だけに絞る。
+	 *
+	 * <p>スキャン経路では {@code OpfPackage.resolve} が既に正規化しているが、
+	 * <b>キャッシュから復元した値は何も通っていない</b>。手で書き換えられた
+	 * キャッシュから {@code ../} 付きのパスが入ってくる経路を塞ぐため、
+	 * 両方をこの関数に通す。</p>
+	 *
+	 * @return 安全なルート相対パス。使えない値なら null (= 表紙なし)
+	 */
+	static String sanitizeCoverEntry(String coverEntry)
+	{
+		if (coverEntry == null || coverEntry.isEmpty()) return null;
+		// 切り詰めると別のパスに化けるので、長すぎるものは捨てる
+		if (coverEntry.length() > MAX_FIELD_CHARS) return null;
+		if (PathUtils.escapesRoot(coverEntry)) return null;
+		String normalized = PathUtils.normalizeRelative(coverEntry);
+		return (normalized == null || normalized.isEmpty()) ? null : normalized;
 	}
 
 	/**
@@ -198,54 +224,72 @@ public class LibraryScanner
 	/** 配下の .epub を集める。読めないディレクトリがあっても走査を止めない */
 	private static List<Path> collectEpubFiles(Path root, int maxDepth, int maxCandidates) throws IOException
 	{
-		List<Path> files = new ArrayList<>();
+		EpubCollector collector = new EpubCollector(root, maxCandidates);
 		// ディレクトリのシンボリックリンクは辿らない。ループと本棚の外への脱出を避けるため
-		Files.walkFileTree(root, EnumSet.noneOf(FileVisitOption.class), Math.max(1, maxDepth),
-			new SimpleFileVisitor<Path>() {
-				@Override
-				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-				{
-					if (!isEpub(file) || !isReadableFile(file, attrs)) return FileVisitResult.CONTINUE;
-					files.add(file.toAbsolutePath().normalize());
-					if (files.size() >= maxCandidates) {
-						logger.warn("候補が {} 件に達したため走査を打ち切ります: {}", maxCandidates, root);
-						return FileVisitResult.TERMINATE;
-					}
-					return FileVisitResult.CONTINUE;
-				}
-
-				@Override
-				public FileVisitResult visitFileFailed(Path file, IOException e)
-				{
-					/* 意図的: 権限不足などで読めない場所は飛ばして走査を続ける */
-					logger.debug("走査できませんでした: {}", file, e);
-					return FileVisitResult.CONTINUE;
-				}
-
-				@Override
-				public FileVisitResult postVisitDirectory(Path dir, IOException e)
-				{
-					// SimpleFileVisitor の既定実装は、ディレクトリの列挙が I/O エラーで
-					// 中断した場合その例外を再スローする。ネットワークドライブや
-					// 走査中に消えたフォルダで本棚全体が落ちてしまうため握り潰す
-					if (e != null) logger.debug("走査を完了できませんでした: {}", dir, e);
-					return FileVisitResult.CONTINUE;
-				}
-			});
-		return files;
+		Files.walkFileTree(root, EnumSet.noneOf(FileVisitOption.class), Math.max(1, maxDepth), collector);
+		return collector.files;
 	}
 
 	/**
-	 * 読み出せる通常ファイルか。
+	 * {@code .epub} を集める visitor。
 	 *
-	 * <p>リンクを辿らずに走査しているため、<b>ファイルへのシンボリックリンクは
-	 * 属性上「通常ファイル」にならない</b>。Linux / macOS で本棚に本を集める運用では
-	 * リンクを張るのが普通なので、リンク先が通常ファイルなら受け入れる。
-	 * ディレクトリのリンクを辿らない方針 (ループ回避) はそのまま。</p>
+	 * <p>「走査が途中で失敗しても止まらない」ことがこのクラスの肝なので、
+	 * 匿名クラスにせず単体で検証できる形にしてある。</p>
 	 */
-	private static boolean isReadableFile(Path file, BasicFileAttributes attrs)
+	static final class EpubCollector extends SimpleFileVisitor<Path>
 	{
-		if (attrs.isRegularFile()) return true;
-		return attrs.isSymbolicLink() && Files.isRegularFile(file);
+		final List<Path> files = new ArrayList<>();
+		private final Path root;
+		private final int maxCandidates;
+
+		EpubCollector(Path root, int maxCandidates)
+		{
+			this.root = root;
+			this.maxCandidates = maxCandidates;
+		}
+
+		@Override
+		public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+		{
+			if (!isEpub(file) || !isReadableFile(file, attrs)) return FileVisitResult.CONTINUE;
+			this.files.add(file.toAbsolutePath().normalize());
+			if (this.files.size() >= this.maxCandidates) {
+				logger.warn("候補が {} 件に達したため走査を打ち切ります: {}", this.maxCandidates, this.root);
+				return FileVisitResult.TERMINATE;
+			}
+			return FileVisitResult.CONTINUE;
+		}
+
+		@Override
+		public FileVisitResult visitFileFailed(Path file, IOException e)
+		{
+			/* 意図的: 権限不足などで読めない場所は飛ばして走査を続ける */
+			logger.debug("走査できませんでした: {}", file, e);
+			return FileVisitResult.CONTINUE;
+		}
+
+		@Override
+		public FileVisitResult postVisitDirectory(Path dir, IOException e)
+		{
+			// SimpleFileVisitor の既定実装は、ディレクトリの列挙が I/O エラーで
+			// 中断した場合その例外を再スローする。ネットワークドライブや
+			// 走査中に消えたフォルダで本棚全体が落ちてしまうため握り潰す
+			if (e != null) logger.debug("走査を完了できませんでした: {}", dir, e);
+			return FileVisitResult.CONTINUE;
+		}
+
+		/**
+		 * 読み出せる通常ファイルか。
+		 *
+		 * <p>リンクを辿らずに走査しているため、<b>ファイルへのシンボリックリンクは
+		 * 属性上「通常ファイル」にならない</b>。Linux / macOS で本棚に本を集める運用では
+		 * リンクを張るのが普通なので、リンク先が通常ファイルなら受け入れる。
+		 * ディレクトリのリンクを辿らない方針 (ループ回避) はそのまま。</p>
+		 */
+		private static boolean isReadableFile(Path file, BasicFileAttributes attrs)
+		{
+			if (attrs.isRegularFile()) return true;
+			return attrs.isSymbolicLink() && Files.isRegularFile(file);
+		}
 	}
 }

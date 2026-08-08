@@ -51,10 +51,15 @@ public class LibraryIndexCache
 	static final int MAX_ENTRIES = 5000;
 
 	/**
-	 * 読み込むキャッシュファイルの上限バイト数。
-	 * {@link #MAX_ENTRIES} 行 × 1 行あたり 1KB 強を見込んだ余裕を持たせた値。
-	 * これを超えるファイルは (手で壊された・別物が置かれた等) 丸ごと捨てる。
-	 * 読んでから件数で切るのでは、その前に巨大なファイルを全部メモリに載せてしまう。
+	 * キャッシュファイルの上限バイト数。<b>読み書きの両方に効かせる。</b>
+	 *
+	 * <p>読み: これを超えるファイルは (手で壊された・別物が置かれた等) 丸ごと捨てる。
+	 * 読んでから件数で切るのでは、その前に巨大なファイルを全部メモリに載せてしまう。</p>
+	 *
+	 * <p>書き: 件数だけで縛ると
+	 * {@link #MAX_ENTRIES} × {@link LibraryScanner#MAX_FIELD_CHARS} × 3 フィールドで
+	 * 最悪 20MB を超え、<b>書いた直後の自分のファイルを読み捨てる</b>ことになる。
+	 * 予算を超える分は古い方から落として、書ける形にしてから保存する。</p>
 	 */
 	static final long MAX_FILE_BYTES = 8L * 1024 * 1024;
 
@@ -76,8 +81,13 @@ public class LibraryIndexCache
 
 	Path getFile() { return this.file; }
 
-	/** 保存済みインデックスを読み込む。読めなければ空のまま始める */
-	public void load()
+	/**
+	 * 保存済みインデックスを読み込む。読めなければ空のまま始める。
+	 *
+	 * <p>プレビューサーバは複数スレッドで動く ({@code PreviewServer} は 4 本の
+	 * プールを持つ) ため、本クラスのメソッドはすべて {@code synchronized} にしてある。</p>
+	 */
+	public synchronized void load()
 	{
 		this.entries.clear();
 		try {
@@ -106,7 +116,7 @@ public class LibraryIndexCache
 	}
 
 	/** 指定パスの記録を返す。無ければ null (呼び出し側でサイズ・更新時刻を照合すること) */
-	public LibraryEntry get(Path file)
+	public synchronized LibraryEntry get(Path file)
 	{
 		return this.entries.get(key(file));
 	}
@@ -117,7 +127,7 @@ public class LibraryIndexCache
 	 * <p>他フォルダの記録は残す (本棚を切り替えるたびに互いのキャッシュを
 	 * 捨て合うことになるため)。</p>
 	 */
-	public void update(Collection<LibraryEntry> scanned)
+	public synchronized void update(Collection<LibraryEntry> scanned)
 	{
 		for (LibraryEntry entry : scanned) {
 			// 再挿入で末尾に移すため、いったん外す。
@@ -148,17 +158,17 @@ public class LibraryIndexCache
 	}
 
 	/** 現在の内容をファイルへ書き出す */
-	void save()
+	synchronized void save()
 	{
 		evictOverflow();
+		evictOverBudget();
 		try {
 			Path parent = this.file.getParent();
 			if (parent != null) Files.createDirectories(parent);
 
-			List<LibraryEntry> keep = new ArrayList<>(this.entries.values());
-			StringBuilder buf = new StringBuilder(keep.size() * 128 + 64);
+			StringBuilder buf = new StringBuilder(this.entries.size() * 128 + 64);
 			buf.append(HEADER).append('\n');
-			for (LibraryEntry entry : keep) buf.append(formatLine(entry)).append('\n');
+			for (LibraryEntry entry : this.entries.values()) buf.append(formatLine(entry)).append('\n');
 			Files.writeString(this.file, buf.toString(), StandardCharsets.UTF_8);
 		} catch (IOException | RuntimeException e) {
 			/* 意図的: 保存できなくても本棚は毎回スキャンすれば動く */
@@ -166,8 +176,31 @@ public class LibraryIndexCache
 		}
 	}
 
+	/**
+	 * ファイルサイズの予算を超える分を古い方から捨てる。
+	 * 件数の上限だけでは、長い書名が並んだときに
+	 * 「書いた直後の自分のファイルを次回 {@link #load} で読み捨てる」ことになる。
+	 */
+	private void evictOverBudget()
+	{
+		long budget = MAX_FILE_BYTES - HEADER.getBytes(StandardCharsets.UTF_8).length - 1;
+		long total = 0;
+		// 新しい方 (末尾) から詰めて、予算に収まる件数を決める
+		List<LibraryEntry> values = new ArrayList<>(this.entries.values());
+		int keepFrom = values.size();
+		for (int i = values.size() - 1; i >= 0; i--) {
+			long line = formatLine(values.get(i)).getBytes(StandardCharsets.UTF_8).length + 1L;
+			if (total + line > budget) break;
+			total += line;
+			keepFrom = i;
+		}
+		if (keepFrom == 0) return;
+		logger.debug("本棚キャッシュがサイズ上限に達したため古い {} 件を捨てます", keepFrom);
+		for (int i = 0; i < keepFrom; i++) this.entries.remove(key(values.get(i).file()));
+	}
+
 	/** 現在メモリに保持している件数 (上限の検証用) */
-	int size() { return this.entries.size(); }
+	synchronized int size() { return this.entries.size(); }
 
 	// ------------------------------------------------------------------
 
@@ -187,7 +220,14 @@ public class LibraryIndexCache
 			escape(entry.coverEntry()));
 	}
 
-	/** 1 行を復元する。列数不足・数値でない等はキャッシュの破損とみなして null */
+	/**
+	 * 1 行を復元する。列数不足・数値でない等はキャッシュの破損とみなして null。
+	 *
+	 * <p><b>復元した値はスキャン経路と同じ制約を通し直す。</b>
+	 * キャッシュファイルはユーザーのホーム配下の平文で、手で書き換えられる。
+	 * 通さないと、512 文字上限も「表紙はルート相対で {@code ..} を含まない」という
+	 * 性質も、キャッシュ再利用時だけすり抜けてしまう。</p>
+	 */
 	static LibraryEntry parseLine(String line)
 	{
 		if (line == null || line.isEmpty()) return null;
@@ -202,9 +242,9 @@ public class LibraryIndexCache
 				Path.of(path),
 				Long.parseLong(columns[1]),
 				Long.parseLong(columns[2]),
-				unescape(columns[3]),
-				unescape(columns[4]),
-				unescape(columns[5]));
+				LibraryScanner.truncate(unescape(columns[3])),
+				LibraryScanner.truncate(unescape(columns[4])),
+				LibraryScanner.sanitizeCoverEntry(unescape(columns[5])));
 		} catch (RuntimeException e) {
 			/* 意図的: 壊れた行はその 1 行だけ捨てる */
 			logger.debug("本棚キャッシュの行を解釈できませんでした: {}", line, e);
