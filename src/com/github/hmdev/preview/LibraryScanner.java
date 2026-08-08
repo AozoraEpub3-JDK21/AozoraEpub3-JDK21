@@ -59,6 +59,16 @@ public class LibraryScanner
 	 */
 	static final int CANDIDATE_MULTIPLIER = 10;
 
+	/**
+	 * 一覧に保持する書名・著者・表紙パスの上限文字数。
+	 *
+	 * <p>1 冊ごとのメタデータ上限 ({@link XmlUtils#MAX_METADATA_BYTES}) は
+	 * <b>合計を縛らない</b>。上限すれすれの OPF を持つ本が 2000 冊あれば、
+	 * 一覧を保持しているだけでヒープを食い潰せる。本棚のグリッドに出す文字数を
+	 * 大きく超える分は捨ててよい。</p>
+	 */
+	static final int MAX_FIELD_CHARS = 512;
+
 	private LibraryScanner() {}
 
 	/** 拡張子から EPUB とみなせるか。Kobo の {@code .kepub.epub} も対象 */
@@ -149,8 +159,15 @@ public class LibraryScanner
 				coverEntry = null;
 			}
 			return new LibraryEntry(file.toAbsolutePath().normalize(), size, modifiedMillis,
-				opf.getTitle(), opf.getCreator(), coverEntry);
+				truncate(opf.getTitle()), truncate(opf.getCreator()), truncate(coverEntry));
 		}
+	}
+
+	/** 一覧に長大な文字列を抱え込まないよう、表示に要らない分を切り捨てる */
+	static String truncate(String value)
+	{
+		if (value == null || value.length() <= MAX_FIELD_CHARS) return value;
+		return value.substring(0, MAX_FIELD_CHARS);
 	}
 
 	/**

@@ -254,6 +254,22 @@ public class LibraryScannerTest
 	}
 
 	@Test
+	public void hugeMetadataFieldsAreTruncated() throws Exception
+	{
+		// 1 冊ごとのメタデータ上限は合計を縛らない。上限すれすれの OPF を持つ本が
+		// 2000 冊あれば、一覧を保持しているだけでヒープを食い潰せる
+		String longTitle = "あ".repeat(LibraryScanner.MAX_FIELD_CHARS + 100);
+		EpubFixture.standard()
+			.put("OPS/package.opf",
+				EpubFixture.packageOpf().replace("テスト書籍", longTitle))
+			.writeTo(root().resolve("a.epub"));
+
+		List<LibraryEntry> entries = LibraryScanner.scan(root(), 3, null);
+		assertEquals(LibraryScanner.MAX_FIELD_CHARS, entries.get(0).title().length());
+		assertEquals("テスト著者", entries.get(0).creator());
+	}
+
+	@Test
 	public void missingFolderIsAnError()
 	{
 		try {
