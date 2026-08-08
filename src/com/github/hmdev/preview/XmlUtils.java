@@ -72,7 +72,23 @@ final class XmlUtils
 		if (size > MAX_METADATA_BYTES) {
 			throw new IOException("メタデータが大きすぎます (" + size + " bytes): " + file);
 		}
-		byte[] bytes = Files.readAllBytes(file);
+		return parse(Files.readAllBytes(file), file.toString());
+	}
+
+	/**
+	 * メモリ上の XML をパースする。
+	 * 本棚 (LibraryScanner) は EPUB を展開せず ZIP エントリを直接読むため、
+	 * ファイルではなくバイト列から入る経路が要る。
+	 *
+	 * @param bytes XML のバイト列
+	 * @param description エラーメッセージに載せる出所 (ファイルパスや ZIP エントリ名)
+	 */
+	static Document parse(byte[] bytes, String description) throws IOException
+	{
+		if (bytes.length > MAX_METADATA_BYTES) {
+			throw new IOException("メタデータが大きすぎます (" + bytes.length + " bytes): " + description);
+		}
+		// BOM 付き UTF-8 を許容する (本プロジェクトが生成する container.xml は BOM 付き)
 		int offset = 0;
 		if (bytes.length >= 3 && (bytes[0] & 0xFF) == 0xEF && (bytes[1] & 0xFF) == 0xBB && (bytes[2] & 0xFF) == 0xBF) {
 			offset = 3;
@@ -84,7 +100,7 @@ final class XmlUtils
 			try {
 				return parse(bytes, offset, true);
 			} catch (ParserConfigurationException | SAXException retry) {
-				throw new IOException("XML の解析に失敗しました: " + file, retry);
+				throw new IOException("XML の解析に失敗しました: " + description, retry);
 			}
 		}
 	}

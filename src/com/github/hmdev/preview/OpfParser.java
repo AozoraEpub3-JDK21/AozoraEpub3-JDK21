@@ -32,7 +32,21 @@ public class OpfParser
 		if (!Files.isRegularFile(opfFile)) {
 			throw new IOException("OPF が見つかりません: " + opfPath);
 		}
-		Document doc = XmlUtils.parse(opfFile);
+		return parse(XmlUtils.parse(opfFile), opfPath);
+	}
+
+	/**
+	 * パース済みの OPF から内容を読み取る。
+	 *
+	 * <p>本棚 (LibraryScanner) は EPUB を展開せず ZIP エントリを直接読むため、
+	 * ファイルではなく {@link Document} から入る経路が要る。
+	 * 展開経路と同じ解釈になるよう、両者ともここに集約する。</p>
+	 *
+	 * @param doc OPF の DOM
+	 * @param opfPath EPUB ルートから見た OPF のパス (href の解決基準になる)
+	 */
+	static OpfPackage parse(Document doc, String opfPath)
+	{
 		OpfPackage opf = new OpfPackage(opfPath);
 
 		Element packageElement = XmlUtils.findFirst(doc, "package");
@@ -53,7 +67,15 @@ public class OpfParser
 		if (!Files.isRegularFile(container)) {
 			throw new IOException("META-INF/container.xml が見つかりません");
 		}
-		Document doc = XmlUtils.parse(container);
+		return findOpfPath(XmlUtils.parse(container));
+	}
+
+	/**
+	 * パース済みの container.xml から rootfile の full-path を取得する。
+	 * 展開先の外を指す full-path はここで弾く (ZIP 直読み経路も同じ検査を通す)。
+	 */
+	static String findOpfPath(Document doc) throws IOException
+	{
 		for (Element rootfile : XmlUtils.findAll(doc, "rootfile")) {
 			String fullPath = XmlUtils.attr(rootfile, "full-path");
 			if (fullPath.isEmpty()) continue;
@@ -95,6 +117,9 @@ public class OpfParser
 			String name = XmlUtils.attr(meta, "name");
 			if ("primary-writing-mode".equals(name)) {
 				opf.setPrimaryWritingMode(XmlUtils.attr(meta, "content"));
+			} else if ("cover".equals(name)) {
+				// EPUB2 の表紙指定。値は manifest の id
+				opf.setCoverIdref(XmlUtils.attr(meta, "content"));
 			}
 		}
 	}

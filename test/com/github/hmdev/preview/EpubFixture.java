@@ -50,9 +50,51 @@ final class EpubFixture
 		return fixture;
 	}
 
+	/**
+	 * EPUB3 の {@code properties="cover-image"} で表紙を指定した構成。
+	 * 本棚のサムネイル抽出用。
+	 */
+	static EpubFixture withEpub3Cover()
+	{
+		EpubFixture fixture = standard();
+		fixture.putBytes("OPS/images/cover.png", PNG_1PX);
+		fixture.put("OPS/package.opf", packageOpf().replace(
+			"    <item id=\"ncx\"",
+			"    <item id=\"cover-img\" properties=\"cover-image\" href=\"images/cover.png\" media-type=\"image/png\"/>\n"
+			+ "    <item id=\"ncx\""));
+		return fixture;
+	}
+
+	/**
+	 * EPUB2 の {@code <meta name="cover" content="id">} で表紙を指定した構成。
+	 * 併せて meta が XHTML を指す誤った EPUB も再現できるよう id を引数化してある。
+	 */
+	static EpubFixture withEpub2Cover(String coverIdref)
+	{
+		EpubFixture fixture = standard();
+		fixture.putBytes("OPS/images/pic.png", PNG_1PX);
+		fixture.put("OPS/package.opf", packageOpf()
+			.replace("    <item id=\"ncx\"",
+				"    <item id=\"pic\" href=\"images/pic.png\" media-type=\"image/png\"/>\n"
+				+ "    <item id=\"ncx\"")
+			.replace("  </metadata>",
+				"    <meta name=\"cover\" content=\"" + coverIdref + "\"/>\n  </metadata>"));
+		return fixture;
+	}
+
+	/** 1x1 の PNG。表紙として実際にデコードできる最小のバイト列 */
+	static final byte[] PNG_1PX = java.util.Base64.getDecoder().decode(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
 	EpubFixture put(String path, String content)
 	{
 		this.entries.put(path, content.getBytes(StandardCharsets.UTF_8));
+		return this;
+	}
+
+	EpubFixture putBytes(String path, byte[] content)
+	{
+		this.entries.put(path, content);
 		return this;
 	}
 

@@ -230,12 +230,34 @@ UI は「推奨リスト (実在するものだけ表示)」+「インストー�
 
 - メタデータは各 EPUB の OPF から `dc:title` / `dc:creator` / 更新日時を取得。
   **全体を展開せず ZIP のエントリを直接読む** (`java.util.zip.ZipFile`)。
+  解釈が展開経路とずれないよう、OPF の読み取りは `OpfParser.parse(Document, String)` を共用する
+  (`XmlUtils.parse(byte[], String)` と併せて Phase 2 で追加した入口)。
 - 表紙は OPF の `properties="cover-image"` (EPUB3) または
   `<meta name="cover" content="...">` (EPUB2) から特定し、
   縮小した PNG/JPEG をメモリ or キャッシュに保持。
-- **インデックスキャッシュ**: `<cacheDir>/preview-library.json` に
-  `path / size / mtime / title / creator / coverEntry` を保存し、
+  - EPUB2 の `meta[name=cover]` が**表紙ページ (XHTML) を指している** EPUB が実在するため、
+    media-type が `image/` であることを確かめる
+  - どちらの宣言も無い EPUB 向けに「id か href に `cover` を含む画像」の推測を最後に置く。
+    外しても「表紙なし」になるだけなので許容する
+  - **manifest にあっても ZIP に実在しない**表紙があるため、スキャン時に存在を確認して落とす
+    (持たせたままだとサムネイル要求のたびに 404 になる)
+- **インデックスキャッシュ**: `path / size / mtime / title / creator / coverEntry` を保存し、
   `size` + `mtime` 一致で再パースを省く。
+
+  > **形式は JSON ではなく行指向のテキスト** (`~/.aozoraepub3/preview-library.tsv`) に変更した。
+  > このプロジェクトには **JSON パーサが無い**。`Json` は「追加依存ゼロ」方針のもとで書かれた
+  > **出力専用**のヘルパで、読む側を持っていない。読み書き両方が要るキャッシュのために
+  > JSON ライブラリを足すのは方針と衝突し、自前パーサを書けば「壊れた入力の誤解釈」を
+  > 新たに抱える。キャッシュは再生成できるので、曖昧さの無い形式を優先した。
+  > 1 行 1 冊のタブ区切りで、値に含まれうるタブ・改行・バックスラッシュのみエスケープし、
+  > null は `\0` で表して空文字と区別する。列数が合わない行は 1 行だけ捨て、
+  > 先頭行の世代が違うファイルは丸ごと読み捨てる。
+- **上限**: 走査の深さ 8 (`DEFAULT_MAX_DEPTH`)、冊数 2000 (`MAX_BOOKS`)、
+  キャッシュ 5000 行 (`MAX_ENTRIES`)。冊数上限に達したら `warn` を出す
+  (黙って切り詰めると「全部見えている」と誤解される)。
+  シンボリックリンクは辿らない (ループと本棚の外への脱出を避けるため)。
+- 壊れた EPUB・EPUB でない `.epub` が 1 つあっても**その 1 冊を飛ばして走査を続ける**。
+  権限不足で読めないディレクトリも同様。
 - 一覧からの選択時に **初めてその EPUB を展開する (遅延展開)**。
   全冊を先に展開しない。
 - 既定のスキャン対象は **GUI の出力先フォルダ**。
@@ -341,8 +363,9 @@ package version は何か、フォントが埋まっているか) をその場�
 | `PreviewServer` | `HttpServer` 配信。loopback / ランダムポート / トークン / パストラバーサル防止 | 1 |
 | `PreviewSession` | 1 セッションの寿命 (展開先・サーバ・URL・マウント済み book) | 1 |
 | `PreviewLauncher` | 展開 → サーバ起動 → `Desktop.browse()` の facade。**GUI と CLI の唯一の入口** | 1 |
-| `LibraryScanner` | フォルダ再帰スキャン + OPF メタデータ + 表紙抽出 | 2 |
-| `LibraryIndexCache` | インデックスの JSON 永続化 (size + mtime で無効化) | 2 |
+| `LibraryEntry` | 本棚 1 冊の書誌 (パス・サイズ・更新時刻・書名・著者・表紙エントリ) の record | 2 |
+| `LibraryScanner` | フォルダ再帰スキャン + ZIP 直読みの OPF メタデータ + 表紙位置の特定 | 2 |
+| `LibraryIndexCache` | インデックスの永続化 (size + mtime で無効化) | 2 |
 | `DeviceProfile` / `DeviceProfileLoader` | `preview/devices/*.ini` の読み込み | 3 |
 | `assets/viewer.html` / `viewer.css` / `viewer-*.js` (7 分割) | ビューアーシェル (JAR 同梱リソース) | 1 |
 
@@ -621,11 +644,18 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 
 ### Phase 2 — 本棚 (R3)
 
-- `LibraryScanner` / `LibraryIndexCache` / 表紙サムネイル抽出
-- 本棚 UI (グリッド表示・タイトル/著者/更新日でのソート・絞り込み)
-- CLI `--preview <dir>` / GUI 「本棚を開く」
+規模が大きいので 4 つの PR に分ける。スタック PR は 2026-08-08 に事故を起こしている
+(`docs/ci-followups.md` §2) ため、**いずれも master から切って順に進める**。
 
-規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行。
+| 段 | 内容 | 状態 |
+|---|---|---|
+| C1 | `LibraryEntry` / `LibraryScanner` / `LibraryIndexCache` + テスト | 実装済 (2026-08-09) |
+| C2 | 表紙サムネイル生成 + `api/library` / `api/library/cover/{bookId}` + セッション連携 | 未着手 |
+| C3 | 本棚 UI (`viewer-library.js` + CSS + `viewer.html`)。グリッド表示・書名/著者/更新日のソート・絞り込み | 未着手 |
+| C4 | 入口: CLI `--preview <dir>` / GUI「本棚を開く」/ 変換後の自動プレビュー (下記 (a)) | 未着手 |
+
+規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行
+(Phase 1 の実績どおり、見積の 1.5〜2 倍に膨らむ前提で見ること)。
 
 #### Phase 2 で入れる小機能 (2026-08-08 ユーザー提案)
 
@@ -712,6 +742,14 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 - `PreviewSessionTest` — 遅延展開、二重展開しないこと、
   **実行中セッションの展開先を掃除で消さないこと**、持ち主の居ない残骸は消すこと
 - `PreviewSettingsStoreTest` — 保存と読み込み、オブジェクト以外の拒否、サイズ上限
+- `LibraryScannerTest` — 再帰スキャンと書誌の取得、**ディスクに何も展開しないこと**、
+  `.epub` 以外を拾わないこと、壊れた 1 冊でスキャン全体を落とさないこと、
+  表紙の 3 経路 (EPUB3 property / EPUB2 meta / 名前からの推測)、
+  EPUB2 の meta が XHTML を指す場合に画像として使わないこと、
+  ZIP に実在しない表紙を落とすこと、深さ上限、キャッシュの再利用と無効化
+- `LibraryIndexCacheTest` — 往復、null と空文字の区別、値に含まれるタブ・改行で
+  列がずれないこと、壊れた行だけを捨てること、世代違いを丸ごと捨てること、
+  他フォルダの記録が消えないこと、上限で古いものから溢れること
 
 `Desktop.browse()` はヘッドレス CI で失敗するため、`PreviewLauncher` は
 「サーバ起動まで」と「ブラウザ起動」を分離し、テストは前者のみを対象とする。

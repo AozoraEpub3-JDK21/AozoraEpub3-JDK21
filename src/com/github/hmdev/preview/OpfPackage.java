@@ -23,6 +23,8 @@ public class OpfPackage
 	private String pageProgressionDirection = "";
 	/** spine/@toc (toc.ncx を指す manifest id) */
 	private String ncxIdref = "";
+	/** EPUB2 の meta[name=cover]/@content (表紙画像を指す manifest id) */
+	private String coverIdref = "";
 
 	private String title;
 	private String creator;
@@ -114,7 +116,42 @@ public class OpfPackage
 		return null;
 	}
 
+	/**
+	 * 表紙画像の EPUB ルート相対パス。無ければ null。
+	 *
+	 * <p>EPUB3 の {@code properties="cover-image"} を優先し、無ければ
+	 * EPUB2 の {@code <meta name="cover" content="id">} を見る。
+	 * どちらも無い EPUB があるため、最後に「id か href に cover を含む画像」を
+	 * 拾う推測を入れている (本棚のサムネイル用であり、外すことがあっても
+	 * 表紙なしとして表示されるだけ)。</p>
+	 */
+	public String getCoverImagePath()
+	{
+		for (ManifestItem item : this.manifestById.values()) {
+			if (item.hasProperty("cover-image")) return item.path();
+		}
+		if (!this.coverIdref.isEmpty()) {
+			ManifestItem item = this.manifestById.get(this.coverIdref);
+			// meta[name=cover] が XHTML の表紙ページを指している EPUB があるので、
+			// 画像であることを確かめる
+			if (item != null && isImage(item)) return item.path();
+		}
+		for (ManifestItem item : this.manifestById.values()) {
+			if (!isImage(item)) continue;
+			String id = item.id().toLowerCase(java.util.Locale.ROOT);
+			String href = item.href().toLowerCase(java.util.Locale.ROOT);
+			if (id.contains("cover") || href.contains("cover")) return item.path();
+		}
+		return null;
+	}
+
+	private static boolean isImage(ManifestItem item)
+	{
+		return item.mediaType() != null && item.mediaType().startsWith("image/");
+	}
+
 	void setVersion(String version) { this.version = (version == null) ? "" : version; }
+	void setCoverIdref(String value) { this.coverIdref = (value == null) ? "" : value; }
 	void setPageProgressionDirection(String value) { this.pageProgressionDirection = (value == null) ? "" : value; }
 	void setNcxIdref(String value) { this.ncxIdref = (value == null) ? "" : value; }
 	void setTitle(String value) { this.title = value; }
