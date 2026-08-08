@@ -631,12 +631,23 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 
 **(b) プレビュー画面から EPUB のフォルダを開く**
 
-- ブラウザから直接ファイラは開けないので、**サーバ側にエンドポイントを足す**
-  (例: `POST /p/{token}/api/book/{bookId}/reveal`)
-- 実装は `PreviewLauncher` の OS 分岐 (`Desktop.browse` → `rundll32` / `open` / `xdg-open`)
-  を流用できる。Windows は `explorer /select,<path>` にすると EPUB を選択状態で開ける
+**実装済み (2026-08-08)。** `POST /p/{token}/api/book/{bookId}/reveal` +
+`FileRevealer` + ビューアーの 📂 ボタン。
+
 - **パスをリクエストから受け取らず、bookId から解決した EPUB のみを対象にする**
   (任意パスを開かせない)。`PathUtils` と同じ思想
+- **Windows で `explorer /select,<path>` は使えない。**当初これで実装したが、
+  実機で**ユーザーのマイドキュメントが開いた**。`ProcessBuilder` は空白を含む引数を
+  丸ごと引用符で囲むため、Explorer が `"/select,D:\...\[テスト] 目次.epub"` という
+  1 個の解釈不能な引数を受け取るため。Java からは引用の仕方を選べない。
+  **親フォルダを `java.awt.Desktop.open(File)` で開く** (パスを API として渡すので
+  空白や日本語で壊れない)。フォールバックは `explorer` / `xdg-open` にフォルダを渡す。
+  macOS だけは `open -R` でファイルを選択状態にできる (argv が素直に渡るため)
+- **存在しないパスでファイラを起動しない。**kindlegen 経路では EPUB を消してから
+  展開済みのものを配信し続けることがあり、そのまま起動すると Windows は
+  やはりマイドキュメントを開き、macOS の `open -R` は無言で何も開かない。
+  サーバ側でフォルダの存在を確認して 404 を返し、`FileRevealer` でも二重に塞ぐ
+- `.NET` ポートへ移植する際も上記 2 点をそのまま踏襲すること
 
 参考にした先行実装 (2026-08-08 にソースを確認):
 
@@ -737,6 +748,20 @@ W3C EPUB 3.3 OCF はファイル名に `" * : < > ? \ |`・末尾ドット・制
 | 予約名ディレクトリ配下 (`OPS/NUL/x.jpg`) | 当該エントリのみ skip (以前は展開全体が失敗) | `createDirectories` は例外を投げずに何も作らないため、`isDirectory` で作成を確認 |
 | 大文字小文字を区別しない FS での衝突 (`Text.xhtml` / `text.xhtml`) | 先勝ちで後を skip + `warn` (以前は無警告で後勝ち上書き) | `EpubExtractor` の畳み込みキー照合 |
 | Unicode 正規化 (NFC/NFD) の揺れ | 吸収しない。href と ZIP エントリ名で正規化形が異なる EPUB は Linux で 404 になりうる | 未対応 |
+
+### 残件: POST エンドポイントに Origin 検査が無い (CSRF)
+
+2026-08-08 のレビューで指摘。現状、サーバ内に `Origin` / `Host` / `Sec-Fetch-Site` の
+検査は 1 件も無く、防御はパスに載せたトークン単独。単純 POST はプリフライトを伴わないため、
+**トークンを知る第三者のページからクロスオリジンで POST を打てる**。
+
+本 PR で追加した `reveal` により、影響が「ローカル閲覧」から
+**「プロセス (ファイラ) の起動」へ昇格**した点が新しい。加えて `bookId` は
+`b1` 連番 (`PreviewSession`) で推測が容易。
+
+対処は `api/heartbeat` / `api/bye` / `api/settings` / `api/*/reveal` の POST 系すべてに
+Origin 検査を入れることになり、既存エンドポイントの挙動に影響する
+(特に `sendBeacon` で送る `api/bye`) ため、本 PR とは分けて対応する。
 
 ### 残件: 推奨フォントリストが Windows 実測のみ
 

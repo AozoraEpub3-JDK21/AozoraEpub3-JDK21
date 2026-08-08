@@ -87,6 +87,18 @@ function bindEvents()
 		reapplyStyle();
 	});
 
+	el.revealFolder.addEventListener('click', () => {
+		// 連打するとフォルダ窓が複数開き、サーバ側もスレッドを掴む
+		if (el.revealFolder.disabled) return;
+		el.revealFolder.disabled = true;
+		// 失敗しても本文の閲覧は続けられるので、ボタンの title に出すだけに留める。
+		// 成功時に必ず戻さないと、一度失敗した後ずっとエラー文言が残る
+		revealBook()
+			.then(() => { el.revealFolder.title = REVEAL_TITLE; })
+			.catch(err => { el.revealFolder.title = 'フォルダを開けませんでした: ' + err.message; })
+			.finally(() => { el.revealFolder.disabled = false; });
+	});
+
 	el.inspectToggle.addEventListener('click', () => toggleInspector());
 	el.inspectClose.addEventListener('click', () => toggleInspector(false));
 

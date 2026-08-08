@@ -364,6 +364,53 @@ public class PreviewServerTest
 	}
 
 	@Test
+	public void revealOpensTheRegisteredEpubOnly() throws Exception
+	{
+		// 実際にファイラを起動すると CI で窓が開くので差し替える
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		assertEquals(204, post(base() + "api/book/" + this.bookId + "/reveal").statusCode());
+		assertEquals(1, opened.size());
+		// 開く対象はリクエストではなくセッションが持つ EPUB から決まること
+		assertEquals(this.session.getBook(this.bookId).getEpubFile(), opened.get(0));
+	}
+
+	@Test
+	public void revealRejectsUnknownBookAndGetRequests() throws Exception
+	{
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		// 未登録の bookId ではファイラを起動しない
+		assertEquals(404, post(base() + "api/book/nosuchbook/reveal").statusCode());
+		// GET で開けると <img src> 等で意図せず起動できてしまう
+		assertEquals(405, get(base() + "api/book/" + this.bookId + "/reveal").statusCode());
+		// bookId が空だと prefix と suffix が重なる。以前は substring(9, 8) で
+		// StringIndexOutOfBoundsException になり 500 を返していた。
+		// このサーバは未知パスへの POST を一律 405 にするので、ここも 405 になる
+		assertEquals(405, post(base() + "api/book/reveal").statusCode());
+		// スラッシュ入りの bookId も引けないだけ
+		assertEquals(404, post(base() + "api/book/a/b/reveal").statusCode());
+		assertTrue("拒否したのにファイラを起動している", opened.isEmpty());
+	}
+
+	@Test
+	public void revealIsRejectedWhenTheFolderIsGone() throws Exception
+	{
+		// kindlegen 経路では EPUB を消してから展開済みのものを配信し続けることがある。
+		// 存在しないパスでファイラを起動すると、Windows はマイドキュメントを開いてしまう
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		Path gone = temp.getRoot().toPath().resolve("gone").resolve("book.epub");
+		String goneId = this.session.addBook(gone);
+
+		assertEquals(404, post(base() + "api/book/" + goneId + "/reveal").statusCode());
+		assertTrue("フォルダが無いのにファイラを起動している", opened.isEmpty());
+	}
+
+	@Test
 	public void heartbeatResetsTheIdleTimer() throws Exception
 	{
 		// CLI プレビューは heartbeat が途絶えたらブラウザが閉じられたとみなして終了する。
