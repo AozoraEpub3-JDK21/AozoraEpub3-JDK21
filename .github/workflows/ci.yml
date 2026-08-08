@@ -10,7 +10,9 @@ on:
       - 'LICENSE*'
       - '.gitignore'
   pull_request:
-    branches: [ main, master ]
+    # スタック PR (ベースがフィーチャーブランチ) でも CI を走らせるため '**' にしている。
+    # 詳細と経緯: docs/ci-followups.md
+    branches: [ '**' ]
     paths-ignore:
       - '**.md'
       - 'docs/**'

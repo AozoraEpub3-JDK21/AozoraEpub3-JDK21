@@ -2,7 +2,9 @@ name: Tests
 
 on:
   pull_request:
-    branches: [ master, develop, main ]
+    # スタック PR (ベースがフィーチャーブランチ) でも CI を走らせるため '**' にしている。
+    # 詳細と経緯: docs/ci-followups.md
+    branches: [ '**' ]
   workflow_dispatch:
     inputs:
       java_version:
