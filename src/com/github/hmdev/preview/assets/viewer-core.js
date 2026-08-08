@@ -133,7 +133,7 @@ function newTabId()
 function cacheElements()
 {
 	const ids = ['tocToggle', 'bookTitle', 'bookCreator', 'prevSection', 'sectionSelect', 'nextSection',
-		'settingsToggle', 'themeToggle', 'inspectToggle', 'tocPanel', 'tocTree', 'frame', 'pageHint',
+		'revealFolder', 'settingsToggle', 'themeToggle', 'inspectToggle', 'tocPanel', 'tocTree', 'frame', 'pageHint',
 		'inspectPanel', 'inspectClose', 'inspectTabs', 'settingsPopover', 'fontSelect', 'gothicSelect',
 		'fontScale', 'fontScaleOut', 'lineHeight', 'lineHeightOut',
 		'marginBlock', 'marginBlockOut', 'marginInline', 'marginInlineOut',
@@ -168,5 +168,22 @@ async function loadBook()
 	buildSectionSelect();
 	buildToc();
 	gotoSection(0, null);
+}
+
+/** フォルダを開くボタンの既定 title。失敗時に書き換えるので復元用に持つ */
+const REVEAL_TITLE = 'EPUB のあるフォルダを開く';
+
+/**
+ * EPUB のあるフォルダを OS のファイラで開く。
+ *
+ * <p>ブラウザからファイラは開けないのでサーバに依頼する。
+ * 開く対象はサーバが bookId から解決するため、パスは送らない。</p>
+ */
+async function revealBook()
+{
+	if (!state.bookId) return;
+	const response = await fetch('api/book/' + encodeURIComponent(state.bookId) + '/reveal',
+		{method: 'POST', cache: 'no-store'});
+	if (!response.ok) throw new Error('HTTP ' + response.status);
 }
 

@@ -69,11 +69,19 @@ public class PreviewServer implements AutoCloseable
 	 */
 	public static final long CLOSE_GRACE_MILLIS = 20_000L;
 
+	/** フォルダを開く処理。テストが実際にファイラを起動しないよう差し替えられるようにする */
+	interface Revealer
+	{
+		void reveal(Path file) throws IOException;
+	}
+
 	private final PreviewSession session;
 	private final HttpServer server;
 	private final ExecutorService executor;
 	private final String basePath;
 	private final PreviewSettingsStore settingsStore;
+	/** テストスレッドが書き HTTP スレッドが読むので volatile */
+	private volatile Revealer revealer = FileRevealer::reveal;
 	/** URL に載せるホスト表記。IPv6 なら角括弧付き */
 	private final String host;
 	/**
@@ -304,6 +312,15 @@ public class PreviewServer implements AutoCloseable
 				serveSettings(exchange, method);
 				return;
 			}
+			// bookId が空の "api/book/reveal" では前後が重なるので、長さで弾いてから切り出す
+			// (substring(9, 8) になり StringIndexOutOfBoundsException で 500 になっていた)
+			if (rest.startsWith("api/book/") && rest.endsWith("/reveal")
+				&& rest.length() > "api/book/".length() + "/reveal".length()) {
+				// POST なので、下の read 判定 (GET/HEAD 以外を 405) より前に処理する
+				serveReveal(exchange, method,
+					rest.substring("api/book/".length(), rest.length() - "/reveal".length()));
+				return;
+			}
 			if (!read) {
 				respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
 				return;
@@ -362,6 +379,50 @@ public class PreviewServer implements AutoCloseable
 	static String decodePath(String path)
 	{
 		return PathUtils.decodeUriStrict(path);
+	}
+
+	/** テスト用。実際にファイラを起動せず呼び出しだけ記録できるようにする */
+	void setRevealer(Revealer revealer)
+	{
+		this.revealer = revealer;
+	}
+
+	/**
+	 * /api/book/{bookId}/reveal — EPUB のあるフォルダを OS のファイラで開く (POST)。
+	 *
+	 * <p><b>開く対象はリクエストから受け取らない。</b>bookId を session で引いて
+	 * 登録済みの EPUB パスを使う。生パスを受け取ると、ローカルサーバとはいえ
+	 * 任意のフォルダを開かせる踏み台になる。</p>
+	 */
+	private void serveReveal(HttpExchange exchange, String method, String bookId) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			// GET で開けると <img src> 等で意図せず起動できてしまう
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		PreviewSession.Book book = this.session.getBook(bookId);
+		if (book == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		// kindlegen 経路では EPUB を消してから展開済みのものを配信し続けることがある。
+		// フォルダごと無くなっているのに起動すると、Windows は存在しないパスを渡された
+		// エクスプローラがマイドキュメントを開いてしまうので、ここで止める
+		Path folder = book.getEpubFile().toAbsolutePath().getParent();
+		if (folder == null || !Files.isDirectory(folder)) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Folder not found".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		try {
+			this.revealer.reveal(book.getEpubFile());
+		} catch (IOException e) {
+			logger.warn("フォルダを開けませんでした: {}", book.getEpubFile(), e);
+			respond(exchange, 500, "text/plain; charset=utf-8",
+				"Failed to open folder".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
 	}
 
 	/** /api/book/{bookId} と /api/book/{bookId}/inspect */
