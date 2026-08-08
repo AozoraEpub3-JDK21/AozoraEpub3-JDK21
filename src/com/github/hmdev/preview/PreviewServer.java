@@ -8,7 +8,10 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,6 +19,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -32,6 +36,8 @@ import com.sun.net.httpserver.HttpServer;
  *   <li>ポートは 0 を指定して OS 任せのランダム割り当てにする</li>
  *   <li>URL に起動ごとのワンタイムトークンを含め、不一致は 404 にする</li>
  *   <li>パスは URL デコード後に正規化し、展開ルート配下であることを検証する</li>
+ *   <li>状態を変える POST は {@code Origin} / {@code Sec-Fetch-Site} で発信元を検査する
+ *       ({@link #isAllowedPostSource})</li>
  * </ol>
  */
 public class PreviewServer implements AutoCloseable
@@ -106,6 +112,12 @@ public class PreviewServer implements AutoCloseable
 	 * それだけで「生きているのに終了する」ことになる。タブ単位で持つ必要がある。</p>
 	 */
 	private final Map<String, Long> clients = new ConcurrentHashMap<>();
+	/**
+	 * POST を受け付ける {@code Origin} (小文字)。
+	 * ビューアーに渡す URL のオリジンに加え、ログを見てユーザーが手で開く可能性のある
+	 * ループバック別名も含める。
+	 */
+	private final Set<String> allowedOrigins;
 
 	public PreviewServer(PreviewSession session) throws IOException
 	{
@@ -122,6 +134,7 @@ public class PreviewServer implements AutoCloseable
 		// 実際に bind したアドレスから URL を組み立てる。
 		// IPv6 を優先する環境では ::1 で待ち受けるため、127.0.0.1 を決め打ちすると繋がらない
 		this.host = urlHost(loopback);
+		this.allowedOrigins = loopbackOrigins(this.host, this.server.getAddress().getPort());
 		this.executor = Executors.newFixedThreadPool(4, runnable -> {
 			Thread thread = new Thread(runnable, "aozora-preview-http");
 			thread.setDaemon(true);
@@ -160,6 +173,66 @@ public class PreviewServer implements AutoCloseable
 	public int getPort()
 	{
 		return this.server.getAddress().getPort();
+	}
+
+	/**
+	 * このサーバ自身を指す {@code Origin} の集合を作る (すべて小文字)。
+	 *
+	 * <p>ブラウザに渡すのは {@code urlHost} 由来の 1 つだけだが、
+	 * URL はログにも出力しており、ユーザーが {@code localhost} で開き直すことがある。
+	 * ホスト名を解決して判定すると、攻撃者が指定した {@code Origin} で
+	 * 名前解決を走らせることになるため、<b>受け付ける表記を列挙する</b>方式にする。</p>
+	 *
+	 * @param urlHost {@link #urlHost} が返すホスト表記 (IPv6 は角括弧付き)
+	 * @param port 実際に bind したポート
+	 */
+	static Set<String> loopbackOrigins(String urlHost, int port)
+	{
+		// Set.of と違い Set.copyOf は重複を許す。urlHost は下記のいずれかと一致するのが普通
+		return Set.copyOf(List.of(
+			"http://" + urlHost.toLowerCase(Locale.ROOT) + ":" + port,
+			"http://localhost:" + port,
+			"http://127.0.0.1:" + port,
+			"http://[::1]:" + port));
+	}
+
+	/**
+	 * 状態を変える POST を受け付けてよい発信元か。
+	 *
+	 * <p>防御はパスに載せたトークン単独だったため、トークンを知る第三者のページから
+	 * クロスオリジンで POST を打てた。単純 POST はプリフライトを伴わないので
+	 * CORS では止まらず、{@code reveal} は OS のファイラを起動する
+	 * (影響が「ローカル閲覧」ではなく「プロセス起動」になる)。
+	 * {@code bookId} も {@code b1} 連番で推測しやすい。</p>
+	 *
+	 * <p>2 つのヘッダを独立に見て、どちらか一方でも他所を指していたら拒否する。
+	 * いずれも <b>Forbidden header name</b> でページの JavaScript からは詐称できない。</p>
+	 *
+	 * <p><b>両方とも無い場合は許可する。</b>ブラウザは GET / HEAD 以外では常に
+	 * {@code Origin} を付ける (Fetch 仕様) ため、無いということはブラウザ発ではない。
+	 * CSRF は被害者のブラウザを踏み台にする攻撃なので、ブラウザ以外からの POST は
+	 * この脅威の対象外であり、ここで弾いても防御にはならない
+	 * (ローカルでコードを実行できる相手には元より意味がない)。
+	 * 一方で弾くと curl / {@code java.net.http} からの利用が壊れる。</p>
+	 */
+	private boolean isAllowedPostSource(HttpExchange exchange)
+	{
+		Headers headers = exchange.getRequestHeaders();
+
+		// same-origin: ビューアーからの fetch / sendBeacon
+		// none: アドレスバー直打ちなどユーザー操作起点 (POST では通常起きないが敵ではない)
+		String site = headers.getFirst("Sec-Fetch-Site");
+		if (site != null) {
+			site = site.trim().toLowerCase(Locale.ROOT);
+			if (!site.equals("same-origin") && !site.equals("none")) return false;
+		}
+
+		String origin = headers.getFirst("Origin");
+		// "null" は sandbox iframe や data: からの POST。同一オリジンとは認めない
+		if (origin != null && !this.allowedOrigins.contains(origin.trim().toLowerCase(Locale.ROOT))) {
+			return false;
+		}
+		return true;
 	}
 
 	/**
@@ -284,6 +357,15 @@ public class PreviewServer implements AutoCloseable
 			boolean read = "GET".equals(method) || "HEAD".equals(method);
 			if (!read && !"POST".equals(method)) {
 				respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+				return;
+			}
+			// 状態を変えるのは POST だけなので、ここで一度だけ発信元を見る。
+			// 個々のハンドラに置くと、エンドポイントを足したときに漏れる
+			if (!read && !isAllowedPostSource(exchange)) {
+				logger.warn("プレビューへの他オリジンからの POST を拒否しました: {} (Origin={}, Sec-Fetch-Site={})",
+					rawPath, exchange.getRequestHeaders().getFirst("Origin"),
+					exchange.getRequestHeaders().getFirst("Sec-Fetch-Site"));
+				respond(exchange, 403, "text/plain; charset=utf-8", "Forbidden".getBytes(StandardCharsets.UTF_8));
 				return;
 			}
 			String rest = rawPath.substring(this.basePath.length());

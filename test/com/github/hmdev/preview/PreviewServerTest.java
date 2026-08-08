@@ -410,6 +410,109 @@ public class PreviewServerTest
 		assertTrue("フォルダが無いのにファイラを起動している", opened.isEmpty());
 	}
 
+	/** ヘッダ付きの POST。ブラウザからのクロスオリジン POST を再現する */
+	private HttpResponse<String> postFrom(String path, String body, String... headers)
+		throws IOException, InterruptedException
+	{
+		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(path))
+			.POST(HttpRequest.BodyPublishers.ofString(body));
+		for (int i = 0; i < headers.length; i += 2) builder.header(headers[i], headers[i + 1]);
+		return this.client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	public void postFromAnotherOriginIsRejected() throws Exception
+	{
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		// 防御がパス上のトークン単独だと、トークンを知る第三者のページから
+		// クロスオリジンで POST を打てる。単純 POST はプリフライトを伴わず CORS では止まらない
+		assertEquals(403, postFrom(base() + "api/book/" + this.bookId + "/reveal", "",
+			"Origin", "http://evil.example").statusCode());
+		assertTrue("他オリジンからの POST でファイラを起動している", opened.isEmpty());
+
+		// 設定も書き換えられない
+		assertEquals(403, postFrom(base() + "api/settings", "{\"theme\":\"dark\"}",
+			"Origin", "http://evil.example").statusCode());
+		assertEquals("{}", get(base() + "api/settings").body());
+
+		// heartbeat / bye も同じ扱い (CLI の生存判定を他所から操作させない)
+		assertEquals(403, postFrom(base() + "api/heartbeat?tab=x", "",
+			"Origin", "http://evil.example").statusCode());
+		assertEquals(403, postFrom(base() + "api/bye?tab=x", "",
+			"Origin", "http://evil.example").statusCode());
+	}
+
+	@Test
+	public void postFromTheViewersOwnOriginIsAccepted() throws Exception
+	{
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		// ビューアーが実際に送るのはこの組み合わせ
+		assertEquals(204, postFrom(base() + "api/book/" + this.bookId + "/reveal", "",
+			"Origin", origin(), "Sec-Fetch-Site", "same-origin").statusCode());
+		assertEquals(1, opened.size());
+		assertEquals(204, postFrom(base() + "api/heartbeat?tab=x", "",
+			"Origin", origin(), "Sec-Fetch-Site", "same-origin").statusCode());
+	}
+
+	@Test
+	public void postWithoutOriginHeaderIsAccepted() throws Exception
+	{
+		// ブラウザは GET / HEAD 以外で必ず Origin を付けるため、無い = ブラウザ発ではない。
+		// CSRF は被害者のブラウザを踏み台にする攻撃なので、ここを弾いても防御にはならず、
+		// curl / java.net.http からの利用が壊れるだけ
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+		assertEquals(204, post(base() + "api/book/" + this.bookId + "/reveal").statusCode());
+		assertEquals(1, opened.size());
+	}
+
+	@Test
+	public void crossSiteFetchMetadataIsRejectedEvenWithoutOrigin() throws Exception
+	{
+		// Sec-Fetch-Site も Forbidden header name でページの JavaScript からは詐称できない。
+		// Origin と独立に見て、どちらか一方でも他所を指していたら拒否する
+		String url = base() + "api/heartbeat?tab=x";
+		assertEquals(403, postFrom(url, "", "Sec-Fetch-Site", "cross-site").statusCode());
+		assertEquals(403, postFrom(url, "", "Sec-Fetch-Site", "same-site").statusCode());
+		assertEquals(204, postFrom(url, "", "Sec-Fetch-Site", "same-origin").statusCode());
+		// アドレスバー直打ちなどユーザー操作起点。POST では通常起きないが敵ではない
+		assertEquals(204, postFrom(url, "", "Sec-Fetch-Site", "none").statusCode());
+		// 自オリジンを名乗っていても Sec-Fetch-Site が他所なら拒否する
+		assertEquals(403, postFrom(url, "", "Origin", origin(), "Sec-Fetch-Site", "cross-site").statusCode());
+	}
+
+	@Test
+	public void opaqueOriginIsRejected() throws Exception
+	{
+		// sandbox iframe や data: からの POST は Origin: null を送る。同一オリジンとは認めない
+		assertEquals(403, postFrom(base() + "api/heartbeat?tab=x", "", "Origin", "null").statusCode());
+		// ポートが違えば別オリジン (ローカルの別サーバからの踏み台を防ぐ)
+		assertEquals(403, postFrom(base() + "api/heartbeat?tab=x", "",
+			"Origin", "http://127.0.0.1:" + (this.server.getPort() + 1)).statusCode());
+	}
+
+	@Test
+	public void loopbackOriginsCoverTheAliasesUsersMayType() throws Exception
+	{
+		// URL はログにも出るので、ユーザーが localhost で開き直すことがある。
+		// ホスト名を解決して判定すると攻撃者の Origin で名前解決が走るため、表記を列挙する
+		java.util.Set<String> origins = PreviewServer.loopbackOrigins("127.0.0.1", 12345);
+		assertTrue(origins.contains("http://127.0.0.1:12345"));
+		assertTrue(origins.contains("http://localhost:12345"));
+		assertTrue(origins.contains("http://[::1]:12345"));
+		assertFalse(origins.contains("http://127.0.0.1:12346"));
+		// bind 先が IPv4 のときは自身の表記が 127.0.0.1 と重複する (Set.of だと落ちる)
+		assertEquals(3, origins.size());
+
+		java.util.Set<String> ipv6 = PreviewServer.loopbackOrigins("[0:0:0:0:0:0:0:1]", 80);
+		assertTrue(ipv6.contains("http://[0:0:0:0:0:0:0:1]:80"));
+		assertTrue(ipv6.contains("http://[::1]:80"));
+	}
+
 	@Test
 	public void heartbeatResetsTheIdleTimer() throws Exception
 	{
