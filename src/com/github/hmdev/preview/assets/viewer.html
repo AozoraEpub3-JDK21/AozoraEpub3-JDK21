@@ -119,6 +119,19 @@
 	画面サイズ・フォントの近似表示です。Kindle / Kobo / Apple Books の実機とは描画が異なります。
 </footer>
 
-<script src="asset/viewer.js"></script>
+<!--
+	viewer-core.js を最初に置くこと。定数・state・el と DOMContentLoaded の起動処理を持ち、
+	後続が top-level で参照すると const の TDZ に当たる。
+	以降のファイルは自分だけで完結する let 宣言しか top-level に持たないため順序非依存だが、
+	依存の向きが分かるよう並べている。
+	ファイルを追加したら PreviewServer.ALLOWED_ASSETS も更新する (白リストに無いと 404)。
+-->
+<script src="asset/viewer-core.js"></script>
+<script src="asset/viewer-util.js"></script>
+<script src="asset/viewer-settings.js"></script>
+<script src="asset/viewer-toc.js"></script>
+<script src="asset/viewer-frame.js"></script>
+<script src="asset/viewer-events.js"></script>
+<script src="asset/viewer-inspector.js"></script>
 </body>
 </html>

@@ -220,10 +220,43 @@ public class PreviewServerTest
 	@Test
 	public void assetsAreWhitelisted() throws Exception
 	{
-		assertEquals(200, get(base() + "asset/viewer.js").statusCode());
+		// 分割した viewer スクリプトは全て配信できること。
+		// ALLOWED_ASSETS の更新漏れはビューアーが動かない事故になるので、全ファイルを検証する
+		for (String name : new String[] {"viewer-core.js", "viewer-util.js", "viewer-settings.js",
+			"viewer-toc.js", "viewer-frame.js", "viewer-events.js", "viewer-inspector.js"}) {
+			assertEquals(name, 200, get(base() + "asset/" + name).statusCode());
+		}
 		assertEquals(200, get(base() + "asset/viewer.css").statusCode());
 		// ホワイトリスト外はクラスパスにあっても配信しない
 		assertEquals(404, get(base() + "asset/viewer.html").statusCode());
+	}
+
+	@Test
+	public void everyAssetReferencedByTheShellIsServable() throws Exception
+	{
+		// viewer.html の参照を実際に走査して検証する。
+		// アセットを増やしたとき ALLOWED_ASSETS の更新を忘れると
+		// ビューアーが動かなくなるが、名前を直書きしたテストでは気付けないため
+		String shell;
+		try (java.io.InputStream in =
+				 PreviewServer.class.getResourceAsStream("assets/viewer.html")) {
+			assertNotNull("viewer.html がクラスパスにない", in);
+			shell = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+		}
+		java.util.regex.Matcher matcher =
+			java.util.regex.Pattern.compile("(?:src|href)=[\"']asset/([^\"']+)[\"']").matcher(shell);
+		int found = 0;
+		while (matcher.find()) {
+			String name = matcher.group(1);
+			found++;
+			assertEquals("viewer.html が参照しているが配信できない: " + name,
+				200, get(base() + "asset/" + name).statusCode());
+		}
+		// 正規表現が拾い漏らすと「1 件も検証していないのに緑」になる。
+		// "asset/" の出現回数と突き合わせて、取りこぼしを検出する
+		int references = shell.split("asset/", -1).length - 1;
+		assertEquals("asset/ 参照の一部を正規表現が拾えていない", references, found);
+		assertTrue("viewer.html からアセット参照を 1 件も抽出できていない", found > 0);
 	}
 
 	@Test

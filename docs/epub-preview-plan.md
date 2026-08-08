@@ -344,7 +344,7 @@ package version は何か、フォントが埋まっているか) をその場�
 | `LibraryScanner` | フォルダ再帰スキャン + OPF メタデータ + 表紙抽出 | 2 |
 | `LibraryIndexCache` | インデックスの JSON 永続化 (size + mtime で無効化) | 2 |
 | `DeviceProfile` / `DeviceProfileLoader` | `preview/devices/*.ini` の読み込み | 3 |
-| `assets/viewer.html` / `viewer.css` / `viewer.js` | ビューアーシェル (JAR 同梱リソース) | 1 |
+| `assets/viewer.html` / `viewer.css` / `viewer-*.js` (7 分割) | ビューアーシェル (JAR 同梱リソース) | 1 |
 
 `sourceSets.main.resources.srcDir = 'src'` のため、`src/com/github/hmdev/preview/assets/`
 配下はそのままクラスパスリソースとして JAR に入る。
@@ -366,7 +366,7 @@ package version は何か、フォントが埋まっているか) をその場�
 | パス | 内容 |
 |---|---|
 | `GET /p/{token}/` | ビューアーシェル (viewer.html) |
-| `GET /p/{token}/asset/*` | viewer.css / viewer.js (クラスパスリソース) |
+| `GET /p/{token}/asset/*` | viewer.css / viewer-*.js (クラスパスリソース。`ALLOWED_ASSETS` の白リスト) |
 | `GET /p/{token}/api/session` | フォント一覧・テーマ既定値などの初期情報 (JSON) |
 | `GET /p/{token}/api/book/{bookId}` | spine + 階層目次 (JSON)。初回アクセスで遅延展開 |
 | `GET /p/{token}/api/book/{bookId}/inspect` | 書誌・構成・manifest 内訳・埋め込みフォント (JSON) |
@@ -563,10 +563,47 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 
 ### Phase 2 着手前に片付けたい構造的な課題
 
-- **`viewer.js` が 1 ファイル 1,300 行超**。今は許容範囲だが、
-  Phase 2 の本棚 UI と Phase 3 のデバイス枠が加わると 2,000 行を超える。
-  着手前にセクション分割かファイル分割を検討する。
-  ファイルを分ける場合は `PreviewServer.ALLOWED_ASSETS` の白リスト更新も必要
+- ~~**`viewer.js` が 1 ファイル 1,300 行超**~~ → **対応済み (2026-08-08)**。
+  既存のセクション区切りに沿って 7 ファイルへ分割した。
+
+  | ファイル | 行数 | 担当 |
+  |---|---|---|
+  | `viewer-core.js` | 152 | 設計メモ・定数・`state`/`el`・起動・heartbeat |
+  | `viewer-util.js` | 68 | `kvTable` / `formatBytes` / `getJson` 等 |
+  | `viewer-settings.js` | 176 | 設定の読み書き・フォント選択 |
+  | `viewer-toc.js` | 115 | セクション / 目次 |
+  | `viewer-frame.js` | 249 | iframe への介入・ページ送り |
+  | `viewer-events.js` | 260 | イベント・テーマ適用 |
+  | `viewer-inspector.js` | 313 | インスペクタ |
+
+  ES モジュール化はしていない。`state` / `el` を含む相互参照が多く、
+  JS 側にユニットテストが無い状態では import/export の張り替えを検証しきれないため、
+  **古典スクリプトのまま行単位でコピーしてセマンティクスを変えない**方針を採った。
+  そのため次の 2 点に注意すること。
+
+  - **各ファイルの先頭に `'use strict';` が要る**。古典スクリプトでは
+    strict モードがスクリプト単位で効くため、書き忘れたファイルだけ sloppy mode になる
+  - **`viewer-core.js` を最初に読み込む**。定数・`state`・`el` の `const` 宣言があり、
+    後続ファイルの top-level から参照すると TDZ に当たる
+    (関数定義しか持たないファイル同士は順序非依存)
+
+  Phase 2 で本棚を足す場合は `viewer-library.js` を新設する。
+  ファイルを増やしたら `PreviewServer.ALLOWED_ASSETS` と `viewer.html` の
+  script タグを両方更新すること。更新漏れは
+  `PreviewServerTest.everyAssetReferencedByTheShellIsServable` が
+  `viewer.html` の参照を走査して検出する。
+
+  分割後の運用ルール:
+
+  - **新モジュールは自分のイベントを自分で bind する**。
+    `viewer-events.js` の `bindEvents()` は既に 105 行あり、
+    ここへ足し続けると分割の意味が消える
+  - **同名の top-level 関数を別ファイルで定義しない**。古典スクリプトでは
+    後から読み込んだ側が無警告で上書きする (モジュールと違いエラーにならない)
+  - **`state` のフィールドは `viewer-core.js` のリテラルに全て宣言する**。
+    動的に生やすと、分割後は「どこで生まれたか」を grep しないと追えない
+  - ES モジュール化のトリガーは **JS ユニットテスト基盤の導入時**、
+    または Phase 3 着手時。それまでは古典スクリプトのままとする (債務として認識)
 - **static 状態が 2 つ増えている** (`PreviewLauncher.current` /
   `AozoraEpub3.lastOutputFile`)。CLAUDE.md の「グローバル状態を増やさない」に照らすと
   借金であり、Phase 2 で `--preview <dir>` を足す際に肥大させないこと
@@ -578,6 +615,39 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 - CLI `--preview <dir>` / GUI 「本棚を開く」
 
 規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行。
+
+#### Phase 2 で入れる小機能 (2026-08-08 ユーザー提案)
+
+**(a) 変換完了後にプレビューを自動で開く (既定 OFF)**
+
+- **既定は OFF**。今までどおり変換して終わる動作を変えない (下位互換)
+- 設定の置き場所は `AozoraEpub3.ini` (`AozoraEpub3Applet.props`)。
+  既存キーの命名 (`LastDir` / `UILang`) に合わせて `AutoPreview` とする
+- **INI キーだけでは足りない。Swing 側にチェックボックスと保存処理が要る**
+  (オプション画面への追加 + `props` への書き戻し)。UI 文言は ja/en 両方
+- 発火点は `AozoraEpub3Applet.java` の「プレビュー対象を更新」箇所 (現状 4124 付近)。
+  **kindlegen 経路ではリネーム後に上書きされる**ため、自動オープンはリネーム完了後に行う
+- CLI は明示の `--preview` があるので対象外とする (フラグ優先)
+
+**(b) プレビュー画面から EPUB のフォルダを開く**
+
+- ブラウザから直接ファイラは開けないので、**サーバ側にエンドポイントを足す**
+  (例: `POST /p/{token}/api/book/{bookId}/reveal`)
+- 実装は `PreviewLauncher` の OS 分岐 (`Desktop.browse` → `rundll32` / `open` / `xdg-open`)
+  を流用できる。Windows は `explorer /select,<path>` にすると EPUB を選択状態で開ける
+- **パスをリクエストから受け取らず、bookId から解決した EPUB のみを対象にする**
+  (任意パスを開かせない)。`PathUtils` と同じ思想
+
+参考にした先行実装 (2026-08-08 にソースを確認):
+
+| | narou.rb | narou.rs |
+|---|---|---|
+| 実体 | `Helper.open_directory` がサーバ側で OS のファイラを起動 (Windows は `explorer "file:///<path>"`、mac は `open`、Linux は `xdg-open` 相当。`/select` は使わない) | `src/commands/folder.rs` が `narou_rs::compat::open_directory` を呼ぶ |
+| 入口 | Web UI の `post "/api/folder"`。`select_valid_novel_ids` で **ID を検証しサーバ側でパス解決**。生パスは受け取らない | `resolve_target_to_id(target)` → `novel_dir_for_record` で **同じくサーバ側解決** |
+| 保護 | 既定で LAN の私有 IP にバインド。Digest 認証は**任意設定** | 未確認 |
+
+どちらも「ID を受けてサーバ側でパスを解決する」設計で、上記 (b) の方針と一致する。
+本アプリは 127.0.0.1 固定 + トークン必須なので、保護は narou.rb より厳しい。
 
 ### Phase 3 — デバイスレイアウト枠 + 仮想ページ (R5)
 

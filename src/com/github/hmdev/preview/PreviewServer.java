@@ -38,8 +38,20 @@ public class PreviewServer implements AutoCloseable
 {
 	private static final Logger logger = LoggerFactory.getLogger(PreviewServer.class);
 
-	/** クラスパスから配信を許可するアセット (ホワイトリスト) */
-	private static final String[] ALLOWED_ASSETS = {"viewer.css", "viewer.js"};
+	/**
+	 * クラスパスから配信を許可するアセット (ホワイトリスト)。
+	 * viewer.js を分割したファイルを追加したら、ここと viewer.html の script タグの両方を更新する。
+	 */
+	private static final String[] ALLOWED_ASSETS = {
+		"viewer.css",
+		"viewer-core.js",
+		"viewer-util.js",
+		"viewer-settings.js",
+		"viewer-toc.js",
+		"viewer-frame.js",
+		"viewer-events.js",
+		"viewer-inspector.js"
+	};
 
 	/**
 	 * ビューアーが居なくなったとみなすまでの無通信時間。
