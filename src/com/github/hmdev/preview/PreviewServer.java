@@ -208,6 +208,9 @@ public class PreviewServer implements AutoCloseable
 	 * <p>2 つのヘッダを独立に見て、どちらか一方でも他所を指していたら拒否する。
 	 * いずれも <b>Forbidden header name</b> でページの JavaScript からは詐称できない。</p>
 	 *
+	 * <p><b>この検査は「GET / HEAD 以外」を条件に掛かる。状態を変えるエンドポイントは
+	 * 必ず POST で足すこと。</b>GET で足すと無検査で通る。</p>
+	 *
 	 * <p><b>両方とも無い場合は許可する。</b>ブラウザは GET / HEAD 以外では常に
 	 * {@code Origin} を付ける (Fetch 仕様) ため、無いということはブラウザ発ではない。
 	 * CSRF は被害者のブラウザを踏み台にする攻撃なので、ブラウザ以外からの POST は

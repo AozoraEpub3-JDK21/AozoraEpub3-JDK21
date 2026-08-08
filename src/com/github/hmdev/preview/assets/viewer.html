@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+	referrer ポリシーをここで指定しないこと。
+	viewer-core.js の navigator.sendBeacon('api/bye') は no-cors なので、
+	no-referrer 等を設定すると Fetch 仕様により Origin: null で送られ、
+	PreviewServer の POST 発信元検査に弾かれて 403 になる。
+	sendBeacon は失敗を観測できないため、「タブを閉じたら CLI も即終了」が
+	無言で 5 分待ちに劣化する (fetch の heartbeat は mode:cors なので無傷)。
+-->
 <title>AozoraEpub3 プレビュー</title>
 <link rel="stylesheet" href="asset/viewer.css">
 </head>

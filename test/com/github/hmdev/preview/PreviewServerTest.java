@@ -437,11 +437,26 @@ public class PreviewServerTest
 			"Origin", "http://evil.example").statusCode());
 		assertEquals("{}", get(base() + "api/settings").body());
 
-		// heartbeat / bye も同じ扱い (CLI の生存判定を他所から操作させない)
+		// heartbeat / bye も同じ扱い。守るのは clients の登録・削除で、
+		// 偽のタブを生かし続けたり、bye で CLI を短い猶予のまま終了させたりできないようにする。
+		// (トークンが一致した時点で lastContactNanos は更新される。これは GET でも同じで、
+		//  トークン単独防御のままの部分。ここで守れるのはタブ単位の生存管理の方)
 		assertEquals(403, postFrom(base() + "api/heartbeat?tab=x", "",
 			"Origin", "http://evil.example").statusCode());
 		assertEquals(403, postFrom(base() + "api/bye?tab=x", "",
 			"Origin", "http://evil.example").statusCode());
+		assertFalse("拒否したのにタブとして登録している", this.server.isCloseNotified());
+	}
+
+	@Test
+	public void headerComparisonToleratesCaseAndSpacing() throws Exception
+	{
+		String url = base() + "api/heartbeat?tab=x";
+		// ヘッダ名は JDK 側で正規化されるが、値の揺れはこちらで吸収する必要がある
+		assertEquals(204, postFrom(url, "", "Origin", " " + origin().toUpperCase(java.util.Locale.ROOT) + " ",
+			"Sec-Fetch-Site", " Same-Origin ").statusCode());
+		// 揺れを吸収した結果として他オリジンまで通してしまわないこと
+		assertEquals(403, postFrom(url, "", "Origin", " HTTP://EVIL.EXAMPLE ").statusCode());
 	}
 
 	@Test
