@@ -57,17 +57,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 <div style="display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; margin: 2em 0;">
   <figure style="flex: 1 1 320px; max-width: 480px; margin: 0;">
-    <img src="assets/screenshot-app.png" alt="AozoraEpub3-JDK21 の変換画面" style="width: 100%; height: auto;">
+    <img src="assets/screenshot-app.png" alt="表題・表紙・ページ出力の設定欄と、ファイルをドロップするテキストエリア" style="width: 100%; height: auto;">
     <figcaption style="text-align: center; font-size: 0.9em;">変換画面（ファイル／URL をドラッグ＆ドロップ）</figcaption>
   </figure>
   <figure style="flex: 1 1 320px; max-width: 480px; margin: 0;">
-    <img src="assets/screenshot-preview.png" alt="変換した EPUB のブラウザプレビュー" style="width: 100%; height: auto;">
-    <figcaption style="text-align: center; font-size: 0.9em;">ブラウザプレビュー（縦書き・ルビ・段組）</figcaption>
+    <img src="assets/screenshot-preview.png" alt="左に章立ての目次、右に縦書き本文が段組で表示されたビューアー" style="width: 100%; height: auto;">
+    <figcaption style="text-align: center; font-size: 0.9em;">ブラウザプレビュー（目次・縦書き・ルビ・段組）</figcaption>
   </figure>
 </div>
 
 変換した EPUB は、リーダーアプリに移す前に**ブラウザでそのままプレビュー**できます。
-画面例は青空文庫の『走れメロス』（太宰治、著作権保護期間満了）を変換したものです。
+画面例は青空文庫の『銀河鉄道の夜』（宮沢賢治、著作権保護期間満了）を変換したものです。
 
 ---
 
