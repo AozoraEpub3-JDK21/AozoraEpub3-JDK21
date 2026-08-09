@@ -962,11 +962,15 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
 
 - **同梱の `AozoraEpub3.ini` は手書きの 17 キー + コメント付きファイルだが、
   今後は GUI を閉じるたびに全キー (約 120) で丸ごと書き直され、コメントは消える。**
-  設定値そのものは往復する (`setProperties` が書いて `loadProperties` が読まないキーは無い)
-  ことを確認済み。`docs/narou-setup.md` / `docs/en/narou-setup.md` に注記した。
-  リリースノートにも書くこと
-- `WebModifiedExpire` だけ表示時に桁区切りが入り、1000 以上で `"2,000"` と書き戻されて
-  次回のパースに失敗していた (既定 24 へ戻る)。本 PR で桁区切りを止めた
+  設定値そのものは往復することを確認済み (読み口が `loadProperties` ではなく `init()` の
+  キーもある — `ChkConfirm` / `ReplaceCover` — が、いずれも読まれてはいる)。
+  `docs/narou-setup.md` / `docs/en/narou-setup.md` に注記した。リリースノートにも書くこと
+- **数値欄の桁区切りで設定が消えていた。** `NumberVerifier` はフォーカスを外した時に
+  欄を整形し直すため、1000 以上を入れると `"2,000"` になる。これがそのまま ini へ書かれ、
+  次回は `Float.parseFloat` も `Double.parseDouble` も失敗して既定値に戻る
+  (`WebModifiedExpire` で表面化。カンマ区切りで複数値を持つ `jTextPageMargins` では
+  区切りごと壊れる)。本 PR で `plainNumberFormat()` に統一し、
+  読み口には `NumberFormat.parse` のフォールバックを足して既存 ini を救済した
 
 **この PR で直さず残した既知の穴** (別ステージで対応):
 

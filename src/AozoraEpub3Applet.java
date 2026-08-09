@@ -44,6 +44,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.text.NumberFormat;
+import java.text.ParseException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -2946,8 +2947,11 @@ public class AozoraEpub3Applet extends JPanel
 		/** 最大値 */
 		float max = Float.MAX_VALUE;
 		
-		NumberFormat format = NumberFormat.getNumberInstance();
-		
+		//桁区切りを入れない。入れると 1000 以上で欄が "2,000" になり、
+		//次に verify する Double.parseDouble も、ini から読み直す Float.parseFloat も失敗して
+		//既定値へ戻る。カンマ区切りで複数値を持つ欄 (jTextPageMargins) では区切りごと壊れる
+		NumberFormat format = plainNumberFormat();
+
 		NumberVerifier(float def, float min)
 		{
 			this.def = Math.max(def, min);
@@ -4855,15 +4859,28 @@ public class AozoraEpub3Applet extends JPanel
 		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	/** 数値を設定 null なら設定しない */
+	/** 桁区切りを入れない数値書式。ini に書いた値をそのまま読み直せるようにするため */
+	private static NumberFormat plainNumberFormat()
+	{
+		NumberFormat format = NumberFormat.getNumberInstance();
+		format.setGroupingUsed(false);
+		return format;
+	}
+	/** ini の数値を読む。桁区切りやロケール依存の小数点で書かれていても拾う
+	 * (桁区切りを止める前に保存された ini、および小数点がカンマのロケールの救済) */
+	private static float parseNumber(String value) throws ParseException
+	{
+		try {
+			return Float.parseFloat(value);
+		} catch (NumberFormatException e) {
+			return NumberFormat.getNumberInstance().parse(value).floatValue();
+		}
+	}
 	private void setPropsNumberText(JTextField jText, Properties props, String name)
 	{
 		try {
 			if (!props.containsKey(name)) return;
-			//桁区切りを入れない。入れると 1000 以上で "2,000" と表示され、
-			//そのまま ini に書き戻されて次回の Float.parseFloat が失敗し、既定値へ戻る
-			NumberFormat format = NumberFormat.getNumberInstance();
-			format.setGroupingUsed(false);
-			jText.setText(format.format(Float.parseFloat(props.getProperty(name))));
+			jText.setText(plainNumberFormat().format(parseNumber(props.getProperty(name))));
 		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	
