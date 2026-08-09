@@ -4671,7 +4671,14 @@ public class AozoraEpub3Applet extends JPanel
 	 * ここが呼ばれるため、busy を見ないとボタンが戻って二重に走らせられる */
 	private void updateLibraryButtons()
 	{
-		if (this.jButtonLibraryAdd == null) return;
+		//ガードは最後に生成するボタンで見る (途中まで組み立てた状態で呼ばれても落ちない)
+		if (this.jButtonOpenLibrary == null) return;
+		//setConvertEnabled(true) は変換 worker の finally からも呼ばれる (EDT ではない)。
+		//Swing のコンポーネントは EDT からしか触ってはいけない
+		if (!SwingUtilities.isEventDispatchThread()) {
+			SwingUtilities.invokeLater(this::updateLibraryButtons);
+			return;
+		}
 		boolean busy = this.libraryOpening || this.isRunning();
 		this.jButtonLibraryAdd.setEnabled(!busy && this.libraryDirsModel.size() < LibraryScanner.MAX_SHELVES);
 		this.jButtonLibraryRemove.setEnabled(!busy && this.jListLibraryDirs.getSelectedIndex() >= 0);
@@ -4693,7 +4700,10 @@ public class AozoraEpub3Applet extends JPanel
 		fileChooser.setApproveButtonText(I18n.t("ui.libraryChooser.approve"));
 		fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
 		if (fileChooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-		String selected = fileChooser.getSelectedFile().getAbsolutePath();
+		File chosen = fileChooser.getSelectedFile();
+		//空のまま「選択」を押すと null が返る
+		if (chosen == null) return;
+		String selected = chosen.getAbsolutePath();
 		//同じフォルダを二重に登録しない (同じ本を二重に数えることになる)。
 		//入れ子の棚を畳むのは PreviewLauncher の役目なのでここではしない
 		String key = PreviewLibraryPrefs.dedupeKey(selected);
@@ -4849,7 +4859,11 @@ public class AozoraEpub3Applet extends JPanel
 	{
 		try {
 			if (!props.containsKey(name)) return;
-			jText.setText(NumberFormat.getNumberInstance().format(Float.parseFloat(props.getProperty(name))));
+			//桁区切りを入れない。入れると 1000 以上で "2,000" と表示され、
+			//そのまま ini に書き戻されて次回の Float.parseFloat が失敗し、既定値へ戻る
+			NumberFormat format = NumberFormat.getNumberInstance();
+			format.setGroupingUsed(false);
+			jText.setText(format.format(Float.parseFloat(props.getProperty(name))));
 		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
 	
