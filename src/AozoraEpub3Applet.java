@@ -4859,10 +4859,13 @@ public class AozoraEpub3Applet extends JPanel
 			jText.setText(Float.toString(Float.parseFloat(props.getProperty(name))));
 		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
-	/** 桁区切りを入れない数値書式。ini に書いた値をそのまま読み直せるようにするため */
+	/** 桁区切りを入れない数値書式。ini に書いた値をそのまま読み直せるようにするため。
+	 * <p>ロケールを固定するのは、小数点がカンマの環境 (de/fr) で 0.5 が "0,5" になり、
+	 * カンマ区切りで複数値を持つ PageMargin が要素数ごと壊れるため。
+	 * 表示だけでなく ini の値も同じ書式で書かれるので、環境をまたぐと読めなくなる。</p> */
 	private static NumberFormat plainNumberFormat()
 	{
-		NumberFormat format = NumberFormat.getNumberInstance();
+		NumberFormat format = NumberFormat.getNumberInstance(Locale.ROOT);
 		format.setGroupingUsed(false);
 		return format;
 	}
@@ -5147,7 +5150,10 @@ public class AozoraEpub3Applet extends JPanel
 		propValue = props.getProperty("PageMargin");
 		if (propValue != null) {
 			String[] pageMargins = propValue.split(",");
-			for (int i=0; i<pageMargins.length; i++) jTextPageMargins[i].setText(pageMargins[i]);
+			//欄の数を超えたら捨てる。壊れた ini (小数点がカンマのロケールで書かれた値など) で
+			//要素が増えても、ここで配列の外に書きに行かない
+			int count = Math.min(pageMargins.length, jTextPageMargins.length);
+			for (int i=0; i<count; i++) jTextPageMargins[i].setText(pageMargins[i]);
 		}
 		propValue = props.getProperty("PageMarginUnit");
 		if (propValue != null) {
