@@ -479,6 +479,21 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	color: var(--text-sub);
 }
 
+/* 「さらに表示 (残り N 冊)」。角ボタン (.icon) ではなく文言主体の見た目にする */
+.library-status .more {
+	background: var(--surface-2);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	height: 24px;
+	padding: 0 10px;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.library-status .more:hover { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
 .library-grid {
 	flex: 1 1 auto;
 	min-height: 0;

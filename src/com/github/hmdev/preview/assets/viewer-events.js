@@ -123,8 +123,11 @@ function bindEvents()
 
 function attachFrameInput(doc)
 {
-	// iframe にフォーカスがあるときもキー操作を効かせる
+	// iframe にフォーカスがあるときもキー操作を効かせる。
+	// iframe の keydown は親 document へ伝播しないので、本棚のキーもここで受け取る。
+	// (本文をクリックするとページ送りが効くので、読書中は必ずこの状態になる)
 	doc.addEventListener('keydown', onKeyDown);
+	doc.addEventListener('keydown', onLibraryKeyDown);
 	// マウスでもページを送れるようにする
 	doc.addEventListener('click', onFrameClick);
 	doc.addEventListener('wheel', onFrameWheel, {passive: false});

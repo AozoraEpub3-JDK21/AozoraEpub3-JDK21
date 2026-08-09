@@ -58,6 +58,8 @@ const state = {
 	pendingAtEnd: false,
 	/** 棚のフォルダ名。null = 棚を読み込んでいない (viewer-core.js が api/session から取る) */
 	libraryFolder: null,
+	/** 棚の冊数。null = 未取得 (viewer-core.js が api/session から、以後は viewer-library.js が更新) */
+	libraryCount: null,
 	/** /api/library のレスポンス。本棚を開くたびに取り直す (viewer-library.js) */
 	library: null,
 	/** 本棚を表示中か (viewer-library.js) */
@@ -161,6 +163,7 @@ async function init()
 	reapplyStyle();
 
 	state.libraryFolder = session.libraryFolder || null;
+	state.libraryCount = (session.libraryCount === undefined) ? null : session.libraryCount;
 	updateLibraryAvailability();
 
 	const params = new URLSearchParams(location.search);
@@ -200,6 +203,11 @@ function setBookControlsEnabled(enabled)
 async function loadBook()
 {
 	const book = await getJson('api/book/' + encodeURIComponent(state.bookId));
+	// 本文が 1 つも無い本を黙って受け入れると、書名だけ新しくなって
+	// iframe には前の本が映ったまま残る (gotoSection が何もせずに返るため)
+	if (!book.spine || book.spine.length === 0) {
+		throw new Error('本文が見つかりません (spine が空の EPUB です)');
+	}
 	setBookControlsEnabled(true);
 	state.book = book;
 	document.title = (book.title || 'EPUB') + ' — AozoraEpub3 プレビュー';

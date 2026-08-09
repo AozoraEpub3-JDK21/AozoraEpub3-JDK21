@@ -18,8 +18,23 @@ const LIBRARY_PAGE_SIZE = 200;
 /** 書名・著者の並べ替えに使う照合器 (日本語) */
 const libraryCollator = new Intl.Collator('ja');
 
+/** 絞り込みを反映するまでの待ち。1 打鍵ごとに全冊を並べ替えるのを避ける (ミリ秒) */
+const LIBRARY_FILTER_DELAY = 150;
+
 /** いま描き終えているカードの枚数。「さらに表示」で増える */
 let libraryShown = 0;
+
+/**
+ * 絞り込みと並べ替えを適用した後の本の配列。
+ * 「さらに表示」で描き足すたびに並べ替え直さないよう持っておく。
+ */
+let libraryVisible = [];
+
+/** 絞り込みの待ち合わせタイマー */
+let libraryFilterTimer = 0;
+
+/** 本を切り替えている最中か。連打で 2 冊が同時に読み込まれるのを防ぐ */
+let libraryOpening = false;
 
 function bindLibraryEvents()
 {
@@ -30,7 +45,11 @@ function bindLibraryEvents()
 		loadLibrary().catch(err => showLibraryStatus('本棚を読み込めませんでした: ' + err.message));
 	});
 
-	el.libraryFilter.addEventListener('input', () => renderLibrary());
+	el.libraryFilter.addEventListener('input', () => {
+		// 打鍵ごとに 2000 冊を並べ替えると入力が引っ掛かる
+		clearTimeout(libraryFilterTimer);
+		libraryFilterTimer = setTimeout(() => renderLibrary(), LIBRARY_FILTER_DELAY);
+	});
 	el.librarySort.addEventListener('change', () => renderLibrary());
 
 	el.libraryGrid.addEventListener('click', event => {
@@ -48,6 +67,15 @@ function onLibraryKeyDown(event)
 {
 	if (event.ctrlKey || event.altKey || event.metaKey) return;
 	if (event.key === 'Escape' && state.libraryOpen) {
+		// 検索欄に文字が残っているうちは、まず絞り込みを解く (type="search" の作法)。
+		// ブラウザ任せにすると入力欄だけ空になって一覧が戻らない実装があるので自分で消す
+		if (event.target === el.libraryFilter && el.libraryFilter.value !== '') {
+			el.libraryFilter.value = '';
+			clearTimeout(libraryFilterTimer);
+			renderLibrary();
+			event.preventDefault();
+			return;
+		}
 		closeLibrary();
 		event.preventDefault();
 		return;
@@ -64,6 +92,8 @@ function onLibraryKeyDown(event)
 function updateLibraryAvailability()
 {
 	el.libraryToggle.hidden = !state.libraryFolder;
+	el.libraryToggle.title = (state.libraryCount === null)
+		? '本棚 (l)' : '本棚 (l) — ' + state.libraryCount + ' 冊';
 	el.libraryFolderName.textContent = state.libraryFolder || '';
 }
 
@@ -106,10 +136,28 @@ function closeLibrary()
 async function loadLibrary()
 {
 	showLibraryStatus('読み込み中…');
-	state.library = await getJson('api/library');
-	state.libraryFolder = state.library.folderName || state.libraryFolder;
+	let library;
+	try {
+		library = await getJson('api/library');
+	} catch (e) {
+		// 古い一覧を残さない。残すと、消された本のカードを押せてしまう
+		state.library = null;
+		clearLibraryGrid();
+		showLibraryStatus('本棚を読み込めませんでした: ' + e.message);
+		return;
+	}
+	state.library = library;
+	state.libraryFolder = library.folderName || state.libraryFolder;
+	state.libraryCount = library.count;
 	updateLibraryAvailability();
 	renderLibrary();
+}
+
+function clearLibraryGrid()
+{
+	libraryVisible = [];
+	libraryShown = 0;
+	el.libraryGrid.textContent = '';
 }
 
 /** 絞り込みと並べ替えを適用した本の配列を返す */
@@ -147,8 +195,10 @@ function libraryHaystack(book)
 		.filter(Boolean).join('\n').toLowerCase();
 }
 
+/** 絞り込みと並べ替えをやり直して描き直す。並べ替えはここでしか行わない */
 function renderLibrary()
 {
+	libraryVisible = visibleLibraryBooks();
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
 	appendLibraryCards();
@@ -157,7 +207,7 @@ function renderLibrary()
 /** 続きのカードを描き足す。全部描き切るまで「さらに表示」を出す */
 function appendLibraryCards()
 {
-	const books = visibleLibraryBooks();
+	const books = libraryVisible;
 	const upto = Math.min(books.length, libraryShown + LIBRARY_PAGE_SIZE);
 	const fragment = document.createDocumentFragment();
 	for (let i = libraryShown; i < upto; i++) fragment.appendChild(libraryCard(books[i]));
@@ -194,7 +244,7 @@ function showLibraryStatus(message, remaining)
 	if (!remaining) return;
 	const more = document.createElement('button');
 	more.type = 'button';
-	more.className = 'icon';
+	more.className = 'more';
 	more.textContent = 'さらに表示 (残り ' + remaining + ' 冊)';
 	more.addEventListener('click', () => appendLibraryCards());
 	el.libraryStatus.append(' ', more);
@@ -275,14 +325,28 @@ function coverPlaceholder(book)
  * {@code api/bye} が飛び、サーバが「ビューアーが閉じた」と判断しうるため
  * (猶予はあるが、わざわざ危ない方を通らない)。
  * 前の本の状態が残らないよう、書籍に紐づく state を明示的に戻すこと。</p>
+ *
+ * <p><b>同時に 2 冊を読み込ませない。</b>state は 1 冊ぶんしか無いため、
+ * 読み込み中に別のカードを押されると 2 つの読み込みが同じ state を書き合い、
+ * 遅い方が後に終わると {@code state.bookId} と表示中の本が食い違う。</p>
  */
 async function openLibraryBook(bookId)
 {
-	if (!bookId) return;
+	if (!bookId || libraryOpening) return;
 	if (bookId === state.bookId) {
 		closeLibrary();
 		return;
 	}
+	libraryOpening = true;
+	try {
+		await switchBook(bookId);
+	} finally {
+		libraryOpening = false;
+	}
+}
+
+async function switchBook(bookId)
+{
 	// 開けなかったときに戻せるよう控えておく (消された本を選ぶと 404 になる)
 	const previous = {id: state.bookId, book: state.book, inspection: state.inspection,
 		spineIndex: state.spineIndex, path: el.frame.getAttribute('data-path')};
