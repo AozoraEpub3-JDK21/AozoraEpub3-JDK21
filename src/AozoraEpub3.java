@@ -217,7 +217,13 @@ public class AozoraEpub3
 					}
 				} catch (Exception e) { /* 意図的: PageBreak ブロック内で個別 catch が拾わない例外も既定値のまま続行 */ }
 			}
-			int maxLength = 64; try { maxLength = Integer.parseInt((props.getProperty("ChapterNameLength"))); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			//GUI が書くのは "MaxChapterNameLength"。CLI は別名を読んでいたため、
+			//GUI で設定した目次の最大文字数が CLI に届かず 64 のままだった。
+			//手書きの ini で旧名を使っている場合に備えて、そちらも読む
+			int maxLength = 64;
+			String maxLengthValue = props.getProperty("MaxChapterNameLength");
+			if (maxLengthValue == null) maxLengthValue = props.getProperty("ChapterNameLength");
+			try { maxLength = Integer.parseInt(maxLengthValue); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			boolean insertTitleToc = "1".equals(props.getProperty("TitleToc"));
 			boolean chapterExclude = "1".equals(props.getProperty("ChapterExclude"));
 			boolean chapterUseNextLine = "1".equals(props.getProperty("ChapterUseNextLine"));
@@ -231,7 +237,8 @@ public class AozoraEpub3
 			boolean chapterNumOnly = "1".equals(props.getProperty("ChapterNumOnly"));
 			boolean chapterNumTitle = "1".equals(props.getProperty("ChapterNumTitle"));
 			boolean chapterNumParen = "1".equals(props.getProperty("ChapterNumParen"));
-			boolean chapterNumParenTitle = "1".equals(props.getProperty("hapterNumParenTitle"));
+			//GUI は "ChapterNumParenTitle" で書く。先頭の C が欠けており、CLI では永久に false だった
+			boolean chapterNumParenTitle = "1".equals(props.getProperty("ChapterNumParenTitle"));
 			String chapterPattern = ""; if ("1".equals(props.getProperty("ChapterPattern"))) chapterPattern = props.getProperty("ChapterPatternText");
 			
 			//オプション指定を反映

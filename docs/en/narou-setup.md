@@ -195,6 +195,8 @@ Once complete, narou.rb will remember the AozoraEpub3 location and auto-integrat
 **Note: Configuration Files**
 After initialization, an **`AozoraEpub3.ini`** file appears in the same directory as `AozoraEpub3.jar`. To adjust line height, font size, and other conversion settings, edit this file directly or save settings from the AozoraEpub3 GUI.
 
+> **Note**: Closing the AozoraEpub3 GUI **rewrites this file in full** from the GUI's own settings, so hand-written comments are not preserved. If you mix GUI use with manual editing, edit the file after closing the GUI.
+
 ---
 
 ## 8. Troubleshooting Tips
