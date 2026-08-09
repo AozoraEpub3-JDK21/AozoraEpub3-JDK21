@@ -93,6 +93,10 @@ public class PreviewSession implements AutoCloseable
 	private final Path root;
 	private final String token;
 	private final Map<String, Book> books = new LinkedHashMap<>();
+	/** 本棚に並べる本。キーは {@link #books} と同じ bookId */
+	private final Map<String, LibraryEntry> library = new LinkedHashMap<>();
+	/** 本棚として走査したフォルダ。未設定なら null */
+	private Path libraryFolder;
 	private final FontCatalog fontCatalog;
 	private final FileChannel lockChannel;
 	private final FileLock lock;
@@ -140,6 +144,19 @@ public class PreviewSession implements AutoCloseable
 	 */
 	public synchronized String addBook(Path epubFile)
 	{
+		return addBook(epubFile, true);
+	}
+
+	/**
+	 * 本を登録する。
+	 *
+	 * @param mayBecomeDefault 既定の本がまだ無いとき、これを既定にしてよいか。
+	 *        <b>本棚の登録では false を渡すこと。</b>true のままだと、
+	 *        本棚を先に読み込んだ場合に「棚の 1 冊目」が既定になり、
+	 *        変換した本を開いたつもりが別の本が表示される
+	 */
+	synchronized String addBook(Path epubFile, boolean mayBecomeDefault)
+	{
 		// normalize しないと out/./book.epub と out/book.epub が別扱いになり二重展開される
 		Path absolute = epubFile.toAbsolutePath().normalize();
 		// 同じ EPUB を繰り返しプレビューしても展開先が増えないようにする
@@ -149,8 +166,37 @@ public class PreviewSession implements AutoCloseable
 		}
 		String id = "b" + (this.nextBookNumber++);
 		this.books.put(id, new Book(id, absolute));
-		if (this.defaultBookId == null) this.defaultBookId = id;
+		if (mayBecomeDefault && this.defaultBookId == null) this.defaultBookId = id;
 		return id;
+	}
+
+	/**
+	 * 本棚のスキャン結果を取り込む。
+	 *
+	 * <p>登録するだけで<b>展開はしない</b>。一覧から選ばれた本が
+	 * {@link #ensureExtracted} を通ったときに初めて展開される。</p>
+	 *
+	 * @param folder 走査したフォルダ
+	 * @param entries {@link LibraryScanner#scan} の結果
+	 */
+	public synchronized void setLibrary(Path folder, List<LibraryEntry> entries)
+	{
+		this.libraryFolder = (folder == null) ? null : folder.toAbsolutePath().normalize();
+		this.library.clear();
+		for (LibraryEntry entry : entries) {
+			// 既定の本は変えない。棚の 1 冊目が既定になると、
+			// 変換した本を開いたつもりが別の本になる
+			this.library.put(addBook(entry.file(), false), entry);
+		}
+	}
+
+	/** 本棚として走査したフォルダ。未設定なら null */
+	public synchronized Path getLibraryFolder() { return this.libraryFolder; }
+
+	/** bookId に対応する本棚の記録。本棚に載っていなければ null */
+	public synchronized LibraryEntry getLibraryEntry(String bookId)
+	{
+		return this.library.get(bookId);
 	}
 
 	/** bookId から本を引く。未登録なら null */
@@ -252,6 +298,67 @@ public class PreviewSession implements AutoCloseable
 		buf.append(']');
 		buf.append('}');
 		return buf.toString();
+	}
+
+	/**
+	 * 本棚の一覧を JSON で返す。
+	 *
+	 * <p>{@code api/session} と同じく<b>ホスト上の絶対パスは載せない</b>。
+	 * 棚の位置はフォルダ名だけ、本の位置は棚からの相対フォルダだけを出す。</p>
+	 */
+	public synchronized String libraryJson()
+	{
+		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 128);
+		buf.append('{');
+		Json.prop(buf, "folderName", folderDisplayName(this.libraryFolder));
+		Json.prop(buf, "count", this.library.size());
+		Json.key(buf, "books");
+		buf.append('[');
+		boolean first = true;
+		for (Map.Entry<String, LibraryEntry> mapping : this.library.entrySet()) {
+			if (!first) buf.append(',');
+			first = false;
+			LibraryEntry entry = mapping.getValue();
+			buf.append('{');
+			Json.prop(buf, "id", mapping.getKey());
+			Json.prop(buf, "title", entry.displayName());
+			Json.prop(buf, "creator", entry.creator());
+			Json.prop(buf, "fileName", entry.file().getFileName().toString());
+			Json.prop(buf, "subFolder", subFolderOf(entry.file()));
+			Json.prop(buf, "modified", entry.modifiedMillis());
+			Json.prop(buf, "size", entry.size());
+			// 表紙が無い本にサムネイルを取りに行かせない (全冊ぶんの 404 になる)
+			Json.prop(buf, "hasCover", entry.coverEntry() != null);
+			buf.append('}');
+		}
+		buf.append(']');
+		buf.append('}');
+		return buf.toString();
+	}
+
+	/** 棚の表示名。ドライブ直下など getFileName() が null になる場合はパス表記のまま */
+	static String folderDisplayName(Path folder)
+	{
+		if (folder == null) return null;
+		Path name = folder.getFileName();
+		return (name == null) ? folder.toString() : name.toString();
+	}
+
+	/** 棚のルートから見た、その本が入っているサブフォルダ (直下なら空文字) */
+	private String subFolderOf(Path file)
+	{
+		Path parent = file.getParent();
+		if (this.libraryFolder == null || parent == null) return "";
+		try {
+			// 棚の外にある本 (シンボリックリンク経由など) は位置を出さない
+			if (!parent.startsWith(this.libraryFolder)) return "";
+			String relative = this.libraryFolder.relativize(parent).toString();
+			return relative.replace('\\', '/');
+		} catch (IllegalArgumentException e) {
+			/* 意図的: 別ドライブなど relativize できない場合は位置を出さない */
+			logger.debug("棚からの相対パスを求められませんでした: {}", file, e);
+			return "";
+		}
 	}
 
 	/** 本の spine と目次を JSON で返す (未展開なら展開する) */

@@ -86,6 +86,8 @@ public class PreviewServer implements AutoCloseable
 	private final ExecutorService executor;
 	private final String basePath;
 	private final PreviewSettingsStore settingsStore;
+	/** 本棚のサムネイル。生成コストが高いのでセッション内で使い回す */
+	private final LibraryCovers covers = new LibraryCovers();
 	/** テストスレッドが書き HTTP スレッドが読むので volatile */
 	private volatile Revealer revealer = FileRevealer::reveal;
 	/** URL に載せるホスト表記。IPv6 なら角括弧付き */
@@ -416,6 +418,10 @@ public class PreviewServer implements AutoCloseable
 				serveAsset(exchange, rest.substring("asset/".length()));
 			} else if (rest.equals("api/session")) {
 				respondJson(exchange, this.session.sessionJson());
+			} else if (rest.equals("api/library")) {
+				respondJson(exchange, this.session.libraryJson());
+			} else if (rest.startsWith("api/library/cover/")) {
+				serveCover(exchange, rest.substring("api/library/cover/".length()));
 			} else if (rest.startsWith("api/book/")) {
 				serveBookApi(exchange, rest.substring("api/book/".length()));
 			} else if (rest.startsWith("book/")) {
@@ -535,6 +541,49 @@ public class PreviewServer implements AutoCloseable
 			Json.prop(buf, "error", String.valueOf(e.getMessage()));
 			buf.append('}');
 			respond(exchange, 500, "application/json; charset=utf-8", buf.toString().getBytes(StandardCharsets.UTF_8));
+		}
+	}
+
+	/**
+	 * /api/library/cover/{bookId} — 本棚のサムネイル。
+	 *
+	 * <p>他のレスポンスと違い <b>ETag による再検証</b>を許す。本棚は数百枚の画像を
+	 * 一度に並べるため、スクロールのたびに作り直すと重い。一方でプレビューは
+	 * 「変換し直したら新しい方を見たい」機能なので、期限付きキャッシュ
+	 * ({@code max-age}) ではなく毎回問い合わせて 304 を返す形にする。
+	 * ETag は EPUB のサイズと更新時刻から作るので、再変換すれば必ず変わる。</p>
+	 */
+	private void serveCover(HttpExchange exchange, String bookId) throws IOException
+	{
+		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		if (entry == null || entry.coverEntry() == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "No cover".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		String etag = LibraryCovers.etag(bookId, entry);
+		exchange.getResponseHeaders().set("ETag", etag);
+		if (etag.equals(exchange.getRequestHeaders().getFirst("If-None-Match"))) {
+			exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+			exchange.sendResponseHeaders(304, -1);
+			return;
+		}
+		byte[] thumbnail = this.covers.thumbnail(bookId, entry);
+		if (thumbnail == null) {
+			// 壊れた画像・未対応形式。1 冊ぶん絵が出ないだけで本棚は使える
+			respond(exchange, 404, "text/plain; charset=utf-8", "No cover".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		exchange.getResponseHeaders().set("Content-Type", "image/jpeg");
+		exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+		// EPUB 由来の画像なので、万一 HTML と誤解釈されないよう念を押す
+		exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+		if ("HEAD".equals(exchange.getRequestMethod())) {
+			exchange.sendResponseHeaders(200, -1);
+			return;
+		}
+		exchange.sendResponseHeaders(200, thumbnail.length);
+		try (OutputStream out = exchange.getResponseBody()) {
+			out.write(thumbnail);
 		}
 	}
 
