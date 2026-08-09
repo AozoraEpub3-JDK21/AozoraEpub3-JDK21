@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -66,36 +67,80 @@ public class LibraryCovers
 	/**
 	 * サムネイルを返す。
 	 *
-	 * @param bookId キャッシュのキーに使う
+	 * @param cacheKey {@link #currentCacheKey} が返すキー。
+	 *        <b>スキャン時ではなく要求時のファイル状態から作ること。</b>
+	 *        スキャン時の値で固定すると、再変換しても古いサムネイルを配り続ける
 	 * @param entry 表紙の位置を持つ本棚の記録
 	 * @return JPEG のバイト列。表紙が無い / 読めない場合は null
 	 */
-	public synchronized byte[] thumbnail(String bookId, LibraryEntry entry)
+	public byte[] thumbnail(String cacheKey, LibraryEntry entry)
 	{
 		if (entry == null || entry.coverEntry() == null) return null;
-		String key = cacheKey(bookId, entry);
-		byte[] cached = this.cache.get(key);
-		if (cached != null) return cached;
+		byte[] cached = lookup(cacheKey);
+		// 作れなかったことも覚える。覚えないと、壊れた表紙の本がグリッドにある限り
+		// 表示のたびに ZIP を開き直してデコードを試み続ける
+		if (cached != null) return (cached.length == 0) ? null : cached;
+		byte[] thumbnail;
 		try {
-			byte[] thumbnail = render(entry);
-			if (thumbnail != null) this.cache.put(key, thumbnail);
-			return thumbnail;
+			// ZIP 読み出しとデコードはロックの外で行う。サーバのスレッドプールは
+			// 4 本しかないので、ここを排他にすると本棚を開いた瞬間に
+			// 本文の読み込みまで表紙生成待ちで詰まる
+			thumbnail = render(entry);
 		} catch (IOException | RuntimeException e) {
 			// 表紙が作れなくても本棚は使える。1 冊ぶん絵が出ないだけ
 			logger.debug("表紙サムネイルを作れませんでした: {}", entry.file(), e);
-			return null;
+			thumbnail = null;
+		}
+		store(cacheKey, (thumbnail == null) ? EMPTY : thumbnail);
+		return thumbnail;
+	}
+
+	/** 「作れなかった」ことを表す印 */
+	private static final byte[] EMPTY = new byte[0];
+
+	private synchronized byte[] lookup(String cacheKey)
+	{
+		// LinkedHashMap の access-order は get でも構造を変えるため排他が要る
+		return this.cache.get(cacheKey);
+	}
+
+	private synchronized void store(String cacheKey, byte[] thumbnail)
+	{
+		this.cache.put(cacheKey, thumbnail);
+	}
+
+	/**
+	 * <b>いま</b>のファイル状態からキャッシュキーを作る。
+	 *
+	 * <p>本棚のスキャンは起動時に 1 回しか走らないため、{@link LibraryEntry} が持つ
+	 * サイズと更新時刻はすぐ古くなる。それを ETag に使うと、
+	 * 「変換し直したのに古い表紙が出続ける」ことになる
+	 * (しかも {@code no-cache} + ETag による再検証が意味を失う)。</p>
+	 *
+	 * <p>ファイルの状態を取れない場合はスキャン時の値に倒す。元 EPUB が消えても
+	 * 展開済みのものを配り続けるという既存方針に合わせる。</p>
+	 */
+	public static String currentCacheKey(String bookId, LibraryEntry entry)
+	{
+		try {
+			return cacheKey(bookId, Files.size(entry.file()),
+				Files.getLastModifiedTime(entry.file()).toMillis());
+		} catch (IOException | RuntimeException e) {
+			/* 意図的: 状態を取れなければスキャン時の値で識別する */
+			logger.debug("EPUB の状態を取得できませんでした: {}", entry.file(), e);
+			return cacheKey(bookId, entry.size(), entry.modifiedMillis());
 		}
 	}
 
-	/** ETag に使う識別子。EPUB が差し替わると変わる */
-	public static String etag(String bookId, LibraryEntry entry)
+	static String cacheKey(String bookId, long size, long modifiedMillis)
 	{
-		return "\"" + cacheKey(bookId, entry) + "\"";
+		return bookId + "-" + size + "-" + modifiedMillis;
 	}
 
-	private static String cacheKey(String bookId, LibraryEntry entry)
+	/** ETag に使う識別子 */
+	public static String etag(String cacheKey)
 	{
-		return bookId + "-" + entry.size() + "-" + entry.modifiedMillis();
+		return "\"" + cacheKey + "\"";
 	}
 
 	// ------------------------------------------------------------------
@@ -143,10 +188,11 @@ public class LibraryCovers
 	 */
 	static BufferedImage decodeBounded(byte[] source) throws IOException
 	{
-		// createImageInputStream は FileCacheImageInputStream (一時ファイル) を作ることがある。
-		// 閉じないと一時ファイルと FD が滞留する (code-audit-followups #4 と同根)
-		try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(source))) {
-			if (input == null) return null;
+		// ImageIO.createImageInputStream は既定で FileCacheImageInputStream (一時ファイル) を
+		// 作る。元データは既にメモリ上にあるので、ディスクを経由する意味が無い。
+		// いずれにせよ閉じないと FD が滞留する (code-audit-followups #4 と同根)
+		try (ImageInputStream input =
+				new javax.imageio.stream.MemoryCacheImageInputStream(new ByteArrayInputStream(source))) {
 			Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
 			if (!readers.hasNext()) {
 				logger.debug("対応していない画像形式のため表紙を作れません");

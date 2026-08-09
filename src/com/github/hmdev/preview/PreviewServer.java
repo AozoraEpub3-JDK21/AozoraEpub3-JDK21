@@ -560,14 +560,18 @@ public class PreviewServer implements AutoCloseable
 			respond(exchange, 404, "text/plain; charset=utf-8", "No cover".getBytes(StandardCharsets.UTF_8));
 			return;
 		}
-		String etag = LibraryCovers.etag(bookId, entry);
+		// スキャン時ではなく「いま」のファイル状態から識別子を作る。本棚のスキャンは
+		// 起動時の 1 回しか走らないので、スキャン時の値で固定すると
+		// 変換し直しても古い表紙を配り続け、再検証の意味が無くなる
+		String cacheKey = LibraryCovers.currentCacheKey(bookId, entry);
+		String etag = LibraryCovers.etag(cacheKey);
 		exchange.getResponseHeaders().set("ETag", etag);
 		if (etag.equals(exchange.getRequestHeaders().getFirst("If-None-Match"))) {
 			exchange.getResponseHeaders().set("Cache-Control", "no-cache");
 			exchange.sendResponseHeaders(304, -1);
 			return;
 		}
-		byte[] thumbnail = this.covers.thumbnail(bookId, entry);
+		byte[] thumbnail = this.covers.thumbnail(cacheKey, entry);
 		if (thumbnail == null) {
 			// 壊れた画像・未対応形式。1 冊ぶん絵が出ないだけで本棚は使える
 			respond(exchange, 404, "text/plain; charset=utf-8", "No cover".getBytes(StandardCharsets.UTF_8));

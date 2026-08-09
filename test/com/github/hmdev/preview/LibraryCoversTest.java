@@ -54,6 +54,12 @@ public class LibraryCoversTest
 		return entries.get(0);
 	}
 
+	/** サーバと同じ手順 (要求時のファイル状態でキーを作る) でサムネイルを得る */
+	private static byte[] thumbnailOf(LibraryEntry entry)
+	{
+		return new LibraryCovers().thumbnail(LibraryCovers.currentCacheKey("b1", entry), entry);
+	}
+
 	@Test
 	public void makesAThumbnailThatFitsTheGrid() throws Exception
 	{
@@ -61,7 +67,7 @@ public class LibraryCoversTest
 		fixture.putBytes("OPS/images/cover.png", png(1200, 1800));
 		fixture.writeTo(root().resolve("a.epub"));
 
-		byte[] jpeg = new LibraryCovers().thumbnail("b1", scanFirst(root()));
+		byte[] jpeg = thumbnailOf(scanFirst(root()));
 
 		assertNotNull(jpeg);
 		BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(jpeg));
@@ -79,7 +85,7 @@ public class LibraryCoversTest
 		fixture.writeTo(root().resolve("a.epub"));
 
 		BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(
-			new LibraryCovers().thumbnail("b1", scanFirst(root()))));
+			thumbnailOf(scanFirst(root()))));
 		assertEquals(LibraryCovers.MAX_WIDTH, decoded.getWidth());
 		assertEquals(LibraryCovers.MAX_WIDTH / 4, decoded.getHeight());
 	}
@@ -92,7 +98,7 @@ public class LibraryCoversTest
 		fixture.writeTo(root().resolve("a.epub"));
 
 		BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(
-			new LibraryCovers().thumbnail("b1", scanFirst(root()))));
+			thumbnailOf(scanFirst(root()))));
 		assertEquals(60, decoded.getWidth());
 		assertEquals(90, decoded.getHeight());
 	}
@@ -101,7 +107,7 @@ public class LibraryCoversTest
 	public void aBookWithoutACoverGivesNothing() throws Exception
 	{
 		EpubFixture.standard().writeTo(root().resolve("a.epub"));
-		assertNull(new LibraryCovers().thumbnail("b1", scanFirst(root())));
+		assertNull(thumbnailOf(scanFirst(root())));
 		assertNull(new LibraryCovers().thumbnail("b1", null));
 	}
 
@@ -114,7 +120,7 @@ public class LibraryCoversTest
 		fixture.put("OPS/images/cover.png", "これは画像ではない");
 		fixture.writeTo(root().resolve("a.epub"));
 
-		assertNull(new LibraryCovers().thumbnail("b1", scanFirst(root())));
+		assertNull(thumbnailOf(scanFirst(root())));
 	}
 
 	@Test
@@ -144,27 +150,76 @@ public class LibraryCoversTest
 		fixture.putBytes("OPS/images/cover.png", huge);
 		fixture.writeTo(root().resolve("a.epub"));
 
-		assertNull(new LibraryCovers().thumbnail("b1", scanFirst(root())));
+		assertNull(thumbnailOf(scanFirst(root())));
 	}
 
 	@Test
-	public void thumbnailsAreCachedPerBookAndInvalidatedByTheEtag() throws Exception
+	public void thumbnailsAreCachedPerBook() throws Exception
 	{
+		EpubFixture fixture = EpubFixture.withEpub3Cover();
+		fixture.putBytes("OPS/images/cover.png", png(800, 1200));
+		fixture.writeTo(root().resolve("a.epub"));
+		LibraryEntry entry = scanFirst(root());
+
+		LibraryCovers covers = new LibraryCovers();
+		String key = LibraryCovers.currentCacheKey("b1", entry);
+		byte[] first = covers.thumbnail(key, entry);
+		assertSame("同じ本を 2 度作り直している", first, covers.thumbnail(key, entry));
+	}
+
+	@Test
+	public void theCacheKeyFollowsTheFileNotTheScan() throws Exception
+	{
+		// 本棚のスキャンは起動時の 1 回しか走らない。LibraryEntry が持つ
+		// サイズと更新時刻で識別すると、変換し直しても古い表紙を配り続け、
+		// no-cache + ETag による再検証が意味を失う
 		EpubFixture fixture = EpubFixture.withEpub3Cover();
 		fixture.putBytes("OPS/images/cover.png", png(800, 1200));
 		Path epub = fixture.writeTo(root().resolve("a.epub"));
 		LibraryEntry entry = scanFirst(root());
 
-		LibraryCovers covers = new LibraryCovers();
-		byte[] first = covers.thumbnail("b1", entry);
-		assertSame("同じ本を 2 度作り直している", first, covers.thumbnail("b1", entry));
+		String before = LibraryCovers.currentCacheKey("b1", entry);
 
-		// 変換し直して EPUB が差し替わったら、ETag が変わって作り直される
+		// スキャンし直さずに EPUB だけ差し替える (変換 → 再プレビューの経路)
 		Files.setLastModifiedTime(epub,
 			java.nio.file.attribute.FileTime.fromMillis(entry.modifiedMillis() + 5000));
-		LibraryEntry updated = scanFirst(root());
-		org.junit.Assert.assertNotEquals(
-			LibraryCovers.etag("b1", entry), LibraryCovers.etag("b1", updated));
+
+		org.junit.Assert.assertNotEquals("再スキャンなしでは古い識別子のままになっている",
+			before, LibraryCovers.currentCacheKey("b1", entry));
+	}
+
+	@Test
+	public void theCacheKeyFallsBackWhenTheFileIsGone() throws Exception
+	{
+		// 元 EPUB が消えても展開済みのものを配り続けるのが既存方針。
+		// 状態を取れないだけで例外にしない
+		EpubFixture fixture = EpubFixture.withEpub3Cover();
+		fixture.putBytes("OPS/images/cover.png", png(800, 1200));
+		Path epub = fixture.writeTo(root().resolve("a.epub"));
+		LibraryEntry entry = scanFirst(root());
+		Files.delete(epub);
+
+		assertEquals(LibraryCovers.cacheKey("b1", entry.size(), entry.modifiedMillis()),
+			LibraryCovers.currentCacheKey("b1", entry));
+	}
+
+	@Test
+	public void failureToRenderIsRememberedToo() throws Exception
+	{
+		// 覚えないと、壊れた表紙の本がグリッドにある限り、表示のたびに
+		// ZIP を開き直してデコードを試み続ける
+		EpubFixture fixture = EpubFixture.withEpub3Cover();
+		fixture.put("OPS/images/cover.png", "これは画像ではない");
+		Path epub = fixture.writeTo(root().resolve("a.epub"));
+		LibraryEntry entry = scanFirst(root());
+
+		LibraryCovers covers = new LibraryCovers();
+		String key = LibraryCovers.currentCacheKey("b1", entry);
+		assertNull(covers.thumbnail(key, entry));
+
+		// 元ファイルを消しても、2 度目は ZIP を開かずに null を返せる
+		Files.delete(epub);
+		assertNull(covers.thumbnail(key, entry));
 	}
 
 	@Test

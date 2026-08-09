@@ -10,7 +10,9 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,6 +95,11 @@ public class PreviewSession implements AutoCloseable
 	private final Path root;
 	private final String token;
 	private final Map<String, Book> books = new LinkedHashMap<>();
+	/**
+	 * 絶対パスから bookId を引く索引。
+	 * 本棚は 2000 冊まで登録しうるので、線形探索で重複判定すると O(N^2) になる。
+	 */
+	private final Map<Path, String> bookIdByPath = new HashMap<>();
 	/** 本棚に並べる本。キーは {@link #books} と同じ bookId */
 	private final Map<String, LibraryEntry> library = new LinkedHashMap<>();
 	/** 本棚として走査したフォルダ。未設定なら null */
@@ -133,8 +140,9 @@ public class PreviewSession implements AutoCloseable
 	public Path getRoot() { return this.root; }
 	public String getToken() { return this.token; }
 	public FontCatalog getFontCatalog() { return this.fontCatalog; }
-	public String getDefaultBookId() { return this.defaultBookId; }
-	public List<Book> getBooks() { return new ArrayList<>(this.books.values()); }
+	// books / defaultBookId は setLibrary の一括登録と並行して読まれうる
+	public synchronized String getDefaultBookId() { return this.defaultBookId; }
+	public synchronized List<Book> getBooks() { return new ArrayList<>(this.books.values()); }
 
 	/**
 	 * 本を登録する。この時点では展開しない。
@@ -161,11 +169,17 @@ public class PreviewSession implements AutoCloseable
 		Path absolute = epubFile.toAbsolutePath().normalize();
 		// 同じ EPUB を繰り返しプレビューしても展開先が増えないようにする
 		// (GUI のボタンを押すたびに dakuten フォント 222 本が複製されるのを避ける)
-		for (Book existing : this.books.values()) {
-			if (existing.epubFile.equals(absolute)) return existing.id;
+		String existing = this.bookIdByPath.get(absolute);
+		if (existing != null) {
+			// 既に本棚として登録済みの本を、改めて「開く本」として渡された場合。
+			// 出力先フォルダを棚にしていれば必ずこの経路を通るので、
+			// ここで既定を決めないと既定の本が無いままビューアーが開く
+			if (mayBecomeDefault && this.defaultBookId == null) this.defaultBookId = existing;
+			return existing;
 		}
 		String id = "b" + (this.nextBookNumber++);
 		this.books.put(id, new Book(id, absolute));
+		this.bookIdByPath.put(absolute, id);
 		if (mayBecomeDefault && this.defaultBookId == null) this.defaultBookId = id;
 		return id;
 	}
@@ -182,11 +196,35 @@ public class PreviewSession implements AutoCloseable
 	public synchronized void setLibrary(Path folder, List<LibraryEntry> entries)
 	{
 		this.libraryFolder = (folder == null) ? null : folder.toAbsolutePath().normalize();
+		Set<String> previous = new LinkedHashSet<>(this.library.keySet());
 		this.library.clear();
 		for (LibraryEntry entry : entries) {
 			// 既定の本は変えない。棚の 1 冊目が既定になると、
 			// 変換した本を開いたつもりが別の本になる
-			this.library.put(addBook(entry.file(), false), entry);
+			String id = addBook(entry.file(), false);
+			this.library.put(id, entry);
+			previous.remove(id);
+		}
+		forgetUnusedLibraryBooks(previous);
+	}
+
+	/**
+	 * 棚から外れた本の登録を捨てる。
+	 *
+	 * <p>{@link #library} だけを clear して {@link #books} を残すと、棚を切り替えるたびに
+	 * 登録が単調増加し、{@code api/session} が棚の全冊 (最大 2000 件) を載せることになる。</p>
+	 *
+	 * <p>ただし<b>既に展開した本と既定の本は残す</b>。表示中の本を消すと
+	 * ビューアーが開いているページが丸ごと 404 になる。</p>
+	 */
+	private void forgetUnusedLibraryBooks(Set<String> removedIds)
+	{
+		for (String id : removedIds) {
+			if (id.equals(this.defaultBookId)) continue;
+			Book book = this.books.get(id);
+			if (book == null || book.dir != null) continue;
+			this.books.remove(id);
+			this.bookIdByPath.remove(book.epubFile);
 		}
 	}
 
@@ -286,6 +324,9 @@ public class PreviewSession implements AutoCloseable
 		buf.append('[');
 		boolean first = true;
 		for (Book book : this.books.values()) {
+			// 本棚の本はここに載せない。載せると最大 2000 件が毎回のセッション情報に
+			// 付いて回る。棚は api/library が返す
+			if (this.library.containsKey(book.id)) continue;
 			if (!first) buf.append(',');
 			first = false;
 			buf.append('{');
