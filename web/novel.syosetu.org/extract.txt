@@ -7,7 +7,7 @@
 ##   目次: https://novel.syosetu.org/402358/
 ##   本文: https://novel.syosetu.org/402358/1.html
 ##
-## 調査日: 2026-02-25 (実機確認済み)
+## 調査日: 2026-08-09 (実機確認済み。前回調査 2026-02-25)
 ## HTML形式: HTML4 Transitional (非SPA)
 ##
 ## 【URL挙動】
@@ -19,8 +19,38 @@
 ##   class="ss" は現行も健在 (div.ss が複数存在)
 ##     .ss[0]: タイトル・著者・ジャンル等
 ##     .ss[1]: あらすじ
-##     .ss[2]: 話一覧テーブル
+##     .ss[2]: 話一覧
 ##     .ss[3]: Twitterシェアリンク等
+##
+## 【話一覧の構造変更 (2026-08-09 確認)】
+##   <table> 廃止 → <section class="episode-list"><ul class="episode-list__items"> へ移行。
+##   旧セレクタ (.ss table a / .ss td a) は一致しなくなり、変換が
+##   「一覧のURLが取得できませんでした」で失敗していた。
+##
+##     <li class="episode-list__chapter">
+##       <div class="episode-list__chapter-title">章名</div>   ← 章見出し
+##     </li>
+##     <li class="episode-list__item">
+##       <a href="./1.html" class="episode-list__link">
+##         <span class="episode-list__mark"></span>
+##         <span class="episode-list__title">話タイトル</span>
+##         <time class="episode-list__date" datetime="...">2026/07/28 06:30</time>
+##         <span class="episode-list__revision" title="2026/08/05 07:12改稿">(改)</span>
+##       </a>
+##     </li>
+##
+##   旧構造のセレクタはキャッシュ済み HTML のために候補として残してある。
+##   章マッピングは Java 側 (WebAozoraConverter#buildEpisodeChapterMapFromToc) が
+##   新旧どちらの構造からも組み立てる。
+##
+## 【各話 href は "./N.html" (相対) だが正規化しない】
+##   フル URL は listBaseUrl + href の単純連結なので .../402358/./1.html になる。
+##   実サイトはこの URL を 200 で返し (2026-08-09 実測)、キャッシュの実ファイルも
+##   safeResolve の normalize で正しい場所に落ちるため実害はない。
+##   本体は「一覧ループ」「ページネーション」「createNoUpdateUrls」「章マッピング」の
+##   4 か所で同じ連結をしており、できた文字列同士の一致が契約になっている
+##   (章の引き当ても更新スキップ判定も文字列一致)。1 か所だけ正規化すると
+##   章が付かない・毎回全話を取り直す、が無音で起きるので触らないこと。
 ##   <font> タグは廃止済み → <span style="font-size:..."> に移行
 ##   著者は <span itemprop="author"> (旧: <a> タグ)
 ##   タイトルは <span itemprop="name"> (旧: <font> タグ)
@@ -48,15 +78,18 @@ AUTHOR	#maind span[itemprop=author]:0
 DESCRIPTION	#maind .ss:1
 
 ## 各話へのリンク
-## .ss テーブル内の <a> タグ (エピソードリンク)
-HREF	#maind .ss table a
+## 新: <a class="episode-list__link"> / 旧: .ss テーブル内の <a>
+## カンマ区切りは「候補の優先順」で、先に一致した方だけが使われる
+## (CSS のセレクタグループではない。WebAozoraConverter#getExtractElements)
+HREF	#maind .episode-list__link,#maind .ss table a
 
 ## 一覧に記載されている各話の更新日時 (更新チェック用)
-## <NOBR> タグは現行も健在
-SUB_UPDATE	#maind .ss table nobr
+## 新: <time class="episode-list__date">2026/07/28 06:30</time> / 旧: <NOBR>
+SUB_UPDATE	#maind .episode-list__date,#maind .ss table nobr
 
 ## 一覧ページのタイトル (本文側に無ければこれを利用)
-SUBTITLE_LIST	#maind .ss td a
+## 新: <span class="episode-list__title"> / 旧: <td> 内の <a>
+SUBTITLE_LIST	#maind .episode-list__title,#maind .ss td a
 
 ################################
 ## 各話の抽出設定
@@ -65,10 +98,16 @@ SUBTITLE_LIST	#maind .ss td a
 #CONTENT_CHAPTER
 
 ## 話タイトル
-## .ss 内の style 属性付き span の 2番目 (index=1)
-## index=0: <span style="font-size:120%"><a>作品タイトル</a></span>
-## index=1: <span style="font-size:120%">N.話タイトル</span>  ← これ
-CONTENT_SUBTITLE	#maind .ss span[style]:1
+## 各話ページ側からは取らず、一覧の SUBTITLE_LIST (.episode-list__title) を使う。
+##
+## 2026-08 の改修で各話ページの見出しが章あり作品では
+##   <span style="font-size:120%">章名<br>話タイトル</span>
+## になり、章名込みの文字列しか取れなくなった (章なし作品は "N.話タイトル")。
+## 章名は直前に［＃大見出し］として出力済みなので、ここで拾うと中見出しに二重に出る。
+## 一覧の .episode-list__title は章あり=話タイトルのみ / 章なし="N.話タイトル" と
+## サイトの表示どおりなので、そちらに寄せる。
+## (CONTENT_SUBTITLE が未定義なら docToAozoraText が SUBTITLE_LIST へフォールバックする)
+#CONTENT_SUBTITLE	#maind .ss span[style]:1
 
 ## 本文
 ## <div id="honbun"> に本文段落 <p id="N"> が集約されている

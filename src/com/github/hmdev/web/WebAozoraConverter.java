@@ -901,12 +901,14 @@ public class WebAozoraConverter
 				}
 			}
 	
-			// TOCテーブルから章マッピング構築 (ハーメルンなど #maind .ss table 構造を持つサイト向け)
-			if (this.nextDataEpisodeChapterMap == null && doc.selectFirst("#maind .ss table") != null) {
-				HashMap<String, String> tocChapterMap = buildEpisodeChapterMapFromTocTable(doc, listBaseUrl);
+			// 一覧から章マッピング構築 (ハーメルンなど、各話ページに章情報を持たないサイト向け)
+			// ハーメルンは 2026-08 頃に一覧を table から ul.episode-list__items へ変えたので両方を見る
+			if (this.nextDataEpisodeChapterMap == null
+				&& (doc.selectFirst("#maind .episode-list__items") != null || doc.selectFirst("#maind .ss table") != null)) {
+				HashMap<String, String> tocChapterMap = buildEpisodeChapterMapFromToc(doc, listBaseUrl);
 				if (!tocChapterMap.isEmpty()) {
 					this.nextDataEpisodeChapterMap = tocChapterMap;
-					LogAppender.println("TOCテーブルから章マッピング構築: " + tocChapterMap.size() + "エピソード");
+					LogAppender.println("一覧から章マッピング構築: " + tocChapterMap.size() + "エピソード");
 				}
 			}
 
@@ -2720,10 +2722,18 @@ public class WebAozoraConverter
 	}
 
 	/**
-	 * TOCページのテーブル構造から章-エピソード対応マップを構築する。
+	 * TOCページの話一覧から章-エピソード対応マップを構築する。
 	 * ハーメルンなど、エピソードページに章情報がなく __NEXT_DATA__ も持たないサイト向け。
 	 *
-	 * テーブル構造:
+	 * <p>ハーメルンは 2026-08 頃に話一覧を &lt;table&gt; から
+	 * &lt;ul class="episode-list__items"&gt; へ作り替えた。新旧どちらの構造からも
+	 * 組み立てられるようにしてある (キャッシュ済みの旧 HTML が残っているため)。</p>
+	 *
+	 * リスト構造 (新):
+	 *   &lt;li class="episode-list__chapter"&gt;&lt;div class="episode-list__chapter-title"&gt;章タイトル&lt;/div&gt;&lt;/li&gt;
+	 *   &lt;li class="episode-list__item"&gt;&lt;a href="./N.html" class="episode-list__link"&gt;…&lt;/a&gt;&lt;/li&gt;
+	 *
+	 * テーブル構造 (旧):
 	 *   &lt;tr&gt;&lt;td colspan=2&gt;&lt;strong&gt;章タイトル&lt;/strong&gt;&lt;/td&gt;&lt;/tr&gt;  ← 章区切り行
 	 *   &lt;tr&gt;&lt;td&gt;&lt;a href="/novel/ID/N.html"&gt;話タイトル&lt;/a&gt;&lt;/td&gt;&lt;td&gt;...&lt;/td&gt;&lt;/tr&gt;  ← エピソード行
 	 *
@@ -2736,6 +2746,49 @@ public class WebAozoraConverter
 	 * @param listBaseUrl 一覧ページのベースURL
 	 * @return episodeFullURL → chapterTitle マップ (章なし作品では空マップ)
 	 */
+	private HashMap<String, String> buildEpisodeChapterMapFromToc(Document doc, String listBaseUrl) {
+		HashMap<String, String> result = buildEpisodeChapterMapFromEpisodeList(doc, listBaseUrl);
+		if (!result.isEmpty()) return result;
+		return buildEpisodeChapterMapFromTocTable(doc, listBaseUrl);
+	}
+
+	/**
+	 * 話一覧 (&lt;ul class="episode-list__items"&gt;) から章-エピソード対応マップを構築する。
+	 *
+	 * <p>章見出しの &lt;li&gt; と各話の &lt;li&gt; が兄弟として並ぶため、上から順に見て
+	 * 直前の章見出しを覚えながらエピソードに割り当てる。章見出しが 1 つも無ければ
+	 * 空マップを返す (章なし作品)。</p>
+	 */
+	private HashMap<String, String> buildEpisodeChapterMapFromEpisodeList(Document doc, String listBaseUrl) {
+		HashMap<String, String> result = new HashMap<String, String>();
+		Elements items = doc.select("#maind .episode-list__items > li");
+		if (items == null || items.isEmpty()) return result;
+		String currentChapter = null;
+		for (Element item : items) {
+			if (item.hasClass("episode-list__chapter")) {
+				Element titleElem = item.selectFirst(".episode-list__chapter-title");
+				//章見出しの li に専用クラスが無い場合は li 自身のテキストを使う
+				String title = (titleElem != null ? titleElem.text() : item.text()).trim();
+				if (!title.isEmpty()) currentChapter = title;
+				continue;
+			}
+			if (currentChapter == null) continue;
+			for (Element link : item.select("a[href]")) {
+				String fullUrl = toFullUrl(link.attr("href"), listBaseUrl);
+				if (fullUrl != null) result.put(fullUrl, currentChapter);
+			}
+		}
+		return result;
+	}
+
+	/** 一覧の相対 href をフルURLにする。href が空なら null */
+	private String toFullUrl(String href, String listBaseUrl) {
+		if (href == null || href.isEmpty()) return null;
+		if (href.startsWith("http")) return href;
+		if (href.charAt(0) == '/') return this.baseUri + href;
+		return listBaseUrl + href;
+	}
+
 	private HashMap<String, String> buildEpisodeChapterMapFromTocTable(Document doc, String listBaseUrl) {
 		HashMap<String, String> result = new HashMap<String, String>();
 		Elements rows = doc.select("#maind .ss table tr");
