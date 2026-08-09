@@ -296,8 +296,8 @@ public class AozoraEpub3Applet extends JPanel
 	JButton jButtonOpenLibrary;
 	/** 本棚を開いている最中か。初回スキャンは冊数に比例して重く、
 	 * その間に一覧を触るとボタンが戻って二重に走らせられてしまう。
-	 * worker スレッドが書き、EDT (ボタンの状態判定) が読む */
-	volatile boolean libraryOpening = false;
+	 * 読み書きとも EDT のみ (worker スレッドは invokeLater 経由で落とす) */
+	boolean libraryOpening = false;
 
 	//画像関連
 	/** 挿絵なし */
@@ -2206,6 +2206,9 @@ public class AozoraEpub3Applet extends JPanel
 			panel.add(label);
 			JTextField jTextField = new JTextField("0");
 			jTextBodyMargins[i] = jTextField;
+			//PageMargin と同じ検証を掛ける。無いと欄に "1,2" と打ててしまい、
+			//カンマ連結で保存される BodyMargin の要素数が壊れる
+			jTextField.setInputVerifier(new NumberVerifier(0, 0));
 			jTextField.setHorizontalAlignment(JTextField.RIGHT);
 			jTextField.addFocusListener(new TextSelectFocusListener(jTextField));
 			jTextField.setMaximumSize(text3);
@@ -5164,7 +5167,10 @@ public class AozoraEpub3Applet extends JPanel
 		propValue = props.getProperty("BodyMargin");
 		if (propValue != null) {
 			String[] bodyMargins = propValue.split(",");
-			for (int i=0; i<bodyMargins.length; i++) jTextBodyMargins[i].setText(bodyMargins[i]);
+			//PageMargin と同じく欄の数を超えた分は捨てる。
+			//ここは init() から try 無しで呼ばれるため、外に書きに行くと GUI が起動できなくなる
+			int bodyCount = Math.min(bodyMargins.length, jTextBodyMargins.length);
+			for (int i=0; i<bodyCount; i++) jTextBodyMargins[i].setText(bodyMargins[i]);
 		}
 		propValue = props.getProperty("BodyMarginUnit");
 		if (propValue != null) {

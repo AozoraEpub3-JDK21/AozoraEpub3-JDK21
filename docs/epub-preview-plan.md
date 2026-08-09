@@ -947,6 +947,11 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
   は EDT から直接呼ばず専用スレッドに載せた (既存の `openPreview` と同じ形)。
   2 回目以降は `LibraryIndexCache` が効いて stat だけになる
 - タブ内には**未実装の設定欄 (常駐・固定ポート) を置かない** (計画どおり)
+- **`.NET` ポートへの移植は不要** (`D:\git\aozoraepub3-dotnet`)。C4-2a は Swing GUI の入口だけで、
+  変換結果にも `com.github.hmdev.preview` のサーバ側にも影響しない。
+  ただし**同時に直した既存バグ 3 件は移植対象**:
+  終了時に設定が保存されない / 数値欄の桁区切りで設定が失われる /
+  GUI と CLI でキー名が食い違う (`ChapterNumParenTitle` のタイポ・`MaxChapterNameLength`)
 
 レビュー (Codex) で見つかった、繰り返しやすい間違い:
 
@@ -976,6 +981,14 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
   カンマ区切りの `PageMargin` が要素数ごと壊れて配列の外に書きに行く (AIOOBE)。
   ini の値も同じ書式で書かれるため、環境をまたぐと読めなくなる。
   読み込み側にも欄数の上限ガードを入れた (ユーザー判断で本 PR に含めた)
+- **同じ穴が `BodyMargin` にも空いていた** (ゲート C で発見)。しかも `jTextBodyMargins` には
+  検証が無く、欄に `1,2` と打つだけで 5 要素の `BodyMargin` が書かれる。
+  読み口は `init()` から try 無しで呼ばれるため、次の起動で GUI ごと落ちる。
+  上限ガードと `NumberVerifier` を入れた
+- **GUI が書いたキーを CLI が読めていなかった** (ゲート C で発見)。
+  `AozoraEpub3.java` の `hapterNumParenTitle` (先頭の C 欠落) と、
+  GUI が `MaxChapterNameLength` を書くのに CLI が `ChapterNameLength` を読む不一致。
+  設定が保存されるようになって初めて実害が出るため、本 PR で直した
 
 **この PR で直さず残した既知の穴** (別ステージで対応):
 
@@ -991,8 +1004,11 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
 - 設定の置き場所は `AozoraEpub3.ini` (`AozoraEpub3Applet.props`)。
   既存キーの命名 (`LastDir` / `UILang`) に合わせて `AutoPreview` とする
 - **INI キーだけでは足りない。Swing 側にチェックボックスと保存処理が要る**
-  (オプション画面への追加 + `props` への書き戻し)。UI 文言は ja/en 両方
-- 発火点は `AozoraEpub3Applet.java` の「プレビュー対象を更新」箇所 (現状 4124 付近)。
+  (C4-2a で新設した**プレビュータブ**に置く + `props` への書き戻しは
+  `saveProperties()` 側で行う — 棚と同じく全体設定であり、プロファイルには混ぜない)。
+  UI 文言は ja/en 両方
+- 発火点は `AozoraEpub3Applet.java` の「プレビュー対象を更新」箇所
+  (`setPreviewTarget(outFile)`。行番号は動くのでメソッド名で探すこと)。
   **kindlegen 経路ではリネーム後に上書きされる**ため、自動オープンはリネーム完了後に行う
 - CLI は明示の `--preview` があるので対象外とする (フラグ優先)
 
