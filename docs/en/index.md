@@ -50,6 +50,24 @@ See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/re
 
 ---
 
+## Screenshots
+
+<div style="display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; margin: 2em 0;">
+  <figure style="flex: 1 1 320px; max-width: 480px; margin: 0;">
+    <img src="../assets/screenshot-app.png" alt="The AozoraEpub3-JDK21 conversion window" style="width: 100%; height: auto;">
+    <figcaption style="text-align: center; font-size: 0.9em;">Conversion window (drag and drop a file or URL)</figcaption>
+  </figure>
+  <figure style="flex: 1 1 320px; max-width: 480px; margin: 0;">
+    <img src="../assets/screenshot-preview.png" alt="Browser preview of a converted EPUB" style="width: 100%; height: auto;">
+    <figcaption style="text-align: center; font-size: 0.9em;">Browser preview (vertical writing, ruby, multi-column)</figcaption>
+  </figure>
+</div>
+
+You can preview a converted EPUB straight in your browser before moving it to a reader app.
+The preview shows *Run, Melos!* by Osamu Dazai from Aozora Bunko (public domain).
+
+---
+
 ## About This Project
 
 This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 21–26 compatibility and support for modern operating systems.

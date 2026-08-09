@@ -41,6 +41,19 @@
 
 ---
 
+## 画面
+
+| 変換画面 | プレビュー |
+|---|---|
+| <img src="docs/assets/screenshot-app.png" alt="AozoraEpub3-JDK21 の変換画面" width="420"> | <img src="docs/assets/screenshot-preview.png" alt="変換した EPUB のブラウザプレビュー" width="420"> |
+
+ファイルまたは URL をドラッグ＆ドロップすると EPUB に変換します。変換した EPUB は
+**ブラウザでそのままプレビュー**できます（縦書き・ルビ・段組を実機に近い形で確認できます）。
+
+> プレビューの画面例は青空文庫の『走れメロス』（太宰治、著作権保護期間満了）を変換したものです。
+
+---
+
 ## 動作環境
 
 **Java 21以降** が必要です（Java 25 LTS まで動作確認済み）。
