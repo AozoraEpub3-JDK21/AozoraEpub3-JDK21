@@ -224,7 +224,8 @@ public class PreviewServerTest
 		// 分割した viewer スクリプトは全て配信できること。
 		// ALLOWED_ASSETS の更新漏れはビューアーが動かない事故になるので、全ファイルを検証する
 		for (String name : new String[] {"viewer-core.js", "viewer-util.js", "viewer-settings.js",
-			"viewer-toc.js", "viewer-frame.js", "viewer-events.js", "viewer-inspector.js"}) {
+			"viewer-toc.js", "viewer-frame.js", "viewer-events.js", "viewer-inspector.js",
+			"viewer-library.js"}) {
 			assertEquals(name, 200, get(base() + "asset/" + name).statusCode());
 		}
 		assertEquals(200, get(base() + "asset/viewer.css").statusCode());
@@ -377,6 +378,25 @@ public class PreviewServerTest
 		// 表紙が無い本にサムネイルを取りに行かせない (全冊ぶんの 404 になる)
 		assertTrue(json, json.contains("\"hasCover\":true"));
 		assertTrue(json, json.contains("\"hasCover\":false"));
+	}
+
+	@Test
+	public void sessionApiTellsWhetherAShelfIsLoaded() throws Exception
+	{
+		// ビューアーは本棚ボタンを出すかどうかをここで決める。
+		// 一覧まで載せると、本文を読むだけのセッション情報に最大 2000 件が付いて回る
+		String before = get(base() + "api/session").body();
+		assertTrue(before, before.contains("\"libraryFolder\":null"));
+		assertTrue(before, before.contains("\"libraryCount\":0"));
+		assertFalse("セッション情報に本棚の一覧を載せてはならない", before.contains("cover-a.epub"));
+
+		shelfWith("cover-a", "plain-b");
+
+		String after = get(base() + "api/session").body();
+		assertTrue(after, after.contains("\"libraryFolder\":\"shelf\""));
+		assertTrue(after, after.contains("\"libraryCount\":2"));
+		assertFalse("棚の位置はフォルダ名だけを出す", after.contains(temp.getRoot().getAbsolutePath()));
+		assertFalse("セッション情報に本棚の一覧を載せてはならない", after.contains("cover-a.epub"));
 	}
 
 	@Test

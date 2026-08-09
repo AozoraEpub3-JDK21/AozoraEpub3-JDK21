@@ -31,6 +31,8 @@
 	</div>
 
 	<div class="group">
+		<!-- 本棚は棚を読み込んだときだけ出す。viewer-library.js が hidden を外す -->
+		<button id="libraryToggle" class="icon" type="button" title="本棚 (l)" aria-label="本棚" hidden>📚</button>
 		<button id="revealFolder" class="icon" type="button" title="EPUB のあるフォルダを開く" aria-label="フォルダを開く">📂</button>
 		<button id="settingsToggle" class="icon" type="button" title="表示設定">Aa</button>
 		<button id="themeToggle" class="icon" type="button" title="テーマ切り替え">◐</button>
@@ -38,7 +40,7 @@
 	</div>
 </header>
 
-<div class="body">
+<div id="mainBody" class="body">
 	<aside id="tocPanel" class="panel left">
 		<div class="panel-head">目次</div>
 		<nav id="tocTree" class="toc"></nav>
@@ -75,6 +77,31 @@
 			<section data-pane="fonts" hidden></section>
 		</div>
 	</aside>
+</div>
+
+<!--
+	本棚。header と footer の間に .body と入れ替わりで並ぶ (flex の兄弟)。
+	重ねて表示しないのは、裏に残った iframe が本文を読み込み続けるのを避けるため。
+-->
+<div id="libraryView" class="library" hidden>
+	<div class="library-head">
+		<div class="title">
+			<span>本棚</span>
+			<span id="libraryFolderName" class="sub"></span>
+		</div>
+		<div class="spacer"></div>
+		<input id="libraryFilter" type="search" placeholder="書名・著者・ファイル名で絞り込み" autocomplete="off">
+		<select id="librarySort" title="並び順">
+			<option value="modified-desc">更新が新しい順</option>
+			<option value="modified-asc">更新が古い順</option>
+			<option value="title">書名順</option>
+			<option value="creator">著者順</option>
+		</select>
+		<button id="libraryReload" class="icon" type="button" title="一覧を更新 (フォルダの再スキャンは行いません)" aria-label="一覧を更新">⟳</button>
+		<button id="libraryClose" class="icon" type="button" title="本棚を閉じる" aria-label="本棚を閉じる">✕</button>
+	</div>
+	<div id="libraryStatus" class="library-status"></div>
+	<div id="libraryGrid" class="library-grid"></div>
 </div>
 
 <div id="settingsPopover" class="popover" hidden>
@@ -142,5 +169,6 @@
 <script src="asset/viewer-frame.js"></script>
 <script src="asset/viewer-events.js"></script>
 <script src="asset/viewer-inspector.js"></script>
+<script src="asset/viewer-library.js"></script>
 </body>
 </html>

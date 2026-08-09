@@ -210,6 +210,9 @@ function onFrameWheel(event)
 function onKeyDown(event)
 {
 	if (event.ctrlKey || event.altKey || event.metaKey) return;
+	// 本棚を見ている間は本文のキー操作を止める (隠れた iframe をページ送りしない)。
+	// 本棚自身のキーは viewer-library.js が別に受け取る
+	if (state.libraryOpen) return;
 	const tag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : '';
 	if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
 

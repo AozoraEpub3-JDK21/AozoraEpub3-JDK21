@@ -55,7 +55,13 @@ const state = {
 	 */
 	pendingFragment: null,
 	/** 遷移後に末尾へスクロールするか。前ページへ戻るときに使う (同上) */
-	pendingAtEnd: false
+	pendingAtEnd: false,
+	/** 棚のフォルダ名。null = 棚を読み込んでいない (viewer-core.js が api/session から取る) */
+	libraryFolder: null,
+	/** /api/library のレスポンス。本棚を開くたびに取り直す (viewer-library.js) */
+	library: null,
+	/** 本棚を表示中か (viewer-library.js) */
+	libraryOpen: false
 };
 
 /** キャッシュした DOM 要素。cacheElements() が一括で埋める */
@@ -69,6 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	cacheElements();
 	loadSettings();
 	bindEvents();
+	// 本棚は自分のイベントを自分で bind する (bindEvents を肥大させない)
+	bindLibraryEvents();
 	applyTheme();
 	startHeartbeat();
 	init().catch(err => showFatal(err));
@@ -137,7 +145,9 @@ function cacheElements()
 		'inspectPanel', 'inspectClose', 'inspectTabs', 'settingsPopover', 'fontSelect', 'gothicSelect',
 		'fontScale', 'fontScaleOut', 'lineHeight', 'lineHeightOut',
 		'marginBlock', 'marginBlockOut', 'marginInline', 'marginInlineOut',
-		'themeSelect', 'settingsReset', 'pageLeft', 'pageRight'];
+		'themeSelect', 'settingsReset', 'pageLeft', 'pageRight',
+		'mainBody', 'libraryToggle', 'libraryView', 'libraryFolderName', 'libraryFilter', 'librarySort',
+		'libraryReload', 'libraryClose', 'libraryStatus', 'libraryGrid'];
 	for (const id of ids) el[id] = document.getElementById(id);
 }
 
@@ -150,16 +160,47 @@ async function init()
 	buildFontSelects();
 	reapplyStyle();
 
+	state.libraryFolder = session.libraryFolder || null;
+	updateLibraryAvailability();
+
 	const params = new URLSearchParams(location.search);
 	state.bookId = params.get('book') || session.defaultBookId;
-	if (!state.bookId) throw new Error('プレビュー対象の EPUB が登録されていません');
+	if (!state.bookId) {
+		// 棚だけを読み込んだ起動 (--preview <フォルダ>)。本棚から選んでもらう
+		if (!state.libraryFolder) throw new Error('プレビュー対象の EPUB が登録されていません');
+		setBookControlsEnabled(false);
+		el.bookTitle.textContent = '本棚';
+		el.bookCreator.textContent = state.libraryFolder;
+		await openLibrary();
+		return;
+	}
 
 	await loadBook();
+}
+
+/**
+ * 本が開かれていない状態では、本に対する操作を押せなくする。
+ * 押せてしまうと、bookId が無いまま要求が飛んで無言で失敗する。
+ */
+function setBookControlsEnabled(enabled)
+{
+	for (const button of [el.tocToggle, el.prevSection, el.nextSection, el.sectionSelect,
+		el.revealFolder, el.inspectToggle]) {
+		button.disabled = !enabled;
+	}
+	// 目次パネルは設定に従う。閉じたまま本を開いても勝手に開かない
+	el.tocPanel.hidden = enabled ? !state.settings.tocOpen : true;
+	el.tocToggle.setAttribute('aria-pressed', String(!el.tocPanel.hidden));
+	if (!enabled) {
+		el.inspectPanel.hidden = true;
+		el.inspectToggle.setAttribute('aria-pressed', 'false');
+	}
 }
 
 async function loadBook()
 {
 	const book = await getJson('api/book/' + encodeURIComponent(state.bookId));
+	setBookControlsEnabled(true);
 	state.book = book;
 	document.title = (book.title || 'EPUB') + ' — AozoraEpub3 プレビュー';
 	el.bookTitle.textContent = book.title || '(無題)';
