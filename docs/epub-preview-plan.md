@@ -711,10 +711,36 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 - 表紙のデコードは**バイト数と画素数の両方**で縛る (`MAX_SOURCE_BYTES` 16MB /
   `MAX_PIXELS` 1600 万)。`ImageIO.read` は寸法を見る前に全部展開してしまうため、
   `ImageReader` に先に幅と高さを問い合わせる。縮小して使うだけなので
-  間引き読み込み (subsampling) も併用する。
-  `ImageInputStream` は必ず閉じる (`code-audit-followups` #4 と同根の漏れ)
+  間引き読み込み (subsampling) も併用する
+- **ImageIO の入力・出力とも一時ファイルを経由させない。**
+  `createImageInputStream` / `ImageIO.write(…, OutputStream)` はいずれも既定で
+  `FileCache*` (一時ファイル) を作る。元データも出力先もメモリ上にあるので
+  `MemoryCacheImageInputStream` / `MemoryCacheImageOutputStream` を明示する。
+  ストリームは必ず閉じる (`code-audit-followups` #4 と同根)
 - JPEG は透過を持てないので、縮小先を白で敷いてから描く
   (透過 PNG の表紙が黒く潰れる)
+- **「変換 → プレビュー → 再変換 → プレビュー」で古い情報を出さない。**
+  本棚のスキャンは起動時の 1 回しか走らないため、記録は放っておくと古くなる。
+  鮮度を保つ面が 3 つあり、どれか 1 つでも欠けると症状が出る。
+
+  | 面 | 欠けたときの症状 |
+  |---|---|
+  | ETag / キャッシュキー | 304 を返し続けて古い表紙が出る |
+  | 表紙エントリ名 (`refreshLibraryEntry`) | 再変換で href が変わると「表紙なし」に固定される |
+  | 一覧 (`libraryJson`) | `hasCover:false` のままでビューアーがサムネイルを取りに来ない |
+
+  `PreviewSession.refreshLibraryEntry(bookId)` に集約し、
+  表紙エンドポイントと一覧生成の両方から通す。判定は stat だけなので安く、
+  ZIP を開き直すのは実際に変わった本だけ。
+- **ロックの中で I/O を抱えない。** `PreviewSession` のモニタは `ensureExtracted`
+  (EPUB 全体の展開。dakuten フォント 222 本なら数秒) も握る。
+  `refreshLibraryEntry` の ZIP 読み直しをロック内で行うと、
+  本棚の一覧を出すだけで本文の配信まで止まる。
+  stat と読み直しはロックの外、書き戻しだけロック内で行う。
+  `LibraryCovers` も同様に、キャッシュの参照・格納だけを排他にする
+  (サーバのスレッドプールは 4 本しかない)
+- 表紙生成の**失敗も覚える**。覚えないと、壊れた表紙の本がグリッドにある限り
+  表示のたびに ZIP を開き直してデコードを試み続ける
 
 #### C3 以降への申し送り
 
@@ -723,7 +749,16 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 - 本棚 UI を足したら `viewer-library.js` を新設し、
   `PreviewServer.ALLOWED_ASSETS` と `viewer.html` の script タグを**両方**更新する
 - スキャンの起動は `PreviewLauncher.loadLibrary(folder)` に集約してある
-  (キャッシュの読み込みと更新まで含む)。C4 の入口はこれを呼ぶだけでよい
+  (キャッシュの読み込みと更新まで含む)。C4 の入口はこれを呼ぶだけでよい。
+  ただし `LibraryIndexCache` をローカル変数で捨てているので、
+  C4 で「棚を切り替える / 再スキャンする」API を足すなら launcher に保持させること
+- **`api/session` の `books` に本棚の本は載らない。** 棚にある本を開くと
+  `defaultBookId` がその本を指す一方 `books` は空になりうる。
+  現在のビューアーは `defaultBookId` を直接使うので問題ないが、
+  C3 が `books` から「開いている本」の一覧を作るなら、
+  `defaultBookId` を別途拾う必要がある
+- **`api/library` は要求のたびに全冊 stat する。** UI からポーリングしないこと
+  (2000 冊で数十 ms。表示・操作の契機でだけ呼ぶ)
 
 #### Phase 2 で入れる小機能 (2026-08-08 ユーザー提案)
 

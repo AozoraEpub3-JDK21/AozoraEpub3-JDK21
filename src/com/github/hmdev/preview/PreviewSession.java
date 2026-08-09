@@ -249,24 +249,44 @@ public class PreviewSession implements AutoCloseable
 	 * <p>変化が無ければ何もしない。読み直せない (消された等) 場合も
 	 * スキャン時の内容を返す。元 EPUB が消えても配り続けるという既存方針に合わせる。</p>
 	 *
+	 * <p><b>ZIP の読み直しはロックの外で行う。</b>このクラスのモニタは
+	 * {@link #ensureExtracted} (EPUB 全体の展開。dakuten フォント 222 本なら数秒) も
+	 * 握るため、ここで抱え込むと本棚の一覧を出すだけで本文の配信まで止まる。</p>
+	 *
 	 * @return 最新の記録。本棚に載っていなければ null
 	 */
-	public synchronized LibraryEntry refreshLibraryEntry(String bookId)
+	public LibraryEntry refreshLibraryEntry(String bookId)
 	{
-		LibraryEntry entry = this.library.get(bookId);
+		LibraryEntry entry;
+		synchronized (this) {
+			entry = this.library.get(bookId);
+		}
 		if (entry == null) return null;
+		long size;
+		long modified;
 		try {
-			long size = Files.size(entry.file());
-			long modified = Files.getLastModifiedTime(entry.file()).toMillis();
-			if (entry.matches(size, modified)) return entry;
-			LibraryEntry fresh = LibraryScanner.read(entry.file(), size, modified);
-			this.library.put(bookId, fresh);
-			return fresh;
+			size = Files.size(entry.file());
+			modified = Files.getLastModifiedTime(entry.file()).toMillis();
+		} catch (IOException | RuntimeException e) {
+			/* 意図的: 状態を取れなければスキャン時の内容を使い続ける */
+			logger.debug("EPUB の状態を取得できませんでした: {}", entry.file(), e);
+			return entry;
+		}
+		if (entry.matches(size, modified)) return entry;
+
+		LibraryEntry fresh;
+		try {
+			fresh = LibraryScanner.read(entry.file(), size, modified);
 		} catch (IOException | RuntimeException e) {
 			/* 意図的: 読み直せなければスキャン時の内容を使い続ける */
 			logger.debug("本棚の記録を更新できませんでした: {}", entry.file(), e);
 			return entry;
 		}
+		synchronized (this) {
+			// 読んでいる間に棚が入れ替わっていたら書き戻さない
+			if (this.library.containsKey(bookId)) this.library.put(bookId, fresh);
+		}
+		return fresh;
 	}
 
 	/** bookId から本を引く。未登録なら null */
@@ -383,12 +403,21 @@ public class PreviewSession implements AutoCloseable
 	 * 表紙が無かった本に表紙が付いても {@code hasCover:false} のままになり、
 	 * ビューアーはサムネイルを取りに来ないので、棚を読み込み直すまで
 	 * 新しい表紙が出ない (書名や更新日時も同様に古いままになる)。
-	 * 判定は stat だけなので安く、ZIP を開き直すのは実際に変わった本だけ。</p>
+	 * 判定は stat だけなので安く、ZIP を開き直すのは実際に変わった本だけ。
+	 * <b>読み直しはロックの外で行う</b> ({@link #refreshLibraryEntry} 参照)。</p>
 	 */
-	public synchronized String libraryJson()
+	public String libraryJson()
 	{
-		for (String id : new ArrayList<>(this.library.keySet())) refreshLibraryEntry(id);
+		List<String> ids;
+		synchronized (this) {
+			ids = new ArrayList<>(this.library.keySet());
+		}
+		for (String id : ids) refreshLibraryEntry(id);
+		return renderLibraryJson();
+	}
 
+	private synchronized String renderLibraryJson()
+	{
 		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 128);
 		buf.append('{');
 		Json.prop(buf, "folderName", folderDisplayName(this.libraryFolder));

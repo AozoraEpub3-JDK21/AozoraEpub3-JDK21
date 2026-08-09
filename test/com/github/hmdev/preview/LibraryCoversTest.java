@@ -158,13 +158,23 @@ public class LibraryCoversTest
 	@Test
 	public void oversizedCoverBytesAreNotRead() throws Exception
 	{
-		// 宣言サイズ・実サイズとも上限を超える表紙は読まない
-		byte[] huge = new byte[(int)LibraryCovers.MAX_SOURCE_BYTES + 1024];
-		EpubFixture fixture = EpubFixture.withEpub3Cover();
-		fixture.putBytes("OPS/images/cover.png", huge);
-		fixture.writeTo(root().resolve("a.epub"));
+		// 上限を外しても「未対応形式」で null になる書き方だとザルなので、
+		// 読み出し自体を直接見る。同じ手順で作った普通の表紙は読めること、
+		// 上限を超えるものだけが読まれないことを対にして確認する
+		Path normalFolder = root().resolve("normal");
+		EpubFixture normal = EpubFixture.withEpub3Cover();
+		normal.putBytes("OPS/images/cover.png", png(60, 90));
+		normal.writeTo(normalFolder.resolve("a.epub"));
 
-		assertNull(thumbnailOf(scanFirst(root())));
+		Path bigFolder = root().resolve("big");
+		EpubFixture huge = EpubFixture.withEpub3Cover();
+		huge.putBytes("OPS/images/cover.png", new byte[(int)LibraryCovers.MAX_SOURCE_BYTES + 1024]);
+		huge.writeTo(bigFolder.resolve("a.epub"));
+
+		assertNotNull("普通の表紙まで読めなくなっている",
+			LibraryCovers.readCoverBytes(scanFirst(normalFolder)));
+		assertNull("上限を超える表紙を読んでいる",
+			LibraryCovers.readCoverBytes(scanFirst(bigFolder)));
 	}
 
 	@Test

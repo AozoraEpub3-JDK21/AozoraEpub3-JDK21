@@ -19,7 +19,11 @@ import java.util.zip.ZipFile;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
+import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.ImageOutputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -139,7 +143,7 @@ public class LibraryCovers
 	}
 
 	/** ZIP から表紙 1 枚を読み出す。大きすぎるものは読まない */
-	private static byte[] readCoverBytes(LibraryEntry entry) throws IOException
+	static byte[] readCoverBytes(LibraryEntry entry) throws IOException
 	{
 		try (ZipFile zip = new ZipFile(entry.file().toFile(), StandardCharsets.UTF_8)) {
 			ZipEntry cover = zip.getEntry(entry.coverEntry());
@@ -175,8 +179,7 @@ public class LibraryCovers
 		// ImageIO.createImageInputStream は既定で FileCacheImageInputStream (一時ファイル) を
 		// 作る。元データは既にメモリ上にあるので、ディスクを経由する意味が無い。
 		// いずれにせよ閉じないと FD が滞留する (code-audit-followups #4 と同根)
-		try (ImageInputStream input =
-				new javax.imageio.stream.MemoryCacheImageInputStream(new ByteArrayInputStream(source))) {
+		try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(source))) {
 			Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
 			if (!readers.hasNext()) {
 				logger.debug("対応していない画像形式のため表紙を作れません");
@@ -240,11 +243,27 @@ public class LibraryCovers
 		return target;
 	}
 
+	/**
+	 * JPEG に符号化する。
+	 *
+	 * <p>{@code ImageIO.write(image, "jpeg", OutputStream)} は内部で
+	 * {@code createImageOutputStream} を呼び、既定で {@code FileCacheImageOutputStream}
+	 * (一時ファイル) を作る。入力側だけメモリにしても、サムネイル 1 枚ごとに
+	 * ディスク往復が残ってしまう。出力側も明示的にメモリへ向ける
+	 * (docs/code-audit-followups.md #4 と同根。既存の {@code ImageUtils} も
+	 * 出力ストリームを明示管理する形に直してある)。</p>
+	 */
 	private static byte[] encodeJpeg(BufferedImage image) throws IOException
 	{
 		ByteArrayOutputStream out = new ByteArrayOutputStream(32 * 1024);
-		if (!ImageIO.write(image, "jpeg", out)) {
-			throw new IOException("JPEG エンコーダが見つかりません");
+		Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+		if (!writers.hasNext()) throw new IOException("JPEG エンコーダが見つかりません");
+		ImageWriter writer = writers.next();
+		try (ImageOutputStream output = new MemoryCacheImageOutputStream(out)) {
+			writer.setOutput(output);
+			writer.write(image);
+		} finally {
+			writer.dispose();
 		}
 		return out.toByteArray();
 	}
