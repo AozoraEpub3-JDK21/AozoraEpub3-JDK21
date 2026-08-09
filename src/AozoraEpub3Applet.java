@@ -40,6 +40,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.text.NumberFormat;
@@ -58,6 +59,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
+import javax.swing.DefaultListModel;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.InputVerifier;
@@ -68,6 +70,7 @@ import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -80,6 +83,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
+import javax.swing.ListSelectionModel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -105,6 +109,8 @@ import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.BookInfoHistory;
 import com.github.hmdev.info.ProfileInfo;
 import com.github.hmdev.info.SectionInfo;
+import com.github.hmdev.preview.LibraryScanner;
+import com.github.hmdev.preview.PreviewLibraryPrefs;
 import com.github.hmdev.swing.JConfirmDialog;
 import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
@@ -277,7 +283,16 @@ public class AozoraEpub3Applet extends JPanel
 	JButton jButtonPreview;
 	/** プレビュー対象。変換が成功するたびに最後の出力で更新される */
 	File previewTargetFile;
-	
+
+	//プレビュータブ (本棚)
+	/** 本棚にするフォルダ。全体設定 (AozoraEpub3.ini) に連番キーで保存する */
+	DefaultListModel<String> libraryDirsModel;
+	JList<String> jListLibraryDirs;
+	JButton jButtonLibraryAdd;
+	JButton jButtonLibraryRemove;
+	/** 本棚をブラウザで開く */
+	JButton jButtonOpenLibrary;
+
 	//画像関連
 	/** 挿絵なし */
 	JCheckBox jCheckNoIllust;
@@ -2462,6 +2477,93 @@ public class AozoraEpub3Applet extends JPanel
 		panel.add(jCheckWebSkipImages);
 
 		////////////////////////////////////////////////////////////////
+		//Tab プレビュー
+		////////////////////////////////////////////////////////////////
+		tabPanel = new JPanel();
+		tabPanel.setLayout(new BoxLayout(tabPanel, BoxLayout.Y_AXIS));
+		jTabbedPane.addTab(I18n.t("ui.tab.preview"), epubIcon, tabPanel);
+
+		////////////////////////////////
+		//本棚フォルダ
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setBorder(new NarrowTitledBorder(
+			I18n.t("ui.border.libraryFolders", LibraryScanner.MAX_SHELVES)));
+		panel.setMaximumSize(new Dimension(1920, 132));
+		panel.setPreferredSize(new Dimension(640, 132));
+		tabPanel.add(panel);
+
+		//全体設定 (プロファイルではない) から読み込む。
+		//loadProperties() に混ぜるとプロファイルを切り替えるたびに棚が入れ替わってしまう
+		this.libraryDirsModel = new DefaultListModel<String>();
+		for (String dir : PreviewLibraryPrefs.load(this.props)) this.libraryDirsModel.addElement(dir);
+		jListLibraryDirs = new JList<String>(this.libraryDirsModel);
+		jListLibraryDirs.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		jListLibraryDirs.setToolTipText(I18n.t("ui.tooltip.libraryFolders"));
+		jListLibraryDirs.setVisibleRowCount(5);
+		jListLibraryDirs.addListSelectionListener(e -> updateLibraryButtons());
+		JScrollPane libraryScrollPane = new JScrollPane(jListLibraryDirs);
+		libraryScrollPane.setBorder(new LineBorder(Color.lightGray, 1));
+		panel.add(libraryScrollPane);
+
+		panelV = new JPanel();
+		panelV.setLayout(new BoxLayout(panelV, BoxLayout.Y_AXIS));
+		panelV.setMaximumSize(new Dimension(110, 132));
+		panelV.setPreferredSize(new Dimension(110, 132));
+		panelV.setBorder(padding2H);
+		panel.add(panelV);
+		jButtonLibraryAdd = new JButton(I18n.t("ui.button.libraryAdd"));
+		jButtonLibraryAdd.setToolTipText(I18n.t("ui.tooltip.libraryAdd"));
+		jButtonLibraryAdd.setBorder(padding5H3V);
+		jButtonLibraryAdd.setFocusPainted(false);
+		jButtonLibraryAdd.setAlignmentX(CENTER_ALIGNMENT);
+		jButtonLibraryAdd.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			addLibraryFolder();
+		}});
+		panelV.add(jButtonLibraryAdd);
+		panelV.add(Box.createVerticalStrut(3));
+		jButtonLibraryRemove = new JButton(I18n.t("ui.button.libraryRemove"));
+		jButtonLibraryRemove.setToolTipText(I18n.t("ui.tooltip.libraryRemove"));
+		jButtonLibraryRemove.setBorder(padding5H3V);
+		jButtonLibraryRemove.setFocusPainted(false);
+		jButtonLibraryRemove.setAlignmentX(CENTER_ALIGNMENT);
+		jButtonLibraryRemove.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			int index = jListLibraryDirs.getSelectedIndex();
+			if (index >= 0) {
+				libraryDirsModel.remove(index);
+				//消した位置に来た項目を選び直す。選択が外れると続けて消せない
+				if (!libraryDirsModel.isEmpty()) {
+					jListLibraryDirs.setSelectedIndex(Math.min(index, libraryDirsModel.size()-1));
+				}
+				updateLibraryButtons();
+			}
+		}});
+		panelV.add(jButtonLibraryRemove);
+		panelV.add(Box.createVerticalGlue());
+
+		////////////////////////////////
+		//本棚を開く
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setMaximumSize(panelSize28);
+		panel.setPreferredSize(panelSize28);
+		panel.setBorder(padding2H);
+		tabPanel.add(panel);
+		jButtonOpenLibrary = new JButton(I18n.t("ui.button.openLibrary"));
+		jButtonOpenLibrary.setToolTipText(I18n.t("ui.tooltip.openLibrary"));
+		jButtonOpenLibrary.setIcon(new ImageIcon(AozoraEpub3Applet.class.getResource("images/epub.png")));
+		jButtonOpenLibrary.setBorder(padding5H3V);
+		jButtonOpenLibrary.setFocusPainted(false);
+		jButtonOpenLibrary.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			openLibrary();
+		}});
+		panel.add(jButtonOpenLibrary);
+		label = new JLabel(I18n.t("ui.label.openLibraryHint"));
+		label.setBorder(padding4H);
+		panel.add(label);
+		this.updateLibraryButtons();
+
+		////////////////////////////////////////////////////////////////
 		//テキストエリア
 		////////////////////////////////////////////////////////////////
 		JPanel lowerPane = new JPanel();
@@ -4497,6 +4599,8 @@ public class AozoraEpub3Applet extends JPanel
 			this.setProfileMoveEnable();
 			//プレビューは対象 EPUB がある場合のみ有効
 			this.updatePreviewButton();
+			//本棚のボタンも一律 setEnabled(true) では戻せない (棚 0 個・未選択がある)
+			this.updateLibraryButtons();
 		}
 
 	}
@@ -4545,6 +4649,92 @@ public class AozoraEpub3Applet extends JPanel
 				SwingUtilities.invokeLater(this::updatePreviewButton);
 			}
 		}, "aozora-preview-launch");
+		worker.setDaemon(true);
+		worker.start();
+	}
+
+	////////////////////////////////////////////////////////////////
+	//本棚 (プレビュータブ)
+	////////////////////////////////////////////////////////////////
+	/** 設定されている棚のフォルダ */
+	private List<String> getLibraryFolders()
+	{
+		if (this.libraryDirsModel == null) return new ArrayList<String>();
+		return new ArrayList<String>(java.util.Collections.list(this.libraryDirsModel.elements()));
+	}
+	/** 本棚まわりのボタンの有効状態を反映する */
+	private void updateLibraryButtons()
+	{
+		if (this.jButtonLibraryAdd == null) return;
+		this.jButtonLibraryAdd.setEnabled(this.libraryDirsModel.size() < LibraryScanner.MAX_SHELVES);
+		this.jButtonLibraryRemove.setEnabled(this.jListLibraryDirs.getSelectedIndex() >= 0);
+		//棚が 1 つも無ければ開いても何も出ない
+		this.jButtonOpenLibrary.setEnabled(!this.libraryDirsModel.isEmpty());
+	}
+	/** 棚にするフォルダを選んで一覧に追加する */
+	private void addLibraryFolder()
+	{
+		if (this.libraryDirsModel.size() >= LibraryScanner.MAX_SHELVES) return;
+		File path = this.currentPath;
+		if (!this.libraryDirsModel.isEmpty()) {
+			//直前に足した棚の隣を探すことが多い
+			File last = new File(this.libraryDirsModel.lastElement());
+			if (last.isDirectory()) path = last;
+		}
+		JFileChooser fileChooser = new JFileChooser(path);
+		fileChooser.setDialogTitle(I18n.t("ui.libraryChooser.title"));
+		fileChooser.setApproveButtonText(I18n.t("ui.libraryChooser.approve"));
+		fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+		if (fileChooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+		String selected = fileChooser.getSelectedFile().getAbsolutePath();
+		//同じフォルダを二重に登録しない (同じ本を二重に数えることになる)。
+		//入れ子の棚を畳むのは PreviewLauncher の役目なのでここではしない
+		String key = PreviewLibraryPrefs.dedupeKey(selected);
+		for (String existing : this.getLibraryFolders()) {
+			if (key.equals(PreviewLibraryPrefs.dedupeKey(existing))) {
+				this.jListLibraryDirs.setSelectedValue(existing, true);
+				return;
+			}
+		}
+		this.libraryDirsModel.addElement(selected);
+		this.jListLibraryDirs.setSelectedIndex(this.libraryDirsModel.size()-1);
+		this.updateLibraryButtons();
+	}
+	/** 設定した棚をブラウザで開く */
+	private void openLibrary()
+	{
+		List<String> folders = this.getLibraryFolders();
+		if (folders.isEmpty()) {
+			JOptionPane.showMessageDialog(this, I18n.t("ui.library.noFolder"),
+				I18n.t("ui.error"), JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		List<Path> paths = new ArrayList<Path>(folders.size());
+		for (String folder : folders) {
+			try {
+				paths.add(Path.of(folder));
+			} catch (InvalidPathException e) {
+				//設定に壊れたパスが残っていても、残りの棚は開けるようにする
+				logger.warn("本棚のフォルダとして扱えないパスを飛ばします: {}", folder, e);
+			}
+		}
+		//初回スキャンは冊数に比例して重い (1 冊ずつ ZIP を開いて OPF を読む)。
+		//2 回目以降は LibraryIndexCache が効いて stat だけになる
+		this.jButtonOpenLibrary.setEnabled(false);
+		Thread worker = new Thread(() -> {
+			try {
+				String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(paths);
+				SwingUtilities.invokeLater(() -> LogAppender.println(I18n.t("ui.library.opened")+" : "+url));
+			} catch (IOException | RuntimeException e) {
+				logger.error("本棚の起動に失敗", e);
+				String detail = (e.getMessage() != null) ? e.getMessage() : e.toString();
+				SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
+					I18n.t("ui.library.failed")+"\n"+detail,
+					I18n.t("ui.error"), JOptionPane.ERROR_MESSAGE));
+			} finally {
+				SwingUtilities.invokeLater(this::updateLibraryButtons);
+			}
+		}, "aozora-library-launch");
 		worker.setDaemon(true);
 		worker.start();
 	}
@@ -5221,7 +5411,10 @@ public class AozoraEpub3Applet extends JPanel
 					applet.props.setProperty("SizeW", ""+size.getWidth());
 					applet.props.setProperty("SizeH", ""+size.getHeight());
 					//props保存と終了処理
-					applet.finalize();
+					//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
+					//ここが Object.finalize() (何もしない) を呼んだままになっていた。
+					//そのため終了時に AozoraEpub3.ini が一切保存されていない
+					applet.saveProperties();
 				} catch (Throwable e) {
 					logger.error("ウィンドウクローズ時の終了処理でエラー", e);
 				}
@@ -5307,7 +5500,10 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			} catch (Exception e) { logger.warn("出力先パス履歴の保存でエラー", e); }
 			this.props.setProperty("LastDir", this.currentPath==null?"":this.currentPath.getAbsolutePath());
-			
+			//本棚のフォルダ。プロファイルではなく全体設定に保存する
+			//(setProperties() は profiles/*.ini にも使われるため、そこへ混ぜてはいけない)
+			if (this.libraryDirsModel != null) PreviewLibraryPrefs.store(this.props, this.getLibraryFolders());
+
 			//アプレットの設定をPropertiesに反映
 			this.setProperties(this.props);
 			
