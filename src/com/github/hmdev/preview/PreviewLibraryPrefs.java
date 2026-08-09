@@ -81,17 +81,21 @@ public final class PreviewLibraryPrefs
 		}
 	}
 
-	/** 空欄を落とし、重複を畳み、上限で打ち切る */
+	/**
+	 * 空欄を落とし、重複を畳み、上限で打ち切る。
+	 *
+	 * <p><b>空欄でない値は 1 文字も削らない。</b>Unix 系ではフォルダ名の末尾に空白を置けるため、
+	 * {@code trim()} を通すと {@code /books/library } が {@code /books/library} になり、
+	 * 保存し直すたびに別のフォルダを指す。空かどうかの判定だけ空白を無視する。</p>
+	 */
 	private static List<String> sanitize(Iterable<String> folders)
 	{
 		List<String> result = new ArrayList<>();
 		Set<String> seen = new LinkedHashSet<>();
 		for (String folder : folders) {
-			if (folder == null) continue;
-			String trimmed = folder.trim();
-			if (trimmed.isEmpty()) continue;
-			if (!seen.add(dedupeKey(trimmed))) continue;
-			result.add(trimmed);
+			if (folder == null || folder.isBlank()) continue;
+			if (!seen.add(dedupeKey(folder))) continue;
+			result.add(folder);
 			if (result.size() >= LibraryScanner.MAX_SHELVES) break;
 		}
 		return result;

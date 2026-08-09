@@ -292,6 +292,10 @@ public class AozoraEpub3Applet extends JPanel
 	JButton jButtonLibraryRemove;
 	/** 本棚をブラウザで開く */
 	JButton jButtonOpenLibrary;
+	/** 本棚を開いている最中か。初回スキャンは冊数に比例して重く、
+	 * その間に一覧を触るとボタンが戻って二重に走らせられてしまう。
+	 * worker スレッドが書き、EDT (ボタンの状態判定) が読む */
+	volatile boolean libraryOpening = false;
 
 	//画像関連
 	/** 挿絵なし */
@@ -4662,14 +4666,17 @@ public class AozoraEpub3Applet extends JPanel
 		if (this.libraryDirsModel == null) return new ArrayList<String>();
 		return new ArrayList<String>(java.util.Collections.list(this.libraryDirsModel.elements()));
 	}
-	/** 本棚まわりのボタンの有効状態を反映する */
+	/** 本棚まわりのボタンの有効状態を反映する。
+	 * 本棚を開いている最中と変換中は触らせない — 一覧を選び直しただけで
+	 * ここが呼ばれるため、busy を見ないとボタンが戻って二重に走らせられる */
 	private void updateLibraryButtons()
 	{
 		if (this.jButtonLibraryAdd == null) return;
-		this.jButtonLibraryAdd.setEnabled(this.libraryDirsModel.size() < LibraryScanner.MAX_SHELVES);
-		this.jButtonLibraryRemove.setEnabled(this.jListLibraryDirs.getSelectedIndex() >= 0);
+		boolean busy = this.libraryOpening || this.isRunning();
+		this.jButtonLibraryAdd.setEnabled(!busy && this.libraryDirsModel.size() < LibraryScanner.MAX_SHELVES);
+		this.jButtonLibraryRemove.setEnabled(!busy && this.jListLibraryDirs.getSelectedIndex() >= 0);
 		//棚が 1 つも無ければ開いても何も出ない
-		this.jButtonOpenLibrary.setEnabled(!this.libraryDirsModel.isEmpty());
+		this.jButtonOpenLibrary.setEnabled(!busy && !this.libraryDirsModel.isEmpty());
 	}
 	/** 棚にするフォルダを選んで一覧に追加する */
 	private void addLibraryFolder()
@@ -4720,7 +4727,8 @@ public class AozoraEpub3Applet extends JPanel
 		}
 		//初回スキャンは冊数に比例して重い (1 冊ずつ ZIP を開いて OPF を読む)。
 		//2 回目以降は LibraryIndexCache が効いて stat だけになる
-		this.jButtonOpenLibrary.setEnabled(false);
+		this.libraryOpening = true;
+		this.updateLibraryButtons();
 		Thread worker = new Thread(() -> {
 			try {
 				String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(paths);
@@ -4732,7 +4740,12 @@ public class AozoraEpub3Applet extends JPanel
 					I18n.t("ui.library.failed")+"\n"+detail,
 					I18n.t("ui.error"), JOptionPane.ERROR_MESSAGE));
 			} finally {
-				SwingUtilities.invokeLater(this::updateLibraryButtons);
+				//フラグを落とすのも EDT で行う。ここで直に false にすると、
+				//戻し忘れた状態で updateLibraryButtons() が先に走る隙ができる
+				SwingUtilities.invokeLater(() -> {
+					this.libraryOpening = false;
+					this.updateLibraryButtons();
+				});
 			}
 		}, "aozora-library-launch");
 		worker.setDaemon(true);

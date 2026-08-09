@@ -47,8 +47,19 @@ public class PreviewLibraryPrefsTest
 		Properties props = new Properties();
 		props.setProperty("PreviewLibraryDir.1", abs("a"));
 		props.setProperty("PreviewLibraryDir.3", "  ");
-		props.setProperty("PreviewLibraryDir.5", "  " + abs("c") + "  ");
+		props.setProperty("PreviewLibraryDir.5", abs("c"));
 		assertEquals(List.of(abs("a"), abs("c")), PreviewLibraryPrefs.load(props));
+	}
+
+	@Test
+	public void trailingSpacesInAFolderNameSurviveTheRoundTrip()
+	{
+		//Unix 系ではフォルダ名の末尾に空白を置ける。trim() すると別のフォルダを指してしまう
+		String spaced = abs("library") + " ";
+		Properties props = new Properties();
+		PreviewLibraryPrefs.store(props, List.of(spaced));
+		assertEquals(spaced, props.getProperty("PreviewLibraryDir.1"));
+		assertEquals(List.of(spaced), PreviewLibraryPrefs.load(props));
 	}
 
 	@Test
