@@ -112,7 +112,8 @@ public class AozoraEpub3
 			// 引数として食べてしまい、既存の使い方が壊れる
 			options.addOption("library", "library", true,
 				"本棚として開くフォルダ (複数指定可、最大 " + com.github.hmdev.preview.LibraryScanner.MAX_SHELVES + " 個)\n"
-				+ "入力ファイルを省略すると本棚だけを開きます");
+				+ "入力ファイルを省略すると本棚だけを開きます\n"
+				+ "-preview と同様、ブラウザを閉じるか Ctrl-C まで待機します");
 
 			CommandLine commandLine;
 			try {
@@ -138,6 +139,9 @@ public class AozoraEpub3
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return 1;
 			}
+			//--library は「棚も一緒に開く」指定なので、単独でもプレビューを開く
+			//(棚だけ読み込んで何も表示しないのでは意味がない)。
+			//-preview と同じくブラウザを閉じるまで待機することはヘルプに明記してある
 			boolean preview = commandLine.hasOption("preview") || (libraryDirs != null && libraryDirs.length > 0);
 			//入力が EPUB だけなら変換せずそのままプレビューする。
 			//-url が併用されている場合は変換対象があるので通常の変換フローに進める
@@ -527,8 +531,11 @@ public class AozoraEpub3
 			if (preview) {
 				if (lastOutputFile == null || !lastOutputFile.isFile()) {
 					LogAppender.println("プレビューできる EPUB がありません");
-					//変換に失敗しても、棚が指定されていれば本棚だけは開く
-					if (libraryDirs != null && libraryDirs.length > 0) return previewLibrary(libraryDirs);
+					//変換に失敗しても、棚が指定されていれば本棚だけは開く。
+					//ただし変換の失敗は終了コードに残す (棚が開けたことで成功にしない)
+					if (libraryDirs != null && libraryDirs.length > 0) {
+						if (previewLibrary(libraryDirs) != 0) errorCount++;
+					}
 				} else if (openPreview(lastOutputFile, libraryDirs)) {
 					awaitTermination();
 				} else {
@@ -556,6 +563,7 @@ public class AozoraEpub3
 	static int previewFiles(String[] fileNames, String[] libraryDirs)
 	{
 		int errorCount = 0;
+		boolean libraryLoaded = false;
 		for (String fileName : fileNames) {
 			File file = new File(fileName);
 			if (!file.isFile()) {
@@ -563,8 +571,11 @@ public class AozoraEpub3
 				errorCount++;
 				continue;
 			}
-			//本棚は最初の 1 冊と一緒に読み込む。2 冊目以降で読み直す必要は無い
-			if (!openPreview(file, errorCount == 0 ? libraryDirs : null)) errorCount++;
+			//本棚は最初に開いた本と一緒に読み込む。2 冊目以降で読み直す必要は無い。
+			//「1 冊目かどうか」を errorCount で代用しないこと — 1 冊目が見つからないと
+			//以降ずっと null が渡り、棚が一度も読み込まれない
+			if (!openPreview(file, libraryLoaded ? null : libraryDirs)) errorCount++;
+			else libraryLoaded = true;
 		}
 		if (errorCount < fileNames.length) awaitTermination();
 		return errorCount > 0 ? 1 : 0;

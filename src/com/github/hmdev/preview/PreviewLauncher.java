@@ -122,22 +122,26 @@ public class PreviewLauncher
 	public static synchronized String previewLibrary(List<Path> folders) throws IOException
 	{
 		if (folders == null || folders.isEmpty()) throw new IOException("本棚のフォルダが指定されていません");
+		// 「このセッションを今作ったか」は棚を読み込む前に決める。
+		// 既に開いているセッション (別のタブで閲覧中かもしれない) を巻き添えで落とさない
+		boolean createdSession = (current == null);
 		loadLibraryInto(folders);
 		try {
 			String url = current.getUrl();
 			openInBrowser(url);
 			return url;
 		} catch (IOException | RuntimeException e) {
-			// 棚しか登録していないセッションはここで畳んでよい
-			// (本を開いている最中なら loadLibraryInto が現行セッションを再利用している)
-			if (current != null && current.session.getDefaultBookId() == null) shutdown();
+			if (createdSession) shutdown();
 			throw e;
 		}
 	}
 
 	/**
-	 * 起動中のプレビューに本棚を取り込む。まだ起動していなければサーバだけ先に立てる。
-	 * ブラウザは開かない。
+	 * 起動中のプレビューの本棚を、指定したフォルダの内容に<b>差し替える</b>。
+	 * まだ起動していなければサーバだけ先に立てる。ブラウザは開かない。
+	 *
+	 * <p>足すのではなく差し替えである点に注意 ({@link PreviewSession#setLibrary(List)})。
+	 * 棚を足していく運用が要るようになったら、まず session 側の契約を決めること。</p>
 	 *
 	 * <p><b>ブラウザを開く前に呼ぶこと。</b>ビューアーは起動時の {@code api/session}
 	 * 一回で本棚ボタンを出すかどうかを決めるため、開いた後に足しても出ない。</p>
@@ -210,6 +214,8 @@ public class PreviewLauncher
 				failure = e;
 				continue;
 			}
+			// 残数は重複排除の前の冊数で減らす。棚をまたいだ重複 (シンボリックリンク経由など)
+			// はここでは分からないため、少なめに見積もる側へ倒している
 			remaining -= entries.size();
 			scanned.addAll(entries);
 			shelves.add(new LibraryShelf(root, entries));
@@ -249,10 +255,13 @@ public class PreviewLauncher
 			// 逆に、後から親を指定された場合は子を畳む
 			roots.removeIf(existing -> existing.startsWith(absolute));
 			roots.add(absolute);
-			if (roots.size() >= LibraryScanner.MAX_SHELVES) {
-				logger.warn("本棚のフォルダは {} 個までです。以降は読み込みません", LibraryScanner.MAX_SHELVES);
-				break;
-			}
+		}
+		// 上限は畳み終わってから掛ける。途中で打ち切ると、後ろに来た「親」で
+		// 畳めるはずの子が残ったまま数だけ埋まる
+		if (roots.size() > LibraryScanner.MAX_SHELVES) {
+			logger.warn("本棚のフォルダは {} 個までです。{} 個目以降は読み込みません",
+				LibraryScanner.MAX_SHELVES, LibraryScanner.MAX_SHELVES + 1);
+			return new ArrayList<>(roots.subList(0, LibraryScanner.MAX_SHELVES));
 		}
 		return roots;
 	}

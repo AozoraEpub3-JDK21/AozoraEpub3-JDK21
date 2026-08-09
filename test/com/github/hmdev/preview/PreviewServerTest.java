@@ -461,6 +461,21 @@ public class PreviewServerTest
 	}
 
 	@Test
+	public void foldingHappensBeforeTheShelfLimitIsApplied()
+	{
+		// 上限を「畳む前」に掛けると、後ろに来た親で畳めるはずの子が残ったまま数だけ埋まる。
+		// 子を MAX_SHELVES 個並べた後に共通の親を渡すと、結果は親 1 個でなければならない
+		Path parent = temp.getRoot().toPath().resolve("outer");
+		List<Path> folders = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES + 2; i++) {
+			folders.add(parent.resolve("child" + i));
+		}
+		folders.add(parent);
+		assertEquals(List.of(parent.toAbsolutePath().normalize()),
+			PreviewLauncher.normalizeShelfFolders(folders));
+	}
+
+	@Test
 	public void sessionApiTellsWhetherAShelfIsLoaded() throws Exception
 	{
 		// ビューアーは本棚ボタンを出すかどうかをここで決める。
