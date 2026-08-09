@@ -4591,6 +4591,10 @@ public class AozoraEpub3Applet extends JPanel
 			this.applet.running = true;
 			//前回の変換結果で自動プレビューが開かないように捨てておく
 			this.applet.autoPreviewTarget = null;
+			//中止フラグを前回から持ち越さない。convertFiles() の先頭でしか戻らないため、
+			//中止した回の後は true のまま残り、次の回が成功しても中止扱いになってしまう
+			//(convertFiles() を一度も通らない回では autoOpenPreview() が直接これを見る)
+			this.applet.convertCanceled = false;
 			this.applet.convertCanceledInWorker = false;
 			this.applet.setConvertEnabled(false);
 			try {

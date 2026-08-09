@@ -1052,6 +1052,13 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
 - **worker が書き EDT が読むフィールドは volatile にする** (ゲート B)。
   `done()` の呼び出し順から happens-before は成立しているが、
   既存の `running` に揃えて意図を示す
+- **中止フラグは変換が終わってもクリアされない** (2 巡目、3 ゲートとも同じ指摘)。
+  上の `convertCanceledInWorker` を足しただけでは、中止した回のあと `convertCanceled` が
+  true のまま残り、次の回の `convertFiles()` 冒頭の写しが**前回の中止**を拾って
+  成功した変換を中止扱いにしてしまう (`convertFiles()` を一度も通らない回では
+  `autoOpenPreview()` が残留値を直接見る)。`ConvertWorker.doInBackground` の入口で
+  `convertCanceled` も false に戻す。
+  **フラグを 1 つ足すと、その初期化漏れという穴も 1 つ増える**という例
 
 **リリース前 todo** (ゲート C の指摘。Phase 2 完了後のリリース作業で行う):
 
