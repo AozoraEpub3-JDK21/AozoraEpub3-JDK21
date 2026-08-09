@@ -107,6 +107,12 @@ public class AozoraEpub3
 			options.addOption("narou", false, "narou.rb互換フォーマット設定(setting_narourb.ini)を適用");
 			options.addOption("preview", "preview", false,
 				"変換後の EPUB を既定ブラウザでプレビュー表示 (入力が .epub のみなら変換せずそのまま表示)\nブラウザを閉じるか Ctrl-C で終了します");
+			// -preview は引数を取らないフラグなので、棚は別オプションにする。
+			// -preview に省略可能な引数を持たせると "-preview book.epub" の book.epub を
+			// 引数として食べてしまい、既存の使い方が壊れる
+			options.addOption("library", "library", true,
+				"本棚として開くフォルダ (複数指定可、最大 " + com.github.hmdev.preview.LibraryScanner.MAX_SHELVES + " 個)\n"
+				+ "入力ファイルを省略すると本棚だけを開きます");
 
 			CommandLine commandLine;
 			try {
@@ -125,15 +131,18 @@ public class AozoraEpub3
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return 0;
 			}
+			String[] libraryDirs = commandLine.getOptionValues("library");
 			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
+				//入力ファイルが無くても、本棚が指定されていれば棚だけを開く
+				if (libraryDirs != null && libraryDirs.length > 0) return previewLibrary(libraryDirs);
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return 1;
 			}
-			boolean preview = commandLine.hasOption("preview");
+			boolean preview = commandLine.hasOption("preview") || (libraryDirs != null && libraryDirs.length > 0);
 			//入力が EPUB だけなら変換せずそのままプレビューする。
 			//-url が併用されている場合は変換対象があるので通常の変換フローに進める
 			if (preview && fileNames.length > 0 && !commandLine.hasOption("url") && isAllEpub(fileNames)) {
-				return previewFiles(fileNames);
+				return previewFiles(fileNames, libraryDirs);
 			}
 			//iniファイル確認
 			if (commandLine.hasOption("i")) {
@@ -518,7 +527,9 @@ public class AozoraEpub3
 			if (preview) {
 				if (lastOutputFile == null || !lastOutputFile.isFile()) {
 					LogAppender.println("プレビューできる EPUB がありません");
-				} else if (openPreview(lastOutputFile)) {
+					//変換に失敗しても、棚が指定されていれば本棚だけは開く
+					if (libraryDirs != null && libraryDirs.length > 0) return previewLibrary(libraryDirs);
+				} else if (openPreview(lastOutputFile, libraryDirs)) {
 					awaitTermination();
 				} else {
 					//起動に失敗しているので待たずに終わる (待っても表示されない)
@@ -542,7 +553,7 @@ public class AozoraEpub3
 	}
 
 	/** EPUB を変換せずにプレビューし、ブラウザが閉じられるか Ctrl-C まで待機する */
-	static int previewFiles(String[] fileNames)
+	static int previewFiles(String[] fileNames, String[] libraryDirs)
 	{
 		int errorCount = 0;
 		for (String fileName : fileNames) {
@@ -552,19 +563,55 @@ public class AozoraEpub3
 				errorCount++;
 				continue;
 			}
-			if (!openPreview(file)) errorCount++;
+			//本棚は最初の 1 冊と一緒に読み込む。2 冊目以降で読み直す必要は無い
+			if (!openPreview(file, errorCount == 0 ? libraryDirs : null)) errorCount++;
 		}
 		if (errorCount < fileNames.length) awaitTermination();
 		return errorCount > 0 ? 1 : 0;
 	}
 
+	/**
+	 * 本棚だけをプレビューし、ブラウザが閉じられるか Ctrl-C まで待機する。
+	 * 入力ファイルを伴わない {@code --library} の経路。
+	 */
+	static int previewLibrary(String[] libraryDirs)
+	{
+		java.util.List<java.nio.file.Path> folders = new ArrayList<>();
+		for (String dir : libraryDirs) {
+			File file = new File(dir);
+			if (!file.isDirectory()) {
+				LogAppender.error("本棚のフォルダが見つかりません : "+file.getAbsolutePath());
+				continue;
+			}
+			folders.add(file.toPath());
+		}
+		if (folders.isEmpty()) return 1;
+		try {
+			String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(folders);
+			LogAppender.println("本棚を開きました : "+url);
+		} catch (IOException e) {
+			logger.error("本棚の起動に失敗: {}", folders, e);
+			LogAppender.error("本棚の起動に失敗しました : "+e.getMessage());
+			return 1;
+		}
+		awaitTermination();
+		return 0;
+	}
+
 	/** 待機ループの間隔。終了条件そのものは PreviewServer が持つ */
 	static final long PREVIEW_POLL_MILLIS = 2_000L;
 
-	/** プレビューをブラウザで開く。成功したら true */
-	static boolean openPreview(File epubFile)
+	/**
+	 * プレビューをブラウザで開く。成功したら true
+	 *
+	 * @param libraryDirs 併せて本棚に取り込むフォルダ。null / 空なら取り込まない。
+	 *        <b>ブラウザを開く前に読み込むこと</b> — ビューアーは起動時の
+	 *        {@code api/session} 一回で本棚ボタンを出すか決めるため、後から足すと出ない
+	 */
+	static boolean openPreview(File epubFile, String[] libraryDirs)
 	{
 		try {
+			if (libraryDirs != null && libraryDirs.length > 0) loadLibraryBeforeOpen(libraryDirs);
 			String url = com.github.hmdev.preview.PreviewLauncher.preview(epubFile);
 			LogAppender.println("プレビューを開きました : "+url);
 			return true;
@@ -572,6 +619,32 @@ public class AozoraEpub3
 			logger.error("プレビューの起動に失敗: {}", epubFile, e);
 			LogAppender.error("プレビューの起動に失敗しました : "+e.getMessage());
 			return false;
+		}
+	}
+
+	/**
+	 * ブラウザを開く前に本棚を読み込む。
+	 * 棚は補助的な情報なので、読めなくても本のプレビュー自体は続ける。
+	 */
+	static void loadLibraryBeforeOpen(String[] libraryDirs)
+	{
+		java.util.List<java.nio.file.Path> folders = new ArrayList<>();
+		for (String dir : libraryDirs) {
+			File file = new File(dir);
+			if (!file.isDirectory()) {
+				LogAppender.error("本棚のフォルダが見つかりません : "+file.getAbsolutePath());
+				continue;
+			}
+			folders.add(file.toPath());
+		}
+		if (folders.isEmpty()) return;
+		try {
+			int count = com.github.hmdev.preview.PreviewLauncher.loadLibraryInto(folders);
+			LogAppender.println("本棚を読み込みました : "+count+" 冊");
+		} catch (IOException e) {
+			/* 意図的: 棚が読めなくても本のプレビューは続ける */
+			logger.warn("本棚の読み込みに失敗: {}", folders, e);
+			LogAppender.error("本棚を読み込めませんでした : "+e.getMessage());
 		}
 	}
 

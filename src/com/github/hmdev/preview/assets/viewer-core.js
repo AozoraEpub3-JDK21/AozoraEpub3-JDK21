@@ -56,10 +56,14 @@ const state = {
 	pendingFragment: null,
 	/** 遷移後に末尾へスクロールするか。前ページへ戻るときに使う (同上) */
 	pendingAtEnd: false,
-	/** 棚のフォルダ名。null = 棚を読み込んでいない (viewer-core.js が api/session から取る) */
+	/** 棚のフォルダ名。棚が 1 つのときだけ入る (複数なら null。viewer-core.js が api/session から取る) */
 	libraryFolder: null,
+	/** 棚の数。0 = 棚を読み込んでいない (viewer-core.js が api/session から取る) */
+	libraryShelfCount: 0,
 	/** 棚の冊数。null = 未取得 (viewer-core.js が api/session から、以後は viewer-library.js が更新) */
 	libraryCount: null,
+	/** 表示する棚の添字。-1 = すべての棚 (viewer-library.js) */
+	libraryShelf: -1,
 	/** /api/library のレスポンス。本棚を開くたびに取り直す (viewer-library.js) */
 	library: null,
 	/** 本棚を表示中か (viewer-library.js) */
@@ -148,7 +152,8 @@ function cacheElements()
 		'fontScale', 'fontScaleOut', 'lineHeight', 'lineHeightOut',
 		'marginBlock', 'marginBlockOut', 'marginInline', 'marginInlineOut',
 		'themeSelect', 'settingsReset', 'pageLeft', 'pageRight',
-		'mainBody', 'libraryToggle', 'libraryView', 'libraryFolderName', 'libraryFilter', 'librarySort',
+		'mainBody', 'libraryToggle', 'libraryView', 'libraryFolderName', 'libraryShelfSelect',
+		'libraryFilter', 'librarySort',
 		'libraryReload', 'libraryClose', 'libraryStatus', 'libraryGrid'];
 	for (const id of ids) el[id] = document.getElementById(id);
 }
@@ -163,17 +168,18 @@ async function init()
 	reapplyStyle();
 
 	state.libraryFolder = session.libraryFolder || null;
+	state.libraryShelfCount = session.libraryShelfCount || 0;
 	state.libraryCount = (session.libraryCount === undefined) ? null : session.libraryCount;
 	updateLibraryAvailability();
 
 	const params = new URLSearchParams(location.search);
 	state.bookId = params.get('book') || session.defaultBookId;
 	if (!state.bookId) {
-		// 棚だけを読み込んだ起動 (--preview <フォルダ>)。本棚から選んでもらう
-		if (!state.libraryFolder) throw new Error('プレビュー対象の EPUB が登録されていません');
+		// 棚だけを読み込んだ起動 (--library <フォルダ>)。本棚から選んでもらう
+		if (!state.libraryShelfCount) throw new Error('プレビュー対象の EPUB が登録されていません');
 		setBookControlsEnabled(false);
 		el.bookTitle.textContent = '本棚';
-		el.bookCreator.textContent = state.libraryFolder;
+		el.bookCreator.textContent = libraryPlaceLabel();
 		await openLibrary();
 		return;
 	}

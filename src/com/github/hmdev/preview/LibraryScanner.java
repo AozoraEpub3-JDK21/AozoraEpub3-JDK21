@@ -46,8 +46,19 @@ public class LibraryScanner
 	/**
 	 * 一覧に載せる上限冊数。
 	 * 超えた分は捨てて警告を出す (黙って切り詰めると「全部見えている」と誤解される)。
+	 *
+	 * <p>棚を複数登録した場合、この上限は<b>棚ごとではなく合計</b>に掛ける
+	 * ({@link PreviewLauncher#loadLibrary(java.util.List)})。一覧は要求のたびに
+	 * 全冊 stat するため、コストは棚数ではなく合計冊数に比例する。</p>
 	 */
 	public static final int MAX_BOOKS = 2000;
+
+	/**
+	 * 棚として登録できるフォルダ数の上限。
+	 * 冊数の頭は {@link #MAX_BOOKS} が押さえるので、こちらは
+	 * 設定 UI と初回スキャンの現実的な範囲として決めている。
+	 */
+	public static final int MAX_SHELVES = 8;
 
 	/**
 	 * 走査中に覚えておく候補パスの上限を決める倍率。

@@ -102,8 +102,15 @@ public class PreviewSession implements AutoCloseable
 	private final Map<Path, String> bookIdByPath = new HashMap<>();
 	/** 本棚に並べる本。キーは {@link #books} と同じ bookId */
 	private final Map<String, LibraryEntry> library = new LinkedHashMap<>();
-	/** 本棚として走査したフォルダ。未設定なら null */
-	private Path libraryFolder;
+	/** 本棚として走査したフォルダ。登録順。棚が無ければ空 */
+	private final List<Path> libraryFolders = new ArrayList<>();
+	/**
+	 * 本がどの棚のものか (bookId → {@link #libraryFolders} の添字)。
+	 *
+	 * <p>棚の表示名 (フォルダ名) ではなく添字で持つ。別々の場所に同じ名前のフォルダを
+	 * 登録できるため、名前で引くと取り違える。</p>
+	 */
+	private final Map<String, Integer> libraryShelfIndex = new HashMap<>();
 	private final FontCatalog fontCatalog;
 	private final FileChannel lockChannel;
 	private final FileLock lock;
@@ -185,25 +192,47 @@ public class PreviewSession implements AutoCloseable
 	}
 
 	/**
+	 * 本棚のスキャン結果を取り込む (棚 1 つ)。
+	 *
+	 * @param folder 走査したフォルダ。null なら棚を空にする
+	 * @param entries {@link LibraryScanner#scan} の結果
+	 */
+	public synchronized void setLibrary(Path folder, List<LibraryEntry> entries)
+	{
+		setLibrary((folder == null) ? List.of() : List.of(new LibraryShelf(folder, entries)));
+	}
+
+	/**
 	 * 本棚のスキャン結果を取り込む。
 	 *
 	 * <p>登録するだけで<b>展開はしない</b>。一覧から選ばれた本が
 	 * {@link #ensureExtracted} を通ったときに初めて展開される。</p>
 	 *
-	 * @param folder 走査したフォルダ
-	 * @param entries {@link LibraryScanner#scan} の結果
+	 * <p><b>同じ本が複数の棚に現れたら、最初に見つけた棚のものとして 1 冊だけ載せる。</b>
+	 * 「出力先フォルダ」と「その親」を両方登録するのは普通に起きるため、
+	 * 素直に登録すると同じ本が二重に並び、冊数の上限も二重に消費する。</p>
+	 *
+	 * @param shelves 棚ごとの走査結果。渡した順に並ぶ
 	 */
-	public synchronized void setLibrary(Path folder, List<LibraryEntry> entries)
+	public synchronized void setLibrary(List<LibraryShelf> shelves)
 	{
-		this.libraryFolder = (folder == null) ? null : folder.toAbsolutePath().normalize();
 		Set<String> previous = new LinkedHashSet<>(this.library.keySet());
 		this.library.clear();
-		for (LibraryEntry entry : entries) {
-			// 既定の本は変えない。棚の 1 冊目が既定になると、
-			// 変換した本を開いたつもりが別の本になる
-			String id = addBook(entry.file(), false);
-			this.library.put(id, entry);
-			previous.remove(id);
+		this.libraryFolders.clear();
+		this.libraryShelfIndex.clear();
+		for (LibraryShelf shelf : shelves) {
+			if (shelf == null || shelf.folder() == null) continue;
+			int index = this.libraryFolders.size();
+			this.libraryFolders.add(shelf.folder().toAbsolutePath().normalize());
+			for (LibraryEntry entry : shelf.entries()) {
+				// 既定の本は変えない。棚の 1 冊目が既定になると、
+				// 変換した本を開いたつもりが別の本になる
+				String id = addBook(entry.file(), false);
+				previous.remove(id);
+				if (this.library.containsKey(id)) continue;
+				this.library.put(id, entry);
+				this.libraryShelfIndex.put(id, index);
+			}
 		}
 		forgetUnusedLibraryBooks(previous);
 	}
@@ -228,8 +257,11 @@ public class PreviewSession implements AutoCloseable
 		}
 	}
 
-	/** 本棚として走査したフォルダ。未設定なら null */
-	public synchronized Path getLibraryFolder() { return this.libraryFolder; }
+	/** 本棚として走査したフォルダ。棚が無ければ空 */
+	public synchronized List<Path> getLibraryFolders() { return new ArrayList<>(this.libraryFolders); }
+
+	/** 本棚に並んでいる冊数 (棚をまたいだ重複は除く) */
+	public synchronized int libraryBookCount() { return this.library.size(); }
 
 	/** bookId に対応する本棚の記録。本棚に載っていなければ null */
 	public synchronized LibraryEntry getLibraryEntry(String bookId)
@@ -377,8 +409,11 @@ public class PreviewSession implements AutoCloseable
 		buf.append('{');
 		Json.prop(buf, "token", this.token);
 		Json.prop(buf, "defaultBookId", this.defaultBookId);
-		// 棚が無いときは null。ホスト上の絶対パスは載せない (api/library と同方針)
-		Json.prop(buf, "libraryFolder", folderDisplayName(this.libraryFolder));
+		// 棚が無いときは null。ホスト上の絶対パスは載せない (api/library と同方針)。
+		// 棚が 2 つ以上あるときは名前を選べないので null にし、冊数と棚数だけを出す
+		Json.prop(buf, "libraryFolder",
+			(this.libraryFolders.size() == 1) ? folderDisplayName(this.libraryFolders.get(0)) : null);
+		Json.prop(buf, "libraryShelfCount", this.libraryFolders.size());
 		Json.prop(buf, "libraryCount", this.library.size());
 		Json.key(buf, "fonts");
 		this.fontCatalog.toJson(buf);
@@ -428,10 +463,23 @@ public class PreviewSession implements AutoCloseable
 
 	private synchronized String renderLibraryJson()
 	{
-		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 128);
+		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 256);
 		buf.append('{');
-		Json.prop(buf, "folderName", folderDisplayName(this.libraryFolder));
+		// 棚が 1 つのときだけ名前を出す (ビューアーの見出し用)。複数なら shelves を見る
+		Json.prop(buf, "folderName",
+			(this.libraryFolders.size() == 1) ? folderDisplayName(this.libraryFolders.get(0)) : null);
 		Json.prop(buf, "count", this.library.size());
+		// 棚ごとの名前と冊数。本は shelf に添字を持つので、名前が重なっても取り違えない
+		Json.key(buf, "shelves");
+		buf.append('[');
+		for (int i = 0; i < this.libraryFolders.size(); i++) {
+			if (i > 0) buf.append(',');
+			buf.append('{');
+			Json.prop(buf, "name", folderDisplayName(this.libraryFolders.get(i)));
+			Json.prop(buf, "count", countBooksOnShelf(i));
+			buf.append('}');
+		}
+		buf.append(']');
 		Json.key(buf, "books");
 		buf.append('[');
 		boolean first = true;
@@ -439,12 +487,14 @@ public class PreviewSession implements AutoCloseable
 			if (!first) buf.append(',');
 			first = false;
 			LibraryEntry entry = mapping.getValue();
+			Integer shelf = this.libraryShelfIndex.get(mapping.getKey());
 			buf.append('{');
 			Json.prop(buf, "id", mapping.getKey());
 			Json.prop(buf, "title", entry.displayName());
 			Json.prop(buf, "creator", entry.creator());
 			Json.prop(buf, "fileName", entry.file().getFileName().toString());
-			Json.prop(buf, "subFolder", subFolderOf(entry.file()));
+			Json.prop(buf, "shelf", (shelf == null) ? -1 : shelf.intValue());
+			Json.prop(buf, "subFolder", subFolderOf(entry.file(), shelf));
 			Json.prop(buf, "modified", entry.modifiedMillis());
 			Json.prop(buf, "size", entry.size());
 			// 表紙が無い本にサムネイルを取りに行かせない (全冊ぶんの 404 になる)
@@ -464,15 +514,30 @@ public class PreviewSession implements AutoCloseable
 		return (name == null) ? folder.toString() : name.toString();
 	}
 
-	/** 棚のルートから見た、その本が入っているサブフォルダ (直下なら空文字) */
-	private String subFolderOf(Path file)
+	/** その棚にある本の冊数 */
+	private int countBooksOnShelf(int shelfIndex)
+	{
+		int count = 0;
+		for (Integer index : this.libraryShelfIndex.values()) {
+			if (index != null && index.intValue() == shelfIndex) count++;
+		}
+		return count;
+	}
+
+	/**
+	 * 棚のルートから見た、その本が入っているサブフォルダ (直下なら空文字)。
+	 * <b>その本が属する棚</b>を基準にすること。別の棚を基準にすると位置が嘘になる。
+	 */
+	private String subFolderOf(Path file, Integer shelfIndex)
 	{
 		Path parent = file.getParent();
-		if (this.libraryFolder == null || parent == null) return "";
+		if (shelfIndex == null || shelfIndex < 0 || shelfIndex >= this.libraryFolders.size()) return "";
+		Path shelfFolder = this.libraryFolders.get(shelfIndex);
+		if (parent == null) return "";
 		try {
 			// 棚の外にある本 (シンボリックリンク経由など) は位置を出さない
-			if (!parent.startsWith(this.libraryFolder)) return "";
-			String relative = this.libraryFolder.relativize(parent).toString();
+			if (!parent.startsWith(shelfFolder)) return "";
+			String relative = shelfFolder.relativize(parent).toString();
 			return relative.replace('\\', '/');
 		} catch (IllegalArgumentException e) {
 			/* 意図的: 別ドライブなど relativize できない場合は位置を出さない */
