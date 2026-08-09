@@ -30,6 +30,7 @@
 | 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | ✅ 対応済（Java 側） | #47 |
 | 16 | 🟡 中 | CLI `-url` に zip / txtz / rar の URL を渡すと変換できない | ✅ 対応済 | #51 |
 | 17 | 🟡 中 | タイトルページの外字画像が `<img src="null"/>` になる | ✅ 対応済 | #49 |
+| 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 
 ---
 
@@ -205,7 +206,7 @@ urlString.substring(...).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_")
 
 ## 🔴 高（追加分）
 
-### 22. CLI で変換すると章見出しが目次に入らない — 未対応
+### 22. CLI で変換すると章見出しが目次に入らない — ✅ 修正済み
 
 **発見**: 2026-08-09、青空文庫の実変換 dogfood 中。**GUI では正常、CLI だけの問題**。
 
@@ -243,16 +244,52 @@ boolean chapterName = "1".equals(props.getProperty("ChapterName"));
   キー追加時のドリフト再発を防げる。あわせて `ChapterUseNextLine` / `SameLineChapter` /
   `ChapterNum*` も GUI 既定値と突き合わせて同時に監査する
 
-**着手前に確認すること（既定値を変えるため）**:
+**実装（2026-08-10）**: 設計判断どおり **D の形で B + A を実施**。
 
-1. `.NET` ポートの比較テストは**凍結済み `reference.epub` との比較**なので即座には壊れないが、
-   reference 再生成スクリプト `tests/integration/generate-reference-epubs.ps1` は
-   narou.rb 側の jar と ini で Java CLI を実行する。**その ini に Chapter\* キーがあるか**を先に見る
-   （あれば当該経路は無影響）
-2. 修正前後の jar で比較テストの 5 ケース（特に見出しを含む `aozora_1567_14913`）を変換し、
-   `nav.xhtml` / `toc.ncx` / opf を diff する
-3. narou.rb 経由も 1 冊 before/after で確認する
-4. 差分が出たら `.NET` ポートへ同じ既定値をポートバックする（`java-port-back-guide.md`）
+- 新規 `src/com/github/hmdev/config/SettingDefaults.java` — 目次設定 18 キー（boolean）+
+  `MaxChapterNameLength`（int）の既定値テーブル。既定値は **GUI のチェックボックス初期状態が正**
+  という原則をコードに固定した
+  - `isSelected(key)` — GUI のウィジェット生成用
+  - `getBoolean(props, key)` / `getInt(props, key)` — CLI 用。`props.containsKey` なら ini 優先、
+    無ければ GUI と同じ既定値（GUI の `setPropsSelected` と同じ意味論）
+  - **表に無いキーは `IllegalArgumentException`**。かつての `hapterNumParenTitle`（先頭の C 欠落）の
+    ようなタイポが黙って false になる事故を型ではなく実行時契約で塞ぐ
+- `AozoraEpub3.java`（CLI）/ `AozoraEpub3Applet.java`（GUI）/ `WriterConfigurator.java`（NavNest・NcxNest）が
+  すべてこの表を参照する。`"1".equals(props.getProperty(...))` を各所に散らさない
+- 同梱 `AozoraEpub3.ini` に `ChapterExclude` / `ChapterSection` / `ChapterH` / `ChapterH1` / `ChapterH2` /
+  `ChapterH3` / `ChapterName` / `MaxChapterNameLength` を明示追記（A。既定値の明文化）
+- テスト `test/com/github/hmdev/config/SettingDefaultsTest.java`（5 件）
+
+**CLI 既定値の変化**（GUI 既定値に合わせた結果）:
+
+| キー | 変更前 | 変更後 |
+|---|---|---|
+| `ChapterH` / `ChapterH1` / `ChapterH2` / `ChapterH3` | false | **true** |
+| `ChapterName` | false | **true** |
+| `ChapterExclude` | false | **true** |
+| `TitleToc` | false | **true** |
+| その他（`ChapterUseNextLine` / `SameLineChapter` / `ChapterNum*` / `ChapterPattern` / `CoverPageToc` / `NavNest` / `NcxNest` / `ChapterSection` / `MaxChapterNameLength`） | 変更なし | 変更なし |
+
+**着手前チェックの結果（すべて実測、2026-08-10）**:
+
+1. `.NET` ポートの比較テスト `JavaComparisonTests` は **ini 経路をまったく通らない**
+   （`GenerateEpubWithDotNet` は `ApplyIniSettings` / `SetChapterLevel` を呼ばず、
+   Core 側のフィールド既定値＝全 ON をそのまま使う）。よって影響なし。
+   なお `src/AozoraEpub3.Cli/Program.cs` の `GetBool(ini, "ChapterH2")` 等は Java の旧実装と同じ形なので、
+   **.NET CLI 側には同じバグが残っている**（ポートバック対象。下記）
+2. 修正前後の jar で比較テスト 5 ケースを **ini なし**で変換 → `dcterms:modified` 以外は完全一致。
+   navPoint 数も 1 / 98 / 46 / 32 / 50 で不変。
+   これらは narou.rb 形式テキストで `［＃改ページ］` 境界が既に `ChapterSection` に拾われており、
+   中見出しが追加のエントリを生まないため
+3. narou.rb 側の ini（`D:\MyNovel\AozoraEpub3_\AozoraEpub3.ini`）は GUI が保存した全 123 キー版で、
+   `ChapterH=` / `ChapterName=` / `ChapterSection=` / `ChapterH1..3=1` / `ChapterExclude=1` / `TitleToc=1` を
+   **すべて明示的に持つ**。実際に n9623lp を before/after 変換しても `dcterms:modified` 以外は完全一致（51 navPoint）
+4. 再現ケース（`456_ruby_145.zip` 銀河鉄道の夜）: **1 件 → 10 件**（表題 + 9 章）。
+   同梱 ini なしでも 9 件（表題ページ自体が出ないため）
+
+**残件**: `.NET` ポート（`src/AozoraEpub3.Cli/Program.cs`）へ同じ既定値テーブルをポートバックする
+（`java-port-back-guide.md`）。`.NET` CLI も ini に Chapter\* キーが無いと章見出しを目次に入れない。
+比較テストは ini 経路を通らないため、ポートバックしても既存テストは壊れない。
 
 ## 🟢 低
 

@@ -2,6 +2,7 @@ package com.github.hmdev.pipeline;
 
 import java.util.Properties;
 
+import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
@@ -71,8 +72,8 @@ public final class WriterConfigurator {
 		epub3ImageWriter.setImageParam(dispW, dispH, coverW, coverH, resizeW, resizeH, singlePageSizeW, singlePageSizeH, singlePageWidth, imageSizeType, fitImage, svgImage, rotateImage,
 				imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQualty, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, nobreSize);
 
-		// toc nesting
-		epub3Writer.setTocParam("1".equals(props.getProperty("NavNest")), "1".equals(props.getProperty("NcxNest")));
+		// toc nesting (キー不在時の値は GUI と共有する SettingDefaults に置く)
+		epub3Writer.setTocParam(SettingDefaults.getBoolean(props, "NavNest"), SettingDefaults.getBoolean(props, "NcxNest"));
 
 		// style settings
 		String[] pageMargin = {};

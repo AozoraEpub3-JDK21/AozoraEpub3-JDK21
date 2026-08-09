@@ -18,6 +18,7 @@ import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
@@ -192,7 +193,7 @@ public class AozoraEpub3
 			int spaceHyp = 0; try { spaceHyp = Integer.parseInt(props.getProperty("SpaceHyphenation")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			boolean tocPage = "1".equals(props.getProperty("TocPage"));//目次追加
 			boolean tocVertical = "1".equals(props.getProperty("TocVertical"));//目次縦書き
-			boolean coverPageToc = "1".equals(props.getProperty("CoverPageToc"));
+			boolean coverPageToc = SettingDefaults.getBoolean(props, "CoverPageToc");
 			int removeEmptyLine = 0; try { removeEmptyLine = Integer.parseInt(props.getProperty("RemoveEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			int maxEmptyLine = 0; try { maxEmptyLine = Integer.parseInt(props.getProperty("MaxEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			
@@ -217,29 +218,31 @@ public class AozoraEpub3
 					}
 				} catch (Exception e) { /* 意図的: PageBreak ブロック内で個別 catch が拾わない例外も既定値のまま続行 */ }
 			}
+			//目次設定はキー不在時に GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
+			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22)
 			//GUI が書くのは "MaxChapterNameLength"。CLI は別名を読んでいたため、
 			//GUI で設定した目次の最大文字数が CLI に届かず 64 のままだった。
 			//手書きの ini で旧名を使っている場合に備えて、そちらも読む
-			int maxLength = 64;
+			int maxLength = SettingDefaults.getInt("MaxChapterNameLength");
 			String maxLengthValue = props.getProperty("MaxChapterNameLength");
 			if (maxLengthValue == null) maxLengthValue = props.getProperty("ChapterNameLength");
 			try { maxLength = Integer.parseInt(maxLengthValue); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			boolean insertTitleToc = "1".equals(props.getProperty("TitleToc"));
-			boolean chapterExclude = "1".equals(props.getProperty("ChapterExclude"));
-			boolean chapterUseNextLine = "1".equals(props.getProperty("ChapterUseNextLine"));
-			boolean chapterSection = !props.containsKey("ChapterSection")||"1".equals(props.getProperty("ChapterSection"));
-			boolean chapterH = "1".equals(props.getProperty("ChapterH"));
-			boolean chapterH1 = "1".equals(props.getProperty("ChapterH1"));
-			boolean chapterH2 = "1".equals(props.getProperty("ChapterH2"));
-			boolean chapterH3 = "1".equals(props.getProperty("ChapterH3"));
-			boolean sameLineChapter = "1".equals(props.getProperty("SameLineChapter"));
-			boolean chapterName = "1".equals(props.getProperty("ChapterName"));
-			boolean chapterNumOnly = "1".equals(props.getProperty("ChapterNumOnly"));
-			boolean chapterNumTitle = "1".equals(props.getProperty("ChapterNumTitle"));
-			boolean chapterNumParen = "1".equals(props.getProperty("ChapterNumParen"));
+			boolean insertTitleToc = SettingDefaults.getBoolean(props, "TitleToc");
+			boolean chapterExclude = SettingDefaults.getBoolean(props, "ChapterExclude");
+			boolean chapterUseNextLine = SettingDefaults.getBoolean(props, "ChapterUseNextLine");
+			boolean chapterSection = SettingDefaults.getBoolean(props, "ChapterSection");
+			boolean chapterH = SettingDefaults.getBoolean(props, "ChapterH");
+			boolean chapterH1 = SettingDefaults.getBoolean(props, "ChapterH1");
+			boolean chapterH2 = SettingDefaults.getBoolean(props, "ChapterH2");
+			boolean chapterH3 = SettingDefaults.getBoolean(props, "ChapterH3");
+			boolean sameLineChapter = SettingDefaults.getBoolean(props, "SameLineChapter");
+			boolean chapterName = SettingDefaults.getBoolean(props, "ChapterName");
+			boolean chapterNumOnly = SettingDefaults.getBoolean(props, "ChapterNumOnly");
+			boolean chapterNumTitle = SettingDefaults.getBoolean(props, "ChapterNumTitle");
+			boolean chapterNumParen = SettingDefaults.getBoolean(props, "ChapterNumParen");
 			//GUI は "ChapterNumParenTitle" で書く。先頭の C が欠けており、CLI では永久に false だった
-			boolean chapterNumParenTitle = "1".equals(props.getProperty("ChapterNumParenTitle"));
-			String chapterPattern = ""; if ("1".equals(props.getProperty("ChapterPattern"))) chapterPattern = props.getProperty("ChapterPatternText");
+			boolean chapterNumParenTitle = SettingDefaults.getBoolean(props, "ChapterNumParenTitle");
+			String chapterPattern = ""; if (SettingDefaults.getBoolean(props, "ChapterPattern")) chapterPattern = props.getProperty("ChapterPatternText");
 			
 			//オプション指定を反映
 			boolean useFileName = false;//表題に入力ファイル名利用

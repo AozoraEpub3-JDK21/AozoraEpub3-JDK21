@@ -104,6 +104,7 @@ import javax.swing.text.TextAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.image.ImageInfoReader;
@@ -1957,9 +1958,12 @@ public class AozoraEpub3Applet extends JPanel
 		label = new JLabel(I18n.t("ui.label.maxChars"));
 		label.setBorder(padding2);
 		panel.add(label);
-		jTextMaxChapterNameLength = new JTextField("64");
+		//目次設定の初期値は SettingDefaults に置いて CLI と共有する
+		//(ここに直接書くと、ini にキーが無いときの挙動が CLI とずれる)
+		int maxChapterNameLength = SettingDefaults.getInt("MaxChapterNameLength");
+		jTextMaxChapterNameLength = new JTextField(Integer.toString(maxChapterNameLength));
 		jTextMaxChapterNameLength.setHorizontalAlignment(JTextField.RIGHT);
-		jTextMaxChapterNameLength.setInputVerifier(new IntegerInputVerifier(64, 1, 999));
+		jTextMaxChapterNameLength.setInputVerifier(new IntegerInputVerifier(maxChapterNameLength, 1, 999));
 		jTextMaxChapterNameLength.setMaximumSize(text3);
 		jTextMaxChapterNameLength.setPreferredSize(text3);
 		jTextMaxChapterNameLength.addFocusListener(new TextSelectFocusListener(jTextMaxChapterNameLength));
@@ -1970,26 +1974,26 @@ public class AozoraEpub3Applet extends JPanel
 		panel.add(label);
 		
 		//表紙
-		jCheckCoverPageToc = new JCheckBox(I18n.t("ui.chk.coverPageToc")+" ");
+		jCheckCoverPageToc = new JCheckBox(I18n.t("ui.chk.coverPageToc")+" ", SettingDefaults.isSelected("CoverPageToc"));
 		jCheckCoverPageToc.setToolTipText(I18n.t("ui.tooltip.coverPageToc"));
 		jCheckCoverPageToc.setFocusPainted(false);
 		jCheckCoverPageToc.setBorder(padding2);
 		panel.add(jCheckCoverPageToc);
 		
 		//表紙
-		jCheckTitleToc = new JCheckBox(I18n.t("ui.chk.titleToc")+" ", true);
+		jCheckTitleToc = new JCheckBox(I18n.t("ui.chk.titleToc")+" ", SettingDefaults.isSelected("TitleToc"));
 		jCheckTitleToc.setToolTipText(I18n.t("ui.tooltip.titleToc"));
 		jCheckTitleToc.setFocusPainted(false);
 		jCheckTitleToc.setBorder(padding2);
 		panel.add(jCheckTitleToc);
 		
-		jCheckChapterUseNextLine = new JCheckBox(I18n.t("ui.chk.chapterNextLine")+" ");
+		jCheckChapterUseNextLine = new JCheckBox(I18n.t("ui.chk.chapterNextLine")+" ", SettingDefaults.isSelected("ChapterUseNextLine"));
 		jCheckChapterUseNextLine.setToolTipText(I18n.t("ui.tooltip.chapterNextLine"));
 		jCheckChapterUseNextLine.setFocusPainted(false);
 		jCheckChapterUseNextLine.setBorder(padding2);
 		panel.add(jCheckChapterUseNextLine);
 		
-		jCheckChapterExclude = new JCheckBox(I18n.t("ui.chk.chapterExclude"), true);
+		jCheckChapterExclude = new JCheckBox(I18n.t("ui.chk.chapterExclude"), SettingDefaults.isSelected("ChapterExclude"));
 		jCheckChapterExclude.setToolTipText(I18n.t("ui.tooltip.chapterExclude"));
 		jCheckChapterExclude.setFocusPainted(false);
 		jCheckChapterExclude.setBorder(padding2);
@@ -2001,14 +2005,14 @@ public class AozoraEpub3Applet extends JPanel
 		panel.setLayout(new FlowLayout(FlowLayout.LEFT, 1, 0));
 		
 		//nav階層化
-		jCheckNavNest = new JCheckBox(I18n.t("ui.chk.navNest")+" ");
+		jCheckNavNest = new JCheckBox(I18n.t("ui.chk.navNest")+" ", SettingDefaults.isSelected("NavNest"));
 		jCheckNavNest.setToolTipText(I18n.t("ui.tooltip.navNest"));
 		jCheckNavNest.setFocusPainted(false);
 		jCheckNavNest.setBorder(padding2);
 		panel.add(jCheckNavNest);
 		
 		//表紙
-		jCheckNcxNest = new JCheckBox(I18n.t("ui.chk.ncxNest")+" ");
+		jCheckNcxNest = new JCheckBox(I18n.t("ui.chk.ncxNest")+" ", SettingDefaults.isSelected("NcxNest"));
 		jCheckNcxNest.setToolTipText(I18n.t("ui.tooltip.ncxNest"));
 		jCheckNcxNest.setFocusPainted(false);
 		jCheckNcxNest.setBorder(padding2);
@@ -2031,24 +2035,24 @@ public class AozoraEpub3Applet extends JPanel
 		label = new JLabel(I18n.t("ui.label.annotation"));
 		label.setBorder(padding2);
 		panel.add(label);
-		jCheckChapterH = new JCheckBox(I18n.t("ui.chk.chapterH")+" ", true);
+		jCheckChapterH = new JCheckBox(I18n.t("ui.chk.chapterH")+" ", SettingDefaults.isSelected("ChapterH"));
 		jCheckChapterH.setFocusPainted(false);
 		jCheckChapterH.setBorder(padding2);
 		panel.add(jCheckChapterH);
-		jCheckChapterH1 = new JCheckBox(I18n.t("ui.chk.chapterH1")+" ", true);
+		jCheckChapterH1 = new JCheckBox(I18n.t("ui.chk.chapterH1")+" ", SettingDefaults.isSelected("ChapterH1"));
 		jCheckChapterH1.setFocusPainted(false);
 		jCheckChapterH1.setBorder(padding2);
 		panel.add(jCheckChapterH1);
-		jCheckChapterH2 = new JCheckBox(I18n.t("ui.chk.chapterH2")+" ", true);
+		jCheckChapterH2 = new JCheckBox(I18n.t("ui.chk.chapterH2")+" ", SettingDefaults.isSelected("ChapterH2"));
 		jCheckChapterH2.setFocusPainted(false);
 		jCheckChapterH2.setBorder(padding2);
 		panel.add(jCheckChapterH2);
-		jCheckChapterH3 = new JCheckBox(I18n.t("ui.chk.chapterH3")+" ", true);
+		jCheckChapterH3 = new JCheckBox(I18n.t("ui.chk.chapterH3")+" ", SettingDefaults.isSelected("ChapterH3"));
 		jCheckChapterH3.setFocusPainted(false);
 		jCheckChapterH3.setBorder(padding2);
 		panel.add(jCheckChapterH3);
 		
-		jCheckSameLineChapter = new JCheckBox(I18n.t("ui.chk.sameLineChapter"), false);
+		jCheckSameLineChapter = new JCheckBox(I18n.t("ui.chk.sameLineChapter"), SettingDefaults.isSelected("SameLineChapter"));
 		jCheckSameLineChapter.setFocusPainted(false);
 		jCheckSameLineChapter.setBorder(padding2);
 		panel.add(jCheckSameLineChapter);
@@ -2059,12 +2063,12 @@ public class AozoraEpub3Applet extends JPanel
 		panel.setBorder(padding3B);
 		panelV.add(panel);
 		//改ページ後を目次に追加
-		jCheckChapterSection = new JCheckBox(I18n.t("ui.chk.chapterSection")+" ", true);
+		jCheckChapterSection = new JCheckBox(I18n.t("ui.chk.chapterSection")+" ", SettingDefaults.isSelected("ChapterSection"));
 		jCheckChapterSection.setToolTipText(I18n.t("ui.tooltip.chapterSection"));
 		jCheckChapterSection.setFocusPainted(false);
 		jCheckChapterSection.setBorder(padding2);
 		panel.add(jCheckChapterSection);
-		jCheckChapterName = new JCheckBox(I18n.t("ui.chk.chapterName"), true);
+		jCheckChapterName = new JCheckBox(I18n.t("ui.chk.chapterName"), SettingDefaults.isSelected("ChapterName"));
 		jCheckChapterName.setToolTipText(I18n.t("ui.tooltip.chapterName"));
 		jCheckChapterName.setFocusPainted(false);
 		jCheckChapterName.setBorder(padding2);
@@ -2075,20 +2079,20 @@ public class AozoraEpub3Applet extends JPanel
 		panel.setMaximumSize(panelVMaxSize);
 		panel.setBorder(padding3B);
 		panelV.add(panel);
-		jCheckChapterNumOnly = new JCheckBox(I18n.t("ui.chk.chapterNumOnly"));
+		jCheckChapterNumOnly = new JCheckBox(I18n.t("ui.chk.chapterNumOnly"), SettingDefaults.isSelected("ChapterNumOnly"));
 		jCheckChapterNumOnly.setFocusPainted(false);
 		jCheckChapterNumOnly.setBorder(padding2);
 		panel.add(jCheckChapterNumOnly);
-		jCheckChapterNumTitle = new JCheckBox(I18n.t("ui.chk.chapterNumTitle")+"  ");
+		jCheckChapterNumTitle = new JCheckBox(I18n.t("ui.chk.chapterNumTitle")+"  ", SettingDefaults.isSelected("ChapterNumTitle"));
 		jCheckChapterNumTitle.setFocusPainted(false);
 		jCheckChapterNumTitle.setBorder(padding2);
 		panel.add(jCheckChapterNumTitle);
-		jCheckChapterNumParen = new JCheckBox(I18n.t("ui.chk.chapterNumParen"));
+		jCheckChapterNumParen = new JCheckBox(I18n.t("ui.chk.chapterNumParen"), SettingDefaults.isSelected("ChapterNumParen"));
 		jCheckChapterNumParen.setToolTipText(I18n.t("ui.tooltip.chapterNumParen"));
 		jCheckChapterNumParen.setFocusPainted(false);
 		jCheckChapterNumParen.setBorder(padding2);
 		panel.add(jCheckChapterNumParen);
-		jCheckChapterNumParenTitle = new JCheckBox(I18n.t("ui.chk.chapterNumParenTitle"));
+		jCheckChapterNumParenTitle = new JCheckBox(I18n.t("ui.chk.chapterNumParenTitle"), SettingDefaults.isSelected("ChapterNumParenTitle"));
 		jCheckChapterNumParenTitle.setFocusPainted(false);
 		jCheckChapterNumParenTitle.setBorder(padding2);
 		panel.add(jCheckChapterNumParenTitle);
@@ -2098,7 +2102,7 @@ public class AozoraEpub3Applet extends JPanel
 		panel.setMaximumSize(panelVMaxSize);
 		panel.setBorder(padding0);
 		panelV.add(panel);
-		jCheckChapterPattern = new JCheckBox(I18n.t("ui.chk.chapterPattern"));
+		jCheckChapterPattern = new JCheckBox(I18n.t("ui.chk.chapterPattern"), SettingDefaults.isSelected("ChapterPattern"));
 		jCheckChapterPattern.setToolTipText(I18n.t("ui.tooltip.chapterPattern"));
 		jCheckChapterPattern.setFocusPainted(false);
 		jCheckChapterPattern.setBorder(padding2);
