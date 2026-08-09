@@ -148,13 +148,39 @@ public class WebAozoraConverterHamelnEpisodeListTest {
 			+ episode("https://novel.syosetu.org/novel/12345/3.html", "絶対")), BASE_URI);
 		HashMap<String, String> map = invoke(doc);
 
+		//期待値はリテラルで固定する (fullUrl() と突き合わせるだけでは規則の写しになってしまう)
+		assertEquals("相対 href は正規化せずに連結する",
+			"第一章", map.get("https://novel.syosetu.org/novel/12345/./1.html"));
+		assertEquals("ルート相対は baseUri に付ける",
+			"第一章", map.get("https://novel.syosetu.org/novel/12345/2.html"));
+		assertEquals("絶対 URL はそのまま",
+			"第一章", map.get("https://novel.syosetu.org/novel/12345/3.html"));
+
+		//上のリテラルが本体の連結規則と一致していることの確認
 		for (String href : new String[]{"./1.html", "/novel/12345/2.html",
 				"https://novel.syosetu.org/novel/12345/3.html"}) {
 			assertTrue("本体と同じ規則のキーで引ける: "+href, map.containsKey(fullUrl(href)));
 		}
-		//ハーメルンの実際の href は "./N.html"。連結したままなので "/./" が残る
-		assertTrue("相対 href は正規化せずに連結する",
-			map.containsKey(LIST_BASE + "./1.html"));
+	}
+
+	/**
+	 * 新構造がある限り旧構造の表は見ない。
+	 * 「新構造だが章なし」で空になったときに表へ落とすと、
+	 * {@code #maind} 内に別の表があるだけで偽の章が付いてしまう。
+	 */
+	@Test
+	public void aStrayTableIsIgnoredWhenTheEpisodeListIsPresent() throws Exception
+	{
+		Document doc = Jsoup.parse("<html><body><div id=\"maind\"><div class=\"ss\">"
+			+ "<section class=\"episode-list\"><ul class=\"episode-list__items\">"
+			+ episode("./1.html", "章なしの話")
+			+ "</ul></section>"
+			//作品情報などに使われる別の表 (章一覧ではない)
+			+ "<table><tr><td colspan=\"2\"><strong>関連作品</strong></td></tr>"
+			+ "<tr><td><a href=\"/novel/99999/1.html\">別作品</a></td><td></td></tr></table>"
+			+ "</div></div></body></html>", BASE_URI);
+
+		assertTrue("表から偽の章を拾わない", invoke(doc).isEmpty());
 	}
 
 	@Test

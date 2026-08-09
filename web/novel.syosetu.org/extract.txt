@@ -41,7 +41,13 @@
 ##
 ##   旧構造のセレクタはキャッシュ済み HTML のために候補として残してある。
 ##   章マッピングは Java 側 (WebAozoraConverter#buildEpisodeChapterMapFromToc) が
-##   新旧どちらの構造からも組み立てる。
+##   新旧どちらの構造からも組み立てる (新構造がある限り旧構造の表は見ない)。
+##
+##   なお SUB_UPDATE の保存形式と各話 href の形が変わるため、旧版のキャッシュを
+##   持っている場合は本修正後の初回だけ全話を取り直す。
+##
+##   話一覧のページ分割は現状も無い (136 話が 1 ページで返ることを 2026-08-09 に確認)。
+##   PAGE_URL を定義していないため、将来分割されると無音で途中までになる。
 ##
 ## 【各話 href は "./N.html" (相対) だが正規化しない】
 ##   フル URL は listBaseUrl + href の単純連結なので .../402358/./1.html になる。
@@ -84,8 +90,16 @@ DESCRIPTION	#maind .ss:1
 HREF	#maind .episode-list__link,#maind .ss table a
 
 ## 一覧に記載されている各話の更新日時 (更新チェック用)
-## 新: <time class="episode-list__date">2026/07/28 06:30</time> / 旧: <NOBR>
-SUB_UPDATE	#maind .episode-list__date,#maind .ss table nobr
+## 新: 各話のリンクそのもの / 旧: <NOBR>
+##
+## <time class="episode-list__date"> だけを見てはいけない。createNoUpdateUrls は
+## 選んだ要素の「内側 HTML」を指紋にして前回と比較するが、改稿日時は <time> ではなく
+## 兄弟の <span class="episode-list__revision" title="2026/08/05 07:12改稿"> にしかない。
+## <time> だけだと改稿しても指紋が変わらず、古い本文がキャッシュから使われ続ける。
+## リンク要素まで上げると内側にタイトル・投稿日時・改稿日時がすべて入る。
+## HREF と同じセレクタなので要素数も必ず一致する
+## (hrefs.size() != updates.size() だと更新判定を諦めて全話再取得になる)。
+SUB_UPDATE	#maind .episode-list__link,#maind .ss table nobr
 
 ## 一覧ページのタイトル (本文側に無ければこれを利用)
 ## 新: <span class="episode-list__title"> / 旧: <td> 内の <a>

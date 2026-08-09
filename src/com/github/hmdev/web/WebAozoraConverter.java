@@ -2747,8 +2747,11 @@ public class WebAozoraConverter
 	 * @return episodeFullURL → chapterTitle マップ (章なし作品では空マップ)
 	 */
 	private HashMap<String, String> buildEpisodeChapterMapFromToc(Document doc, String listBaseUrl) {
-		HashMap<String, String> result = buildEpisodeChapterMapFromEpisodeList(doc, listBaseUrl);
-		if (!result.isEmpty()) return result;
+		//新構造があるならそちらだけを見る。「新構造だが章なし」で空になったときに
+		//旧構造へ落とすと、#maind 内に別の表があれば偽の章が付いてしまう
+		if (doc.selectFirst("#maind .episode-list__items") != null) {
+			return buildEpisodeChapterMapFromEpisodeList(doc, listBaseUrl);
+		}
 		return buildEpisodeChapterMapFromTocTable(doc, listBaseUrl);
 	}
 
