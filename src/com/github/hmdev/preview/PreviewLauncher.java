@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,6 +105,26 @@ public class PreviewLauncher
 			if (createdSession) shutdown();
 			throw e;
 		}
+	}
+
+	/**
+	 * フォルダを走査して本棚に取り込む。ブラウザは開かない。
+	 *
+	 * <p>キャッシュの読み込みと更新まで面倒を見る。
+	 * {@link LibraryScanner#scan} はキャッシュを読むだけで更新しないため、
+	 * 呼び出し側でこれを忘れると毎回全冊が再パースになる。</p>
+	 *
+	 * @return 取り込んだ冊数
+	 */
+	public int loadLibrary(Path folder) throws IOException
+	{
+		LibraryIndexCache cache = new LibraryIndexCache();
+		cache.load();
+		List<LibraryEntry> entries = LibraryScanner.scan(folder, LibraryScanner.DEFAULT_MAX_DEPTH, cache);
+		cache.update(entries);
+		this.session.setLibrary(folder, entries);
+		logger.info("本棚を読み込みました: {} ({} 冊)", folder, entries.size());
+		return entries.size();
 	}
 
 	/** 起動中のプレビューがあれば返す。無ければ null */

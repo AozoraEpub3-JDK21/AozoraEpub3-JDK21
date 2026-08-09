@@ -10,7 +10,9 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,6 +95,15 @@ public class PreviewSession implements AutoCloseable
 	private final Path root;
 	private final String token;
 	private final Map<String, Book> books = new LinkedHashMap<>();
+	/**
+	 * 絶対パスから bookId を引く索引。
+	 * 本棚は 2000 冊まで登録しうるので、線形探索で重複判定すると O(N^2) になる。
+	 */
+	private final Map<Path, String> bookIdByPath = new HashMap<>();
+	/** 本棚に並べる本。キーは {@link #books} と同じ bookId */
+	private final Map<String, LibraryEntry> library = new LinkedHashMap<>();
+	/** 本棚として走査したフォルダ。未設定なら null */
+	private Path libraryFolder;
 	private final FontCatalog fontCatalog;
 	private final FileChannel lockChannel;
 	private final FileLock lock;
@@ -129,8 +140,9 @@ public class PreviewSession implements AutoCloseable
 	public Path getRoot() { return this.root; }
 	public String getToken() { return this.token; }
 	public FontCatalog getFontCatalog() { return this.fontCatalog; }
-	public String getDefaultBookId() { return this.defaultBookId; }
-	public List<Book> getBooks() { return new ArrayList<>(this.books.values()); }
+	// books / defaultBookId は setLibrary の一括登録と並行して読まれうる
+	public synchronized String getDefaultBookId() { return this.defaultBookId; }
+	public synchronized List<Book> getBooks() { return new ArrayList<>(this.books.values()); }
 
 	/**
 	 * 本を登録する。この時点では展開しない。
@@ -140,17 +152,141 @@ public class PreviewSession implements AutoCloseable
 	 */
 	public synchronized String addBook(Path epubFile)
 	{
+		return addBook(epubFile, true);
+	}
+
+	/**
+	 * 本を登録する。
+	 *
+	 * @param mayBecomeDefault 既定の本がまだ無いとき、これを既定にしてよいか。
+	 *        <b>本棚の登録では false を渡すこと。</b>true のままだと、
+	 *        本棚を先に読み込んだ場合に「棚の 1 冊目」が既定になり、
+	 *        変換した本を開いたつもりが別の本が表示される
+	 */
+	synchronized String addBook(Path epubFile, boolean mayBecomeDefault)
+	{
 		// normalize しないと out/./book.epub と out/book.epub が別扱いになり二重展開される
 		Path absolute = epubFile.toAbsolutePath().normalize();
 		// 同じ EPUB を繰り返しプレビューしても展開先が増えないようにする
 		// (GUI のボタンを押すたびに dakuten フォント 222 本が複製されるのを避ける)
-		for (Book existing : this.books.values()) {
-			if (existing.epubFile.equals(absolute)) return existing.id;
+		String existing = this.bookIdByPath.get(absolute);
+		if (existing != null) {
+			// 既に本棚として登録済みの本を、改めて「開く本」として渡された場合。
+			// 出力先フォルダを棚にしていれば必ずこの経路を通るので、
+			// ここで既定を決めないと既定の本が無いままビューアーが開く
+			if (mayBecomeDefault && this.defaultBookId == null) this.defaultBookId = existing;
+			return existing;
 		}
 		String id = "b" + (this.nextBookNumber++);
 		this.books.put(id, new Book(id, absolute));
-		if (this.defaultBookId == null) this.defaultBookId = id;
+		this.bookIdByPath.put(absolute, id);
+		if (mayBecomeDefault && this.defaultBookId == null) this.defaultBookId = id;
 		return id;
+	}
+
+	/**
+	 * 本棚のスキャン結果を取り込む。
+	 *
+	 * <p>登録するだけで<b>展開はしない</b>。一覧から選ばれた本が
+	 * {@link #ensureExtracted} を通ったときに初めて展開される。</p>
+	 *
+	 * @param folder 走査したフォルダ
+	 * @param entries {@link LibraryScanner#scan} の結果
+	 */
+	public synchronized void setLibrary(Path folder, List<LibraryEntry> entries)
+	{
+		this.libraryFolder = (folder == null) ? null : folder.toAbsolutePath().normalize();
+		Set<String> previous = new LinkedHashSet<>(this.library.keySet());
+		this.library.clear();
+		for (LibraryEntry entry : entries) {
+			// 既定の本は変えない。棚の 1 冊目が既定になると、
+			// 変換した本を開いたつもりが別の本になる
+			String id = addBook(entry.file(), false);
+			this.library.put(id, entry);
+			previous.remove(id);
+		}
+		forgetUnusedLibraryBooks(previous);
+	}
+
+	/**
+	 * 棚から外れた本の登録を捨てる。
+	 *
+	 * <p>{@link #library} だけを clear して {@link #books} を残すと、棚を切り替えるたびに
+	 * 登録が単調増加し、{@code api/session} が棚の全冊 (最大 2000 件) を載せることになる。</p>
+	 *
+	 * <p>ただし<b>既に展開した本と既定の本は残す</b>。表示中の本を消すと
+	 * ビューアーが開いているページが丸ごと 404 になる。</p>
+	 */
+	private void forgetUnusedLibraryBooks(Set<String> removedIds)
+	{
+		for (String id : removedIds) {
+			if (id.equals(this.defaultBookId)) continue;
+			Book book = this.books.get(id);
+			if (book == null || book.dir != null) continue;
+			this.books.remove(id);
+			this.bookIdByPath.remove(book.epubFile);
+		}
+	}
+
+	/** 本棚として走査したフォルダ。未設定なら null */
+	public synchronized Path getLibraryFolder() { return this.libraryFolder; }
+
+	/** bookId に対応する本棚の記録。本棚に載っていなければ null */
+	public synchronized LibraryEntry getLibraryEntry(String bookId)
+	{
+		return this.library.get(bookId);
+	}
+
+	/**
+	 * 本棚の 1 冊を、いまのファイル状態で読み直す。
+	 *
+	 * <p>本棚のスキャンは起動時の 1 回しか走らない。「変換 → プレビュー →
+	 * 設定を変えて再変換 → プレビュー」がこの機能の中心的な使い方なので、
+	 * <b>スキャン時の内容を持ち続けると、変換し直した本の表紙が古いまま</b>になる。
+	 * サイズや更新時刻だけを見直しても足りない — 再変換で OPF の表紙 href が
+	 * 変われば、古いパスを新しい ZIP に探しに行って「表紙なし」になる。</p>
+	 *
+	 * <p>変化が無ければ何もしない。読み直せない (消された等) 場合も
+	 * スキャン時の内容を返す。元 EPUB が消えても配り続けるという既存方針に合わせる。</p>
+	 *
+	 * <p><b>ZIP の読み直しはロックの外で行う。</b>このクラスのモニタは
+	 * {@link #ensureExtracted} (EPUB 全体の展開。dakuten フォント 222 本なら数秒) も
+	 * 握るため、ここで抱え込むと本棚の一覧を出すだけで本文の配信まで止まる。</p>
+	 *
+	 * @return 最新の記録。本棚に載っていなければ null
+	 */
+	public LibraryEntry refreshLibraryEntry(String bookId)
+	{
+		LibraryEntry entry;
+		synchronized (this) {
+			entry = this.library.get(bookId);
+		}
+		if (entry == null) return null;
+		long size;
+		long modified;
+		try {
+			size = Files.size(entry.file());
+			modified = Files.getLastModifiedTime(entry.file()).toMillis();
+		} catch (IOException | RuntimeException e) {
+			/* 意図的: 状態を取れなければスキャン時の内容を使い続ける */
+			logger.debug("EPUB の状態を取得できませんでした: {}", entry.file(), e);
+			return entry;
+		}
+		if (entry.matches(size, modified)) return entry;
+
+		LibraryEntry fresh;
+		try {
+			fresh = LibraryScanner.read(entry.file(), size, modified);
+		} catch (IOException | RuntimeException e) {
+			/* 意図的: 読み直せなければスキャン時の内容を使い続ける */
+			logger.debug("本棚の記録を更新できませんでした: {}", entry.file(), e);
+			return entry;
+		}
+		synchronized (this) {
+			// 読んでいる間に棚が入れ替わっていたら書き戻さない
+			if (this.library.containsKey(bookId)) this.library.put(bookId, fresh);
+		}
+		return fresh;
 	}
 
 	/** bookId から本を引く。未登録なら null */
@@ -240,6 +376,9 @@ public class PreviewSession implements AutoCloseable
 		buf.append('[');
 		boolean first = true;
 		for (Book book : this.books.values()) {
+			// 本棚の本はここに載せない。載せると最大 2000 件が毎回のセッション情報に
+			// 付いて回る。棚は api/library が返す
+			if (this.library.containsKey(book.id)) continue;
 			if (!first) buf.append(',');
 			first = false;
 			buf.append('{');
@@ -252,6 +391,84 @@ public class PreviewSession implements AutoCloseable
 		buf.append(']');
 		buf.append('}');
 		return buf.toString();
+	}
+
+	/**
+	 * 本棚の一覧を JSON で返す。
+	 *
+	 * <p>{@code api/session} と同じく<b>ホスト上の絶対パスは載せない</b>。
+	 * 棚の位置はフォルダ名だけ、本の位置は棚からの相対フォルダだけを出す。</p>
+	 *
+	 * <p>出すたびに<b>変わっている本の記録を読み直す</b>。読み直さないと、
+	 * 表紙が無かった本に表紙が付いても {@code hasCover:false} のままになり、
+	 * ビューアーはサムネイルを取りに来ないので、棚を読み込み直すまで
+	 * 新しい表紙が出ない (書名や更新日時も同様に古いままになる)。
+	 * 判定は stat だけなので安く、ZIP を開き直すのは実際に変わった本だけ。
+	 * <b>読み直しはロックの外で行う</b> ({@link #refreshLibraryEntry} 参照)。</p>
+	 */
+	public String libraryJson()
+	{
+		List<String> ids;
+		synchronized (this) {
+			ids = new ArrayList<>(this.library.keySet());
+		}
+		for (String id : ids) refreshLibraryEntry(id);
+		return renderLibraryJson();
+	}
+
+	private synchronized String renderLibraryJson()
+	{
+		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 128);
+		buf.append('{');
+		Json.prop(buf, "folderName", folderDisplayName(this.libraryFolder));
+		Json.prop(buf, "count", this.library.size());
+		Json.key(buf, "books");
+		buf.append('[');
+		boolean first = true;
+		for (Map.Entry<String, LibraryEntry> mapping : this.library.entrySet()) {
+			if (!first) buf.append(',');
+			first = false;
+			LibraryEntry entry = mapping.getValue();
+			buf.append('{');
+			Json.prop(buf, "id", mapping.getKey());
+			Json.prop(buf, "title", entry.displayName());
+			Json.prop(buf, "creator", entry.creator());
+			Json.prop(buf, "fileName", entry.file().getFileName().toString());
+			Json.prop(buf, "subFolder", subFolderOf(entry.file()));
+			Json.prop(buf, "modified", entry.modifiedMillis());
+			Json.prop(buf, "size", entry.size());
+			// 表紙が無い本にサムネイルを取りに行かせない (全冊ぶんの 404 になる)
+			Json.prop(buf, "hasCover", entry.coverEntry() != null);
+			buf.append('}');
+		}
+		buf.append(']');
+		buf.append('}');
+		return buf.toString();
+	}
+
+	/** 棚の表示名。ドライブ直下など getFileName() が null になる場合はパス表記のまま */
+	static String folderDisplayName(Path folder)
+	{
+		if (folder == null) return null;
+		Path name = folder.getFileName();
+		return (name == null) ? folder.toString() : name.toString();
+	}
+
+	/** 棚のルートから見た、その本が入っているサブフォルダ (直下なら空文字) */
+	private String subFolderOf(Path file)
+	{
+		Path parent = file.getParent();
+		if (this.libraryFolder == null || parent == null) return "";
+		try {
+			// 棚の外にある本 (シンボリックリンク経由など) は位置を出さない
+			if (!parent.startsWith(this.libraryFolder)) return "";
+			String relative = this.libraryFolder.relativize(parent).toString();
+			return relative.replace('\\', '/');
+		} catch (IllegalArgumentException e) {
+			/* 意図的: 別ドライブなど relativize できない場合は位置を出さない */
+			logger.debug("棚からの相対パスを求められませんでした: {}", file, e);
+			return "";
+		}
 	}
 
 	/** 本の spine と目次を JSON で返す (未展開なら展開する) */

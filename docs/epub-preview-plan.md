@@ -400,6 +400,7 @@ package version は何か、フォントが埋まっているか) をその場�
 | `LibraryEntry` | 本棚 1 冊の書誌 (パス・サイズ・更新時刻・書名・著者・表紙エントリ) の record | 2 |
 | `LibraryScanner` | フォルダ再帰スキャン + ZIP 直読みの OPF メタデータ + 表紙位置の特定 | 2 |
 | `LibraryIndexCache` | インデックスの永続化 (size + mtime で無効化) | 2 |
+| `LibraryCovers` | 表紙サムネイルの生成とセッション内キャッシュ | 2 |
 | `DeviceProfile` / `DeviceProfileLoader` | `preview/devices/*.ini` の読み込み | 3 |
 | `assets/viewer.html` / `viewer.css` / `viewer-*.js` (7 分割) | ビューアーシェル (JAR 同梱リソース) | 1 |
 
@@ -432,8 +433,8 @@ package version は何か、フォントが埋まっているか) をその場�
 | `POST /p/{token}/api/settings` | 表示設定を保存 |
 | `POST /p/{token}/api/heartbeat?tab={id}` | タブが生きていることの通知 (204) |
 | `POST /p/{token}/api/bye?tab={id}` | タブを閉じた通知 (204、`sendBeacon`) |
-| `GET /p/{token}/api/library` | 本棚一覧 (JSON) — Phase 2 |
-| `GET /p/{token}/api/library/cover/{bookId}` | 表紙サムネイル — Phase 2 |
+| `GET /p/{token}/api/library` | 本棚一覧 (JSON)。絶対パスは載せない |
+| `GET /p/{token}/api/library/cover/{bookId}` | 表紙サムネイル (JPEG)。`no-cache` + ETag で 304 を返す |
 
 `/p/{token}` (末尾スラッシュ無し) は `308` でクエリごと `/p/{token}/` へ送る。
 
@@ -684,24 +685,80 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 | 段 | 内容 | 状態 |
 |---|---|---|
 | C1 | `LibraryEntry` / `LibraryScanner` / `LibraryIndexCache` + テスト | 実装済 (2026-08-09) |
-| C2 | 表紙サムネイル生成 + `api/library` / `api/library/cover/{bookId}` + セッション連携 | 未着手 |
-
+| C2 | 表紙サムネイル生成 + `api/library` / `api/library/cover/{bookId}` + セッション連携 | 実装済 (2026-08-09) |
 | C3 | 本棚 UI (`viewer-library.js` + CSS + `viewer.html`)。グリッド表示・書名/著者/更新日のソート・絞り込み | 未着手 |
 | C4 | 入口: CLI `--preview <dir>` / GUI「本棚を開く」/ 変換後の自動プレビュー (下記 (a)) | 未着手 |
 
 規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行
 (Phase 1 の実績どおり、見積の 1.5〜2 倍に膨らむ前提で見ること)。
 
-#### C2 以降への申し送り (C1 のレビューで判明)
+#### C2 で決めたこと
 
-- **`PreviewSession.defaultBookId` は最初の `addBook` で固定される。**
-  C2 で本棚の 2000 冊を先に登録すると、C4 の「変換後の自動プレビュー」で
-  既定表示が本棚の 1 冊目になってしまう。本棚の登録と
-  「いま見たい 1 冊」の指定を分ける必要がある
+- **本棚の bookId は通常の本と同じ空間**を使う (`PreviewSession.addBook`)。
+  遅延展開・同一パスの重複排除・`reveal` がそのまま乗る。
+  ただし登録時に**既定の本にはしない** (`addBook(path, false)`)。
+  C1 のレビューで指摘されたとおり、本棚を先に読み込むと
+  「棚の 1 冊目」が既定になり、変換した本を開いたつもりが別の本になる
+- `api/library` は**ホスト上の絶対パスを載せない** (`api/session` と同方針)。
+  棚はフォルダ名だけ、本は棚からの相対フォルダ (`subFolder`) だけを出す
+- 一覧に `hasCover` を持たせる。表紙が無い本にサムネイルを取りに行かせると
+  全冊ぶんの 404 になる
+- **サムネイルだけは ETag による再検証を許す。** 本棚は数百枚を一度に並べるため
+  スクロールのたびに作り直すと重い。一方でプレビューは「変換し直したら
+  新しい方を見たい」機能なので、期限付きキャッシュ (`max-age`) ではなく
+  `no-cache` + ETag で毎回問い合わせて 304 を返す。
+  ETag は EPUB のサイズと更新時刻から作るので再変換すれば必ず変わる
+- 表紙のデコードは**バイト数と画素数の両方**で縛る (`MAX_SOURCE_BYTES` 16MB /
+  `MAX_PIXELS` 1600 万)。`ImageIO.read` は寸法を見る前に全部展開してしまうため、
+  `ImageReader` に先に幅と高さを問い合わせる。縮小して使うだけなので
+  間引き読み込み (subsampling) も併用する
+- **ImageIO の入力・出力とも一時ファイルを経由させない。**
+  `createImageInputStream` / `ImageIO.write(…, OutputStream)` はいずれも既定で
+  `FileCache*` (一時ファイル) を作る。元データも出力先もメモリ上にあるので
+  `MemoryCacheImageInputStream` / `MemoryCacheImageOutputStream` を明示する。
+  ストリームは必ず閉じる (`code-audit-followups` #4 と同根)
+- JPEG は透過を持てないので、縮小先を白で敷いてから描く
+  (透過 PNG の表紙が黒く潰れる)
+- **「変換 → プレビュー → 再変換 → プレビュー」で古い情報を出さない。**
+  本棚のスキャンは起動時の 1 回しか走らないため、記録は放っておくと古くなる。
+  鮮度を保つ面が 3 つあり、どれか 1 つでも欠けると症状が出る。
+
+  | 面 | 欠けたときの症状 |
+  |---|---|
+  | ETag / キャッシュキー | 304 を返し続けて古い表紙が出る |
+  | 表紙エントリ名 (`refreshLibraryEntry`) | 再変換で href が変わると「表紙なし」に固定される |
+  | 一覧 (`libraryJson`) | `hasCover:false` のままでビューアーがサムネイルを取りに来ない |
+
+  `PreviewSession.refreshLibraryEntry(bookId)` に集約し、
+  表紙エンドポイントと一覧生成の両方から通す。判定は stat だけなので安く、
+  ZIP を開き直すのは実際に変わった本だけ。
+- **ロックの中で I/O を抱えない。** `PreviewSession` のモニタは `ensureExtracted`
+  (EPUB 全体の展開。dakuten フォント 222 本なら数秒) も握る。
+  `refreshLibraryEntry` の ZIP 読み直しをロック内で行うと、
+  本棚の一覧を出すだけで本文の配信まで止まる。
+  stat と読み直しはロックの外、書き戻しだけロック内で行う。
+  `LibraryCovers` も同様に、キャッシュの参照・格納だけを排他にする
+  (サーバのスレッドプールは 4 本しかない)
+- 表紙生成の**失敗も覚える**。覚えないと、壊れた表紙の本がグリッドにある限り
+  表示のたびに ZIP を開き直してデコードを試み続ける
+
+#### C3 以降への申し送り
+
 - **状態を変えるエンドポイントは必ず POST にする** (前掲の不変条件)。
   本棚の再スキャンや削除を GET で足すと発信元検査を通らない
 - 本棚 UI を足したら `viewer-library.js` を新設し、
   `PreviewServer.ALLOWED_ASSETS` と `viewer.html` の script タグを**両方**更新する
+- スキャンの起動は `PreviewLauncher.loadLibrary(folder)` に集約してある
+  (キャッシュの読み込みと更新まで含む)。C4 の入口はこれを呼ぶだけでよい。
+  ただし `LibraryIndexCache` をローカル変数で捨てているので、
+  C4 で「棚を切り替える / 再スキャンする」API を足すなら launcher に保持させること
+- **`api/session` の `books` に本棚の本は載らない。** 棚にある本を開くと
+  `defaultBookId` がその本を指す一方 `books` は空になりうる。
+  現在のビューアーは `defaultBookId` を直接使うので問題ないが、
+  C3 が `books` から「開いている本」の一覧を作るなら、
+  `defaultBookId` を別途拾う必要がある
+- **`api/library` は要求のたびに全冊 stat する。** UI からポーリングしないこと
+  (2000 冊で数十 ms。表示・操作の契機でだけ呼ぶ)
 
 #### Phase 2 で入れる小機能 (2026-08-08 ユーザー提案)
 
@@ -793,6 +850,12 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
   表紙の 3 経路 (EPUB3 property / EPUB2 meta / 名前からの推測)、
   EPUB2 の meta が XHTML を指す場合に画像として使わないこと、
   ZIP に実在しない表紙を落とすこと、深さ上限、キャッシュの再利用と無効化
+- `LibraryCoversTest` — グリッドに収まる大きさになること、縦横比の保持、
+  元が小さい表紙を拡大しないこと、表紙なし / 壊れた画像 / 未対応形式で落ちないこと、
+  画素数とバイト数の上限、キャッシュの再利用と ETag による無効化
+- `PreviewServerTest` (本棚) — 一覧 JSON の内容、**絶対パスを漏らさないこと**、
+  空の本棚、**本棚の登録が既定の本を奪わないこと**、サムネイルの Content-Type、
+  ETag による 304、表紙なし / 未登録での 404、**一覧を出しただけでは展開しないこと**
 - `LibraryIndexCacheTest` — 往復、null と空文字の区別、値に含まれるタブ・改行で
   列がずれないこと、壊れた行だけを捨てること、世代違いを丸ごと捨てること、
   他フォルダの記録が消えないこと、上限で古いものから溢れること

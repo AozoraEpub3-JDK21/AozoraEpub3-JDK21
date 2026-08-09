@@ -3,6 +3,7 @@ package com.github.hmdev.preview;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -339,6 +340,301 @@ public class PreviewServerTest
 			String line = reader.readLine();
 			return (line == null) ? "(応答なし)" : line;
 		}
+	}
+
+	// ------------------------------------------------------------------
+	// 本棚 (Phase 2)
+	// ------------------------------------------------------------------
+
+	/** 本棚用のフォルダを作って走査し、セッションに取り込む */
+	private Path shelfWith(String... names) throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("shelf");
+		for (String name : names) {
+			EpubFixture fixture = name.startsWith("cover-")
+				? EpubFixture.withEpub3Cover() : EpubFixture.standard();
+			fixture.writeTo(shelf.resolve(name + ".epub"));
+		}
+		this.session.setLibrary(shelf, LibraryScanner.scan(shelf, 3, null));
+		return shelf;
+	}
+
+	@Test
+	public void libraryApiListsTheScannedBooks() throws Exception
+	{
+		shelfWith("cover-a", "plain-b");
+
+		HttpResponse<String> response = get(base() + "api/library");
+		assertEquals(200, response.statusCode());
+		assertTrue(response.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
+
+		String json = response.body();
+		assertTrue(json, json.contains("\"count\":2"));
+		assertTrue(json, json.contains("\"folderName\":\"shelf\""));
+		assertTrue(json, json.contains("\"fileName\":\"cover-a.epub\""));
+		assertTrue(json, json.contains("\"title\":\"テスト書籍\""));
+		assertTrue(json, json.contains("\"creator\":\"テスト著者\""));
+		// 表紙が無い本にサムネイルを取りに行かせない (全冊ぶんの 404 になる)
+		assertTrue(json, json.contains("\"hasCover\":true"));
+		assertTrue(json, json.contains("\"hasCover\":false"));
+	}
+
+	@Test
+	public void libraryApiDoesNotLeakAbsolutePaths() throws Exception
+	{
+		// api/session と同じ方針。棚の位置はフォルダ名、本の位置は棚からの相対だけ
+		Path shelf = temp.getRoot().toPath().resolve("shelf");
+		EpubFixture.standard().writeTo(shelf.resolve("sub").resolve("deep").resolve("a.epub"));
+		this.session.setLibrary(shelf, LibraryScanner.scan(shelf, 5, null));
+
+		String json = get(base() + "api/library").body();
+		assertFalse("ホスト上の絶対パスを公開してはならない",
+			json.contains(temp.getRoot().getAbsolutePath()));
+		assertTrue(json, json.contains("\"subFolder\":\"sub/deep\""));
+	}
+
+	@Test
+	public void anEmptyLibraryIsStillValidJson() throws Exception
+	{
+		String json = get(base() + "api/library").body();
+		assertTrue(json, json.contains("\"count\":0"));
+		assertTrue(json, json.contains("\"folderName\":null"));
+		assertTrue(json, json.contains("\"books\":[]"));
+	}
+
+	@Test
+	public void registeringTheLibraryDoesNotStealTheDefaultBook() throws Exception
+	{
+		// 本棚を「先に」読み込んだときに棚の 1 冊目が既定になると、
+		// 変換した本を開いたつもりが別の本が表示される。
+		// setUp のセッションは既に既定を持っているので、順序を作れる新しい
+		// セッションで確かめる (既定が埋まった後では何を登録しても変わらない)
+		Path shelf = temp.getRoot().toPath().resolve("order-shelf");
+		EpubFixture.standard().writeTo(shelf.resolve("shelf-book.epub"));
+		Path converted = EpubFixture.standard()
+			.writeTo(temp.getRoot().toPath().resolve("converted.epub"));
+
+		try (PreviewSession fresh = new PreviewSession()) {
+			fresh.setLibrary(shelf, LibraryScanner.scan(shelf, 3, null));
+			assertNull("本棚の登録だけで既定の本が決まってしまっている", fresh.getDefaultBookId());
+
+			String convertedId = fresh.addBook(converted);
+			assertEquals("変換した本が既定にならない", convertedId, fresh.getDefaultBookId());
+		}
+	}
+
+	@Test
+	public void openingABookThatIsAlreadyOnTheShelfStillMakesItTheDefault() throws Exception
+	{
+		// 出力先フォルダをそのまま棚にすると必ずこの経路を通る。
+		// 登録済みとして早期 return すると既定が決まらず、
+		// ビューアーを既定 URL で開いても何も表示されない
+		Path shelf = temp.getRoot().toPath().resolve("out-shelf");
+		Path converted = EpubFixture.standard().writeTo(shelf.resolve("converted.epub"));
+
+		try (PreviewSession fresh = new PreviewSession()) {
+			fresh.setLibrary(shelf, LibraryScanner.scan(shelf, 3, null));
+			assertNull(fresh.getDefaultBookId());
+
+			String id = fresh.addBook(converted);
+			assertEquals("棚にある本を開いても既定が決まらない", id, fresh.getDefaultBookId());
+		}
+	}
+
+	@Test
+	public void theSessionApiDoesNotCarryTheWholeShelf() throws Exception
+	{
+		// api/session は起動のたびに読まれる。棚の全冊 (最大 2000 件) を載せると
+		// 毎回それが付いて回る。棚は api/library が返す
+		shelfWith("cover-a", "plain-b");
+
+		String json = get(base() + "api/session").body();
+		assertTrue("開いている本が消えている", json.contains("\"fileName\":\"book.epub\""));
+		assertFalse("セッション情報に本棚の本が載っている", json.contains("cover-a.epub"));
+		assertFalse(json.contains("plain-b.epub"));
+	}
+
+	@Test
+	public void switchingShelvesForgetsTheBooksThatAreGone() throws Exception
+	{
+		// library だけ入れ替えて books を残すと、棚を切り替えるたびに登録が単調増加する
+		shelfWith("cover-a", "plain-b");
+		String staleId = coverBookId();
+		// setUp の book.epub + 棚の 2 冊
+		assertEquals(3, this.session.getBooks().size());
+
+		Path other = temp.getRoot().toPath().resolve("other-shelf");
+		EpubFixture.standard().writeTo(other.resolve("c.epub"));
+		this.session.setLibrary(other, LibraryScanner.scan(other, 3, null));
+
+		// book.epub + 新しい棚の 1 冊。前の棚の 2 冊は忘れている
+		assertEquals("棚を切り替えても前の棚の登録が残っている", 2, this.session.getBooks().size());
+		assertNull("棚から外れた本が残っている", this.session.getBook(staleId));
+		assertNotNull("開いている本まで消えている", this.session.getBook(this.bookId));
+	}
+
+	@Test
+	public void anOpenedShelfBookSurvivesTheShelfSwitch() throws Exception
+	{
+		// 表示中の本を消すと、ビューアーが開いているページが丸ごと 404 になる
+		shelfWith("cover-a");
+		String coverId = coverBookId();
+		assertEquals(200, get(base() + "api/book/" + coverId).statusCode());
+
+		Path other = temp.getRoot().toPath().resolve("other-shelf");
+		EpubFixture.standard().writeTo(other.resolve("c.epub"));
+		this.session.setLibrary(other, LibraryScanner.scan(other, 3, null));
+
+		assertNotNull("展開済みの本まで捨てている", this.session.getBook(coverId));
+		assertEquals(200, get(base() + "api/book/" + coverId).statusCode());
+	}
+
+	@Test
+	public void coverEtagFollowsTheFileEvenWithoutARescan() throws Exception
+	{
+		// 本棚のスキャンは起動時の 1 回しか走らない。ETag がスキャン時の値で
+		// 固定されていると、変換し直しても 304 を返し続けて古い表紙が出る
+		shelfWith("cover-a");
+		String coverId = coverBookId();
+		Path epub = this.session.getBook(coverId).getEpubFile();
+
+		String first = get(base() + "api/library/cover/" + coverId)
+			.headers().firstValue("ETag").orElse("");
+
+		java.nio.file.Files.setLastModifiedTime(epub,
+			java.nio.file.attribute.FileTime.fromMillis(
+				java.nio.file.Files.getLastModifiedTime(epub).toMillis() + 5000));
+
+		HttpResponse<String> after = this.client.send(
+			HttpRequest.newBuilder(URI.create(base() + "api/library/cover/" + coverId))
+				.header("If-None-Match", first).GET().build(),
+			HttpResponse.BodyHandlers.ofString());
+
+		assertEquals("差し替わったのに 304 を返している", 200, after.statusCode());
+		org.junit.Assert.assertNotEquals(first, after.headers().firstValue("ETag").orElse(""));
+	}
+
+	@Test
+	public void theListPicksUpACoverAddedAfterTheScan() throws Exception
+	{
+		// 一覧を出し直しても hasCover:false のままだと、ビューアーはサムネイルを
+		// 取りに来ない。表紙エンドポイントだけを新しくしても届かない
+		shelfWith("plain-b");
+		Path epub = this.session.getBooks().stream()
+			.filter(b -> b.getEpubFile().getFileName().toString().equals("plain-b.epub"))
+			.findFirst().orElseThrow().getEpubFile();
+		assertTrue(get(base() + "api/library").body().contains("\"hasCover\":false"));
+
+		// 表紙付きに変換し直す
+		EpubFixture.withEpub3Cover().writeTo(epub);
+		java.nio.file.Files.setLastModifiedTime(epub,
+			java.nio.file.attribute.FileTime.fromMillis(
+				java.nio.file.Files.getLastModifiedTime(epub).toMillis() + 5000));
+
+		String json = get(base() + "api/library").body();
+		assertTrue("再変換で付いた表紙が一覧に反映されない", json.contains("\"hasCover\":true"));
+	}
+
+	@Test
+	public void aRegeneratedBookWithADifferentCoverPathStillShowsACover() throws Exception
+	{
+		// サイズと更新時刻を見直すだけでは足りない。再変換で OPF の表紙 href が
+		// 変わると、古いパスを新しい ZIP に探しに行って「表紙なし」に落ちる
+		shelfWith("cover-a");
+		String coverId = coverBookId();
+		Path epub = this.session.getBook(coverId).getEpubFile();
+		assertEquals(200, get(base() + "api/library/cover/" + coverId).statusCode());
+
+		// 同じパスに、表紙の置き場所が違う EPUB を書き直す
+		EpubFixture renamed = EpubFixture.standard();
+		renamed.putBytes("OPS/images/front.png", EpubFixture.PNG_1PX);
+		renamed.put("OPS/package.opf", EpubFixture.packageOpf().replace(
+			"    <item id=\"ncx\"",
+			"    <item id=\"cover-img\" properties=\"cover-image\" href=\"images/front.png\""
+			+ " media-type=\"image/png\"/>\n    <item id=\"ncx\""));
+		renamed.writeTo(epub);
+		java.nio.file.Files.setLastModifiedTime(epub,
+			java.nio.file.attribute.FileTime.fromMillis(
+				java.nio.file.Files.getLastModifiedTime(epub).toMillis() + 5000));
+
+		assertEquals("再変換で表紙が消えている", 200,
+			get(base() + "api/library/cover/" + coverId).statusCode());
+	}
+
+	@Test
+	public void coverApiServesAJpegThumbnail() throws Exception
+	{
+		shelfWith("cover-a");
+		String coverId = coverBookId();
+
+		HttpResponse<byte[]> response = this.client.send(
+			HttpRequest.newBuilder(URI.create(base() + "api/library/cover/" + coverId)).GET().build(),
+			HttpResponse.BodyHandlers.ofByteArray());
+
+		assertEquals(200, response.statusCode());
+		assertEquals("image/jpeg", response.headers().firstValue("Content-Type").orElse(""));
+		assertEquals("nosniff", response.headers().firstValue("X-Content-Type-Options").orElse(""));
+		assertNotNull(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(response.body())));
+	}
+
+	@Test
+	public void coverApiRevalidatesInsteadOfExpiring() throws Exception
+	{
+		// 本棚は数百枚を並べるのでスクロールのたびに作り直すと重い。一方で
+		// 「変換し直したら新しい方を見たい」ので、期限付きキャッシュではなく
+		// 毎回問い合わせて 304 を返す
+		shelfWith("cover-a");
+		String coverId = coverBookId();
+
+		HttpResponse<String> first = get(base() + "api/library/cover/" + coverId);
+		String etag = first.headers().firstValue("ETag").orElse("");
+		assertTrue("ETag が付いていない", !etag.isEmpty());
+		assertEquals("no-cache", first.headers().firstValue("Cache-Control").orElse(""));
+
+		HttpResponse<String> second = this.client.send(
+			HttpRequest.newBuilder(URI.create(base() + "api/library/cover/" + coverId))
+				.header("If-None-Match", etag).GET().build(),
+			HttpResponse.BodyHandlers.ofString());
+		assertEquals(304, second.statusCode());
+		assertTrue("304 なのに本体を返している", second.body().isEmpty());
+	}
+
+	@Test
+	public void coverApiIs404ForBooksWithoutOne() throws Exception
+	{
+		shelfWith("plain-b");
+		String plainId = this.session.getBooks().stream()
+			.filter(b -> b.getEpubFile().getFileName().toString().equals("plain-b.epub"))
+			.findFirst().orElseThrow().getId();
+
+		assertEquals(404, get(base() + "api/library/cover/" + plainId).statusCode());
+		// 本棚に載っていない本 (変換して開いただけの本) も対象外
+		assertEquals(404, get(base() + "api/library/cover/" + this.bookId).statusCode());
+		assertEquals(404, get(base() + "api/library/cover/nosuchbook").statusCode());
+	}
+
+	@Test
+	public void libraryBooksAreNotExtractedUntilOpened() throws Exception
+	{
+		// 数百冊を並べても展開コストが出ないことが本棚の前提
+		shelfWith("cover-a", "plain-b");
+		String coverId = coverBookId();
+		get(base() + "api/library");
+		get(base() + "api/library/cover/" + coverId);
+
+		assertNull("一覧を出しただけで展開している", this.session.getBook(coverId).getDir());
+
+		// 選択して初めて展開される
+		assertEquals(200, get(base() + "api/book/" + coverId).statusCode());
+		assertNotNull(this.session.getBook(coverId).getDir());
+	}
+
+	/** 表紙付きの本の bookId */
+	private String coverBookId()
+	{
+		return this.session.getBooks().stream()
+			.filter(b -> b.getEpubFile().getFileName().toString().equals("cover-a.epub"))
+			.findFirst().orElseThrow().getId();
 	}
 
 	@Test
