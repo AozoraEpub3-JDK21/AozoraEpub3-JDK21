@@ -41,6 +41,22 @@
 
 ---
 
+## 画面
+
+ファイルまたは URL をドラッグ＆ドロップすると EPUB に変換します。
+
+<img src="https://raw.githubusercontent.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/master/docs/assets/screenshot-app.png" alt="変換画面。表題・表紙・ページ出力などの設定欄と、ファイルをドロップするテキストエリア" width="626">
+
+変換した EPUB は、リーダーアプリに移す前に**ブラウザでそのままプレビュー**できます。
+縦書き・ルビ・段組・目次を実機に近い形で確認できます。
+
+<img src="https://raw.githubusercontent.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/master/docs/assets/screenshot-preview.png" alt="ブラウザプレビュー。左に章立ての目次、右に縦書き本文が段組で表示されている">
+
+> 画面例は青空文庫の『銀河鉄道の夜』（宮沢賢治、著作権保護期間満了）を変換したものです。
+> 画像は配布パッケージからも参照できるよう GitHub 上の絶対 URL で読み込んでいます。
+
+---
+
 ## 動作環境
 
 **Java 21以降** が必要です（Java 25 LTS まで動作確認済み）。
