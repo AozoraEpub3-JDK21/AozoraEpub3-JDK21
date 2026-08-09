@@ -97,8 +97,10 @@ HREF	#maind .episode-list__link,#maind .ss table a
 ## 兄弟の <span class="episode-list__revision" title="2026/08/05 07:12改稿"> にしかない。
 ## <time> だけだと改稿しても指紋が変わらず、古い本文がキャッシュから使われ続ける。
 ## リンク要素まで上げると内側にタイトル・投稿日時・改稿日時がすべて入る。
-## HREF と同じセレクタなので要素数も必ず一致する
-## (hrefs.size() != updates.size() だと更新判定を諦めて全話再取得になる)。
+## HREF と同じセレクタなので要素数も必ず一致する。
+## ここは必ず一致させること。hrefs.size() != updates.size() だと createNoUpdateUrls が
+## null を返し、呼び出し側は「更新なし集合が無い」として reload=false のままになる。
+## つまり全話再取得ではなく、**キャッシュがある限り 1 話も更新されない**(無音で古いまま)。
 SUB_UPDATE	#maind .episode-list__link,#maind .ss table nobr
 
 ## 一覧ページのタイトル (本文側に無ければこれを利用)
@@ -112,16 +114,22 @@ SUBTITLE_LIST	#maind .episode-list__title,#maind .ss td a
 #CONTENT_CHAPTER
 
 ## 話タイトル
-## 各話ページ側からは取らず、一覧の SUBTITLE_LIST (.episode-list__title) を使う。
+## .ss 内の style 属性付き span の 2番目 (index=1)
+## index=0: <span style="font-size:120%"><a>作品タイトル</a></span>
+## index=1: <span style="font-size:120%">N.話タイトル</span>  ← これ
 ##
-## 2026-08 の改修で各話ページの見出しが章あり作品では
+## 2026-08 の改修で、章あり作品では index=1 が
 ##   <span style="font-size:120%">章名<br>話タイトル</span>
-## になり、章名込みの文字列しか取れなくなった (章なし作品は "N.話タイトル")。
-## 章名は直前に［＃大見出し］として出力済みなので、ここで拾うと中見出しに二重に出る。
-## 一覧の .episode-list__title は章あり=話タイトルのみ / 章なし="N.話タイトル" と
-## サイトの表示どおりなので、そちらに寄せる。
-## (CONTENT_SUBTITLE が未定義なら docToAozoraText が SUBTITLE_LIST へフォールバックする)
-#CONTENT_SUBTITLE	#maind .ss span[style]:1
+## になり章名込みで取れるようになった。章名は直前に［＃大見出し］として
+## 出力済みなので、そのままだと中見出しに二重に出る。
+## そこで <br> までを捨てる正規表現を付ける (getExtractText は要素の内側 HTML に
+## パターンを当てるため <br> で切れる)。章なし作品は <br> が無く不一致となり、
+## ExtractInfo#replace の replaceAll がそのまま返すので従来どおり。
+##
+## 一覧の SUBTITLE_LIST に寄せて丸ごと外す手もあるが、それだと
+## 各話 URL (https://novel.syosetu.org/402358/1.html) を直接変換したときに
+## 一覧が無く listSubTitle が null になり、中見出しが消える。
+CONTENT_SUBTITLE	#maind .ss span[style]:1	^.*?<br>\s*(.*)$	$1
 
 ## 本文
 ## <div id="honbun"> に本文段落 <p id="N"> が集約されている

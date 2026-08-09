@@ -2776,7 +2776,8 @@ public class WebAozoraConverter
 				continue;
 			}
 			if (currentChapter == null) continue;
-			for (Element link : item.select("a[href]")) {
+			//各話のリンクだけを見る (li の中に別のリンクが増えても拾わない)
+			for (Element link : item.select("a.episode-list__link[href]")) {
 				String fullUrl = toFullUrl(link.attr("href"), listBaseUrl);
 				if (fullUrl != null) result.put(fullUrl, currentChapter);
 			}
