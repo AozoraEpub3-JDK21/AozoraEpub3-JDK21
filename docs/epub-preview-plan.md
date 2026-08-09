@@ -689,7 +689,7 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 | C3 | 本棚 UI (`viewer-library.js` + CSS + `viewer.html`)。グリッド表示・書名/著者/更新日のソート・絞り込み | 実装済 (2026-08-09) |
 | C4-1 | 本棚の複数フォルダ対応 + CLI `--library <フォルダ>` | 実装済 (2026-08-09) |
 | C4-2a | GUI: 「プレビュー」タブ新設 + 棚フォルダ設定 + 「本棚を開く」 | 実装済 (2026-08-09) |
-| C4-2b | GUI: 変換完了後にプレビューを自動で開く (既定 OFF。下記 (a)) | 未着手 |
+| C4-2b | GUI: 変換完了後にプレビューを自動で開く (既定 OFF。下記 (a)) | 実装済 (2026-08-09) |
 
 規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行
 (Phase 1 の実績どおり、見積の 1.5〜2 倍に膨らむ前提で見ること)。
@@ -1011,6 +1011,67 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
   (`setPreviewTarget(outFile)`。行番号は動くのでメソッド名で探すこと)。
   **kindlegen 経路ではリネーム後に上書きされる**ため、自動オープンはリネーム完了後に行う
 - CLI は明示の `--preview` があるので対象外とする (フラグ優先)
+
+**C4-2b の実装結果 (2026-08-09)**
+
+- **発火点は `setPreviewTarget()` ではなく `ConvertWorker.done()` にした。**
+  変換は複数ファイルをまとめて処理するため、`setPreviewTarget()` から直接開くと
+  ファイルの数だけタブが開く。`done()` は EDT で呼ばれ、kindlegen のリネームも
+  済んでいるので、計画の「リネーム完了後に行う」も自然に満たす
+- **開く対象は `previewTargetFile` ではなく専用の `autoPreviewTarget`。**
+  前者は前回の変換結果が残っているだけの状態でも非 null になるため、
+  「変換に失敗した / 対象が 0 件だった」回でも自動で開いてしまう。
+  `autoPreviewTarget` は `doInBackground` の入口で捨て、**変換中の**
+  `setPreviewTarget()` だけが更新し、`done()` で使って捨てる
+- 中止された変換 (`convertCanceled`) の結果は開かない。
+  複数ファイルの途中で中止した場合は、それ以前に成功した本も開かない (安全側)
+- **`openPreview()` に `previewOpening` を入れて本棚と揃えた** (計画の「C4-2b で揃える」)。
+  併せて `updatePreviewButton()` を `updateLibraryButtons()` と同じく
+  EDT へ移すようにした (`setConvertEnabled(true)` が worker スレッドから呼ぶため)
+- **ja / en の文言の取り違えをテストで塞いだ** (`I18nMessagesParityTest`)。
+  キー集合の一致に加えて `{0}` などの引数の一致も見る。
+  片方の言語にだけ足す事故は今後ビルドで落ちる
+- `.NET` ポートへの移植は C4-2a と同じく不要 (Swing GUI の入口のみ)
+
+レビューで見つかった、繰り返しやすい間違い (ゲート A=Codex / B=Opus / C=Fable):
+
+- **kindlegen 経路の「出力ファイル」は一時ファイルである** (ゲート A・B)。
+  `outFileOrg != null` のとき `outFile` は `kindle*.epub` で、変換直後の
+  `setPreviewTarget(outFile)` はこれを指す。kindlegen が実行ファイル名の検証で
+  `return` したり例外で抜けるとリネームまで届かず、`kindle12345.epub` を
+  自動で開いてしまう。`setPreviewTarget(file, confirmed)` の第 2 引数で
+  自動プレビューの対象から外し、リネーム後の呼び出しで確定させる
+  (**手動のプレビューボタンは従来どおり一時ファイルを対象にする** —
+  中身は変換済みの本そのものなので、見せない理由がない)
+- **中止フラグは変換 1 回ぶんを表していない** (ゲート C)。
+  `convertCanceled` は `convertFiles()` の先頭で false に戻る。
+  URL を複数変換すると `convertWeb()` が URL ごとに `convertFiles()` を呼ぶため、
+  1 件目で中止しても最後には false に戻っており、「中止した回は開かない」が破れる
+  (ループが中止で break しないのは既存挙動)。消える前に
+  `convertCanceledInWorker` へ写し、`done()` はこちらも見る
+- **worker が書き EDT が読むフィールドは volatile にする** (ゲート B)。
+  `done()` の呼び出し順から happens-before は成立しているが、
+  既存の `running` に揃えて意図を示す
+- **中止フラグは変換が終わってもクリアされない** (2 巡目、3 ゲートとも同じ指摘)。
+  上の `convertCanceledInWorker` を足しただけでは、中止した回のあと `convertCanceled` が
+  true のまま残り、次の回の `convertFiles()` 冒頭の写しが**前回の中止**を拾って
+  成功した変換を中止扱いにしてしまう (`convertFiles()` を一度も通らない回では
+  `autoOpenPreview()` が残留値を直接見る)。`ConvertWorker.doInBackground` の入口で
+  `convertCanceled` も false に戻す。
+  **フラグを 1 つ足すと、その初期化漏れという穴も 1 つ増える**という例
+- **次に「変換 1 回ぶんの状態」が要るときは applet のフィールドに足さない** (ゲート C の設計意見)。
+  初期化漏れが 2 巡続いた根因は、回ごとの状態を applet の可変フィールドに置いていること。
+  `ConvertWorker` のインスタンスフィールド (生成時に必ず初期化される) へ寄せる。
+  `convertCanceled` 本体は旧来コードが広く触るため現状維持でよい
+- **本 PR の範囲外の既存バグを 1 件見つけた** (ゲート B): 起動引数のファイルを
+  1 個ずつ別 worker で変換しており、複数指定するとタブが冊数ぶん開く。
+  `docs/code-audit-followups.md` の項目 18 に記録した
+
+**リリース前 todo** (ゲート C の指摘。Phase 2 完了後のリリース作業で行う):
+
+- `README.md` / ユーザー向け docs に**プレビュータブそのものが未記載**
+  (C4-2a の棚設定・「本棚を開く」も含む)。`AutoPreview` の既定 OFF もあわせて書く
+- ja / en の両方を更新すること (`feedback_docs_sync`)
 
 **(b) プレビュー画面から EPUB のフォルダを開く**
 

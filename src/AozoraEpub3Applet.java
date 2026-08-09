@@ -285,6 +285,10 @@ public class AozoraEpub3Applet extends JPanel
 	JButton jButtonPreview;
 	/** プレビュー対象。変換が成功するたびに最後の出力で更新される */
 	File previewTargetFile;
+	/** プレビューを開いている最中か。EPUB の展開とブラウザ起動には時間がかかり、
+	 * その間に変換が終わると updatePreviewButton() でボタンが戻って二重に起動できてしまう。
+	 * 読み書きとも EDT のみ (worker スレッドは invokeLater 経由で落とす) */
+	boolean previewOpening = false;
 
 	//プレビュータブ (本棚)
 	/** 本棚にするフォルダ。全体設定 (AozoraEpub3.ini) に連番キーで保存する */
@@ -294,6 +298,13 @@ public class AozoraEpub3Applet extends JPanel
 	JButton jButtonLibraryRemove;
 	/** 本棚をブラウザで開く */
 	JButton jButtonOpenLibrary;
+	/** 変換完了後に自動でプレビューを開く。全体設定 (AozoraEpub3.ini) の AutoPreview に保存する */
+	JCheckBox jCheckAutoPreview;
+	/** 自動プレビューの対象。変換中の setPreviewTarget() だけが更新し、
+	 * ConvertWorker の done() で使って捨てる。previewTargetFile と分けているのは、
+	 * 前回の変換結果が残っているだけの状態で自動オープンしないため。
+	 * worker スレッドが書き EDT が読む (running と同じ扱い) */
+	volatile File autoPreviewTarget;
 	/** 本棚を開いている最中か。初回スキャンは冊数に比例して重く、
 	 * その間に一覧を触るとボタンが戻って二重に走らせられてしまう。
 	 * 読み書きとも EDT のみ (worker スレッドは invokeLater 経由で落とす) */
@@ -477,6 +488,11 @@ public class AozoraEpub3Applet extends JPanel
 	
 	/** 変換をキャンセルした場合true */
 	boolean convertCanceled = false;
+	/** 変換 1 回 (ConvertWorker 1 本) の間に一度でも中止されたか。
+	 * convertCanceled は convertFiles() の先頭で false に戻り、URL を複数変換すると
+	 * convertWeb() が URL ごとに convertFiles() を呼ぶため、中止した事実がそこで消える。
+	 * 自動プレビューは「中止した回は開かない」ので、消える前にここへ写しておく */
+	volatile boolean convertCanceledInWorker = false;
 	/** 変換実行中 */
 	/** 変換処理中か。worker スレッドが書き、EDT (プレビューボタンの状態判定) が読む */
 	volatile boolean running = false;
@@ -2493,6 +2509,23 @@ public class AozoraEpub3Applet extends JPanel
 		jTabbedPane.addTab(I18n.t("ui.tab.preview"), epubIcon, tabPanel);
 
 		////////////////////////////////
+		//変換後の自動プレビュー
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setMaximumSize(panelSize28);
+		panel.setPreferredSize(panelSize28);
+		panel.setBorder(padding2H);
+		tabPanel.add(panel);
+		jCheckAutoPreview = new JCheckBox(I18n.t("ui.chk.autoPreview"));
+		jCheckAutoPreview.setToolTipText(I18n.t("ui.tooltip.autoPreview"));
+		jCheckAutoPreview.setFocusPainted(false);
+		jCheckAutoPreview.setBorder(padding2);
+		//棚と同じく全体設定から読む。既定は OFF (今までどおり変換して終わる)
+		jCheckAutoPreview.setSelected("1".equals(this.props.getProperty("AutoPreview")));
+		panel.add(jCheckAutoPreview);
+		panel.add(Box.createHorizontalGlue());
+
+		////////////////////////////////
 		//本棚フォルダ
 		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
@@ -3570,7 +3603,9 @@ public class AozoraEpub3Applet extends JPanel
 	private void convertFiles(File[] srcFiles, File dstPath)
 	{
 		if (srcFiles.length == 0 ) return;
-		
+
+		//中止フラグが消える前に写す (convertWeb は URL ごとにここを通る)
+		if (convertCanceled) this.convertCanceledInWorker = true;
 		convertCanceled = false;
 		
 		////////////////////////////////////////////////////////////////
@@ -4235,8 +4270,9 @@ public class AozoraEpub3Applet extends JPanel
 			LogAppender.error("変換に失敗しました : "+srcFile.getAbsolutePath());
 			return;
 		}
-		//プレビュー対象を更新 (kindlegen 経路では後段のリネーム後に上書きする)
-		this.setPreviewTarget(outFile);
+		//プレビュー対象を更新 (kindlegen 経路では後段のリネーム後に上書きする)。
+		//outFileOrg != null は outFile が kindle*.epub の一時ファイルであることを意味する
+		this.setPreviewTarget(outFile, outFileOrg == null);
 		
 		////////////////////////////////
 		//kindlegen.exeがあれば実行
@@ -4553,6 +4589,13 @@ public class AozoraEpub3Applet extends JPanel
 		protected Object doInBackground() throws Exception
 		{
 			this.applet.running = true;
+			//前回の変換結果で自動プレビューが開かないように捨てておく
+			this.applet.autoPreviewTarget = null;
+			//中止フラグを前回から持ち越さない。convertFiles() の先頭でしか戻らないため、
+			//中止した回の後は true のまま残り、次の回が成功しても中止扱いになってしまう
+			//(convertFiles() を一度も通らない回では autoOpenPreview() が直接これを見る)
+			this.applet.convertCanceled = false;
+			this.applet.convertCanceledInWorker = false;
 			this.applet.setConvertEnabled(false);
 			try {
 				
@@ -4583,6 +4626,8 @@ public class AozoraEpub3Applet extends JPanel
 			//doInBackground の finally と同じ理由で running を先にクリアする
 			this.applet.running = false;
 			this.applet.setConvertEnabled(true);
+			//done() は EDT で呼ばれる。設定が ON なら変換結果をブラウザで開く
+			this.applet.autoOpenPreview();
 		}
 	}
 	
@@ -4619,18 +4664,54 @@ public class AozoraEpub3Applet extends JPanel
 	/** プレビュー対象を設定し、ボタンの有効状態を更新する */
 	private void setPreviewTarget(File file)
 	{
+		this.setPreviewTarget(file, true);
+	}
+	/** プレビュー対象を設定し、ボタンの有効状態を更新する。
+	 * @param confirmed 出力が確定しているか。kindlegen 経路の 1 回目は
+	 * 一時ファイル (kindle*.epub) を指しており、この後のリネームで確定する。
+	 * kindlegen が失敗するとリネームまで届かないため、自動プレビューの対象からは外す
+	 * (手動のプレビューボタンは従来どおり中身の見える一時ファイルを対象にする) */
+	private void setPreviewTarget(File file, boolean confirmed)
+	{
 		boolean valid = file != null && file.isFile()
 			&& file.getName().toLowerCase(Locale.ROOT).endsWith(".epub");
 		this.previewTargetFile = valid ? file : null;
+		//変換中の更新だけを自動プレビューの対象にする。kindlegen 経路では
+		//リネーム後にもう一度呼ばれるので、最後に渡された値が残る
+		if (this.isRunning()) this.autoPreviewTarget = confirmed ? this.previewTargetFile : null;
 		SwingUtilities.invokeLater(this::updatePreviewButton);
 	}
 	/** プレビューボタンの有効状態を反映する。
 	 * 変換処理中は有効化しない — kindlegen 経路では変換後に対象 EPUB が
-	 * リネーム・削除されるため、途中で開かれると展開に失敗する */
+	 * リネーム・削除されるため、途中で開かれると展開に失敗する。
+	 * 起動中も有効化しない (本棚の updateLibraryButtons() と同じ扱い) */
 	private void updatePreviewButton()
 	{
 		if (this.jButtonPreview == null) return;
-		this.jButtonPreview.setEnabled(this.previewTargetFile != null && !this.isRunning());
+		//setConvertEnabled(true) は変換 worker の finally からも呼ばれる (EDT ではない)
+		if (!SwingUtilities.isEventDispatchThread()) {
+			SwingUtilities.invokeLater(this::updatePreviewButton);
+			return;
+		}
+		this.jButtonPreview.setEnabled(
+			this.previewTargetFile != null && !this.previewOpening && !this.isRunning());
+	}
+	/** 変換完了時に呼ばれる。設定が ON なら変換結果のプレビューを開く。
+	 * 対象は変換中に更新されたものだけで、呼ぶたびに捨てる (EDT から呼ぶこと) */
+	private void autoOpenPreview()
+	{
+		File target = this.autoPreviewTarget;
+		this.autoPreviewTarget = null;
+		if (target == null) return;
+		//中止された変換の結果は開かない (URL を複数変換した場合は
+		//最後の 1 件が中止されていなくても、一度でも中止されていれば開かない)
+		if (this.convertCanceled || this.convertCanceledInWorker) return;
+		if (this.jCheckAutoPreview == null || !this.jCheckAutoPreview.isSelected()) return;
+		//すでに手動で開いている最中なら重ねない
+		if (this.previewOpening) return;
+		//kindlegen 経路で消された等
+		if (!target.isFile()) return;
+		this.startPreview(target);
 	}
 	/** プレビュー対象の EPUB を既定ブラウザで開く */
 	private void openPreview()
@@ -4641,9 +4722,15 @@ public class AozoraEpub3Applet extends JPanel
 				I18n.t("ui.error"), JOptionPane.WARNING_MESSAGE);
 			return;
 		}
+		this.startPreview(target);
+	}
+	/** 指定した EPUB のプレビューを別スレッドで開く (EDT から呼ぶこと) */
+	private void startPreview(File target)
+	{
 		//EPUB の展開・フォント一覧の取得・ブラウザ起動はいずれも時間がかかるため
 		//EDT では実行しない (UI が固まる)
-		this.jButtonPreview.setEnabled(false);
+		this.previewOpening = true;
+		this.updatePreviewButton();
 		Thread worker = new Thread(() -> {
 			try {
 				String url = com.github.hmdev.preview.PreviewLauncher.preview(target);
@@ -4658,7 +4745,11 @@ public class AozoraEpub3Applet extends JPanel
 					I18n.t("ui.preview.failed")+"\n"+detail,
 					I18n.t("ui.error"), JOptionPane.ERROR_MESSAGE));
 			} finally {
-				SwingUtilities.invokeLater(this::updatePreviewButton);
+				//フラグを落とすのも EDT で行う (本棚と同じ理由)
+				SwingUtilities.invokeLater(() -> {
+					this.previewOpening = false;
+					this.updatePreviewButton();
+				});
 			}
 		}, "aozora-preview-launch");
 		worker.setDaemon(true);
@@ -5567,6 +5658,10 @@ public class AozoraEpub3Applet extends JPanel
 			//本棚のフォルダ。プロファイルではなく全体設定に保存する
 			//(setProperties() は profiles/*.ini にも使われるため、そこへ混ぜてはいけない)
 			if (this.libraryDirsModel != null) PreviewLibraryPrefs.store(this.props, this.getLibraryFolders());
+			//変換後の自動プレビュー。棚と同じく全体設定に保存する
+			if (this.jCheckAutoPreview != null) {
+				this.props.setProperty("AutoPreview", this.jCheckAutoPreview.isSelected()?"1":"");
+			}
 
 			//アプレットの設定をPropertiesに反映
 			this.setProperties(this.props);
