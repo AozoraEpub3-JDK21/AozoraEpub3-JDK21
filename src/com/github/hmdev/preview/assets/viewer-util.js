@@ -35,6 +35,20 @@ function formatBytes(bytes)
 	return (value / 1024 / 1024).toFixed(2) + ' MB';
 }
 
+/**
+ * エポックミリ秒を「YYYY-MM-DD HH:mm」(閲覧環境のローカル時刻) にする。
+ * 表示揺れを避けるため toLocaleString は使わない。
+ */
+function formatDateTime(millis)
+{
+	const value = Number(millis);
+	if (!value) return '—';
+	const date = new Date(value);
+	const pad = n => String(n).padStart(2, '0');
+	return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+		+ ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+
 function fileNameOf(path)
 {
 	const slash = String(path).lastIndexOf('/');

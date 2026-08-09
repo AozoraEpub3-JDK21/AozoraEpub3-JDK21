@@ -15,9 +15,16 @@ function toggleInspector(force)
 async function renderInspector()
 {
 	if (!state.inspection) {
+		// 取得中に本棚から別の本へ切り替えられることがある。
+		// 要求したときの本を控えておき、変わっていたら結果を捨てる
+		// (捨てないと、新しい本の欄に前の本の書誌・CSS が出る)
+		const requestedId = state.bookId;
 		try {
-			state.inspection = await getJson('api/book/' + encodeURIComponent(state.bookId) + '/inspect');
+			const inspection = await getJson('api/book/' + encodeURIComponent(requestedId) + '/inspect');
+			if (requestedId !== state.bookId) return;
+			state.inspection = inspection;
 		} catch (e) {
+			if (requestedId !== state.bookId) return;
 			pane('summary').textContent = 'EPUB 情報の取得に失敗しました: ' + e.message;
 			return;
 		}

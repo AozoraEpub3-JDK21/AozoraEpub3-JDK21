@@ -123,8 +123,11 @@ function bindEvents()
 
 function attachFrameInput(doc)
 {
-	// iframe にフォーカスがあるときもキー操作を効かせる
+	// iframe にフォーカスがあるときもキー操作を効かせる。
+	// iframe の keydown は親 document へ伝播しないので、本棚のキーもここで受け取る。
+	// (本文をクリックするとページ送りが効くので、読書中は必ずこの状態になる)
 	doc.addEventListener('keydown', onKeyDown);
+	doc.addEventListener('keydown', onLibraryKeyDown);
 	// マウスでもページを送れるようにする
 	doc.addEventListener('click', onFrameClick);
 	doc.addEventListener('wheel', onFrameWheel, {passive: false});
@@ -210,6 +213,9 @@ function onFrameWheel(event)
 function onKeyDown(event)
 {
 	if (event.ctrlKey || event.altKey || event.metaKey) return;
+	// 本棚を見ている間は本文のキー操作を止める (隠れた iframe をページ送りしない)。
+	// 本棚自身のキーは viewer-library.js が別に受け取る
+	if (state.libraryOpen) return;
 	const tag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : '';
 	if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
 

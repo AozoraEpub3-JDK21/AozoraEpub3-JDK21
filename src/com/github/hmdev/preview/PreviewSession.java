@@ -363,13 +363,23 @@ public class PreviewSession implements AutoCloseable
 		}
 	}
 
-	/** セッション情報を JSON で返す */
+	/**
+	 * セッション情報を JSON で返す。
+	 *
+	 * <p>本棚については<b>フォルダ名と冊数だけ</b>を載せる。ビューアーは
+	 * 「本棚ボタンを出すかどうか」をここで判断し、一覧そのものは開いた時点で
+	 * {@code api/library} に取りに行く。一覧を毎回ここに載せると、
+	 * 本文を読むだけのセッション情報に最大 2000 件が付いて回る。</p>
+	 */
 	public synchronized String sessionJson()
 	{
 		StringBuilder buf = new StringBuilder(1024);
 		buf.append('{');
 		Json.prop(buf, "token", this.token);
 		Json.prop(buf, "defaultBookId", this.defaultBookId);
+		// 棚が無いときは null。ホスト上の絶対パスは載せない (api/library と同方針)
+		Json.prop(buf, "libraryFolder", folderDisplayName(this.libraryFolder));
+		Json.prop(buf, "libraryCount", this.library.size());
 		Json.key(buf, "fonts");
 		this.fontCatalog.toJson(buf);
 		Json.key(buf, "books");

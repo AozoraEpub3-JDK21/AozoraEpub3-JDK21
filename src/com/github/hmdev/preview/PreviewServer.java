@@ -56,7 +56,8 @@ public class PreviewServer implements AutoCloseable
 		"viewer-toc.js",
 		"viewer-frame.js",
 		"viewer-events.js",
-		"viewer-inspector.js"
+		"viewer-inspector.js",
+		"viewer-library.js"
 	};
 
 	/**
