@@ -203,6 +203,57 @@ urlString.substring(...).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_")
 
 ---
 
+## 🔴 高（追加分）
+
+### 22. CLI で変換すると章見出しが目次に入らない — 未対応
+
+**発見**: 2026-08-09、青空文庫の実変換 dogfood 中。**GUI では正常、CLI だけの問題**。
+
+**再現**（宮沢賢治『銀河鉄道の夜』。底本に `［＃「一、午后の授業」は中見出し］` 形式の中見出しが 9 個ある）:
+
+```bash
+java -jar AozoraEpub3.jar -of -d out -url https://www.aozora.gr.jp/cards/000081/files/456_ruby_145.zip
+```
+
+- 目次項目は **1 件（表題のみ）**。本文 XHTML には `<div class="chap2">` が 9 個あるのに目次に載らない
+- 同じ ini に `ChapterName=1` / `ChapterH=1` / `ChapterH1=1` / `ChapterH2=1` / `ChapterH3=1` を足すと **10 件（表題 + 9 章）** になり正常
+
+**原因**: `src/AozoraEpub3.java` の目次設定はすべて ini から読む。
+
+```java
+boolean chapterH  = "1".equals(props.getProperty("ChapterH"));   // キーが無ければ false
+boolean chapterName = "1".equals(props.getProperty("ChapterName"));
+```
+
+同梱の `AozoraEpub3.ini` は手書きの 17 キーだけで、**Chapter\* キーが 1 つも入っていない**
+（`TocPage` / `CoverPage` / `TitlePage` / `TitleToc` は入っている）。GUI は Swing 側に独自の既定値
+（すべて ON）を持つため影響を受けない。
+
+**設計判断（ゲート C / Fable、2026-08-09）**: **B を本質的修正とし、A を補助として併用（＝ C）**。
+
+- **A: 同梱 ini に Chapter\* キーを追記** — データのみの変更で安全だが、`-i` で自前 ini を渡すユーザーや
+  narou.rb 環境は直らない。既定値の明文化としては有効
+- **B: CLI 側の既定値を GUI に合わせる** — `!props.containsKey(...)||"1".equals(...)` の形にする。
+  **同じブロックの `ChapterSection` は既にこの形**であり、「キー不在＝GUI 既定」はこのコードの設計方針。
+  他の Chapter\* だけ取り残されているのがバグ、という読みが妥当。
+  なお同ブロックには GUI/CLI 既定値の不一致を直した痕跡が既に 2 件ある
+  （`MaxChapterNameLength` の別名読み、`ChapterNumParenTitle` のタイポ修正）
+- **D（実装形として推奨）: GUI と CLI が共有する既定値テーブルを 1 か所に置く**。
+  `containsKey` を各所に散らさない。CLAUDE.md の「仕組みで対応する」に合致し、
+  キー追加時のドリフト再発を防げる。あわせて `ChapterUseNextLine` / `SameLineChapter` /
+  `ChapterNum*` も GUI 既定値と突き合わせて同時に監査する
+
+**着手前に確認すること（既定値を変えるため）**:
+
+1. `.NET` ポートの比較テストは**凍結済み `reference.epub` との比較**なので即座には壊れないが、
+   reference 再生成スクリプト `tests/integration/generate-reference-epubs.ps1` は
+   narou.rb 側の jar と ini で Java CLI を実行する。**その ini に Chapter\* キーがあるか**を先に見る
+   （あれば当該経路は無影響）
+2. 修正前後の jar で比較テストの 5 ケース（特に見出しを含む `aozora_1567_14913`）を変換し、
+   `nav.xhtml` / `toc.ncx` / opf を diff する
+3. narou.rb 経由も 1 冊 before/after で確認する
+4. 差分が出たら `.NET` ポートへ同じ既定値をポートバックする（`java-port-back-guide.md`）
+
 ## 🟢 低
 
 ### 20. 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる — 未対応
