@@ -45,6 +45,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.text.NumberFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -4858,7 +4859,6 @@ public class AozoraEpub3Applet extends JPanel
 			jText.setText(Float.toString(Float.parseFloat(props.getProperty(name))));
 		} catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 	}
-	/** 数値を設定 null なら設定しない */
 	/** 桁区切りを入れない数値書式。ini に書いた値をそのまま読み直せるようにするため */
 	private static NumberFormat plainNumberFormat()
 	{
@@ -4867,15 +4867,23 @@ public class AozoraEpub3Applet extends JPanel
 		return format;
 	}
 	/** ini の数値を読む。桁区切りやロケール依存の小数点で書かれていても拾う
-	 * (桁区切りを止める前に保存された ini、および小数点がカンマのロケールの救済) */
+	 * (桁区切りを止める前に保存された ini、および小数点がカンマのロケールの救済)。
+	 * 末尾にゴミが付いた値は受け付けない — NumberFormat.parse は "12abc" を 12 と読むため、
+	 * そのまま通すと壊れた設定を黙って別の値として受け入れることになる */
 	private static float parseNumber(String value) throws ParseException
 	{
 		try {
 			return Float.parseFloat(value);
 		} catch (NumberFormatException e) {
-			return NumberFormat.getNumberInstance().parse(value).floatValue();
+			ParsePosition position = new ParsePosition(0);
+			Number parsed = NumberFormat.getNumberInstance().parse(value, position);
+			if (parsed == null || position.getIndex() != value.length()) {
+				throw new ParseException("数値として読めません: "+value, position.getErrorIndex());
+			}
+			return parsed.floatValue();
 		}
 	}
+	/** 数値を設定 null なら設定しない */
 	private void setPropsNumberText(JTextField jText, Properties props, String name)
 	{
 		try {
