@@ -237,6 +237,38 @@ public class PreviewSession implements AutoCloseable
 		return this.library.get(bookId);
 	}
 
+	/**
+	 * 本棚の 1 冊を、いまのファイル状態で読み直す。
+	 *
+	 * <p>本棚のスキャンは起動時の 1 回しか走らない。「変換 → プレビュー →
+	 * 設定を変えて再変換 → プレビュー」がこの機能の中心的な使い方なので、
+	 * <b>スキャン時の内容を持ち続けると、変換し直した本の表紙が古いまま</b>になる。
+	 * サイズや更新時刻だけを見直しても足りない — 再変換で OPF の表紙 href が
+	 * 変われば、古いパスを新しい ZIP に探しに行って「表紙なし」になる。</p>
+	 *
+	 * <p>変化が無ければ何もしない。読み直せない (消された等) 場合も
+	 * スキャン時の内容を返す。元 EPUB が消えても配り続けるという既存方針に合わせる。</p>
+	 *
+	 * @return 最新の記録。本棚に載っていなければ null
+	 */
+	public synchronized LibraryEntry refreshLibraryEntry(String bookId)
+	{
+		LibraryEntry entry = this.library.get(bookId);
+		if (entry == null) return null;
+		try {
+			long size = Files.size(entry.file());
+			long modified = Files.getLastModifiedTime(entry.file()).toMillis();
+			if (entry.matches(size, modified)) return entry;
+			LibraryEntry fresh = LibraryScanner.read(entry.file(), size, modified);
+			this.library.put(bookId, fresh);
+			return fresh;
+		} catch (IOException | RuntimeException e) {
+			/* 意図的: 読み直せなければスキャン時の内容を使い続ける */
+			logger.debug("本棚の記録を更新できませんでした: {}", entry.file(), e);
+			return entry;
+		}
+	}
+
 	/** bookId から本を引く。未登録なら null */
 	public synchronized Book getBook(String bookId)
 	{

@@ -555,15 +555,15 @@ public class PreviewServer implements AutoCloseable
 	 */
 	private void serveCover(HttpExchange exchange, String bookId) throws IOException
 	{
-		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		// 「いま」のファイル状態で読み直す。本棚のスキャンは起動時の 1 回しか
+		// 走らないので、スキャン時の記録のままだと変換し直しても古い表紙を配り続け、
+		// 再検証の意味が無くなる。表紙の href が変わる場合もあるので stat だけでは足りない
+		LibraryEntry entry = this.session.refreshLibraryEntry(bookId);
 		if (entry == null || entry.coverEntry() == null) {
 			respond(exchange, 404, "text/plain; charset=utf-8", "No cover".getBytes(StandardCharsets.UTF_8));
 			return;
 		}
-		// スキャン時ではなく「いま」のファイル状態から識別子を作る。本棚のスキャンは
-		// 起動時の 1 回しか走らないので、スキャン時の値で固定すると
-		// 変換し直しても古い表紙を配り続け、再検証の意味が無くなる
-		String cacheKey = LibraryCovers.currentCacheKey(bookId, entry);
+		String cacheKey = LibraryCovers.cacheKey(bookId, entry);
 		String etag = LibraryCovers.etag(cacheKey);
 		exchange.getResponseHeaders().set("ETag", etag);
 		if (etag.equals(exchange.getRequestHeaders().getFirst("If-None-Match"))) {

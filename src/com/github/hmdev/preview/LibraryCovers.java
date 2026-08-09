@@ -67,8 +67,9 @@ public class LibraryCovers
 	/**
 	 * サムネイルを返す。
 	 *
-	 * @param cacheKey {@link #currentCacheKey} が返すキー。
-	 *        <b>スキャン時ではなく要求時のファイル状態から作ること。</b>
+	 * @param cacheKey {@link #cacheKey} が返すキー。
+	 *        <b>スキャン時ではなく要求時のファイル状態から作ること</b>
+	 *        ({@code PreviewSession.refreshLibraryEntry} を通してから渡す)。
 	 *        スキャン時の値で固定すると、再変換しても古いサムネイルを配り続ける
 	 * @param entry 表紙の位置を持つ本棚の記録
 	 * @return JPEG のバイト列。表紙が無い / 読めない場合は null
@@ -110,31 +111,14 @@ public class LibraryCovers
 	}
 
 	/**
-	 * <b>いま</b>のファイル状態からキャッシュキーを作る。
+	 * キャッシュと ETag の識別子。
 	 *
-	 * <p>本棚のスキャンは起動時に 1 回しか走らないため、{@link LibraryEntry} が持つ
-	 * サイズと更新時刻はすぐ古くなる。それを ETag に使うと、
-	 * 「変換し直したのに古い表紙が出続ける」ことになる
-	 * (しかも {@code no-cache} + ETag による再検証が意味を失う)。</p>
-	 *
-	 * <p>ファイルの状態を取れない場合はスキャン時の値に倒す。元 EPUB が消えても
-	 * 展開済みのものを配り続けるという既存方針に合わせる。</p>
+	 * <p>渡す記録は {@code PreviewSession.refreshLibraryEntry} を通したものにすること。
+	 * スキャン時の値のままだと、再変換しても識別子が変わらず古い表紙を配り続ける。</p>
 	 */
-	public static String currentCacheKey(String bookId, LibraryEntry entry)
+	public static String cacheKey(String bookId, LibraryEntry entry)
 	{
-		try {
-			return cacheKey(bookId, Files.size(entry.file()),
-				Files.getLastModifiedTime(entry.file()).toMillis());
-		} catch (IOException | RuntimeException e) {
-			/* 意図的: 状態を取れなければスキャン時の値で識別する */
-			logger.debug("EPUB の状態を取得できませんでした: {}", entry.file(), e);
-			return cacheKey(bookId, entry.size(), entry.modifiedMillis());
-		}
-	}
-
-	static String cacheKey(String bookId, long size, long modifiedMillis)
-	{
-		return bookId + "-" + size + "-" + modifiedMillis;
+		return bookId + "-" + entry.size() + "-" + entry.modifiedMillis();
 	}
 
 	/** ETag に使う識別子 */

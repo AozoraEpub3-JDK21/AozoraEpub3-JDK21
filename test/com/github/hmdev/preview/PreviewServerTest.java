@@ -515,6 +515,32 @@ public class PreviewServerTest
 	}
 
 	@Test
+	public void aRegeneratedBookWithADifferentCoverPathStillShowsACover() throws Exception
+	{
+		// サイズと更新時刻を見直すだけでは足りない。再変換で OPF の表紙 href が
+		// 変わると、古いパスを新しい ZIP に探しに行って「表紙なし」に落ちる
+		shelfWith("cover-a");
+		String coverId = coverBookId();
+		Path epub = this.session.getBook(coverId).getEpubFile();
+		assertEquals(200, get(base() + "api/library/cover/" + coverId).statusCode());
+
+		// 同じパスに、表紙の置き場所が違う EPUB を書き直す
+		EpubFixture renamed = EpubFixture.standard();
+		renamed.putBytes("OPS/images/front.png", EpubFixture.PNG_1PX);
+		renamed.put("OPS/package.opf", EpubFixture.packageOpf().replace(
+			"    <item id=\"ncx\"",
+			"    <item id=\"cover-img\" properties=\"cover-image\" href=\"images/front.png\""
+			+ " media-type=\"image/png\"/>\n    <item id=\"ncx\""));
+		renamed.writeTo(epub);
+		java.nio.file.Files.setLastModifiedTime(epub,
+			java.nio.file.attribute.FileTime.fromMillis(
+				java.nio.file.Files.getLastModifiedTime(epub).toMillis() + 5000));
+
+		assertEquals("再変換で表紙が消えている", 200,
+			get(base() + "api/library/cover/" + coverId).statusCode());
+	}
+
+	@Test
 	public void coverApiServesAJpegThumbnail() throws Exception
 	{
 		shelfWith("cover-a");
