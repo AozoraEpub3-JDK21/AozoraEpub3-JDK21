@@ -205,6 +205,25 @@ urlString.substring(...).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_")
 
 ## 🟢 低
 
+### 18. 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） — 未対応
+
+**発見**: 2026-08-09、EPUB プレビュー C4-2b のゲート B（Opus）。本 PR の範囲外のため未修正。
+
+`src/AozoraEpub3Applet.java` の `main` 末尾、「引数にファイルが指定されていたら変換実行」のループが、
+引数ごとに `startConvertWorker(...)` を呼んでいる。`isRunning()` を見ておらず前の worker の完了も待たないため、
+**ファイルを複数指定して起動すると `ConvertWorker` が並走する**。
+
+影響:
+
+- 変換中フラグ（`running` / `convertCanceled` / `autoPreviewTarget` 等）を互いに上書きし合う
+- C4-2b の「変換完了後の自動プレビュー」を ON にしていると、**冊数ぶんブラウザのタブが開く**
+  （自動プレビューは worker 1 本につき 1 回開く設計のため）
+- 既存の挙動であり、C4-2b で悪化させたわけではない（自動プレビュー ON のときに目立つようになるだけ）
+
+**あるべき形**: ループで `vecFiles` を組み立ててから `startConvertWorker` を **1 回だけ**呼ぶ
+（ドラッグ＆ドロップ経路は既にそうなっている）。現在のループは 1 引数ぶんの `vecFiles` を毎回作り直しており、
+`files` 配列を組み立てながら使っていない dead code も残っている。
+
 ### 7. 0B-4c 監査漏れの空 catch（`意図的:` コメントなし）2 件 → ❌ 誤検出（対応不要）
 
 - `src/AozoraEpub3Applet.java` — `catch (Exception e) {}`（D&D の transferData 取得）
