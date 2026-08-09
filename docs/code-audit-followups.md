@@ -30,7 +30,12 @@
 | 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | ✅ 対応済（Java 側） | #47 |
 | 16 | 🟡 中 | CLI `-url` に zip / txtz / rar の URL を渡すと変換できない | ✅ 対応済 | #51 |
 | 17 | 🟡 中 | タイトルページの外字画像が `<img src="null"/>` になる | ✅ 対応済 | #49 |
+| 18 | 🟢 低 | 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） | ❌ 未対応 | — |
+| 19 | 🟢 低 | エピソード URL の組み立てが 4 か所に重複している | ❌ 未対応 | — |
+| 20 | 🟢 低 | 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる | ❌ 未対応 | — |
+| 21 | 🟢 低 | カクヨムの TOC キャッシュ書き込みが `AccessDeniedException` になる | ❌ 未対応 | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
+| 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ❌ 未対応 | — |
 
 ---
 
@@ -287,11 +292,38 @@ boolean chapterName = "1".equals(props.getProperty("ChapterName"));
 4. 再現ケース（`456_ruby_145.zip` 銀河鉄道の夜）: **1 件 → 10 件**（表題 + 9 章）。
    同梱 ini なしでも 9 件（表題ページ自体が出ないため）
 
-**残件**: `.NET` ポート（`src/AozoraEpub3.Cli/Program.cs`）へ同じ既定値テーブルをポートバックする
-（`java-port-back-guide.md`）。`.NET` CLI も ini に Chapter\* キーが無いと章見出しを目次に入れない。
-比較テストは ini 経路を通らないため、ポートバックしても既存テストは壊れない。
+**残件**:
+
+- `.NET` ポート（`src/AozoraEpub3.Cli/Program.cs`）へ同じ既定値テーブルをポートバックする
+  （`java-port-back-guide.md`）。`.NET` CLI も ini に Chapter\* キーが無いと章見出しを目次に入れない。
+  比較テストは ini 経路を通らないため、ポートバックしても既存テストは壊れない
+- **キー名のコンパイル時安全化**: `SettingDefaults` は文字列キーで引くため、呼び出し側のタイポは
+  実行時例外（GUI なら構築時クラッシュ）になる。旧実装の「黙って false」よりは大幅に良いが、
+  enum か `public static final String` 定数に寄せればコンパイル時に落とせる。
+  ini の読み書き（`props.setProperty` 側）も同時に定数化しないと中途半端になるため、別 PR で扱う
+
+**リリースノートに書くこと**: `-i` で目次キーを持たない自作 ini を使っている CLI 利用者は、
+章見出しと表題が目次に入るように**出力が変わる**（意図した修正）。従来の目次に戻したい場合は
+ini に `ChapterH=` / `ChapterH1=` / `ChapterH2=` / `ChapterH3=` / `ChapterName=` / `TitleToc=` を明示する。
 
 ## 🟢 低
+
+### 23. `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる — 未対応
+
+**場所**: `src/AozoraEpub3.java:245`
+
+```java
+String chapterPattern = ""; if (SettingDefaults.getBoolean(props, "ChapterPattern")) chapterPattern = props.getProperty("ChapterPatternText");
+```
+
+`ChapterPattern=1` だけを書いた手書き ini では `chapterPattern` が null のまま
+`setChapterLevel` に渡る。項目 22 の修正時に発見した既存バグ（本修正の前後で挙動は同じ）。
+GUI は必ず両方を書くため GUI 経路では起きない。
+
+**修正方針**: null / 空文字なら空文字にフォールバックする。あわせて
+`MaxChapterNameLength` が不正値のときに旧名 `ChapterNameLength` へフォールバックしない件
+（同 226-229 行）も、意図した挙動か整理する。
+
 
 ### 20. 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる — 未対応
 

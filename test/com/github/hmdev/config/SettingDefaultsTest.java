@@ -89,6 +89,32 @@ public class SettingDefaultsTest {
 		}
 	}
 
+	/**
+	 * 表に載っているキーの集合が変わっていないこと。
+	 * GUI / CLI の呼び出し側はキー名を文字列で渡すため、キーを消す・改名すると
+	 * 呼び出し側が実行時例外になる。ここで集合を固定して差分をレビューで見えるようにする
+	 */
+	@Test
+	public void tableKeysAreStable() {
+		String[] expectedBooleans = {
+			"CoverPageToc", "TitleToc",
+			"NavNest", "NcxNest",
+			"ChapterUseNextLine", "ChapterExclude", "ChapterSection",
+			"ChapterH", "ChapterH1", "ChapterH2", "ChapterH3", "SameLineChapter",
+			"ChapterName", "ChapterNumOnly", "ChapterNumTitle",
+			"ChapterNumParen", "ChapterNumParenTitle", "ChapterPattern",
+		};
+		assertEquals("boolean キーの件数", expectedBooleans.length, SettingDefaults.booleanKeys().size());
+		for (String key : expectedBooleans) {
+			assertTrue(key+" が表にあること", SettingDefaults.booleanKeys().contains(key));
+		}
+
+		assertEquals("int キーの件数", 1, SettingDefaults.intKeys().size());
+		assertTrue(SettingDefaults.intKeys().contains("MaxChapterNameLength"));
+		//旧名は GUI が書かないので表に載せない (CLI が互換読み出しとして個別に扱う)
+		assertFalse(SettingDefaults.intKeys().contains("ChapterNameLength"));
+	}
+
 	/** GUI が保存する値 ("1" / "") をそのまま読み戻せる */
 	@Test
 	public void roundTripsGuiWrittenValues() {

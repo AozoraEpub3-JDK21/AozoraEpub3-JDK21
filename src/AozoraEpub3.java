@@ -222,11 +222,12 @@ public class AozoraEpub3
 			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22)
 			//GUI が書くのは "MaxChapterNameLength"。CLI は別名を読んでいたため、
 			//GUI で設定した目次の最大文字数が CLI に届かず 64 のままだった。
-			//手書きの ini で旧名を使っている場合に備えて、そちらも読む
-			int maxLength = SettingDefaults.getInt("MaxChapterNameLength");
-			String maxLengthValue = props.getProperty("MaxChapterNameLength");
-			if (maxLengthValue == null) maxLengthValue = props.getProperty("ChapterNameLength");
-			try { maxLength = Integer.parseInt(maxLengthValue); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			//旧名 "ChapterNameLength" は SettingDefaults の表には載せず (GUI は書かない)、
+			//手書きの ini 向けの互換読み出しとしてここだけで扱う
+			int maxLength = SettingDefaults.getInt(props, "MaxChapterNameLength");
+			if (!props.containsKey("MaxChapterNameLength")) {
+				try { maxLength = Integer.parseInt(props.getProperty("ChapterNameLength")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			}
 			boolean insertTitleToc = SettingDefaults.getBoolean(props, "TitleToc");
 			boolean chapterExclude = SettingDefaults.getBoolean(props, "ChapterExclude");
 			boolean chapterUseNextLine = SettingDefaults.getBoolean(props, "ChapterUseNextLine");
