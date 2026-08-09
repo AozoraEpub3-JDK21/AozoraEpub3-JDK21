@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.After;
 import org.junit.Before;
@@ -380,6 +381,100 @@ public class PreviewServerTest
 		assertTrue(json, json.contains("\"hasCover\":false"));
 	}
 
+	/** 名前を指定して棚を作り、走査結果を返す (セッションには取り込まない) */
+	private LibraryShelf makeShelf(String folderName, String... names) throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve(folderName);
+		for (String name : names) {
+			EpubFixture fixture = name.startsWith("cover-")
+				? EpubFixture.withEpub3Cover() : EpubFixture.standard();
+			fixture.writeTo(shelf.resolve(name + ".epub"));
+		}
+		return new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null));
+	}
+
+	@Test
+	public void libraryApiListsEveryShelfWithItsOwnBooks() throws Exception
+	{
+		LibraryShelf first = makeShelf("novels", "a", "b");
+		LibraryShelf second = makeShelf("comics", "c");
+		this.session.setLibrary(List.of(first, second));
+
+		String json = get(base() + "api/library").body();
+		assertTrue(json, json.contains("\"count\":3"));
+		// 棚が 2 つ以上あるときは名前を選べないので folderName は出さない
+		assertTrue(json, json.contains("\"folderName\":null"));
+		assertTrue(json, json.contains("\"name\":\"novels\",\"count\":2"));
+		assertTrue(json, json.contains("\"name\":\"comics\",\"count\":1"));
+		// 本は棚の添字を持つ (名前で引くと、同じ名前のフォルダを登録したときに取り違える)
+		assertTrue(json, json.contains("\"shelf\":0"));
+		assertTrue(json, json.contains("\"shelf\":1"));
+		assertFalse("ホスト上の絶対パスを公開してはならない",
+			json.contains(temp.getRoot().getAbsolutePath()));
+	}
+
+	@Test
+	public void aBookOnTwoShelvesIsListedOnce() throws Exception
+	{
+		// 「出力先フォルダ」と「その親」を両方登録するのは普通に起きる。
+		// 素直に登録すると同じ本が二重に並び、冊数の上限も二重に消費する
+		Path parent = temp.getRoot().toPath().resolve("outer");
+		EpubFixture.standard().writeTo(parent.resolve("inner").resolve("shared.epub"));
+		Path child = parent.resolve("inner");
+
+		this.session.setLibrary(List.of(
+			new LibraryShelf(parent, LibraryScanner.scan(parent, 3, null)),
+			new LibraryShelf(child, LibraryScanner.scan(child, 3, null))));
+
+		String json = get(base() + "api/library").body();
+		assertEquals("同じ本が 2 回並んでいる", 1,
+			json.split("\"fileName\":\"shared.epub\"", -1).length - 1);
+		assertTrue(json, json.contains("\"count\":1"));
+		// 位置は「その本が属する棚」から見た相対にする
+		assertTrue(json, json.contains("\"shelf\":0"));
+		assertTrue(json, json.contains("\"subFolder\":\"inner\""));
+	}
+
+	@Test
+	public void nestedShelfFoldersAreFoldedIntoTheParent()
+	{
+		// 親を走査すれば子も含まれるので、子を別の棚として走査するのは二度手間
+		Path parent = temp.getRoot().toPath().resolve("outer");
+		List<Path> roots = PreviewLauncher.normalizeShelfFolders(
+			List.of(parent, parent.resolve("inner"), parent));
+		assertEquals(List.of(parent.toAbsolutePath().normalize()), roots);
+
+		// 後から親を指定された場合は、先に入れた子を畳む
+		List<Path> reversed = PreviewLauncher.normalizeShelfFolders(
+			List.of(parent.resolve("inner"), parent));
+		assertEquals(List.of(parent.toAbsolutePath().normalize()), reversed);
+	}
+
+	@Test
+	public void theNumberOfShelvesIsCapped()
+	{
+		List<Path> many = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES + 4; i++) {
+			many.add(temp.getRoot().toPath().resolve("shelf" + i));
+		}
+		assertEquals(LibraryScanner.MAX_SHELVES, PreviewLauncher.normalizeShelfFolders(many).size());
+	}
+
+	@Test
+	public void foldingHappensBeforeTheShelfLimitIsApplied()
+	{
+		// 上限を「畳む前」に掛けると、後ろに来た親で畳めるはずの子が残ったまま数だけ埋まる。
+		// 子を MAX_SHELVES 個並べた後に共通の親を渡すと、結果は親 1 個でなければならない
+		Path parent = temp.getRoot().toPath().resolve("outer");
+		List<Path> folders = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES + 2; i++) {
+			folders.add(parent.resolve("child" + i));
+		}
+		folders.add(parent);
+		assertEquals(List.of(parent.toAbsolutePath().normalize()),
+			PreviewLauncher.normalizeShelfFolders(folders));
+	}
+
 	@Test
 	public void sessionApiTellsWhetherAShelfIsLoaded() throws Exception
 	{
@@ -394,6 +489,7 @@ public class PreviewServerTest
 
 		String after = get(base() + "api/session").body();
 		assertTrue(after, after.contains("\"libraryFolder\":\"shelf\""));
+		assertTrue(after, after.contains("\"libraryShelfCount\":1"));
 		assertTrue(after, after.contains("\"libraryCount\":2"));
 		assertFalse("棚の位置はフォルダ名だけを出す", after.contains(temp.getRoot().getAbsolutePath()));
 		assertFalse("セッション情報に本棚の一覧を載せてはならない", after.contains("cover-a.epub"));

@@ -52,6 +52,11 @@ function bindLibraryEvents()
 	});
 	el.librarySort.addEventListener('change', () => renderLibrary());
 
+	el.libraryShelfSelect.addEventListener('change', () => {
+		state.libraryShelf = Number(el.libraryShelfSelect.value);
+		renderLibrary();
+	});
+
 	el.libraryGrid.addEventListener('click', event => {
 		const card = event.target.closest('button.book-card');
 		if (!card) return;
@@ -91,10 +96,42 @@ function onLibraryKeyDown(event)
 /** 棚を読み込んでいるときだけ本棚ボタンを出す */
 function updateLibraryAvailability()
 {
-	el.libraryToggle.hidden = !state.libraryFolder;
+	el.libraryToggle.hidden = !state.libraryShelfCount;
 	el.libraryToggle.title = (state.libraryCount === null)
 		? '本棚 (l)' : '本棚 (l) — ' + state.libraryCount + ' 冊';
-	el.libraryFolderName.textContent = state.libraryFolder || '';
+	el.libraryFolderName.textContent = libraryPlaceLabel();
+}
+
+/** 棚の場所の表示。1 つならフォルダ名、複数なら個数だけ (絶対パスは持っていない) */
+function libraryPlaceLabel()
+{
+	if (state.libraryFolder) return state.libraryFolder;
+	return state.libraryShelfCount ? state.libraryShelfCount + ' 個のフォルダ' : '';
+}
+
+/** 棚の選択肢を作る。棚が 1 つだけなら選ばせない (選択肢が「すべて」と 1 個で無意味) */
+function buildShelfSelect()
+{
+	const shelves = (state.library && state.library.shelves) ? state.library.shelves : [];
+	el.libraryShelfSelect.hidden = (shelves.length < 2);
+	if (shelves.length < 2) {
+		state.libraryShelf = -1;
+		return;
+	}
+	// 棚を読み込み直したら選択が範囲外になりうる
+	if (state.libraryShelf >= shelves.length) state.libraryShelf = -1;
+	el.libraryShelfSelect.textContent = '';
+	const all = document.createElement('option');
+	all.value = '-1';
+	all.textContent = 'すべての棚 (' + state.library.count + ' 冊)';
+	el.libraryShelfSelect.appendChild(all);
+	shelves.forEach((shelf, index) => {
+		const option = document.createElement('option');
+		option.value = String(index);
+		option.textContent = shelf.name + ' (' + shelf.count + ' 冊)';
+		el.libraryShelfSelect.appendChild(option);
+	});
+	el.libraryShelfSelect.value = String(state.libraryShelf);
 }
 
 function toggleLibrary(force)
@@ -109,7 +146,8 @@ function toggleLibrary(force)
 
 async function openLibrary()
 {
-	if (!state.libraryFolder) return;
+	// 棚が 2 つ以上あると libraryFolder は null になる。棚の有無は数で見ること
+	if (!state.libraryShelfCount) return;
 	state.libraryOpen = true;
 	el.libraryView.hidden = false;
 	// 本文は隠す。重ねて表示すると裏の iframe が本文を読み込み続ける
@@ -147,9 +185,11 @@ async function loadLibrary()
 		return;
 	}
 	state.library = library;
-	state.libraryFolder = library.folderName || state.libraryFolder;
+	state.libraryFolder = library.folderName || null;
+	state.libraryShelfCount = library.shelves ? library.shelves.length : state.libraryShelfCount;
 	state.libraryCount = library.count;
 	updateLibraryAvailability();
+	buildShelfSelect();
 	renderLibrary();
 }
 
@@ -160,10 +200,11 @@ function clearLibraryGrid()
 	el.libraryGrid.textContent = '';
 }
 
-/** 絞り込みと並べ替えを適用した本の配列を返す */
+/** 棚の選択・絞り込み・並べ替えを適用した本の配列を返す */
 function visibleLibraryBooks()
 {
-	const books = (state.library && state.library.books) ? state.library.books.slice() : [];
+	let books = (state.library && state.library.books) ? state.library.books.slice() : [];
+	if (state.libraryShelf >= 0) books = books.filter(book => book.shelf === state.libraryShelf);
 	const keyword = el.libraryFilter.value.trim().toLowerCase();
 	const filtered = keyword ? books.filter(book => libraryHaystack(book).includes(keyword)) : books;
 
@@ -187,6 +228,15 @@ function visibleLibraryBooks()
 		}
 	});
 	return filtered;
+}
+
+/** いま見ている範囲 (棚を選んでいればその棚、選んでいなければ全体) の冊数 */
+function shelfScopeCount()
+{
+	if (!state.library) return 0;
+	if (state.libraryShelf < 0) return state.library.count;
+	const shelf = (state.library.shelves || [])[state.libraryShelf];
+	return shelf ? shelf.count : 0;
 }
 
 function libraryHaystack(book)
@@ -214,7 +264,8 @@ function appendLibraryCards()
 	el.libraryGrid.appendChild(fragment);
 	libraryShown = upto;
 
-	const total = (state.library && state.library.books) ? state.library.books.length : 0;
+	// 分母は「いま見ている棚」の冊数。棚を選んでいるときに棚全体の冊数と混ぜない
+	const total = shelfScopeCount();
 	if (books.length === 0) {
 		showLibraryStatus(total === 0 ? 'この棚に EPUB がありません' : '絞り込みに一致する本がありません');
 		return;

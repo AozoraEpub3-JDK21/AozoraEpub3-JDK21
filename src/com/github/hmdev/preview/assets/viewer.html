@@ -90,6 +90,8 @@
 			<span id="libraryFolderName" class="sub"></span>
 		</div>
 		<div class="spacer"></div>
+		<!-- 棚が 2 つ以上あるときだけ viewer-library.js が hidden を外す -->
+		<select id="libraryShelfSelect" title="棚" hidden></select>
 		<input id="libraryFilter" type="search" placeholder="書名・著者・ファイル名で絞り込み" autocomplete="off">
 		<select id="librarySort" title="並び順">
 			<option value="modified-desc">更新が新しい順</option>
