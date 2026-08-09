@@ -7,7 +7,7 @@
 ##   目次: https://novel.syosetu.org/402358/
 ##   本文: https://novel.syosetu.org/402358/1.html
 ##
-## 調査日: 2026-02-25 (実機確認済み)
+## 調査日: 2026-08-09 (実機確認済み。前回調査 2026-02-25)
 ## HTML形式: HTML4 Transitional (非SPA)
 ##
 ## 【URL挙動】
@@ -19,13 +19,48 @@
 ##   class="ss" は現行も健在 (div.ss が複数存在)
 ##     .ss[0]: タイトル・著者・ジャンル等
 ##     .ss[1]: あらすじ
-##     .ss[2]: 話一覧テーブル
+##     .ss[2]: 話一覧
 ##     .ss[3]: Twitterシェアリンク等
 ##   <font> タグは廃止済み → <span style="font-size:..."> に移行
 ##   著者は <span itemprop="author"> (旧: <a> タグ)
 ##   タイトルは <span itemprop="name"> (旧: <font> タグ)
 ##   エピソード本文は <div id="honbun"> に集約
-##   更新日時は <NOBR><time datetime="...">...</time></NOBR> (NOBR健在)
+##
+## 【話一覧の構造変更 (2026-08-09 確認)】
+##   <table> 廃止 → <section class="episode-list"><ul class="episode-list__items"> へ移行。
+##   旧セレクタ (.ss table a / .ss td a) は一致しなくなり、変換が
+##   「一覧のURLが取得できませんでした」で失敗していた。
+##
+##     <li class="episode-list__chapter">
+##       <div class="episode-list__chapter-title">章名</div>   ← 章見出し
+##     </li>
+##     <li class="episode-list__item">
+##       <a href="./1.html" class="episode-list__link">
+##         <span class="episode-list__mark"></span>
+##         <span class="episode-list__title">話タイトル</span>
+##         <time class="episode-list__date" datetime="...">2026/07/28 06:30</time>
+##         <span class="episode-list__revision" title="2026/08/05 07:12改稿">(改)</span>
+##       </a>
+##     </li>
+##
+##   旧構造のセレクタはキャッシュ済み HTML のために候補として残してある。
+##   章マッピングは Java 側 (WebAozoraConverter#buildEpisodeChapterMapFromToc) が
+##   新旧どちらの構造からも組み立てる (新構造がある限り旧構造の表は見ない)。
+##
+##   なお SUB_UPDATE の保存形式と各話 href の形が変わるため、旧版のキャッシュを
+##   持っている場合は本修正後の初回だけ全話を取り直す。
+##
+##   話一覧のページ分割は現状も無い (136 話が 1 ページで返ることを 2026-08-09 に確認)。
+##   PAGE_URL を定義していないため、将来分割されると無音で途中までになる。
+##
+## 【各話 href は "./N.html" (相対) だが正規化しない】
+##   フル URL は listBaseUrl + href の単純連結なので .../402358/./1.html になる。
+##   実サイトはこの URL を 200 で返し (2026-08-09 実測)、キャッシュの実ファイルも
+##   safeResolve の normalize で正しい場所に落ちるため実害はない。
+##   本体は「一覧ループ」「ページネーション」「createNoUpdateUrls」「章マッピング」の
+##   4 か所で同じ連結をしており、できた文字列同士の一致が契約になっている
+##   (章の引き当ても更新スキップ判定も文字列一致)。1 か所だけ正規化すると
+##   章が付かない・毎回全話を取り直す、が無音で起きるので触らないこと。
 ################################
 
 ## Cookie (uaid はサーバーが自動発行するためここでは固定の over18 のみ)
@@ -48,15 +83,31 @@ AUTHOR	#maind span[itemprop=author]:0
 DESCRIPTION	#maind .ss:1
 
 ## 各話へのリンク
-## .ss テーブル内の <a> タグ (エピソードリンク)
-HREF	#maind .ss table a
+## 新: <a class="episode-list__link"> / 旧: .ss テーブル内の <a>
+## カンマ区切りは「候補の優先順」で、先に一致した方だけが使われる
+## (CSS のセレクタグループではない。WebAozoraConverter#getExtractElements)
+HREF	#maind .episode-list__items .episode-list__link,#maind .ss table a
 
 ## 一覧に記載されている各話の更新日時 (更新チェック用)
-## <NOBR> タグは現行も健在
-SUB_UPDATE	#maind .ss table nobr
+## 新: 各話のリンクそのもの / 旧: <NOBR>
+##
+## <time class="episode-list__date"> だけを見てはいけない。createNoUpdateUrls は
+## 選んだ要素の「内側 HTML」を指紋にして前回と比較するが、改稿日時は <time> ではなく
+## 兄弟の <span class="episode-list__revision" title="2026/08/05 07:12改稿"> にしかない。
+## <time> だけだと改稿しても指紋が変わらず、古い本文がキャッシュから使われ続ける。
+## リンク要素まで上げると内側にタイトル・投稿日時・改稿日時がすべて入る。
+## 同じく内側に入る <span class="episode-list__mark"> は 2 作品 149 話すべてで空だった
+## (2026-08-09 実測)。中身が時間で変わるようになると毎回再取得になるので、
+## 挙動が変わったらここを疑うこと。
+## HREF と同じセレクタなので要素数も必ず一致する。
+## ここは必ず一致させること。hrefs.size() != updates.size() だと createNoUpdateUrls が
+## null を返し、呼び出し側は「更新なし集合が無い」として reload=false のままになる。
+## つまり全話再取得ではなく、**キャッシュがある限り 1 話も更新されない**(無音で古いまま)。
+SUB_UPDATE	#maind .episode-list__items .episode-list__link,#maind .ss table nobr
 
 ## 一覧ページのタイトル (本文側に無ければこれを利用)
-SUBTITLE_LIST	#maind .ss td a
+## 新: <span class="episode-list__title"> / 旧: <td> 内の <a>
+SUBTITLE_LIST	#maind .episode-list__items .episode-list__title,#maind .ss td a
 
 ################################
 ## 各話の抽出設定
@@ -68,7 +119,19 @@ SUBTITLE_LIST	#maind .ss td a
 ## .ss 内の style 属性付き span の 2番目 (index=1)
 ## index=0: <span style="font-size:120%"><a>作品タイトル</a></span>
 ## index=1: <span style="font-size:120%">N.話タイトル</span>  ← これ
-CONTENT_SUBTITLE	#maind .ss span[style]:1
+##
+## 2026-08 の改修で、章あり作品では index=1 が
+##   <span style="font-size:120%">章名<br>話タイトル</span>
+## になり章名込みで取れるようになった。章名は直前に［＃大見出し］として
+## 出力済みなので、そのままだと中見出しに二重に出る。
+## そこで <br> までを捨てる正規表現を付ける (getExtractText は要素の内側 HTML に
+## パターンを当てるため <br> で切れる)。章なし作品は <br> が無く不一致となり、
+## ExtractInfo#replace の replaceAll がそのまま返すので従来どおり。
+##
+## 一覧の SUBTITLE_LIST に寄せて丸ごと外す手もあるが、それだと
+## 各話 URL (https://novel.syosetu.org/402358/1.html) を直接変換したときに
+## 一覧が無く listSubTitle が null になり、中見出しが消える。
+CONTENT_SUBTITLE	#maind .ss span[style]:1	^.*?<br>\s*(.*)$	$1
 
 ## 本文
 ## <div id="honbun"> に本文段落 <p id="N"> が集約されている
