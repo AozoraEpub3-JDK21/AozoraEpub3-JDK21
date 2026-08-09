@@ -21,6 +21,10 @@
 ##     .ss[1]: あらすじ
 ##     .ss[2]: 話一覧
 ##     .ss[3]: Twitterシェアリンク等
+##   <font> タグは廃止済み → <span style="font-size:..."> に移行
+##   著者は <span itemprop="author"> (旧: <a> タグ)
+##   タイトルは <span itemprop="name"> (旧: <font> タグ)
+##   エピソード本文は <div id="honbun"> に集約
 ##
 ## 【話一覧の構造変更 (2026-08-09 確認)】
 ##   <table> 廃止 → <section class="episode-list"><ul class="episode-list__items"> へ移行。
@@ -57,11 +61,6 @@
 ##   4 か所で同じ連結をしており、できた文字列同士の一致が契約になっている
 ##   (章の引き当ても更新スキップ判定も文字列一致)。1 か所だけ正規化すると
 ##   章が付かない・毎回全話を取り直す、が無音で起きるので触らないこと。
-##   <font> タグは廃止済み → <span style="font-size:..."> に移行
-##   著者は <span itemprop="author"> (旧: <a> タグ)
-##   タイトルは <span itemprop="name"> (旧: <font> タグ)
-##   エピソード本文は <div id="honbun"> に集約
-##   更新日時は <NOBR><time datetime="...">...</time></NOBR> (NOBR健在)
 ################################
 
 ## Cookie (uaid はサーバーが自動発行するためここでは固定の over18 のみ)
@@ -87,7 +86,7 @@ DESCRIPTION	#maind .ss:1
 ## 新: <a class="episode-list__link"> / 旧: .ss テーブル内の <a>
 ## カンマ区切りは「候補の優先順」で、先に一致した方だけが使われる
 ## (CSS のセレクタグループではない。WebAozoraConverter#getExtractElements)
-HREF	#maind .episode-list__link,#maind .ss table a
+HREF	#maind .episode-list__items .episode-list__link,#maind .ss table a
 
 ## 一覧に記載されている各話の更新日時 (更新チェック用)
 ## 新: 各話のリンクそのもの / 旧: <NOBR>
@@ -97,15 +96,18 @@ HREF	#maind .episode-list__link,#maind .ss table a
 ## 兄弟の <span class="episode-list__revision" title="2026/08/05 07:12改稿"> にしかない。
 ## <time> だけだと改稿しても指紋が変わらず、古い本文がキャッシュから使われ続ける。
 ## リンク要素まで上げると内側にタイトル・投稿日時・改稿日時がすべて入る。
+## 同じく内側に入る <span class="episode-list__mark"> は 2 作品 149 話すべてで空だった
+## (2026-08-09 実測)。中身が時間で変わるようになると毎回再取得になるので、
+## 挙動が変わったらここを疑うこと。
 ## HREF と同じセレクタなので要素数も必ず一致する。
 ## ここは必ず一致させること。hrefs.size() != updates.size() だと createNoUpdateUrls が
 ## null を返し、呼び出し側は「更新なし集合が無い」として reload=false のままになる。
 ## つまり全話再取得ではなく、**キャッシュがある限り 1 話も更新されない**(無音で古いまま)。
-SUB_UPDATE	#maind .episode-list__link,#maind .ss table nobr
+SUB_UPDATE	#maind .episode-list__items .episode-list__link,#maind .ss table nobr
 
 ## 一覧ページのタイトル (本文側に無ければこれを利用)
 ## 新: <span class="episode-list__title"> / 旧: <td> 内の <a>
-SUBTITLE_LIST	#maind .episode-list__title,#maind .ss td a
+SUBTITLE_LIST	#maind .episode-list__items .episode-list__title,#maind .ss td a
 
 ################################
 ## 各話の抽出設定
