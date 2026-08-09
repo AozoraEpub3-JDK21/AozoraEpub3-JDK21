@@ -1033,6 +1033,32 @@ C4 には「本棚を開く」ボタンと棚フォルダの選択という置�
   片方の言語にだけ足す事故は今後ビルドで落ちる
 - `.NET` ポートへの移植は C4-2a と同じく不要 (Swing GUI の入口のみ)
 
+レビューで見つかった、繰り返しやすい間違い (ゲート A=Codex / B=Opus / C=Fable):
+
+- **kindlegen 経路の「出力ファイル」は一時ファイルである** (ゲート A・B)。
+  `outFileOrg != null` のとき `outFile` は `kindle*.epub` で、変換直後の
+  `setPreviewTarget(outFile)` はこれを指す。kindlegen が実行ファイル名の検証で
+  `return` したり例外で抜けるとリネームまで届かず、`kindle12345.epub` を
+  自動で開いてしまう。`setPreviewTarget(file, confirmed)` の第 2 引数で
+  自動プレビューの対象から外し、リネーム後の呼び出しで確定させる
+  (**手動のプレビューボタンは従来どおり一時ファイルを対象にする** —
+  中身は変換済みの本そのものなので、見せない理由がない)
+- **中止フラグは変換 1 回ぶんを表していない** (ゲート C)。
+  `convertCanceled` は `convertFiles()` の先頭で false に戻る。
+  URL を複数変換すると `convertWeb()` が URL ごとに `convertFiles()` を呼ぶため、
+  1 件目で中止しても最後には false に戻っており、「中止した回は開かない」が破れる
+  (ループが中止で break しないのは既存挙動)。消える前に
+  `convertCanceledInWorker` へ写し、`done()` はこちらも見る
+- **worker が書き EDT が読むフィールドは volatile にする** (ゲート B)。
+  `done()` の呼び出し順から happens-before は成立しているが、
+  既存の `running` に揃えて意図を示す
+
+**リリース前 todo** (ゲート C の指摘。Phase 2 完了後のリリース作業で行う):
+
+- `README.md` / ユーザー向け docs に**プレビュータブそのものが未記載**
+  (C4-2a の棚設定・「本棚を開く」も含む)。`AutoPreview` の既定 OFF もあわせて書く
+- ja / en の両方を更新すること (`feedback_docs_sync`)
+
 **(b) プレビュー画面から EPUB のフォルダを開く**
 
 **実装済み (2026-08-08)。** `POST /p/{token}/api/book/{bookId}/reveal` +
