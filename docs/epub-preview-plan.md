@@ -230,12 +230,68 @@ UI は「推奨リスト (実在するものだけ表示)」+「インストー�
 
 - メタデータは各 EPUB の OPF から `dc:title` / `dc:creator` / 更新日時を取得。
   **全体を展開せず ZIP のエントリを直接読む** (`java.util.zip.ZipFile`)。
+  解釈が展開経路とずれないよう、OPF の読み取りは `OpfParser.parse(Document, String)` を共用する
+  (`XmlUtils.parse(byte[], String)` と併せて Phase 2 で追加した入口)。
 - 表紙は OPF の `properties="cover-image"` (EPUB3) または
   `<meta name="cover" content="...">` (EPUB2) から特定し、
   縮小した PNG/JPEG をメモリ or キャッシュに保持。
-- **インデックスキャッシュ**: `<cacheDir>/preview-library.json` に
-  `path / size / mtime / title / creator / coverEntry` を保存し、
+  - EPUB2 の `meta[name=cover]` が**表紙ページ (XHTML) を指している** EPUB が実在するため、
+    media-type が `image/` であることを確かめる
+  - どちらの宣言も無い EPUB 向けに「id か href に `cover` を含む画像」の推測を最後に置く。
+    外しても「表紙なし」になるだけなので許容する
+  - **manifest にあっても ZIP に実在しない**表紙があるため、スキャン時に存在を確認して落とす
+    (持たせたままだとサムネイル要求のたびに 404 になる)
+- **インデックスキャッシュ**: `path / size / mtime / title / creator / coverEntry` を保存し、
   `size` + `mtime` 一致で再パースを省く。
+
+  > **形式は JSON ではなく行指向のテキスト** (`~/.aozoraepub3/preview-library.tsv`) に変更した。
+  > このプロジェクトには **JSON パーサが無い**。`Json` は「追加依存ゼロ」方針のもとで書かれた
+  > **出力専用**のヘルパで、読む側を持っていない。読み書き両方が要るキャッシュのために
+  > JSON ライブラリを足すのは方針と衝突し、自前パーサを書けば「壊れた入力の誤解釈」を
+  > 新たに抱える。キャッシュは再生成できるので、曖昧さの無い形式を優先した。
+  > 1 行 1 冊のタブ区切りで、値に含まれうるタブ・改行・バックスラッシュのみエスケープし、
+  > null は `\0` で表して空文字と区別する。列数が合わない行は 1 行だけ捨て、
+  > 先頭行の世代が違うファイルは丸ごと読み捨てる。
+- **上限** (全 6 種)
+
+  | 定数 | 値 | 対象 | 超過時 |
+  |---|---|---|---|
+  | `LibraryScanner.DEFAULT_MAX_DEPTH` | 8 | 走査の深さ | 静かに打ち切り |
+  | `LibraryScanner.MAX_BOOKS` | 2000 | 一覧に載せる冊数 | `warn` |
+  | `MAX_BOOKS * CANDIDATE_MULTIPLIER` | 20000 | 走査中に覚える候補パス | `warn` |
+  | `LibraryScanner.MAX_FIELD_CHARS` | 512 | 書名・著者の保持長 | 切り捨て |
+  | `LibraryIndexCache.MAX_ENTRIES` | 5000 | キャッシュ件数 | 古い方から破棄 |
+  | `LibraryIndexCache.MAX_FILE_BYTES` | 8MB | キャッシュファイル | 読: 丸ごと破棄 / 書: 古い方から破棄 |
+
+  - **冊数の上限は「候補」ではなく「読めた本」で数える。** 候補で数えると、
+    壊れた `.epub` が先に並んでいるだけで後ろの正常な本が丸ごと落ちる
+  - キャッシュの上限は**メモリ上のマップからも溢れさせる**。書き出す分だけ切り詰めると、
+    GUI を起動したまま本棚を渡り歩いたときにマップが際限なく育つ
+  - **件数とファイルサイズの両方を書き込み時に効かせる。** 件数だけだと
+    `MAX_ENTRIES` × `MAX_FIELD_CHARS` × 3 フィールドで 8MB を超え、
+    **書いた直後の自分のファイルを次回 `load` で読み捨てる**
+  - **書名・著者は切り捨てるが、表紙パスは切り捨てない。** 途中で切ると
+    実在するパスが実在しないパスに化ける。長すぎるものは「表紙なし」にする
+  - キャッシュから復元した値は**スキャン経路と同じ制約を通し直す**
+    (`truncate` / `sanitizeCoverEntry`)。キャッシュはホーム配下の平文で手で書き換えられ、
+    通さないと 512 文字上限も「表紙はルート相対で `..` を含まない」性質も
+    キャッシュ経由だけすり抜ける
+- **スレッド安全性**: `PreviewServer` は 4 スレッドのプールで動くため、
+  `LibraryIndexCache` のメソッドはすべて `synchronized`。
+- `LibraryScanner.scan()` は**キャッシュを読むだけで更新しない**。
+  呼び出し側が結果を `LibraryIndexCache.update()` に渡すこと
+  (忘れると以後も毎回全冊を再パースし続ける)。
+- **シンボリックリンク**: ディレクトリのリンクは辿らない (ループと本棚の外への脱出を避ける)。
+  一方、**ファイルへのリンクは受け入れる**。リンクを辿らない走査では
+  ファイルへのリンクが属性上「通常ファイル」にならず、
+  Linux / macOS でリンクを張って本を集める運用だと本が消えるため。
+  なお Windows の junction は JDK 上シンボリックリンク扱いにならないので、
+  歯止めは深さ上限だけになる。
+- 壊れた EPUB・EPUB でない `.epub` が 1 つあっても**その 1 冊を飛ばして走査を続ける**。
+  権限不足で読めないディレクトリも同様。
+  - `SimpleFileVisitor.postVisitDirectory` の**既定実装は、ディレクトリの列挙が
+    I/O エラーで中断した場合その例外を再スローする**。オーバーライドして握り潰さないと、
+    ネットワークドライブや走査中に消えたフォルダで本棚全体が落ちる
 - 一覧からの選択時に **初めてその EPUB を展開する (遅延展開)**。
   全冊を先に展開しない。
 - 既定のスキャン対象は **GUI の出力先フォルダ**。
@@ -341,8 +397,9 @@ package version は何か、フォントが埋まっているか) をその場�
 | `PreviewServer` | `HttpServer` 配信。loopback / ランダムポート / トークン / パストラバーサル防止 | 1 |
 | `PreviewSession` | 1 セッションの寿命 (展開先・サーバ・URL・マウント済み book) | 1 |
 | `PreviewLauncher` | 展開 → サーバ起動 → `Desktop.browse()` の facade。**GUI と CLI の唯一の入口** | 1 |
-| `LibraryScanner` | フォルダ再帰スキャン + OPF メタデータ + 表紙抽出 | 2 |
-| `LibraryIndexCache` | インデックスの JSON 永続化 (size + mtime で無効化) | 2 |
+| `LibraryEntry` | 本棚 1 冊の書誌 (パス・サイズ・更新時刻・書名・著者・表紙エントリ) の record | 2 |
+| `LibraryScanner` | フォルダ再帰スキャン + ZIP 直読みの OPF メタデータ + 表紙位置の特定 | 2 |
+| `LibraryIndexCache` | インデックスの永続化 (size + mtime で無効化) | 2 |
 | `DeviceProfile` / `DeviceProfileLoader` | `preview/devices/*.ini` の読み込み | 3 |
 | `assets/viewer.html` / `viewer.css` / `viewer-*.js` (7 分割) | ビューアーシェル (JAR 同梱リソース) | 1 |
 
@@ -621,11 +678,30 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 
 ### Phase 2 — 本棚 (R3)
 
-- `LibraryScanner` / `LibraryIndexCache` / 表紙サムネイル抽出
-- 本棚 UI (グリッド表示・タイトル/著者/更新日でのソート・絞り込み)
-- CLI `--preview <dir>` / GUI 「本棚を開く」
+規模が大きいので 4 つの PR に分ける。スタック PR は 2026-08-08 に事故を起こしている
+(`docs/ci-followups.md` §2) ため、**いずれも master から切って順に進める**。
 
-規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行。
+| 段 | 内容 | 状態 |
+|---|---|---|
+| C1 | `LibraryEntry` / `LibraryScanner` / `LibraryIndexCache` + テスト | 実装済 (2026-08-09) |
+| C2 | 表紙サムネイル生成 + `api/library` / `api/library/cover/{bookId}` + セッション連携 | 未着手 |
+
+| C3 | 本棚 UI (`viewer-library.js` + CSS + `viewer.html`)。グリッド表示・書名/著者/更新日のソート・絞り込み | 未着手 |
+| C4 | 入口: CLI `--preview <dir>` / GUI「本棚を開く」/ 変換後の自動プレビュー (下記 (a)) | 未着手 |
+
+規模感: Java 500〜700 行 + JS/CSS 250 行 + テスト 150 行
+(Phase 1 の実績どおり、見積の 1.5〜2 倍に膨らむ前提で見ること)。
+
+#### C2 以降への申し送り (C1 のレビューで判明)
+
+- **`PreviewSession.defaultBookId` は最初の `addBook` で固定される。**
+  C2 で本棚の 2000 冊を先に登録すると、C4 の「変換後の自動プレビュー」で
+  既定表示が本棚の 1 冊目になってしまう。本棚の登録と
+  「いま見たい 1 冊」の指定を分ける必要がある
+- **状態を変えるエンドポイントは必ず POST にする** (前掲の不変条件)。
+  本棚の再スキャンや削除を GET で足すと発信元検査を通らない
+- 本棚 UI を足したら `viewer-library.js` を新設し、
+  `PreviewServer.ALLOWED_ASSETS` と `viewer.html` の script タグを**両方**更新する
 
 #### Phase 2 で入れる小機能 (2026-08-08 ユーザー提案)
 
@@ -712,6 +788,14 @@ JS が見積の倍近くなったのは、ページ送りの書字方向対応�
 - `PreviewSessionTest` — 遅延展開、二重展開しないこと、
   **実行中セッションの展開先を掃除で消さないこと**、持ち主の居ない残骸は消すこと
 - `PreviewSettingsStoreTest` — 保存と読み込み、オブジェクト以外の拒否、サイズ上限
+- `LibraryScannerTest` — 再帰スキャンと書誌の取得、**ディスクに何も展開しないこと**、
+  `.epub` 以外を拾わないこと、壊れた 1 冊でスキャン全体を落とさないこと、
+  表紙の 3 経路 (EPUB3 property / EPUB2 meta / 名前からの推測)、
+  EPUB2 の meta が XHTML を指す場合に画像として使わないこと、
+  ZIP に実在しない表紙を落とすこと、深さ上限、キャッシュの再利用と無効化
+- `LibraryIndexCacheTest` — 往復、null と空文字の区別、値に含まれるタブ・改行で
+  列がずれないこと、壊れた行だけを捨てること、世代違いを丸ごと捨てること、
+  他フォルダの記録が消えないこと、上限で古いものから溢れること
 
 `Desktop.browse()` はヘッドレス CI で失敗するため、`PreviewLauncher` は
 「サーバ起動まで」と「ブラウザ起動」を分離し、テストは前者のみを対象とする。
