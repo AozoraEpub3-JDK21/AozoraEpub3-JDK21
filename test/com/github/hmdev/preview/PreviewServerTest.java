@@ -515,6 +515,27 @@ public class PreviewServerTest
 	}
 
 	@Test
+	public void theListPicksUpACoverAddedAfterTheScan() throws Exception
+	{
+		// 一覧を出し直しても hasCover:false のままだと、ビューアーはサムネイルを
+		// 取りに来ない。表紙エンドポイントだけを新しくしても届かない
+		shelfWith("plain-b");
+		Path epub = this.session.getBooks().stream()
+			.filter(b -> b.getEpubFile().getFileName().toString().equals("plain-b.epub"))
+			.findFirst().orElseThrow().getEpubFile();
+		assertTrue(get(base() + "api/library").body().contains("\"hasCover\":false"));
+
+		// 表紙付きに変換し直す
+		EpubFixture.withEpub3Cover().writeTo(epub);
+		java.nio.file.Files.setLastModifiedTime(epub,
+			java.nio.file.attribute.FileTime.fromMillis(
+				java.nio.file.Files.getLastModifiedTime(epub).toMillis() + 5000));
+
+		String json = get(base() + "api/library").body();
+		assertTrue("再変換で付いた表紙が一覧に反映されない", json.contains("\"hasCover\":true"));
+	}
+
+	@Test
 	public void aRegeneratedBookWithADifferentCoverPathStillShowsACover() throws Exception
 	{
 		// サイズと更新時刻を見直すだけでは足りない。再変換で OPF の表紙 href が

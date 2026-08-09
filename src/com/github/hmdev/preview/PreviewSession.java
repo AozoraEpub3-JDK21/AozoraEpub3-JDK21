@@ -378,9 +378,17 @@ public class PreviewSession implements AutoCloseable
 	 *
 	 * <p>{@code api/session} と同じく<b>ホスト上の絶対パスは載せない</b>。
 	 * 棚の位置はフォルダ名だけ、本の位置は棚からの相対フォルダだけを出す。</p>
+	 *
+	 * <p>出すたびに<b>変わっている本の記録を読み直す</b>。読み直さないと、
+	 * 表紙が無かった本に表紙が付いても {@code hasCover:false} のままになり、
+	 * ビューアーはサムネイルを取りに来ないので、棚を読み込み直すまで
+	 * 新しい表紙が出ない (書名や更新日時も同様に古いままになる)。
+	 * 判定は stat だけなので安く、ZIP を開き直すのは実際に変わった本だけ。</p>
 	 */
 	public synchronized String libraryJson()
 	{
+		for (String id : new ArrayList<>(this.library.keySet())) refreshLibraryEntry(id);
+
 		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 128);
 		buf.append('{');
 		Json.prop(buf, "folderName", folderDisplayName(this.libraryFolder));
