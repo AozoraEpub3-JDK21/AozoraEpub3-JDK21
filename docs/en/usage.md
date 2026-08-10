@@ -184,6 +184,21 @@ Presets in the `presets/` directory:
 - `reader.ini` — Sony Reader
 - `reader_t3.ini` — Sony Reader T3
 
+#### How the settings file (AozoraEpub3.ini) is located
+
+The CLI looks for its settings file in this order. If none is found, it runs with the
+built-in defaults (same as the GUI's initial state) and logs a line saying so.
+
+1. The file given with `-i <file>`
+2. `AozoraEpub3.ini` in the current directory
+3. `AozoraEpub3.ini` next to the jar (the bundled settings file)
+
+**The GUI always reads and writes `AozoraEpub3.ini` next to the jar** (it never looks at
+the current directory). When you run the CLI from outside the distribution folder, step 3
+makes it pick up the same settings as the GUI. Note that because of step 2, a file named
+`AozoraEpub3.ini` in your working directory silently takes precedence. The startup log
+(`設定ファイルを読み込みました: <path>`) shows which file was read.
+
 ### EPUB Preview
 
 Check the result in a browser before transferring it to a device.
