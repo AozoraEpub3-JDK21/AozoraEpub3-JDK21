@@ -496,6 +496,35 @@ ini 探索（項目 26）だけでなく `template/` / `web/` / `.cache` の解�
 `new File(...).getParent()`（両区切りを解釈する）にする。template/web/cache と ini で
 挙動が揃うよう、直すときは全経路まとめて。
 
+### 28. 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） — 未対応
+
+**発見**: 2026-08-11、v1.5.0-jdk21 リリース後の実サイト dogfood（GUI 経由）。
+`https://www.aozora.gr.jp/cards/000035/files/1567_14913.html`（走れメロス）を変換すると
+表題が「走れメロス 走れメロス」になり、出力ファイル名・タイトルページ・プレビューの
+書名すべてに二重表題が出る。
+
+**原因**: `web/www.aozora.gr.jp/extract.txt` の `SERIES`（`h1.site-title:0,.title:0,#title:0`）と
+`TITLE`（`.title:0,h1:0,#title:0`）が、青空文庫の単話ページでは**同じ `<h1 class="title">` に
+マッチ**する。`WebAozoraConverter.java:692-698` は series → title を無条件に連続出力するため、
+中間テキストの先頭が「走れメロス／走れメロス／太宰治」の 3 行になり、本文内表題の
+「表題＋副題」解釈で 1〜2 行目が連結される。
+
+**範囲**:
+- 影響するのは **HTML ページ URL の変換経路のみ**。zip URL（監査 #16 の
+  `ArchiveUrlUtils` 経路）とローカル zip/txt 入力は SERIES を使わないため正常
+  （「[太宰治] 走れメロス.epub」）
+- `.NET` ポート `WebAozoraConverter.cs:239-240` にも同一挙動あり（移植時は同時修正）
+- git 履歴（`git log -S`）・RELEASE_NOTES に過去の修正記録は見つからず、
+  v1.3.6 の青空文庫復旧（extract.txt 新設）以来の既存挙動と推定。
+  過去のリリース前 E2E では表題ページ文言の目視が漏れていた
+
+**修正方針**: `WebAozoraConverter` の series 出力を
+`if (series != null && !series.equals(title))` にガードする（1 行）。
+なろう等シリーズ名が表題と異なるサイトの出力は不変のため narou.rb 互換への影響なし。
+extract.txt 側で `SERIES` をコメントアウトする案もあるが、コード側ガードは全サイト共通の
+防御になるためコード側を推奨。修正後は `.NET` ポートの `JavaComparisonTests` と
+（HTML 経路のフィクスチャがあれば）出力比較の確認を行う。
+
 ### 25. GUI 専用の設定が CLI に届かない / 単位の連結が壊れている — 🔶 一部対応（タイポのみ修正）
 
 **発見**: 2026-08-10、項目 24 の全キー棚卸し。項目 22 と**同じ型のキー名タイポ**が 1 件残っていた。
