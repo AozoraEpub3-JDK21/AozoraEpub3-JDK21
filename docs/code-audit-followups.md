@@ -36,7 +36,8 @@
 | 21 | 🟢 低 | カクヨムの TOC キャッシュ書き込みが `AccessDeniedException` になる | ❌ 未対応 | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ❌ 未対応 | — |
-| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） | ❌ 未対応 | — |
+| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ❌ 未対応 | — |
+| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | ❌ 未対応 | — |
 
 ---
 
@@ -346,6 +347,79 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 
 **予防策の候補（nice-to-have）**: `src/` を grep して `props.getProperty("Chapter…` 等の
 直読みを禁止する簡易テストを置く。キー名の定数化 PR（項目 22 の残件）で同時に扱うのが自然。
+
+#### 全キー棚卸しの結果（2026-08-10、実測）
+
+GUI をまっさらな状態で起動 → 終了させて**初期状態の ini を実物として生成**し（126 キー）、
+同梱 `AozoraEpub3.ini`（24 キー）および CLI のキー不在時の実効値と 3 者比較した。
+
+**判明した重要事実**:
+
+- **GUI は終了時に全 126 キーを必ず書き出す**（OFF は `Key=` の空値として明示）。つまり
+  「キー不在」は GUI 経由では起こり得ず、**手書き ini と同梱 ini でしか起きない**。
+  narou.rb 連携先の ini（`D:\MyNovel\AozoraEpub3_\AozoraEpub3.ini`）は 123 キーを持ち、
+  同梱 ini はその**完全な部分集合**（同梱にしか無いキーは 0 件）。
+  よって **CLI 既定値を変えても narou.rb 連携の出力は原理的に変わらない**
+- 同梱 ini は「GUI 初期値」ではなく**意図的に異なる値**を持つ:
+  `TocPage=1`（GUI は OFF）/ `TitlePage=2`（GUI は 1）/ `NavNest=NcxNest=1`（GUI は OFF）/
+  `AutoYokoNum1=AutoYokoNum3=1`（GUI は OFF）/ `SpaceHyphenation=1`（GUI は 0）/
+  `DakutenType=2`（GUI は 1）。全キー版にする際もこれらは維持する
+
+**同梱 ini に追記すると CLI の出力が変わるキー（8 件）**:
+
+| キー | GUI 初期値 | CLI（キー不在時） | 影響 |
+|---|---|---|---|
+| `PageBreak` | `1` | false | **自動改ページが全滅**。`PageBreakSize` 等が ini にあってもこのフラグで gate されている |
+| `TocVertical` | `1` | false | 目次ページが横書きになる |
+| `FitImage` | `1` | false | 画像が画面サイズに合わされない |
+| `ImageSizeType` | `3`（アスペクト） | `2`（高さ） | 画像のみ EPUB で幅 fit にならない |
+| `SinglePageSizeW` / `H` | `400` / `600` | `480` / `640` | 単ページ画像判定の閾値がずれる |
+| `JpegQuality` | `85` | `80` | 再エンコード品質とバイト列が変わる |
+| `MaxCoverLine` | `10` | 実質無制限 | 先頭画像を表紙にする指定で、本文後方の画像まで表紙候補になる |
+
+**同梱 ini に追記してはいけないキー**: `BodyMargin` / `BodyMarginUnit`。
+`WriterConfigurator.java:83,90` が単位を `"0"` / `"1"` のまま連結するため `"00"` になる
+（GUI 側は `AozoraEpub3Applet.java:3679,3684` で `"em"` / `"%"` に変換してから渡す）。
+値が 0 なら CSS 上は無害だが、非 0 だと 10 倍の margin になる。**下記 25 で扱う**。
+なお `PageMargin=",,,"` は `split` の結果が長さ 0 になるため追加しても無害。
+
+**CLI がまったく読まないキー（43 件）**: ウィンドウ位置・履歴などの実行時状態（`PosX` / `PosY` /
+`SizeW` / `SizeH` / `DividerLocation` / `LastDir` / `DstPath` / `DstPathList` / `ProfileFileName` /
+`ProfileList` / `CoverHistory` / `ChkConfirm` / `SamePath` / `AutoPreview` / `ReplaceCover` /
+`OverWrite`）は**同梱 ini に入れない**。CLI オプションで代替されるもの（`EncType` / `Ext` /
+`Cover` / `UseFileName` / `AutoFileName` / `Vertical` / `CachePath` / `WebInterval` / `TitleType`）と、
+CLI に配線されていない機能設定（`ChukiRuby` / `ForceIndent` / `ImageFloat` / `ImageFloatBlock` /
+`ImageFloatPage` / `PubFirst` / `AuthorCommentStyle` / `ImageScaleChecked`）、
+Web 変換系（`UseNarouApi` / `ApiFallback` / `WebBeforeChapter*` / `WebConvertUpdated` /
+`WebModified*` / `WebSkipImages`）も同様。
+
+**決定した方針（2026-08-10、ユーザー判断）**: 項目 22 と同じ **A+B**。
+同梱 ini を全キー版にし（実行時状態は除外、既存 24 キーの意図的な値は維持）、あわせて
+`SettingDefaults` を拡張して**古い ini を持ち込む利用者**のドリフトも解消する。
+出力が変わるため、比較 5 ケースで before/after を実測してから入れる。
+
+### 25. GUI 専用の設定が CLI に届かない / 単位の連結が壊れている — 未対応
+
+**発見**: 2026-08-10、項目 24 の全キー棚卸し。項目 22 と**同じ型のキー名タイポ**が 1 件残っていた。
+
+- **`GothicUseBold` が恒久的に無効**: `src/com/github/hmdev/pipeline/WriterConfigurator.java:97` が
+  `props.getProperty("gothicUseBold")` と**先頭小文字**で読んでいる。GUI が書くキーは
+  `GothicUseBold` なので、ini に何を書いても常に false。
+  項目 22 で直した `hapterNumParenTitle`（先頭 C 欠落）と同種
+- **`BodyMarginUnit` の連結が壊れている**: 上記 `WriterConfigurator.java:83,90` の単位連結。
+  GUI は `"em"` / `"%"` に変換してから渡すのに、CLI は ini の生値（`"0"` / `"1"`）を連結するため
+  `"00"` のような不正な CSS 値になる。`BodyMargin` が 0 のときだけ無害
+- **`ImageFloatType` が 1 ずれる**: GUI はコンボの index（0/1）で保存し、内部で `+1` して使う
+  （`AozoraEpub3Applet.java:3682` 付近）。CLI は `+1` しないため、float を有効にした ini で
+  GUI と CLI の挙動が食い違う。ただし `ImageFloat` チェックボックス自体を CLI が読まないため、
+  現状では到達しない
+- **CLI に配線されていない GUI 設定**: `ChukiRuby` / `ForceIndent` / `ImageFloat` /
+  `PubFirst` / `AuthorCommentStyle`。CLI は `setChukiRuby` / `setForceIndent` / `setImageFloat` を
+  呼んでいない。既定値がすべて false のため初期状態では差が出ないが、**ini に書いても効かない**
+
+**修正方針**: `GothicUseBold` のタイポは単独で直せる（1 行）。単位連結と `ImageFloatType` は
+GUI 側の変換を `WriterConfigurator` に寄せて両者が同じ関数を通る形にする。
+CLI 未配線の設定は「CLI で対応する」か「ドキュメントに CLI 非対応と明記する」かの判断が要る。
 
 ### 20. 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる — 未対応
 
