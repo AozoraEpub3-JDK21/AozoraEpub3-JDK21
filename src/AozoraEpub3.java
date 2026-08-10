@@ -88,7 +88,7 @@ public class AozoraEpub3
 			Options options = new Options();
 			options.addOption("h", "help", false, "show usage");
 			options.addOption("i", "ini", true, "指定したiniファイルから設定を読み込みます (コマンドラインオプション以外の設定)");
-			options.addOption("t", true, "本文内の表題種別\n[0:表題→著者名] (default)\n[1:著者名→表題]\n[2:表題→著者名(副題優先)]\n[3:表題のみ]\n[4:なし]");
+			options.addOption("t", true, "本文内の表題種別\n[0:表題→著者名] (default)\n[1:著者名→表題]\n[2:表題→著者名(副題優先)]\n[3:表題のみ(1行)]\n[4:表題+著者名のみ(2行)]\n[5:なし]");
 			options.addOption("tf", false, "入力ファイル名を表題に利用");
 			options.addOption("c", "cover", true, "表紙画像\n[0:先頭の挿絵]\n[1:ファイル名と同じ画像]\n[ファイル名 or URL]");
 			options.addOption("ext", true, "出力ファイル拡張子\n[.epub] (default)\n[.kepub.epub]");
@@ -172,30 +172,42 @@ public class AozoraEpub3
 			
 			//propsから読み込み
 			props = new Properties();
-			try { props.load(Files.newInputStream(Path.of(propFileName))); } catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */ }
+			//-i の指定が無いときはカレントの ini を優先し、無ければ jar と同じ場所を見る (項目 26)
+			File propFile = commandLine.hasOption("i")
+				? new File(propFileName)
+				: resolveDefaultIniFile(jarPath, propFileName);
+			try {
+				props.load(Files.newInputStream(propFile.toPath()));
+				logger.info("設定ファイルを読み込みました: {}", propFile.getAbsolutePath());
+			} catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */
+				logger.info("設定ファイルが無いか読めないため既定値で起動します: {}", propFile.getAbsolutePath());
+				logger.debug("設定ファイルの読み込みに失敗", e);
+			}
 			
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			
 			//コマンドラインオプション以外
-			boolean coverPage = "1".equals(props.getProperty("CoverPage"));//表紙追加
+			//ini にキーが無いときは GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
+			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22 / 24)
+			boolean coverPage = SettingDefaults.getBoolean(props, "CoverPage");//表紙追加
 			int titlePage = BookInfo.TITLE_NONE;
-			if ("1".equals(props.getProperty("TitlePageWrite"))) {
-				try { titlePage =Integer.parseInt(props.getProperty("TitlePage")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			if (SettingDefaults.getBoolean(props, "TitlePageWrite")) {
+				titlePage = SettingDefaults.getInt(props, "TitlePage");
 			}
-			boolean withMarkId = "1".equals(props.getProperty("MarkId"));
+			boolean withMarkId = SettingDefaults.getBoolean(props, "MarkId");
 			//boolean gaiji32 = "1".equals(props.getProperty("Gaiji32"));
-			boolean commentPrint = "1".equals(props.getProperty("CommentPrint"));
-			boolean commentConvert = "1".equals(props.getProperty("CommentConvert"));
-			boolean autoYoko = "1".equals(props.getProperty("AutoYoko"));
-			boolean autoYokoNum1 = "1".equals(props.getProperty("AutoYokoNum1"));
-			boolean autoYokoNum3 = "1".equals(props.getProperty("AutoYokoNum3"));
-			boolean autoYokoEQ1 = "1".equals(props.getProperty("AutoYokoEQ1"));
-			int spaceHyp = 0; try { spaceHyp = Integer.parseInt(props.getProperty("SpaceHyphenation")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			boolean tocPage = "1".equals(props.getProperty("TocPage"));//目次追加
-			boolean tocVertical = "1".equals(props.getProperty("TocVertical"));//目次縦書き
+			boolean commentPrint = SettingDefaults.getBoolean(props, "CommentPrint");
+			boolean commentConvert = SettingDefaults.getBoolean(props, "CommentConvert");
+			boolean autoYoko = SettingDefaults.getBoolean(props, "AutoYoko");
+			boolean autoYokoNum1 = SettingDefaults.getBoolean(props, "AutoYokoNum1");
+			boolean autoYokoNum3 = SettingDefaults.getBoolean(props, "AutoYokoNum3");
+			boolean autoYokoEQ1 = SettingDefaults.getBoolean(props, "AutoYokoEQ1");
+			int spaceHyp = SettingDefaults.getInt(props, "SpaceHyphenation");
+			boolean tocPage = SettingDefaults.getBoolean(props, "TocPage");//目次追加
+			boolean tocVertical = SettingDefaults.getBoolean(props, "TocVertical");//目次縦書き
 			boolean coverPageToc = SettingDefaults.getBoolean(props, "CoverPageToc");
-			int removeEmptyLine = 0; try { removeEmptyLine = Integer.parseInt(props.getProperty("RemoveEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			int maxEmptyLine = 0; try { maxEmptyLine = Integer.parseInt(props.getProperty("MaxEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			int removeEmptyLine = SettingDefaults.getInt(props, "RemoveEmptyLine");
+			int maxEmptyLine = SettingDefaults.getInt(props, "MaxEmptyLine");
 			
 			WriterConfigurator.apply(props, epub3Writer, epub3ImageWriter);
 			
@@ -206,17 +218,16 @@ public class AozoraEpub3
 			int forcePageBreakEmptySize = 0;
 			int forcePageBreakChapter = 0;
 			int forcePageBreakChapterSize = 0;
-			if ("1".equals(props.getProperty("PageBreak"))) {
-				try {
-					try { forcePageBreakSize = Integer.parseInt(props.getProperty("PageBreakSize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-					if ("1".equals(props.getProperty("PageBreakEmpty"))) {
-						try { forcePageBreakEmpty = Integer.parseInt(props.getProperty("PageBreakEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-						try { forcePageBreakEmptySize = Integer.parseInt(props.getProperty("PageBreakEmptySize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-					} if ("1".equals(props.getProperty("PageBreakChapter"))) {
-						forcePageBreakChapter = 1;
-						try { forcePageBreakChapterSize = Integer.parseInt(props.getProperty("PageBreakChapterSize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-					}
-				} catch (Exception e) { /* 意図的: PageBreak ブロック内で個別 catch が拾わない例外も既定値のまま続行 */ }
+			if (SettingDefaults.getBoolean(props, "PageBreak")) {
+				forcePageBreakSize = SettingDefaults.getInt(props, "PageBreakSize") * 1024;
+				if (SettingDefaults.getBoolean(props, "PageBreakEmpty")) {
+					forcePageBreakEmpty = SettingDefaults.getInt(props, "PageBreakEmptyLine");
+					forcePageBreakEmptySize = SettingDefaults.getInt(props, "PageBreakEmptySize") * 1024;
+				}
+				if (SettingDefaults.getBoolean(props, "PageBreakChapter")) {
+					forcePageBreakChapter = 1;
+					forcePageBreakChapterSize = SettingDefaults.getInt(props, "PageBreakChapterSize") * 1024;
+				}
 			}
 			//目次設定はキー不在時に GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
 			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22)
@@ -243,7 +254,13 @@ public class AozoraEpub3
 			boolean chapterNumParen = SettingDefaults.getBoolean(props, "ChapterNumParen");
 			//GUI は "ChapterNumParenTitle" で書く。先頭の C が欠けており、CLI では永久に false だった
 			boolean chapterNumParenTitle = SettingDefaults.getBoolean(props, "ChapterNumParenTitle");
-			String chapterPattern = ""; if (SettingDefaults.getBoolean(props, "ChapterPattern")) chapterPattern = props.getProperty("ChapterPatternText");
+			//ChapterPattern=1 だけを書いた手書き ini では ChapterPatternText が無く、
+			//null のまま setChapterLevel に渡って「パターンが不正」の警告が出ていた (項目 23)
+			String chapterPattern = "";
+			if (SettingDefaults.getBoolean(props, "ChapterPattern")) {
+				String patternText = props.getProperty("ChapterPatternText");
+				if (patternText != null) chapterPattern = patternText;
+			}
 			
 			//オプション指定を反映
 			boolean useFileName = false;//表題に入力ファイル名利用
@@ -283,7 +300,7 @@ public class AozoraEpub3
 			//変換オプション設定
 			aozoraConverter.setAutoYoko(autoYoko, autoYokoNum1, autoYokoNum3, autoYokoEQ1);
 			//文字出力設定
-			int dakutenType = 0; try { dakutenType = Integer.parseInt(props.getProperty("DakutenType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			int dakutenType = SettingDefaults.getInt(props, "DakutenType");
 			boolean printIvsBMP = "1".equals(props.getProperty("IvsBMP"));
 			boolean printIvsSSP = "1".equals(props.getProperty("IvsSSP"));
 			
@@ -495,7 +512,7 @@ public class AozoraEpub3
 					//先頭からの場合で指定行数以降なら表紙無し
 					if ("".equals(coverFileName)) {
 						try {
-							int maxCoverLine = Integer.parseInt(props.getProperty("MaxCoverLine"));
+							int maxCoverLine = SettingDefaults.getInt(props, "MaxCoverLine");
 							if (maxCoverLine > 0 && bookInfo.firstImageLineNum >= maxCoverLine) {
 								coverImageIndex = -1;
 								coverFileName = null;
@@ -699,6 +716,50 @@ public class AozoraEpub3
 		com.github.hmdev.preview.PreviewLauncher.shutdown();
 	}
 	
+	/**
+	 * {@code -i} の指定が無いときに読む ini を決める。
+	 *
+	 * <p>従来どおり<b>カレントディレクトリを優先</b>し、そこに無ければ jar と同じ場所
+	 * （配布フォルダの同梱 ini。{@code .exe} 起動の GUI が実質読み書きする場所）を見る。
+	 * CLI は {@code template/} や {@code web/} を jar 基準で解決しているのに ini だけ
+	 * カレント基準だったため、配布フォルダの外から
+	 * {@code java -jar /path/to/AozoraEpub3.jar} を実行すると同梱 ini が無言で無視され、
+	 * GUI で設定した内容も反映されなかった（docs/code-audit-followups.md 項目 26）。
+	 *
+	 * <p>jar 隣を先に見ないのは、配布フォルダには必ず同梱 ini があるため、
+	 * jar 優先にすると<b>カレントに ini を置いて使い分けている運用が常に無視される</b>から。
+	 * カレント優先 + jar フォールバックなら、どちらの使い方も壊れない。
+	 *
+	 * @param jarPath jar のあるディレクトリ。クラスパス実行時などは空文字
+	 * @param fileName ini のファイル名
+	 * @return 読み込む ini。どちらにも無ければカレント側の File（呼び出し側で存在チェックされる）
+	 */
+	static File resolveDefaultIniFile(String jarPath, String fileName)
+	{
+		return resolveDefaultIniFile(jarPath, fileName, null);
+	}
+
+	/**
+	 * 作業ディレクトリを差し替えられるオーバーロード（テストがプロセスのカレントに依存しないため）。
+	 * @param workingDir カレントディレクトリとして扱う場所。null ならプロセスのカレント
+	 *  （返す File もカレント相対のまま）
+	 */
+	static File resolveDefaultIniFile(String jarPath, String fileName, File workingDir)
+	{
+		File inWorkingDir = workingDir == null ? new File(fileName) : new File(workingDir, fileName);
+		File besideJar = jarPath != null && jarPath.length() > 0 ? new File(jarPath, fileName) : null;
+		if (inWorkingDir.isFile()) {
+			//両方に ini があるときはどちらを読んだか分かるように残す（項目 26 の本質は無言で無視されること）
+			if (besideJar != null && besideJar.isFile()
+					&& !besideJar.getAbsoluteFile().equals(inWorkingDir.getAbsoluteFile())) {
+				logger.info("jar と同じ場所の ini は使用しません: {}", besideJar.getAbsolutePath());
+			}
+			return inWorkingDir;
+		}
+		if (besideJar != null && besideJar.isFile()) return besideJar;
+		return inWorkingDir;
+	}
+
 	/** 出力ファイルを生成 */
 	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) throws IOException
 	{

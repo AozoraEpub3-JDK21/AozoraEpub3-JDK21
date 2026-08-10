@@ -33,10 +33,13 @@
 | 18 | 🟢 低 | 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） | ❌ 未対応 | — |
 | 19 | 🟢 低 | エピソード URL の組み立てが 4 か所に重複している | ❌ 未対応 | — |
 | 20 | 🟢 低 | 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる | ❌ 未対応 | — |
-| 21 | 🟢 低 | カクヨムの TOC キャッシュ書き込みが `AccessDeniedException` になる | ❌ 未対応 | — |
+| 21 | 🟡 中 | カクヨムの TOC キャッシュ衝突で新着話を取り逃す | 🔶 修正ブランチあり（`fix/kakuyomu-toc-cache-collision`、マージ待ち） | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
-| 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ❌ 未対応 | — |
-| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） | ❌ 未対応 | — |
+| 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
+| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
+| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポのみ修正） | — |
+| 26 | 🟡 中 | CLI の ini 探索がカレントのみで、配布フォルダ外から実行すると同梱 ini が無視される | ✅ 対応済 | — |
+| 27 | 🟢 低 | jar パス導出がクラスパス区切り・パス区切りとも固定文字で環境非対応 | ❌ 未対応（記録のみ） | — |
 
 ---
 
@@ -309,7 +312,7 @@ ini に `ChapterH=` / `ChapterH1=` / `ChapterH2=` / `ChapterH3=` / `ChapterName=
 
 ## 🟢 低
 
-### 23. `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる — 未対応
+### 23. `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる — ✅ 修正済み
 
 **場所**: `src/AozoraEpub3.java:245`
 
@@ -326,7 +329,7 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 （同 226-229 行）も、意図した挙動か整理する。
 
 
-### 24. 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） — 未対応
+### 24. 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） — ✅ 修正済み
 
 **発見**: 2026-08-10、項目 22 のゲート C（Fable）。項目 22 で目次まわりの 19 キーは
 `SettingDefaults` に集約したが、**同じ形のドリフトが表の外に残っている**。
@@ -346,6 +349,181 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 
 **予防策の候補（nice-to-have）**: `src/` を grep して `props.getProperty("Chapter…` 等の
 直読みを禁止する簡易テストを置く。キー名の定数化 PR（項目 22 の残件）で同時に扱うのが自然。
+
+#### 全キー棚卸しの結果（2026-08-10、実測）
+
+GUI をまっさらな状態で起動 → 終了させて**初期状態の ini を実物として生成**し（126 キー）、
+同梱 `AozoraEpub3.ini`（23 キー）および CLI のキー不在時の実効値と 3 者比較した。
+
+**判明した重要事実**:
+
+- **GUI は終了時に全 126 キーを必ず書き出す**（OFF は `Key=` の空値として明示）。つまり
+  「キー不在」は GUI 経由では起こり得ず、**手書き ini と同梱 ini でしか起きない**。
+  narou.rb 連携先の ini（`D:\MyNovel\AozoraEpub3_\AozoraEpub3.ini`）は 123 キーを持ち、
+  同梱 ini はその**完全な部分集合**（同梱にしか無いキーは 0 件）。
+  よって **CLI 既定値を変えても narou.rb 連携の出力は原理的に変わらない**
+- 同梱 ini は「GUI 初期値」ではなく**意図的に異なる値**を持つ:
+  `TocPage=1`（GUI は OFF）/ `TitlePage=2`（GUI は 1）/ `NavNest=NcxNest=1`（GUI は OFF）/
+  `AutoYokoNum1=AutoYokoNum3=1`（GUI は OFF）/ `SpaceHyphenation=1`（GUI は 0）/
+  `DakutenType=2`（GUI は 1）。全キー版にする際もこれらは維持する
+
+**同梱 ini に追記すると CLI の出力が変わるキー（8 件）**:
+
+| キー | GUI 初期値 | CLI（キー不在時） | 影響 |
+|---|---|---|---|
+| `PageBreak` | `1` | false | **自動改ページが全滅**。`PageBreakSize` 等が ini にあってもこのフラグで gate されている |
+| `TocVertical` | `1` | false | 目次ページが横書きになる |
+| `FitImage` | `1` | false | 画像が画面サイズに合わされない |
+| `ImageSizeType` | `3`（アスペクト） | `2`（高さ） | 画像のみ EPUB で幅 fit にならない |
+| `SinglePageSizeW` / `H` | `400` / `600` | `480` / `640` | 単ページ画像判定の閾値がずれる |
+| `JpegQuality` | `85` | `80` | 再エンコード品質とバイト列が変わる |
+| `MaxCoverLine` | `10` | 実質無制限 | 先頭画像を表紙にする指定で、本文後方の画像まで表紙候補になる |
+
+**同梱 ini に追記してはいけないキー**: `BodyMargin` / `BodyMarginUnit`。
+`WriterConfigurator.java:83,90` が単位を `"0"` / `"1"` のまま連結するため `"00"` になる
+（GUI 側は `AozoraEpub3Applet.java:3679,3684` で `"em"` / `"%"` に変換してから渡す）。
+値が 0 なら CSS 上は無害だが、非 0 だと 10 倍の margin になる。**下記 25 で扱う**。
+なお `PageMargin=",,,"` は `split` の結果が長さ 0 になるため追加しても無害。
+
+**CLI がまったく読まないキー（43 件）**: ウィンドウ位置・履歴などの実行時状態（`PosX` / `PosY` /
+`SizeW` / `SizeH` / `DividerLocation` / `LastDir` / `DstPath` / `DstPathList` / `ProfileFileName` /
+`ProfileList` / `CoverHistory` / `ChkConfirm` / `SamePath` / `AutoPreview` / `ReplaceCover` /
+`OverWrite`）は**同梱 ini に入れない**。CLI オプションで代替されるもの（`EncType` / `Ext` /
+`Cover` / `UseFileName` / `AutoFileName` / `Vertical` / `CachePath` / `WebInterval` / `TitleType`）と、
+CLI に配線されていない機能設定（`ChukiRuby` / `ForceIndent` / `ImageFloat` / `ImageFloatBlock` /
+`ImageFloatPage` / `PubFirst` / `AuthorCommentStyle` / `ImageScaleChecked`）、
+Web 変換系（`UseNarouApi` / `ApiFallback` / `WebBeforeChapter*` / `WebConvertUpdated` /
+`WebModified*` / `WebSkipImages`）も同様。
+
+※上記の「同梱 ini に入れない」は棚卸し時点の分類案で、下記の決定（全キー版）により
+上書きされた。最終的な同梱 ini が除外するのは、実行時状態（`PosX` / `PosY` / `SizeW` /
+`SizeH` / `DividerLocation` / `LastDir` / `DstPath(List)` / `Profile*` — GUI 初期値
+フィクスチャの段階で除外済み）と、項目 25 の `BodyMargin` / `BodyMarginUnit` /
+`PageMargin`、GUI 内部フラグ `ImageScaleChecked` のみ。
+
+**決定した方針（2026-08-10、ユーザー判断）**: 項目 22 と同じ **A+B**。
+同梱 ini を全キー版にし（実行時状態は除外、既存 23 キーの意図的な値は維持）、あわせて
+`SettingDefaults` を拡張して**古い ini を持ち込む利用者**のドリフトも解消する。
+
+#### 実装と実測（2026-08-10）— ✅ 対応済
+
+`SettingDefaults` に boolean 17 キー・int 16 キーを追加し、`AozoraEpub3.java` /
+`WriterConfigurator.java` / `AozoraEpub3Applet.java` を表経由に統一した。
+
+**実測（修正前後の jar で同一入力を変換）**:
+
+| 条件 | before | after |
+|---|---|---|
+| ini なし・1.8MB の見出し無しテキスト | 本文 XHTML **1 枚**、表題ページ**なし** | 本文 XHTML **5 枚**（400KB で自動改ページ）、表題ページ**あり** |
+| narou.rb 連携先の実 ini（123 キー）・同じ入力 | \_ | **`dcterms:modified` 以外の差分ゼロ** |
+| narou.rb 連携先の実 ini・`test_chapter.txt` | \_ | **`dcterms:modified` 以外の差分ゼロ** |
+
+ini なしの CLI 実行が GUI と同じ挙動（自動改ページ ON・表題ページ出力）に揃い、
+キーを持つ ini を使う経路（GUI 保存 ini / narou.rb）は不変であることを実測で確認した。
+
+**回帰防止**: `test/com/github/hmdev/config/SettingDefaultsGuiParityTest.java` を追加。
+GUI をまっさらな状態で起動・終了させて得た実測 ini を `test_data/gui_default_settings.ini` に
+フィクスチャとして置き、**表の全キーが GUI 初期値と一致すること**を機械的に検証する。
+GUI 側の初期値を変えたらフィクスチャを取り直すこと。
+
+**測定時の落とし穴**: CLI が読む ini は**カレントディレクトリ相対**なので、
+リポジトリルートで `java -jar <別の場所>/AozoraEpub3.jar` を実行すると
+リポジトリの `AozoraEpub3.ini` が読まれてしまい、「ini なし」の比較にならない。下記 26 を参照。
+
+**残件（2026-08-11、ゲート B・C の指摘）**:
+
+- **int 系ウィジェット初期値の単一ソース化が未完**: applet は boolean 系 25 か所で
+  `SettingDefaults.isSelected` を使うが、`getInt` の利用は 1 か所のみ。`jRadioTitleMiddle` /
+  DakutenType / MaxCoverLine / JpegQuality / SinglePageSizeW,H などの初期値はハードコードのまま。
+  `SettingDefaultsGuiParityTest` は静的フィクスチャとの照合なので、**GUI 側だけ変えても
+  テストは赤くならない**（フィクスチャ再取得までドリフトが復活しうる）。キー名定数化 PR
+  （項目 22 の残件）で `getInt` へ寄せる
+- **.NET ポートへの移植タスク**: `SettingDefaults` 拡張（項目 24）と ini 探索順（項目 26）は
+  `aozoraepub3-dotnet` 側に未移植。参照 EPUB 比較（全キー ini 使用）は影響を受けないが、
+  キー不在時の挙動が Java 側と食い違うため、port-back の項目として残す
+
+### 26. CLI の ini 探索がカレントのみで、配布フォルダ外からの実行で同梱 ini が無視される — ✅ 修正済み
+
+**発見**: 2026-08-10、項目 24 の before/after 実測中。両方の jar が同じ出力を返す不可解な結果を
+追いかけて判明した。
+
+| 経路 | ini の探索先 | 該当箇所 |
+|---|---|---|
+| CLI | **カレントディレクトリ**（`propFileName` は `"AozoraEpub3.ini"` の相対パス） | `src/AozoraEpub3.java:174` |
+| GUI | **起動時のカレントディレクトリ**（`jarPath` は `""` 固定のため相対。`.exe` / ダブルクリック起動ではカレント = 配布フォルダ。当初「jar と同じフォルダ」と記録していたが誤り — 2026-08-10 の docs ブランチのゲート C で発覚） | `src/AozoraEpub3Applet.java:542,552,769` |
+
+CLI 側は `template/` や `web/` は `jarPath` 基準で解決しているのに、**ini だけカレント基準**という
+CLI 内部の非対称になっている（GUI は ini も template もすべてカレント基準で、`.exe` 起動なら
+配布フォルダに一致するため一貫している）。
+
+**影響**: 配布フォルダの外から `java -jar /path/to/AozoraEpub3.jar input.txt` を実行すると、
+**同梱 `AozoraEpub3.ini` が読まれず**、（通常の `.exe` / ダブルクリック起動の）GUI で設定した
+内容も反映されない（`SettingDefaults` の既定値で動く）。エラーも警告も出ないため気づけない。
+逆に、たまたまカレントに別の `AozoraEpub3.ini` があるとそれを拾う。
+
+**なぜ今まで表面化しなかったか**: narou.rb は AozoraEpub3 のフォルダをカレントにして起動し、
+GUI からの利用も配布フォルダ内で完結するため。
+
+**修正内容（2026-08-10、ゲート C の設計判断で確定）**: 探索順は
+**`-i` 明示 → カレント → jar と同じ場所**。当初案の jar 優先は却下した — カレントに ini を
+置くのは利用者の能動的な意思表示であり、jar 優先だとそれが常に無言で潰されるうえ、
+従来 CLI（カレントのみ）からの後方互換もカレント優先の方が厳密に優位なため
+（既存の全ケースが不変で「カレントに無いときだけ」挙動が増える純増）。
+実装は `AozoraEpub3.resolveDefaultIniFile`。両方に存在するときは
+「jar と同じ場所の ini は使用しません」、どちらにも無い（または読めない）ときは
+「設定ファイルが無いか読めないため既定値で起動します」を info で 1 行出す（元バグの本質は沈黙）。
+探索順のユーザー向け説明（README / docs/usage.md / docs/en/usage.md）は、同じ箇所を
+書き換える CLI ドキュメント整備ブランチ（docs/preview-cli-and-en-options）側に入れる。
+
+### 27. jar パス導出がクラスパス区切り・パス区切りともに固定文字で環境非対応 — 未対応（実害小）
+
+**発見**: 2026-08-10、項目 26 のゲート C + 実機確認。`src/AozoraEpub3.java:63-67` が
+`System.getProperty("java.class.path")` を `";"`（Windows の区切り）固定で分割しており、
+Unix 系の `:` を考慮していない。さらにディレクトリの切り出しが
+`lastIndexOf(File.separator)` 固定のため、**Windows で
+`java -jar D:/path/to/AozoraEpub3.jar` とスラッシュ区切りで起動すると `jarPath` が
+空になり**、jar 隣の ini（項目 26）・`template/`・`web/`・`.cache` がすべてカレント基準に
+落ちる（実機確認済み。`D:\path\to\...` と入力すれば正常）。narou.rb は
+バックスラッシュで起動するため無影響。
+
+**影響**: `java -jar` 起動ではクラスパスが jar 1 本になるため無害。Unix で
+`-cp /opt/a.jar:/opt/b.jar` のようなクラスパス起動をした場合、末尾要素が `.jar` だと
+`lastIndexOf(File.separator)` までの切り出しで `/opt/a.jar:/opt/` のような**壊れたパス**になり、
+ini 探索（項目 26）だけでなく `template/` / `web/` / `.cache` の解決も同じ `jarPath` を
+使うため崩れる。ただしこの起動形態は README でも案内しておらず、従来からの既存問題。
+マルチプラットフォーム方針上の記録として残す。直すなら `File.pathSeparator` で分割し、
+ディレクトリの切り出しは `lastIndexOf(File.separator)` ではなく
+`new File(...).getParent()`（両区切りを解釈する）にする。template/web/cache と ini で
+挙動が揃うよう、直すときは全経路まとめて。
+
+### 25. GUI 専用の設定が CLI に届かない / 単位の連結が壊れている — 🔶 一部対応（タイポのみ修正）
+
+**発見**: 2026-08-10、項目 24 の全キー棚卸し。項目 22 と**同じ型のキー名タイポ**が 1 件残っていた。
+
+- **`GothicUseBold` が恒久的に無効**: `src/com/github/hmdev/pipeline/WriterConfigurator.java:97` が
+  `props.getProperty("gothicUseBold")` と**先頭小文字**で読んでいる。GUI が書くキーは
+  `GothicUseBold` なので、ini に何を書いても常に false。
+  項目 22 で直した `hapterNumParenTitle`（先頭 C 欠落）と同種
+- **`BodyMarginUnit` の連結が壊れている**: 上記 `WriterConfigurator.java:83,90` の単位連結。
+  GUI は `"em"` / `"%"` に変換してから渡すのに、CLI は ini の生値（`"0"` / `"1"`）を連結するため
+  `"00"` のような不正な CSS 値になる。`BodyMargin` が 0 のときだけ無害
+- **`ImageFloatType` が 1 ずれる**: GUI はコンボの index（0/1）で保存し、内部で `+1` して使う
+  （`AozoraEpub3Applet.java:3682` 付近）。CLI は `+1` しないため、float を有効にした ini で
+  GUI と CLI の挙動が食い違う。ただし `ImageFloat` チェックボックス自体を CLI が読まないため、
+  現状では到達しない
+- **CLI に配線されていない GUI 設定**: `ChukiRuby` / `ForceIndent` / `ImageFloat` /
+  `PubFirst` / `AuthorCommentStyle`。CLI は `setChukiRuby` / `setForceIndent` / `setImageFloat` を
+  呼んでいない。既定値がすべて false のため初期状態では差が出ないが、**ini に書いても効かない**
+- **`AutoMarginPadding` が `AutoMarginNombreSize` で上書きされる**（2026-08-11、項目 24/26 の
+  ゲート B・C で発見）: `WriterConfigurator.java:61-63` で `AutoMarginPadding` を読んだ直後に
+  `autoMarginPadding = Float.parseFloat(props.getProperty("AutoMarginNombreSize"))` と
+  **同じ変数へ再代入**しており、`nobreSize` は `0.03f` 固定で ini から読まれない。
+  `AutoMargin=1` の ini では GUI（Padding 1.0 / NombreSize 3.0）と CLI の挙動が食い違う。
+  `AutoMargin` が OFF なら到達しない
+
+**修正方針**: `GothicUseBold` のタイポは単独で直せる（1 行）。単位連結と `ImageFloatType` は
+GUI 側の変換を `WriterConfigurator` に寄せて両者が同じ関数を通る形にする。
+CLI 未配線の設定は「CLI で対応する」か「ドキュメントに CLI 非対応と明記する」かの判断が要る。
 
 ### 20. 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる — 未対応
 
@@ -383,7 +561,7 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 narou.rb 互換の出力を変えることになるので、`.NET` ポートの byte-identical 比較テストへの
 影響を確認してから決めること。
 
-### 21. カクヨムの TOC キャッシュ書き込みが AccessDeniedException になる — 未対応
+### 21. カクヨムの TOC キャッシュ書き込みが AccessDeniedException になる — 🔶 修正ブランチあり（`fix/kakuyomu-toc-cache-collision`、マージ待ち）
 
 **発見**: 2026-08-09、4 サイト（なろう / カクヨム / ハーメルン / 青空文庫）の実変換 dogfood 中。
 
