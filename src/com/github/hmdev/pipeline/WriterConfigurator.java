@@ -2,7 +2,7 @@ package com.github.hmdev.pipeline;
 
 import java.util.Properties;
 
-import com.github.hmdev.info.SectionInfo;
+import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.writer.Epub3ImageWriter;
 import com.github.hmdev.writer.Epub3Writer;
 
@@ -27,10 +27,9 @@ public final class WriterConfigurator {
 		if ("1".equals(props.getProperty("ResizeW"))) try { resizeW = Integer.parseInt(props.getProperty("ResizeNumW")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int resizeH = 0;
 		if ("1".equals(props.getProperty("ResizeH"))) try { resizeH = Integer.parseInt(props.getProperty("ResizeNumH")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-		int singlePageSizeW = 480;
-		try { singlePageSizeW = Integer.parseInt(props.getProperty("SinglePageSizeW")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-		int singlePageSizeH = 640;
-		try { singlePageSizeH = Integer.parseInt(props.getProperty("SinglePageSizeH")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+		//キーが無いときは GUI と同じ既定値を使う (docs/code-audit-followups.md 項目 24)
+		int singlePageSizeW = SettingDefaults.getInt(props, "SinglePageSizeW");
+		int singlePageSizeH = SettingDefaults.getInt(props, "SinglePageSizeH");
 		int singlePageWidth = 600;
 		try { singlePageWidth = Integer.parseInt(props.getProperty("SinglePageWidth")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		float imageScale = 1;
@@ -41,14 +40,12 @@ public final class WriterConfigurator {
 		try { imageFloatW = Integer.parseInt(props.getProperty("ImageFloatW")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int imageFloatH = 0;
 		try { imageFloatH = Integer.parseInt(props.getProperty("ImageFloatH")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-		int imageSizeType = SectionInfo.IMAGE_SIZE_TYPE_HEIGHT;
-		try { imageSizeType = Integer.parseInt(props.getProperty("ImageSizeType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-		boolean fitImage = "1".equals(props.getProperty("FitImage"));
+		int imageSizeType = SettingDefaults.getInt(props, "ImageSizeType");
+		boolean fitImage = SettingDefaults.getBoolean(props, "FitImage");
 		boolean svgImage = "1".equals(props.getProperty("SvgImage"));
 		int rotateImage = 0;
 		if ("1".equals(props.getProperty("RotateImage"))) rotateImage = 90; else if ("2".equals(props.getProperty("RotateImage"))) rotateImage = -90;
-		float jpegQualty = 0.8f;
-		try { jpegQualty = Integer.parseInt(props.getProperty("JpegQuality"))/100f; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+		float jpegQualty = SettingDefaults.getInt(props, "JpegQuality")/100f;
 		float gamma = 1.0f;
 		if ("1".equals(props.getProperty("Gamma"))) try { gamma = Float.parseFloat(props.getProperty("GammaValue")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		int autoMarginLimitH = 0;
@@ -71,8 +68,8 @@ public final class WriterConfigurator {
 		epub3ImageWriter.setImageParam(dispW, dispH, coverW, coverH, resizeW, resizeH, singlePageSizeW, singlePageSizeH, singlePageWidth, imageSizeType, fitImage, svgImage, rotateImage,
 				imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQualty, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, nobreSize);
 
-		// toc nesting
-		epub3Writer.setTocParam("1".equals(props.getProperty("NavNest")), "1".equals(props.getProperty("NcxNest")));
+		// toc nesting (キー不在時の値は GUI と共有する SettingDefaults に置く)
+		epub3Writer.setTocParam(SettingDefaults.getBoolean(props, "NavNest"), SettingDefaults.getBoolean(props, "NcxNest"));
 
 		// style settings
 		String[] pageMargin = {};
@@ -94,7 +91,9 @@ public final class WriterConfigurator {
 		int fontSize = 100;
 		try { fontSize = Integer.parseInt(props.getProperty("FontSize")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		boolean boldUseGothic = "1".equals(props.getProperty("BoldUseGothic"));
-		boolean gothicUseBold = "1".equals(props.getProperty("gothicUseBold"));
+		//GUI が書くキーは "GothicUseBold"。先頭が小文字だったため、ini に何を書いても
+		//常に false だった (docs/code-audit-followups.md 項目 25)
+		boolean gothicUseBold = "1".equals(props.getProperty("GothicUseBold"));
 		epub3Writer.setStyles(pageMargin, bodyMargin, lineHeight, fontSize, boldUseGothic, gothicUseBold);
 	}
 }
