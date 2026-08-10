@@ -33,11 +33,12 @@
 | 18 | 🟢 低 | 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） | ❌ 未対応 | — |
 | 19 | 🟢 低 | エピソード URL の組み立てが 4 か所に重複している | ❌ 未対応 | — |
 | 20 | 🟢 低 | 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる | ❌ 未対応 | — |
-| 21 | 🟢 低 | カクヨムの TOC キャッシュ書き込みが `AccessDeniedException` になる | ❌ 未対応 | — |
+| 21 | 🟡 中 | カクヨムの TOC キャッシュ衝突で新着話を取り逃す | ✅ 対応済 | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
-| 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ❌ 未対応 | — |
-| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ❌ 未対応 | — |
-| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | ❌ 未対応 | — |
+| 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
+| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
+| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポのみ修正） | — |
+| 26 | 🟡 中 | CLI は ini をカレントディレクトリから読む（GUI は jar と同じ場所） | ❌ 未対応 | — |
 
 ---
 
@@ -396,7 +397,56 @@ Web 変換系（`UseNarouApi` / `ApiFallback` / `WebBeforeChapter*` / `WebConver
 **決定した方針（2026-08-10、ユーザー判断）**: 項目 22 と同じ **A+B**。
 同梱 ini を全キー版にし（実行時状態は除外、既存 24 キーの意図的な値は維持）、あわせて
 `SettingDefaults` を拡張して**古い ini を持ち込む利用者**のドリフトも解消する。
-出力が変わるため、比較 5 ケースで before/after を実測してから入れる。
+
+#### 実装と実測（2026-08-10）— ✅ 対応済
+
+`SettingDefaults` に boolean 17 キー・int 16 キーを追加し、`AozoraEpub3.java` /
+`WriterConfigurator.java` / `AozoraEpub3Applet.java` を表経由に統一した。
+
+**実測（修正前後の jar で同一入力を変換）**:
+
+| 条件 | before | after |
+|---|---|---|
+| ini なし・1.8MB の見出し無しテキスト | 本文 XHTML **1 枚**、表題ページ**なし** | 本文 XHTML **5 枚**（400KB で自動改ページ）、表題ページ**あり** |
+| narou.rb 連携先の実 ini（123 キー）・同じ入力 | \_ | **`dcterms:modified` 以外の差分ゼロ** |
+| narou.rb 連携先の実 ini・`test_chapter.txt` | \_ | **`dcterms:modified` 以外の差分ゼロ** |
+
+ini なしの CLI 実行が GUI と同じ挙動（自動改ページ ON・表題ページ出力）に揃い、
+キーを持つ ini を使う経路（GUI 保存 ini / narou.rb）は不変であることを実測で確認した。
+
+**回帰防止**: `test/com/github/hmdev/config/SettingDefaultsGuiParityTest.java` を追加。
+GUI をまっさらな状態で起動・終了させて得た実測 ini を `test_data/gui_default_settings.ini` に
+フィクスチャとして置き、**表の全キーが GUI 初期値と一致すること**を機械的に検証する。
+GUI 側の初期値を変えたらフィクスチャを取り直すこと。
+
+**測定時の落とし穴**: CLI が読む ini は**カレントディレクトリ相対**なので、
+リポジトリルートで `java -jar <別の場所>/AozoraEpub3.jar` を実行すると
+リポジトリの `AozoraEpub3.ini` が読まれてしまい、「ini なし」の比較にならない。下記 26 を参照。
+
+### 26. CLI は ini をカレントディレクトリから読む（GUI は jar と同じ場所） — 未対応
+
+**発見**: 2026-08-10、項目 24 の before/after 実測中。両方の jar が同じ出力を返す不可解な結果を
+追いかけて判明した。
+
+| 経路 | ini の探索先 | 該当箇所 |
+|---|---|---|
+| CLI | **カレントディレクトリ**（`propFileName` は `"AozoraEpub3.ini"` の相対パス） | `src/AozoraEpub3.java:174` |
+| GUI | **jar と同じフォルダ**（`jarPath + propFileName`） | `src/AozoraEpub3Applet.java:553,770,5675` |
+
+CLI 側は `template/` や `web/` は `jarPath` 基準で解決しているのに、**ini だけカレント基準**という
+非対称になっている。
+
+**影響**: 配布フォルダの外から `java -jar /path/to/AozoraEpub3.jar input.txt` を実行すると、
+**同梱 `AozoraEpub3.ini` が読まれず**、GUI で設定した内容も反映されない（`SettingDefaults` の
+既定値で動く）。エラーも警告も出ないため気づけない。逆に、たまたまカレントに別の
+`AozoraEpub3.ini` があるとそれを拾う。
+
+**なぜ今まで表面化しなかったか**: narou.rb は AozoraEpub3 のフォルダをカレントにして起動し、
+GUI からの利用も配布フォルダ内で完結するため。
+
+**修正方針**: `jarPath + propFileName` を優先し、無ければカレントの `AozoraEpub3.ini` に
+フォールバックする（既存の使い方を壊さない）。`-i` 指定時は従来どおりその指定を使う。
+どちらを読んだかをログに出すと切り分けが楽になる。
 
 ### 25. GUI 専用の設定が CLI に届かない / 単位の連結が壊れている — 未対応
 
