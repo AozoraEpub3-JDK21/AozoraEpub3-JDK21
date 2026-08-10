@@ -152,7 +152,7 @@ java -jar AozoraEpub3.jar [OPTIONS] input_file
 | `-h, --help` | Show usage | |
 | `-i <file>` | Read settings from an ini file | `-i settings.ini` |
 | `-enc <encoding>` | Input file encoding (default `MS932`) | `-enc UTF-8` |
-| `-t <type>` | Title layout in the body text (`0`: title → author (default) / `1`: author → title / `2`: title → author, subtitle first / `3`: title only / `4`: none) | `-t 1` |
+| `-t <type>` | Title layout in the body text (`0`: title → author (default) / `1`: author → title / `2`: title → author, subtitle first / `3`: title only, one line / `4`: title + author only, two lines / `5`: none) | `-t 1` |
 | `-tf` | Use the input file name as the title | |
 | `-c <image>` | Cover image (`0`: first illustration / `1`: image with the same name as the input file / a file name or URL) | `-c cover.jpg` |
 | `-d <directory>` | Output directory | `-d ./output/` |
@@ -193,9 +193,11 @@ built-in defaults (same as the GUI's initial state) and logs a line saying so.
 2. `AozoraEpub3.ini` in the current directory
 3. `AozoraEpub3.ini` next to the jar (the bundled settings file)
 
-**The GUI always reads and writes `AozoraEpub3.ini` next to the jar** (it never looks at
-the current directory). When you run the CLI from outside the distribution folder, step 3
-makes it pick up the same settings as the GUI. Note that because of step 2, a file named
+**The GUI reads and writes `AozoraEpub3.ini` in its startup working directory.** When
+launched via `AozoraEpub3.exe` / `AozoraEpub3.sh` or by double-clicking, the working
+directory is the distribution folder, so in practice this is the bundled ini next to the
+jar. When you run the CLI from outside the distribution folder, step 3 picks up that same
+bundled ini the GUI normally reads and writes. Note that because of step 2, a file named
 `AozoraEpub3.ini` in your working directory silently takes precedence. The startup log
 (`設定ファイルを読み込みました: <path>`) shows which file was read.
 
@@ -585,7 +587,7 @@ PageBreak=1
 PageBreakSize=400
 # split at PageBreakEmptyLine consecutive blank lines, once the page is past PageBreakEmptySize KB
 PageBreakEmpty=1
-PageBreakEmptyLine=3
+PageBreakEmptyLine=2
 PageBreakEmptySize=300
 # split at chapter headings, once the page is past PageBreakChapterSize KB
 PageBreakChapter=1
@@ -594,6 +596,9 @@ PageBreakChapterSize=200
 
 Every `*Size` is the minimum page size (KB) at which that trigger starts to apply — blank lines
 and chapter headings do not split a page that is still smaller than the threshold.
+Note that if the unconditional threshold (`PageBreakSize`) is smaller than an enabled
+`PageBreakEmptySize` / `PageBreakChapterSize`, it is internally raised to the largest of them,
+so the unconditional split cannot preempt the blank-line / chapter triggers.
 
 Then pass the ini with `-i`:
 
