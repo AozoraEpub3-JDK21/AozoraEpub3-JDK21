@@ -74,6 +74,9 @@ dependencies {
     // ログの実装（SLF4J）
         implementation 'org.slf4j:slf4j-api:2.0.17'
         implementation 'org.slf4j:slf4j-simple:2.0.17'
+
+    // Swing の Look and Feel（GUI モダン化）
+        implementation 'com.formdev:flatlaf:3.7.2'
     
     // テストフレームワーク
     testImplementation 'junit:junit:4.13.2'

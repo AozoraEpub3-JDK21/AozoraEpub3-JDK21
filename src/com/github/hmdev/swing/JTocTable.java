@@ -10,6 +10,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
 
+import com.github.hmdev.gui.UiThemeManager;
 import com.github.hmdev.info.ChapterLineInfo;
 
 public class JTocTable extends JTable
@@ -51,8 +52,14 @@ public class JTocTable extends JTable
 	public Component prepareRenderer(TableCellRenderer renderer, int row, int column)
 	{
 		Component component = super.prepareRenderer(renderer, row, column);
-		if (this.model.isSelected(row)) component.setForeground(Color.BLACK);
-		else component.setForeground(Color.LIGHT_GRAY);
+		//ダークテーマで黒文字が読めなくなるため、色はテーマから取得する
+		//（isSelected は目次に含めるかのチェック状態。行のカーソル選択とは別）
+		if (this.model.isSelected(row)) {
+			component.setForeground(UiThemeManager.uiColor(
+				this.isRowSelected(row) ? "Table.selectionForeground" : "Table.foreground", Color.BLACK));
+		} else {
+			component.setForeground(UiThemeManager.uiColor("Label.disabledForeground", Color.LIGHT_GRAY));
+		}
 		return component;
 	}
 	

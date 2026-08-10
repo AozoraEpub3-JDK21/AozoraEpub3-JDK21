@@ -40,7 +40,6 @@ public class JProfileDialog extends JDialog
 	{
 		this.setIconImage(iconImage);
 		this.setModalityType(Dialog.ModalityType.TOOLKIT_MODAL);
-		this.setSize(new Dimension(360, 128));
 		this.setResizable(false);
 		this.setTitle("プロファイル設定");
 		this.setLayout(new GridLayout());
@@ -62,9 +61,11 @@ public class JProfileDialog extends JDialog
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		outer.add(panel);
 		jTextProfileName = new JTextField();
-		jTextProfileName.setMinimumSize(new Dimension(100, 22));
-		jTextProfileName.setPreferredSize(new Dimension(300, 22));
-		jTextProfileName.setMaximumSize(new Dimension(480, 26));
+		//高さは L&F 実寸から取る (決め打ちだと L&F 変更で文字が潰れる)
+		int textH = jTextProfileName.getPreferredSize().height;
+		jTextProfileName.setMinimumSize(new Dimension(100, textH));
+		jTextProfileName.setPreferredSize(new Dimension(300, textH));
+		jTextProfileName.setMaximumSize(new Dimension(480, textH));
 		panel.add(jTextProfileName);
 		
 		JPanel buttonPanel = new JPanel();
@@ -135,6 +136,10 @@ public class JProfileDialog extends JDialog
 		panel.setBorder(padding4H);
 		panel.add(jButtonCancel);
 		buttonPanel.add(panel);
+
+		//コンポーネントの実寸に合わせる (旧 360x128 固定。L&F を変えると入り切らない)
+		this.pack();
+		this.setSize(Math.max(360, this.getWidth()), this.getHeight());
 	}
 	
 	public void showCreate(Point location, String name)
