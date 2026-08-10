@@ -194,9 +194,9 @@ built-in defaults (same as the GUI's initial state) and logs a line saying so.
 3. `AozoraEpub3.ini` next to the jar (the bundled settings file)
 
 **The GUI reads and writes `AozoraEpub3.ini` in its startup working directory.** When
-launched via `AozoraEpub3.exe` / `AozoraEpub3.sh` or by double-clicking, the working
-directory is the distribution folder, so in practice this is the bundled ini next to the
-jar. When you run the CLI from outside the distribution folder, step 3 picks up that same
+launched via `AozoraEpub3.exe` or by double-clicking, the working directory is the
+distribution folder, so in practice this is the bundled ini next to the jar (note that
+`AozoraEpub3.sh` keeps the directory you run it from as the working directory). When you run the CLI from outside the distribution folder, step 3 picks up that same
 bundled ini the GUI normally reads and writes. Note that because of step 2, a file named
 `AozoraEpub3.ini` in your working directory silently takes precedence. The startup log
 (`設定ファイルを読み込みました: <path>`) shows which file was read.
