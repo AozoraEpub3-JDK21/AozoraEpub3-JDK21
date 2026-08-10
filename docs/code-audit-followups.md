@@ -33,7 +33,7 @@
 | 18 | 🟢 低 | 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） | ❌ 未対応 | — |
 | 19 | 🟢 低 | エピソード URL の組み立てが 4 か所に重複している | ❌ 未対応 | — |
 | 20 | 🟢 低 | 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる | ❌ 未対応 | — |
-| 21 | 🟡 中 | カクヨムの TOC キャッシュ衝突で新着話を取り逃す | 🔶 修正ブランチあり（`fix/kakuyomu-toc-cache-collision`、マージ待ち） | — |
+| 21 | 🟡 中 | カクヨムの TOC キャッシュ衝突で新着話を取り逃す | ✅ 対応済 | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
 | 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
@@ -561,7 +561,7 @@ CLI 未配線の設定は「CLI で対応する」か「ドキュメントに CL
 narou.rb 互換の出力を変えることになるので、`.NET` ポートの byte-identical 比較テストへの
 影響を確認してから決めること。
 
-### 21. カクヨムの TOC キャッシュ書き込みが AccessDeniedException になる — 🔶 修正ブランチあり（`fix/kakuyomu-toc-cache-collision`、マージ待ち）
+### 21. カクヨムの TOC キャッシュ書き込みが AccessDeniedException になる — ✅ 修正済み
 
 **発見**: 2026-08-09、4 サイト（なろう / カクヨム / ハーメルン / 青空文庫）の実変換 dogfood 中。
 
@@ -595,6 +595,23 @@ v1.3.2 で「ファイル→ディレクトリ変換時に `index.html` にリ�
 
 **あるべき形**: TOC の保存先を決める時点で、同名ディレクトリがあれば
 `<workId>/index.html` に寄せる（読み出し側は既にこのフォールバックを持っている）。
+
+**実装（2026-08-10）**: 上記の方針どおり。
+
+- `WebAozoraConverter.resolveHtmlCacheFile(File)` を追加。同名ディレクトリが既にある場合だけ
+  `<dir>/index.html` を返す
+- 適用先は **HTML の 3 経路のみ**: 一覧（`convertToAozoraText` の `cacheFile`）と
+  各話キャッシュ 2 か所（`chapterCacheFile`）。ページネーションの TOC は
+  `Files.createTempFile` なので衝突しない
+- **画像には適用しない**。参照されない場所に書いても表示は直らないため、従来どおり
+  loud に失敗させる方が良い（無音で壊れるより検知できる）
+- テスト `test/com/github/hmdev/web/WebAozoraConverterHtmlCacheFileTest.java`（4 件）。
+  「同名ディレクトリあり → index.html に寄せる」「寄せた先に実際に書ける」
+  「既存ファイル / 何も無いパスはそのまま」。ミューテーション確認済み
+  （`resolveHtmlCacheFile` を素通しに戻すと前 2 件が赤くなる）
+
+**残件**: 実サイトでの確認。既に壊れたキャッシュ（`<workId>/` ディレクトリが先にある状態）を
+持っているカクヨム作品で、TOC が更新され新着話が拾えるようになることを dogfood で確かめる。
 
 ### 19. エピソード URL の組み立てが 4 か所に重複している — 未対応
 
