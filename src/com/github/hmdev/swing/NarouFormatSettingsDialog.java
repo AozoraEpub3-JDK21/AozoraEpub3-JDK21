@@ -137,7 +137,8 @@ public class NarouFormatSettingsDialog extends JDialog {
 		JPanel unitPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
 		unitPanel.add(new JLabel(I18n.t("ui.narou.label.lowerDigitZero")));
 		spnKanjiNumUnitsDigit = new JSpinner(new SpinnerNumberModel(2, 1, 10, 1));
-		spnKanjiNumUnitsDigit.setPreferredSize(new Dimension(50, 22));
+		//高さは L&F 実寸から取る (決め打ちだと L&F 変更で文字が潰れる)
+		spnKanjiNumUnitsDigit.setPreferredSize(new Dimension(50, spnKanjiNumUnitsDigit.getPreferredSize().height));
 		unitPanel.add(spnKanjiNumUnitsDigit);
 		panel.add(unitPanel, gbc);
 		gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
