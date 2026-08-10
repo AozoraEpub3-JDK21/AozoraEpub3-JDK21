@@ -36,6 +36,7 @@
 | 21 | 🟢 低 | カクヨムの TOC キャッシュ書き込みが `AccessDeniedException` になる | ❌ 未対応 | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ❌ 未対応 | — |
+| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） | ❌ 未対応 | — |
 
 ---
 
@@ -324,6 +325,27 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 `MaxChapterNameLength` が不正値のときに旧名 `ChapterNameLength` へフォールバックしない件
 （同 226-229 行）も、意図した挙動か整理する。
 
+
+### 24. 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） — 未対応
+
+**発見**: 2026-08-10、項目 22 のゲート C（Fable）。項目 22 で目次まわりの 19 キーは
+`SettingDefaults` に集約したが、**同じ形のドリフトが表の外に残っている**。
+
+| キー | GUI 既定 | CLI（キー不在時） | 同梱 `AozoraEpub3.ini` | 実害 |
+|---|---|---|---|---|
+| `TocVertical` | 縦書き（`AozoraEpub3Applet.java:955` の `jRadioTocV` が `true`） | `false`（横書き） | **無い** | **同梱 ini のままの CLI 変換は目次ページが横書き、GUI は縦書き**。現に食い違っている |
+| `CoverPage` | ON（同 917） | `false` | `CoverPage=1` あり | 同梱 ini では出ない。`-i` の自作 ini のみ |
+| `TitlePageWrite` | ON（同 921） | `false` | `TitlePageWrite=1` あり | 同上 |
+
+いずれも `src/AozoraEpub3.java:194-195` 等で `"1".equals(props.getProperty(...))` を直読みしている。
+
+**修正方針**: `SettingDefaults` の表にこれらを足し、CLI 側を `getBoolean` に置き換える。
+項目 22 と同じ形なので実装は小さいが、**`TocVertical` は出力（目次ページの writing-mode）が変わる**ため
+リリースをまたぐ変更として単独 PR で扱う。あわせて GUI ウィジェット初期値の直書きを
+`SettingDefaults.isSelected` に寄せ、表に無いキーが残っていないかを全キー棚卸しする。
+
+**予防策の候補（nice-to-have）**: `src/` を grep して `props.getProperty("Chapter…` 等の
+直読みを禁止する簡易テストを置く。キー名の定数化 PR（項目 22 の残件）で同時に扱うのが自然。
 
 ### 20. 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる — 未対応
 
