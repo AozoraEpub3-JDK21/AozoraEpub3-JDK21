@@ -1,6 +1,6 @@
 # v1.5.0-jdk21 リリース計画と作業状態
 
-最終更新: 2026-08-10
+最終更新: 2026-08-11
 
 セッションをまたいで作業を再開するための状態記録。**残件は本書と
 [`code-audit-followups.md`](code-audit-followups.md) を正とする。**
@@ -19,23 +19,27 @@ v1.4.0-jdk21（2026-08-01）以降に master へ入ったもの + 本セッシ�
 | 修正 | カクヨムの新着話取りこぼし（項目 21）、GUI/CLI 既定値ドリフト（項目 24）、`ChapterPattern` の警告（項目 23）、`GothicUseBold` のタイポ（項目 25 の一部）、ini 探索パスの非対称（項目 26） |
 | ドキュメント | CLI 記述の実装不一致を全面修正、`--preview` / `--library` / 本棚の説明追加 |
 
-`RELEASE_NOTES.md` の「未リリース（v1.5.0-jdk21 予定）」節に下書き済み。
-**リリース時はその節をバージョン節に書き換えるだけでよい**（項目 21 / 24 / 26 の追記は必要）。
+`RELEASE_NOTES.md` の「未リリース（v1.5.0-jdk21 予定）」節に下書き済み（PR #78 で
+項目 21 / 23 / 24 / 25 / 26・同梱 ini 全キー化・FlatLaf の互換性影響まで反映済み）。
+**リリース時はその節をバージョン節に書き換えるだけでよい**。
 
 ---
 
-## 2. 未マージのブランチ（すべてローカル、未 push）
+## 2. ブランチと PR の状態（2026-08-11 時点）
 
-| ブランチ | コミット数 | 内容 | ゲート |
+全ブランチが 3 ゲート（A=Codex / B=Opus / C=Fable）+ フレッシュコンテキストの
+検証ラウンドを**指摘ゼロで通過**し、push・PR 作成済み。
+
+| PR | ブランチ | 内容 | 状態 |
 |---|---|---|---|
-| `fix/ini-default-drift` | 4 | 項目 24 / 23 / 25 / 26。`SettingDefaults` 拡張、同梱 ini 全キー化、ini 探索修正 | A・B 済（指摘なし）→ **C 未実施** |
-| `fix/kakuyomu-toc-cache-collision` | 1 | 項目 21。カクヨムの新着話取りこぼし | A・B 済（指摘なし）→ **C 未実施** |
-| `docs/preview-cli-and-en-options` | 3 | CLI ドキュメントの実装不一致修正 + プレビュー説明 | 事実確認ゲート・B 済 → **C 未実施** |
-| `docs/ini-drift-inventory` | 1 | ini 全キー棚卸しの記録（`fix/ini-default-drift` に取り込み済み） | — |
-| `worktree-agent-a99e816fe008d21a0` | 6 | **FlatLaf 一式**。`.claude/worktrees/agent-a99e816fe008d21a0` の worktree にある | 実装内で再レビュー済 |
+| #75 | `fix/ini-default-drift` | 項目 23/24/25(一部)/26。`SettingDefaults` 拡張、同梱 ini 全キー版（GUI 初期値）、ini 探索順、`-t` ヘルプ修正 | CI 待ち → マージ |
+| #76 | `fix/kakuyomu-toc-cache-collision` | 項目 21 + symlink 再検証・早期失敗 | CI 待ち → マージ |
+| #77 | `feat/flatlaf-ui`（worktree ブランチを rename して push） | FlatLaf 一式 | CI 待ち → マージ |
+| #78 | `docs/preview-cli-and-en-options` | CLI ドキュメント修正 + リリースノート下書き拡充 | CI 待ち → マージ |
 
-再開手順: 各ブランチで **ゲート C（Fable）** → push → PR → CI → マージ。
-`gh pr merge` は auto mode の分類器に止められるため、ユーザーに実行してもらう。
+**マージ順（厳守）**: #75 → #76 → #77 → #78。#78 のドキュメントは #75/#77 の実装を
+説明しているため必ず最後。`docs/ini-drift-inventory` ブランチは #75 に取り込み済みで PR 不要。
+マージ判断はユーザーから Fable に委譲済み（2026-08-10）。
 
 ---
 
@@ -55,19 +59,18 @@ v1.4.0-jdk21（2026-08-01）以降に master へ入ったもの + 本セッシ�
 
 ## 4. 設計判断の記録（迷ったら本節を読む）
 
-### 4.1 同梱 `AozoraEpub3.ini` は「GUI 初期値」ではなく「従来と同じ出力になる値」
+### 4.1 同梱 `AozoraEpub3.ini` は「v1.4.x と同じ GUI 起動状態」（最終決定・#75 で実装）
 
-同梱 ini を GUI の初期状態と同じ全キー版にしたところ、`JavaAozoraVsReferenceTest` の
-narou.rb 由来 5 ケースが全滅した。原因は、このテストが作業ディレクトリをプロジェクトルートに
-して実行するため**リポジトリの同梱 ini を読んでおり**、参照 EPUB は旧・同梱 ini（24 キー）で
-変換した出力と一致する契約になっていたこと。
+経緯: 当初、参照 EPUB との byte 一致を守るため 8 キーだけ「従来出力を維持する値」にしたが、
+ゲート B で **GUI も同梱 ini を読む**（`setPropsSelected` が `containsKey` 判定）ことが判明。
+そのままだと新規展開した GUI が自動改ページ OFF 等で起動してしまう。
 
-**「同梱 ini = GUI 初期値」と「同梱 ini = narou.rb 参照出力と byte 一致」は両立しない。**
-ユーザー判断で後者を優先し、出力に影響する 8 キー（`TocVertical` / `PageBreak` / `FitImage` /
-`ImageSizeType` / `SinglePageSizeW` / `SinglePageSizeH` / `JpegQuality` / `MaxCoverLine`）だけ
-従来の実効値を入れている。理由は ini 内のコメントにも書いた。
-
-`SettingDefaults` の拡張自体は残るので、**キーを持たない手書き ini を使う利用者のドリフトは解消済み**。
+**最終決定（ユーザー判断 2026-08-10）**: 同梱 ini は GUI 初期値ベースに戻し、
+`JavaAozoraVsReferenceTest` には専用 ini `test_data/reference_comparison.ini`
+（旧 23 キー + 旧 CLI ハードコード実効値 8 キーの明示）を `-i` で渡して契約を独立させる。
+これで「新規展開した GUI の起動状態 = v1.4.x と同一」かつ「参照 EPUB との byte 一致」が両立。
+同梱 ini のまま CLI 変換していた場合の出力変化はリリースノートに記載済み。
+参照 EPUB を作り直すときだけ `reference_comparison.ini` を更新する。
 
 ### 4.2 GUI 初期値の実測フィクスチャ
 
@@ -89,14 +92,14 @@ narou.rb 由来 5 ケースが全滅した。原因は、このテストが作�
 
 手順の詳細は [`release-procedure.md`](release-procedure.md) を**必ず最初から最後まで読む**こと。
 
-- [ ] 各ブランチのゲート C（Fable）→ push → PR → マージ（FlatLaf の worktree ブランチを含む）
-- [ ] **README / docs のスクリーンショット撮り直し**（FlatLaf 適用後の新 UI）。
-      `docs/assets/screenshot-app.png` と、必要なら `screenshot-preview.png`
+- [x] 各ブランチの 3 ゲート + 検証ラウンド → push → PR（#75〜#78）
+- [ ] PR #75 → #76 → #77 → #78 の順で CI 確認 → マージ
+- [x] **README / docs のスクリーンショット撮り直し**（FlatLaf 適用後、本ブランチに含む）
 - [ ] README / `docs/index.md` の「※プレビュー機能は未リリースです」注記を削除
       （`docs/en/index.md` には注記が入っていないので追加不要）
 - [ ] バージョン更新 5 ファイル: `src/AozoraEpub3.java` / `NarouApiClient.java` /
       `build.gradle` / `docs/index.md` / `docs/en/index.md`
-- [ ] `RELEASE_NOTES.md` の「未リリース」節をバージョン節へ。項目 21 / 24 / 26 の記載を足す
+- [ ] `RELEASE_NOTES.md` の「未リリース」節をバージョン節へ（互換性影響は #78 で記載済み）
 - [ ] `gradlew --no-daemon clean test` → `dist` → 配布物の必須ファイル目視（手順書 §3.4）。
       **FlatLaf の jar が増えるので `unzip -l` のサイズ確認も**
 - [ ] リリース前 E2E ゲート（手順書 §2.1.1）。なろう / 青空文庫 / キャッシュ再利用 /
@@ -109,7 +112,8 @@ narou.rb 由来 5 ケースが全滅した。原因は、このテストが作�
 - **CLI の目次既定値が GUI に揃った**（項目 22）。`-i` で `Chapter*` キーを持たない自作 ini を
   使っている場合は出力が変わる。戻すには ini に明示する
 - **ini にキーが無いときの CLI 既定値が GUI に揃った**（項目 24）。自動改ページ・表題ページなどが
-  効くようになる。**同梱 ini を使う限り出力は不変**
+  効くようになる。**同梱 ini も GUI 初期値ベースの全キー版になったため、同梱 ini のまま
+  CLI 変換していた場合も出力が変わる**（§4.1。従来出力へ戻す 8 キーはリリースノートに記載）
 - **CLI が jar と同じ場所の ini を読むようになった**（項目 26）。配布フォルダ外から実行していた
   利用者は、これまで無視されていた同梱 ini が効くようになる
 - ハーメルンは**旧キャッシュがあると初回だけ全話再取得**（#72）
@@ -129,93 +133,3 @@ narou.rb 由来 5 ケースが全滅した。原因は、このテストが作�
 
 ---
 
-## 7. 中断時点の状態（2026-08-10 深夜、`/clear` 直前）
-
-### すぐやること（優先順）
-
-1. **`fix/ini-default-drift` の must-fix 1 を片付ける**。同梱 `AozoraEpub3.ini` の 8 キー
-   （`TocVertical` / `PageBreak` / `FitImage` / `ImageSizeType` / `SinglePageSizeW` /
-   `SinglePageSizeH` / `JpegQuality` / `MaxCoverLine`）は **GUI にも効く**
-   （`AozoraEpub3Applet.java:4916` の `setPropsSelected` が `props.containsKey` 判定）。
-   いまの「従来出力を維持する値」を入れたままだと、**配布物を新規展開した GUI が
-   自動改ページ OFF・画像合わせ OFF・目次横書きで起動する**。
-   **ユーザー判断（2026-08-10）**: 同梱 ini は GUI 初期値に戻し、
-   `test/JavaAozoraVsReferenceTest.java` に**専用 ini を `-i` で明示的に渡す**。
-   渡す ini は master の 24 キー版（参照 EPUB を作ったときの設定）を
-   `test_data/` に置いたものにする。**このテスト変更はユーザー承認済み**
-2. **`AozoraEpub3IniResolutionTest.prefersIniBesideJar` が赤**。ini 探索順を
-   「カレント優先 → jar フォールバック」に変えたため。**Fable に設計判断を依頼したが
-   結果は受け取れていない**（セッション終了のため）。再開時に再依頼するか、
-   自分で決めてテストを書き直す
-3. ゲート C（Fable）を 3 ブランチに対して実施 → push → PR → マージ
-4. リリースノートに互換性影響を追記（`DakutenType` 0→1 / `TitlePage` -1→1 /
-   `MaxCoverLine` 実質無制限→10 / `GothicUseBold` が効くようになる / ini 探索順の変更）
-
-### ゲート B（2026-08-10）の結果
-
-`fix/ini-default-drift` に対して must-fix 2 件・should-fix 2 件。上記 1・2 が must-fix。
-残る should-fix は「リリースノート未反映」。nice-to-have として:
-
-- パリティテストは表のキーしか走査しない。逆方向（CLI が読むキーが表にあるか）の検査があるとよい
-- **既存バグ（master 由来）**: `AozoraEpub3Applet.java:2213` の
-  `jRadioTitleHorizontal = new JRadioButton(...)` が `group.add(jRadioPageMarginUnit0)` を
-  潰しており、横書きラジオがオーファン化 + 余白単位ラジオがグループ未登録。要記録
-
-検証済みで問題なしとされた点: フィクスチャ 116 キーとソースの一致、`PageBreak` ブロックの
-意味不変、`-i` 指定時の挙動不変、同梱 ini × コードの実効値の全キー照合
-（差は `ImageFloatW/H` のみで `ImageFloatType=0` のため無害）。
-
-### スクリーンショット（済）
-
-`docs/assets/screenshot-app.png` を FlatLaf 適用後（ライト、886x533）に差し替え、
-`screenshot-app-dark.png` を追加済み（ブランチ `docs/v150-release-plan`）。
-`screenshot-preview.png` はブラウザ表示なので据え置き。
-
-### 未 push ブランチの最新
-
-| ブランチ | 先頭コミット | 備考 |
-|---|---|---|
-| `fix/ini-default-drift` | `adc8331` wip | **テスト 1 件が赤**。上記 1・2 が残件 |
-| `fix/kakuyomu-toc-cache-collision` | `66b74a5` | 緑。ゲート C 待ち |
-| `docs/preview-cli-and-en-options` | `7e98daf` | 緑。ゲート C 待ち |
-| `docs/v150-release-plan` | 本書 + スクショ | — |
-| `worktree-agent-a99e816fe008d21a0` | `c25ddad` | FlatLaf 一式。ライト既定 |
-
-### ゲート C（Fable）の判断 — ini 探索順（2026-08-10、受領済み）
-
-**結論: カレント優先 → jar フォールバック（現行実装を承認）。**
-
-- jar 隣の ini は配布物に必ず受動的に存在するが、カレントに ini を置くのは**利用者の能動的な意思表示**。
-  jar 優先ではその意思が常に無言で潰され、本修正が消そうとしている「無言で無視される事故」を
-  別の形で再生産する
-- 後方互換も cwd 優先が厳密に優位。従来 CLI は cwd のみだったので、cwd 優先なら既存の全ケースが
-  不変で「cwd に無いときだけ」挙動が増える純増。jar 優先は既存運用を退行させる
-- git / npm 等の「ローカル設定がインストール済み既定を上書きする」慣習とも一致。narou.rb は無影響
-
-**テストの直し方（重要な構造指摘）**: 単なる期待値の書き換えではなく意図ごと書き直す。
-その前に構造問題を直すこと — 現在の `resolveDefaultIniFile` は相対 `File` がプロセスの
-カレントに解決されるため、**全テストがリポジトリルートの `AozoraEpub3.ini` の存在に暗黙依存**
-している（`ignoresDirectoryWithSameName` は cwd 側の ini が先にヒットして jar 側の判定に
-到達しておらず、**偶然 PASS している**）。
-推奨: `workingDir` を引数に取るオーバーロードを足してハーメチックにし、次の 5 ケースにする。
-
-1. 両方あれば cwd が勝つ
-2. cwd に無ければ jar 隣
-3. `jarPath` が空 / null
-4. 同名ディレクトリは無視（cwd 側・jar 側の両方）
-5. どちらにも無ければ cwd 相対の File を返す
-
-**ログとドキュメント**: 現行の「設定ファイルを読み込みました: <絶対パス>」は維持。加えて
-(a) 両方存在するとき「jar 隣の ini は使用しません: <path>」を info で 1 行、
-(b) どちらも無く既定値で起動するときも info を 1 行（**元バグの本質は沈黙**）。
-README / リリースノートに探索順 `-i` → cwd → jar 隣 を明記し、
-「GUI は常に jar 隣を読み書きする」非対称も書く。
-
-**あわせて指摘された残件**:
-
-- ~~`src/AozoraEpub3.java:175` のインラインコメントが実装と逆~~ → 修正済（`e254e9a`）
-- 任意ディレクトリの野良 `AozoraEpub3.ini` を拾う挙動は従来からだが、明文化される以上ドキュメントに注意書きを
-- `src/AozoraEpub3.java:63-67` の jarPath 導出が `";"` 固定分割で **Unix の `:` に非対応**。
-  `-jar` 起動では無害な既存問題だが、マルチ OS 方針上 docs に項目として残す価値あり
-- `JavaAozoraVsReferenceTest` への `-i` 明示は**本 PR 内で先に入れるのが安全**
-  （リポジトリ ini が +138 行変わっており比較結果が動きうるため）
