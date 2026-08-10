@@ -104,6 +104,15 @@ E2E 整備のタイミングで JUnit 4 + `Assume.assumeTrue(isNetworkAvailable(
 1 のフィクスチャサーバが実現すれば、「旧バージョンで生成したキャッシュを流し込んで
 再ダウンロードが発生しないこと」を自動化できる。
 
+## 4. `HamelnE2ETest` の hameln_nochapter が削除済み作品を指している
+
+2026-08-11 の dogfood で判明。`test/HamelnE2ETest.java` の hameln_nochapter ケースが使う
+`https://novel.syosetu.org/7/` は**投稿者により削除済み**（ハーメルンは「投稿者が削除、
+もしくは間違ったアドレスを指定しています」ページを HTTP 200 で返すため、変換は
+「各話のリンク先URLが取得できません」で失敗する）。章なしの実在作品に差し替えること。
+章あり `402358`（137 話）は 2026-08-11 時点で実在・変換成功を確認済み。
+検証用 URL の一覧は `memory/feedback_dogfood_real_sites.md` にもある。
+
 ## 関連
 
 - `docs/release-procedure.md` §2.1.1 — リリース前 E2E チェックリスト
