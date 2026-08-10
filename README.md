@@ -351,8 +351,8 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
 | `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
-| `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
-| `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
+| `-interval <秒>` | ページ取得間隔（`-url` 指定時のみ有効、既定 1.0 秒） | `-interval 1.5` |
+| `-cache <パス>` | キャッシュディレクトリ（`-url` 指定時のみ有効、既定は jar と同じ場所の `.cache`） | `-cache .cache` |
 | `--preview` | 変換した EPUB を既定ブラウザでプレビュー表示 | `--preview foo.epub` |
 | `--library <フォルダ>` | フォルダを本棚として開く（複数指定可、最大 8 個） | `--library ./output/` |
 
@@ -381,7 +381,8 @@ GUI では変換完了後に「プレビュー」ボタンが有効になりま�
 - EPUB 情報（書誌・構成・manifest 内訳・実効スタイル・CSS・埋め込みフォント）の確認
 - ページ送り: 本文の左右端クリック / ホイール / ← → / Space
 
-サーバは `127.0.0.1` のランダムポートに URL トークン付きで待ち受け、外部からは接続できません。
+サーバはループバックアドレス（`127.0.0.1`、IPv6 優先環境では `::1`）のランダムポートに
+URL トークン付きで待ち受け、外部からは接続できません。
 CLI ではブラウザを閉じると自動的に終了します（Ctrl-C でも終了）。
 表示設定は `~/.aozoraepub3/preview-settings.json` に保存されます。
 

@@ -162,8 +162,8 @@ java -jar AozoraEpub3.jar [OPTIONS] input_file
 | `-device <type>` | Apply device-specific handling | `-device kindle` |
 | `-url <URL>` | Convert directly from a web novel URL, or a `.zip` / `.txtz` / `.rar` archive URL (repeatable) | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | Apply narou.rb-compatible format settings | |
-| `-interval <seconds>` | Page fetch interval (default 1.0) | `-interval 1.5` |
-| `-cache <path>` | Cache directory (default `.cache`) | `-cache .cache` |
+| `-interval <seconds>` | Page fetch interval (only with `-url`, default 1.0) | `-interval 1.5` |
+| `-cache <path>` | Cache directory (only with `-url`, defaults to `.cache` next to the jar) | `-cache .cache` |
 | `--preview` | Open the converted EPUB in your default browser | `--preview foo.epub` |
 | `--library <folder>` | Open a folder as a library (repeatable, up to 8) | `--library ./output/` |
 
@@ -213,8 +213,8 @@ The default body font is UD Digi Kyokasho, falling back to Yu Mincho and others 
 not installed. Display settings are stored in `~/.aozoraepub3/preview-settings.json` and
 restored on the next run.
 
-The server listens on a random port on `127.0.0.1` behind a URL token, so it is not reachable
-from other machines. In CLI mode it shuts down automatically once you close the browser
+The server listens on a random port on the loopback address (`127.0.0.1`, or `::1` where IPv6
+takes precedence) behind a URL token, so it is not reachable from other machines. In CLI mode it shuts down automatically once you close the browser
 (Ctrl-C also works).
 
 #### Library
@@ -248,13 +248,16 @@ java -jar AozoraEpub3.jar -enc UTF-8 -of -d output novel.txt
 
 #### Convert with Kobo preset
 ```bash
-java -jar AozoraEpub3.jar -p presets/kobo_glo.ini -of -d output novel.txt
+java -jar AozoraEpub3.jar -i presets/kobo_glo.ini -of -d output novel.txt
 ```
 
-#### Horizontal writing with custom style
+#### Horizontal writing
 ```bash
-java -jar AozoraEpub3.jar -y -fs 110 -lh 1.8 -of -d output essay.txt
+java -jar AozoraEpub3.jar -hor -of -d output essay.txt
 ```
+
+Text size and line height have no command-line switches — set them in the GUI and pass the
+saved ini with `-i`.
 
 #### Batch conversion
 ```bash
@@ -326,9 +329,9 @@ Preset files (`.ini`) contain optimized settings for specific e-readers.
 
 **GUI**: Select from "Device Preset" dropdown
 
-**CLI**: Use `-p` option
+**CLI**: Pass the preset ini with `-i`
 ```bash
-java -jar AozoraEpub3.jar -p presets/kobo_glo.ini input.txt
+java -jar AozoraEpub3.jar -i presets/kobo_glo.ini input.txt
 ```
 
 ### Preset File Format
@@ -357,7 +360,7 @@ java -jar AozoraEpub3.jar -p presets/kobo_glo.ini input.txt
 1. Copy an existing preset file
 2. Edit values in a text editor
 3. Save with `.ini` extension
-4. Use with `-p` option
+4. Pass it with `-i`
 
 ---
 
@@ -431,9 +434,11 @@ Common encodings:
 
 **Problem**: Images too large for device
 
-**Solution**: Use image resize options
+**Solution**: Set the maximum image width / height in the GUI (or in the ini) and pass that ini
+with `-i`. There are no command-line switches for image sizing.
+
 ```bash
-java -jar AozoraEpub3.jar -iw 758 -ih 1024 input.txt
+java -jar AozoraEpub3.jar -i presets/kobo_glo.ini input.txt
 ```
 
 ### Memory Issues
@@ -561,16 +566,19 @@ setting, not a command-line switch — set it in the GUI, or edit `AozoraEpub3.i
 
 ```ini
 PageBreak=1
-# split once a page reaches this many KB
+# split once the page grows past this many KB
 PageBreakSize=400
-# ... or after this many consecutive blank lines
+# split at PageBreakEmptyLine consecutive blank lines, once the page is past PageBreakEmptySize KB
 PageBreakEmpty=1
 PageBreakEmptyLine=3
 PageBreakEmptySize=300
-# ... or at chapter headings
+# split at chapter headings, once the page is past PageBreakChapterSize KB
 PageBreakChapter=1
 PageBreakChapterSize=200
 ```
+
+Every `*Size` is the minimum page size (KB) at which that trigger starts to apply — blank lines
+and chapter headings do not split a page that is still smaller than the threshold.
 
 Then pass the ini with `-i`:
 
@@ -583,8 +591,10 @@ java -jar AozoraEpub3.jar -i AozoraEpub3.ini -of -d ./output/ large_novel.txt
 Whether chapter headings nest under their parent chapter is also an ini setting:
 
 ```ini
-NavNest=1                  ; nest entries in nav.xhtml
-NcxNest=1                  ; nest entries in toc.ncx
+# nest entries in nav.xhtml
+NavNest=1
+# nest entries in toc.ncx
+NcxNest=1
 ```
 
 Set them to `0` for a flat table of contents. Which headings become entries at all is

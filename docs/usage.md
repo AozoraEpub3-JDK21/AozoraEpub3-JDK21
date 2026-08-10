@@ -193,8 +193,8 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
 | `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
-| `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
-| `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
+| `-interval <秒>` | ページ取得間隔（`-url` 指定時のみ有効、既定 1.0 秒） | `-interval 1.5` |
+| `-cache <パス>` | キャッシュディレクトリ（`-url` 指定時のみ有効、既定は jar と同じ場所の `.cache`） | `-cache .cache` |
 | `--preview` | 変換した EPUB を既定ブラウザでプレビュー表示 | `--preview foo.epub` |
 | `--library <フォルダ>` | フォルダを本棚として開く（複数指定可、最大 8 個） | `--library ./output/` |
 
@@ -206,22 +206,34 @@ CLI オプションはここに挙げたものがすべてです。文字サイ�
 java -jar AozoraEpub3.jar -i presets/kindle_pw.ini -of -d ./output/ input.txt
 ```
 
+`presets/` に同梱しているプリセット:
+
+- `kobo__full.ini` — Kobo 最大サイズ
+- `kobo_glo.ini` — Kobo Glo
+- `kobo_touch.ini` — Kobo Touch
+- `kindle_pw.ini` — Kindle Paperwhite
+- `reader.ini` — Sony Reader
+- `reader_t3.ini` — Sony Reader T3
+
 #### ini でしか指定できない主な設定
 
-長いファイルを複数ページに分割する自動改ページ:
+長いファイルを複数ページ（XHTML）に分割する自動改ページ:
 
 ```ini
 PageBreak=1
-# 1 ページがこのサイズ（KB）に達したら改ページ
+# ページがこのサイズ（KB）を超えたら改ページ
 PageBreakSize=400
-# または空行がこの行数続いたら改ページ
+# 空行が PageBreakEmptyLine 行続き、かつページが PageBreakEmptySize (KB) を超えていたら改ページ
 PageBreakEmpty=1
 PageBreakEmptyLine=3
 PageBreakEmptySize=300
-# または章見出しで改ページ
+# 章見出しがあり、かつページが PageBreakChapterSize (KB) を超えていたら改ページ
 PageBreakChapter=1
 PageBreakChapterSize=200
 ```
+
+`*Size` はいずれも「そのきっかけで改ページし始める最小ページサイズ（KB）」です。空行や章見出しが
+あっても、ページがその大きさに達するまでは分割されません。
 
 目次を入れ子にするかどうか:
 
@@ -260,7 +272,8 @@ GUI では変換完了後に「プレビュー」ボタンが有効になりま�
 本文フォントの既定は UD デジタル教科書体（無い環境では游明朝などへ順に落ちます）。
 表示設定は `~/.aozoraepub3/preview-settings.json` に保存され、次回起動時に復元されます。
 
-サーバは `127.0.0.1` のランダムポートに URL トークン付きで待ち受けるため、外部からは接続できません。
+サーバはループバックアドレス（`127.0.0.1`、IPv6 優先環境では `::1`）のランダムポートに
+URL トークン付きで待ち受けるため、外部からは接続できません。
 CLI ではブラウザを閉じると自動的に終了します（Ctrl-C でも終了）。
 
 #### 本棚
