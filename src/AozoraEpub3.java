@@ -179,7 +179,9 @@ public class AozoraEpub3
 			try {
 				props.load(Files.newInputStream(propFile.toPath()));
 				logger.info("設定ファイルを読み込みました: {}", propFile.getAbsolutePath());
-			} catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */ }
+			} catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */
+				logger.info("設定ファイルが無いため既定値で起動します: {}", propFile.getAbsolutePath());
+			}
 			
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			
@@ -713,7 +715,6 @@ public class AozoraEpub3
 		com.github.hmdev.preview.PreviewLauncher.shutdown();
 	}
 	
-	/** 出力ファイルを生成 */
 	/**
 	 * {@code -i} の指定が無いときに読む ini を決める。
 	 *
@@ -733,15 +734,31 @@ public class AozoraEpub3
 	 */
 	static File resolveDefaultIniFile(String jarPath, String fileName)
 	{
-		File inWorkingDir = new File(fileName);
-		if (inWorkingDir.isFile()) return inWorkingDir;
-		if (jarPath != null && jarPath.length() > 0) {
-			File beside = new File(jarPath, fileName);
-			if (beside.isFile()) return beside;
+		return resolveDefaultIniFile(jarPath, fileName, null);
+	}
+
+	/**
+	 * 作業ディレクトリを差し替えられるオーバーロード（テストがプロセスのカレントに依存しないため）。
+	 * @param workingDir カレントディレクトリとして扱う場所。null ならプロセスのカレント
+	 *  （返す File もカレント相対のまま）
+	 */
+	static File resolveDefaultIniFile(String jarPath, String fileName, File workingDir)
+	{
+		File inWorkingDir = workingDir == null ? new File(fileName) : new File(workingDir, fileName);
+		File besideJar = jarPath != null && jarPath.length() > 0 ? new File(jarPath, fileName) : null;
+		if (inWorkingDir.isFile()) {
+			//両方に ini があるときはどちらを読んだか分かるように残す（項目 26 の本質は無言で無視されること）
+			if (besideJar != null && besideJar.isFile()
+					&& !besideJar.getAbsoluteFile().equals(inWorkingDir.getAbsoluteFile())) {
+				logger.info("jar と同じ場所の ini は使用しません: {}", besideJar.getAbsolutePath());
+			}
+			return inWorkingDir;
 		}
+		if (besideJar != null && besideJar.isFile()) return besideJar;
 		return inWorkingDir;
 	}
 
+	/** 出力ファイルを生成 */
 	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) throws IOException
 	{
 		//出力ファイル

@@ -38,6 +38,9 @@ public class JavaAozoraVsReferenceTest {
 	private static final Path JAR_PATH =
 		Paths.get("build/libs/AozoraEpub3.jar");
 	private static final Path PROJECT_ROOT = Paths.get(".").toAbsolutePath().normalize();
+	/** 参照 EPUB を生成したときと同じ設定（同梱 ini や GUI 初期値の変更に影響されないよう -i で明示） */
+	private static final Path REFERENCE_INI =
+		Paths.get("test_data/reference_comparison.ini");
 
 	// テキストファイル拡張子（正規化比較対象）
 	private static final Set<String> TEXT_EXTENSIONS =
@@ -136,6 +139,7 @@ public class JavaAozoraVsReferenceTest {
 			"java", "-Dfile.encoding=UTF-8",
 			"-cp", jarFile.toAbsolutePath().toString(),
 			"AozoraEpub3",
+			"-i", PROJECT_ROOT.resolve(REFERENCE_INI).toString(),
 			"-enc", inputEncoding,
 			"-of",
 			"-d", outDir.toAbsolutePath().toString(),
@@ -143,7 +147,7 @@ public class JavaAozoraVsReferenceTest {
 		));
 
 		ProcessBuilder pb = new ProcessBuilder(cmd);
-		// プロジェクトルート（template/, gaiji/, AozoraEpub3.ini 等の解決用）
+		// プロジェクトルート（template/, gaiji/ 等の解決用。ini は -i で明示）
 		pb.directory(PROJECT_ROOT.toFile());
 		pb.redirectErrorStream(true);
 

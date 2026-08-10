@@ -1,5 +1,4 @@
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 import java.io.File;
 import java.io.IOException;
@@ -7,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -14,55 +14,93 @@ import org.junit.rules.TemporaryFolder;
 /**
  * {@code -i} 指定が無いときの ini 探索のテスト（docs/code-audit-followups.md 項目 26）。
  *
- * <p>CLI は ini だけカレントディレクトリ相対で読んでいたため、配布フォルダの外から
- * {@code java -jar /path/to/AozoraEpub3.jar} を実行すると同梱 ini が無言で無視されていた。
- * jar と同じ場所を優先し、無ければ従来どおりカレントを見る。</p>
+ * <p>探索順は<b>カレントディレクトリ優先 → jar と同じ場所へフォールバック</b>。
+ * カレントに ini を置くのは利用者の能動的な使い分けなので jar 隣より優先し、
+ * どちらにも無ければ従来どおりカレント相対の File を返す（呼び出し側で存在チェック）。</p>
+ *
+ * <p>プロセスのカレント（リポジトリルートの AozoraEpub3.ini）に依存しないよう、
+ * workingDir を明示するオーバーロードでテストする。</p>
  */
 public class AozoraEpub3IniResolutionTest {
+
+	private static final String INI = "AozoraEpub3.ini";
 
 	@Rule
 	public TemporaryFolder tempFolder = new TemporaryFolder();
 
-	/** jar と同じ場所に ini があればそれを読む */
-	@Test
-	public void prefersIniBesideJar() throws IOException {
-		File jarDir = tempFolder.newFolder("dist");
-		Path beside = jarDir.toPath().resolve("AozoraEpub3.ini");
-		Files.write(beside, "TocPage=1".getBytes(StandardCharsets.UTF_8));
+	private File workDir;
+	private File jarDir;
 
-		File resolved = AozoraEpub3.resolveDefaultIniFile(jarDir.getAbsolutePath()+File.separator, "AozoraEpub3.ini");
-
-		assertEquals(beside.toFile().getAbsolutePath(), resolved.getAbsolutePath());
+	@Before
+	public void setUp() throws IOException {
+		workDir = tempFolder.newFolder("cwd");
+		jarDir = tempFolder.newFolder("dist");
 	}
 
-	/** jar と同じ場所に無ければカレント相対の File を返す（従来の挙動） */
-	@Test
-	public void fallsBackToWorkingDirectory() throws IOException {
-		File jarDir = tempFolder.newFolder("dist-empty");
-
-		File resolved = AozoraEpub3.resolveDefaultIniFile(jarDir.getAbsolutePath()+File.separator, "AozoraEpub3.ini");
-
-		assertEquals("AozoraEpub3.ini", resolved.getPath());
-		assertFalse("jar 隣のパスを返してはいけない", resolved.isAbsolute());
+	private String jarPath() {
+		return jarDir.getAbsolutePath() + File.separator;
 	}
 
-	/** jarPath が空（クラスパス実行など）でもカレント相対に落ちる */
-	@Test
-	public void handlesEmptyJarPath() {
-		assertEquals("AozoraEpub3.ini",
-			AozoraEpub3.resolveDefaultIniFile("", "AozoraEpub3.ini").getPath());
-		assertEquals("AozoraEpub3.ini",
-			AozoraEpub3.resolveDefaultIniFile(null, "AozoraEpub3.ini").getPath());
+	private Path createIni(File dir) throws IOException {
+		Path ini = dir.toPath().resolve(INI);
+		Files.write(ini, "TocPage=1".getBytes(StandardCharsets.UTF_8));
+		return ini;
 	}
 
-	/** jar と同じ名前のディレクトリがあっても誤って選ばない */
+	/** 1. 両方にあればカレントが勝つ（カレントの ini は利用者の意思表示） */
+	@Test
+	public void prefersWorkingDirWhenBothExist() throws IOException {
+		Path inWorkDir = createIni(workDir);
+		createIni(jarDir);
+
+		File resolved = AozoraEpub3.resolveDefaultIniFile(jarPath(), INI, workDir);
+
+		assertEquals(inWorkDir.toFile(), resolved);
+	}
+
+	/** 2. カレントに無ければ jar と同じ場所（配布フォルダ外からの実行で同梱 ini が効く） */
+	@Test
+	public void fallsBackToJarDirectory() throws IOException {
+		Path beside = createIni(jarDir);
+
+		File resolved = AozoraEpub3.resolveDefaultIniFile(jarPath(), INI, workDir);
+
+		assertEquals(beside.toFile(), resolved);
+	}
+
+	/** 3. jarPath が空 / null（クラスパス実行など）はカレント側だけを見る */
+	@Test
+	public void handlesEmptyJarPath() throws IOException {
+		Path inWorkDir = createIni(workDir);
+
+		assertEquals(inWorkDir.toFile(),
+			AozoraEpub3.resolveDefaultIniFile("", INI, workDir));
+		assertEquals(inWorkDir.toFile(),
+			AozoraEpub3.resolveDefaultIniFile(null, INI, workDir));
+	}
+
+	/** 4. 同じ名前のディレクトリは無視する（カレント側・jar 側とも） */
 	@Test
 	public void ignoresDirectoryWithSameName() throws IOException {
-		File jarDir = tempFolder.newFolder("dist-dir");
-		Files.createDirectories(jarDir.toPath().resolve("AozoraEpub3.ini"));
+		Files.createDirectories(workDir.toPath().resolve(INI));
+		Path beside = createIni(jarDir);
 
-		File resolved = AozoraEpub3.resolveDefaultIniFile(jarDir.getAbsolutePath()+File.separator, "AozoraEpub3.ini");
+		File resolved = AozoraEpub3.resolveDefaultIniFile(jarPath(), INI, workDir);
+		assertEquals("カレント側のディレクトリを飛ばして jar 隣のファイルを選ぶ",
+			beside.toFile(), resolved);
 
-		assertEquals("AozoraEpub3.ini", resolved.getPath());
+		Files.delete(beside);
+		Files.createDirectories(jarDir.toPath().resolve(INI));
+		resolved = AozoraEpub3.resolveDefaultIniFile(jarPath(), INI, workDir);
+		assertEquals("jar 側もディレクトリなら不在扱いでカレント側の File を返す",
+			new File(workDir, INI), resolved);
+	}
+
+	/** 5. どちらにも無ければカレント側の File を返す（呼び出し側の存在チェックで既定値起動） */
+	@Test
+	public void returnsWorkingDirFileWhenNeitherExists() {
+		File resolved = AozoraEpub3.resolveDefaultIniFile(jarPath(), INI, workDir);
+
+		assertEquals(new File(workDir, INI), resolved);
 	}
 }
