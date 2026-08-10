@@ -349,7 +349,7 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-of` | 出力ファイル名を入力ファイル名に合わせる（既定は `[著者名] 表題.epub`） | |
 | `-hor` | 横書きで出力 | |
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
-| `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
+| `-url <URL>` | Web小説URL・アーカイブURLから直接変換（複数指定可） | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
 | `-interval <秒>` | ページ取得間隔（`-url` 指定時のみ有効、既定 1.0 秒） | `-interval 1.5` |
 | `-cache <パス>` | キャッシュディレクトリ（`-url` 指定時のみ有効、既定は jar と同じ場所の `.cache`） | `-cache .cache` |

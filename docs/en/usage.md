@@ -271,7 +271,7 @@ java -jar AozoraEpub3.jar -of -d output novel_archive.zip
 
 #### With cover image
 ```bash
-java -jar AozoraEpub3.jar -cover cover.jpg -of -d output novel.txt
+java -jar AozoraEpub3.jar -c cover.jpg -of -d output novel.txt
 ```
 
 #### Convert web novel from URL
