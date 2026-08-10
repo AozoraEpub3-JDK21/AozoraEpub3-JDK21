@@ -54,7 +54,8 @@ public final class UiThemeManager
 		/** ini に保存する文字列表現 */
 		public String iniValue() { return this.iniValue; }
 
-		/** ini 文字列から Mode へ。未知・null は SYSTEM */
+		/** ini 文字列から Mode へ。未知・null は LIGHT
+		 * （既定はライト固定。README のスクリーンショットと初回起動の見た目を一致させるため） */
 		public static Mode fromIni(String value)
 		{
 			if (value != null) {
@@ -63,7 +64,7 @@ public final class UiThemeManager
 					if (m.iniValue.equals(v)) return m;
 				}
 			}
-			return SYSTEM;
+			return LIGHT;
 		}
 	}
 
@@ -184,7 +185,7 @@ public final class UiThemeManager
 	////////////////////////////////////////////////////////////////
 	/**
 	 * 起動時の Look and Feel 設定。
-	 * @param mode テーマ（null は SYSTEM 扱い）
+	 * @param mode テーマ（null は LIGHT 扱い）
 	 * @param fontFamily UI 既定フォント名（null なら {@link #getPreferredJapaneseFontName()}）
 	 */
 	public static void setup(Mode mode, String fontFamily)
@@ -200,7 +201,7 @@ public final class UiThemeManager
 	 * 実行時のテーマ切り替え。EDT から呼ぶこと。
 	 * {@link FlatLaf#updateUI()} が表示中の全ウィンドウのコンポーネントツリーを更新する。
 	 * （切り替えアニメーション FlatAnimatedLafChange は flatlaf-extras 側のため未使用）
-	 * @param mode テーマ（null は SYSTEM 扱い）
+	 * @param mode テーマ（null は LIGHT 扱い）
 	 * @param fontFamily UI 既定フォント名（null なら {@link #getPreferredJapaneseFontName()}）
 	 */
 	public static void switchTo(Mode mode, String fontFamily)
@@ -251,10 +252,10 @@ public final class UiThemeManager
 		return true;
 	}
 
-	/** モードを解決して FlatLightLaf / FlatDarkLaf を適用 */
+	/** モードを解決して FlatLightLaf / FlatDarkLaf を適用（null は LIGHT 扱い） */
 	private static void setLookAndFeel(Mode mode) throws Exception
 	{
-		boolean dark = (mode == Mode.DARK) || (mode != Mode.LIGHT && isSystemDark());
+		boolean dark = (mode == Mode.DARK) || (mode == Mode.SYSTEM && isSystemDark());
 		if (dark) UIManager.setLookAndFeel(new FlatDarkLaf());
 		else UIManager.setLookAndFeel(new FlatLightLaf());
 	}

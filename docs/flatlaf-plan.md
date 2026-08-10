@@ -15,20 +15,21 @@ L&F 関連コードはこの分岐より後に置き続けること）。
 ### 1.2 テーマ
 - 使用テーマ: **FlatLightLaf / FlatDarkLaf（標準テーマ）**。
   - FlatMac* 系は macOS で実機確認できないため今回は見送り（残件参照）
-- 既定値: **OS 追従（system）**。検出できない場合は light にフォールバック
-  - README のスクリーンショットはライトなので、ライト OS ユーザーの見た目は従来の想定と整合
-  - EPUB プレビュー機能の「システム追従 / ライト / ダーク」3 択と UX を揃える
-- OS ダークモード検出（best-effort、失敗時は light、各コマンド 1 秒タイムアウト）:
+- 既定値: **ライト固定（light）**。`UiTheme=system` を選べば OS 追従も選択できる
+  - 理由: README のスクリーンショットがライトのため、初回起動の見た目とドキュメントを一致させる（ユーザー判断 2026-08-10）
+  - 選択肢は「システム追従 / ライト / ダーク」の 3 択のまま。EPUB プレビュー機能の 3 択と UX を揃える
+- OS ダークモード検出（`UiTheme=system` 選択時のみ使用。best-effort、失敗時は light、各コマンド 1 秒タイムアウト）:
   - Windows: `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v AppsUseLightTheme` → `0x0` なら dark
   - macOS: `defaults read -g AppleInterfaceStyle` → 正常終了かつ `Dark` なら dark
   - Linux: `gsettings get org.gnome.desktop.interface color-scheme` → `dark` を含めば dark
 
 ### 1.3 テーマ切り替え手段
-- ini キー: `UiTheme` = `system` | `light` | `dark`（**AozoraEpub3.ini 全体設定**。プロファイルではない）
+- ini キー: `UiTheme` = `system` | `light` | `dark`（**AozoraEpub3.ini 全体設定**。プロファイルではない。
+  キー欠落・不正値は `light` 扱い）
 - GUI: トップのプロファイル行の右端（horizontal glue の後）に「テーマ」ラベル + 3 択コンボを追加
-  - 変更時は即時適用（`FlatAnimatedLafChange.showSnapshot()` → `UIManager.setLookAndFeel` →
-    `FlatLaf.updateUI()` → `hideSnapshotWithAnimation()`）+ `props.setProperty("UiTheme", ...)`
-    （保存自体は既存の windowClosing の props 保存に乗る）
+  - 変更時は即時適用（`UIManager.setLookAndFeel` → `FlatLaf.updateUI()`）+
+    `props.setProperty("UiTheme", ...)`（保存自体は既存の windowClosing の props 保存に乗る）
+  - 切替アニメーション `FlatAnimatedLafChange` は flatlaf-extras 側のため未使用（core のみ依存）
 - i18n: `messages_ja.properties` / `messages_en.properties` の**両方**に追加
   - `ui.label.theme`（テーマ / Theme）、`ui.theme.system`（システム追従 / System）、
     `ui.theme.light`（ライト / Light）、`ui.theme.dark`（ダーク / Dark）
