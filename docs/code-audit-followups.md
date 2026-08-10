@@ -33,12 +33,13 @@
 | 18 | 🟢 低 | 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） | ❌ 未対応 | — |
 | 19 | 🟢 低 | エピソード URL の組み立てが 4 か所に重複している | ❌ 未対応 | — |
 | 20 | 🟢 低 | 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる | ❌ 未対応 | — |
-| 21 | 🟡 中 | カクヨムの TOC キャッシュ衝突で新着話を取り逃す | ✅ 対応済 | — |
+| 21 | 🟡 中 | カクヨムの TOC キャッシュ衝突で新着話を取り逃す | 🔶 修正ブランチあり（`fix/kakuyomu-toc-cache-collision`、マージ待ち） | — |
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
 | 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
 | 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポのみ修正） | — |
-| 26 | 🟡 中 | CLI は ini をカレントディレクトリから読む（GUI は jar と同じ場所） | ❌ 未対応 | — |
+| 26 | 🟡 中 | CLI の ini 探索がカレントのみで、配布フォルダ外から実行すると同梱 ini が無視される | ✅ 対応済 | — |
+| 27 | 🟢 低 | jar パス導出がクラスパス区切り・パス区切りとも固定文字で環境非対応 | ❌ 未対応（記録のみ） | — |
 
 ---
 
@@ -311,7 +312,7 @@ ini に `ChapterH=` / `ChapterH1=` / `ChapterH2=` / `ChapterH3=` / `ChapterName=
 
 ## 🟢 低
 
-### 23. `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる — 未対応
+### 23. `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる — ✅ 修正済み
 
 **場所**: `src/AozoraEpub3.java:245`
 
@@ -328,7 +329,7 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 （同 226-229 行）も、意図した挙動か整理する。
 
 
-### 24. 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） — 未対応
+### 24. 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） — ✅ 修正済み
 
 **発見**: 2026-08-10、項目 22 のゲート C（Fable）。項目 22 で目次まわりの 19 キーは
 `SettingDefaults` に集約したが、**同じ形のドリフトが表の外に残っている**。
@@ -394,6 +395,12 @@ CLI に配線されていない機能設定（`ChukiRuby` / `ForceIndent` / `Ima
 Web 変換系（`UseNarouApi` / `ApiFallback` / `WebBeforeChapter*` / `WebConvertUpdated` /
 `WebModified*` / `WebSkipImages`）も同様。
 
+※上記の「同梱 ini に入れない」は棚卸し時点の分類案で、下記の決定（全キー版）により
+上書きされた。最終的な同梱 ini が除外するのは、実行時状態（`PosX` / `PosY` / `SizeW` /
+`SizeH` / `DividerLocation` / `LastDir` / `DstPath(List)` / `Profile*` — GUI 初期値
+フィクスチャの段階で除外済み）と、項目 25 の `BodyMargin` / `BodyMarginUnit` /
+`PageMargin`、GUI 内部フラグ `ImageScaleChecked` のみ。
+
 **決定した方針（2026-08-10、ユーザー判断）**: 項目 22 と同じ **A+B**。
 同梱 ini を全キー版にし（実行時状態は除外、既存 23 キーの意図的な値は維持）、あわせて
 `SettingDefaults` を拡張して**古い ini を持ち込む利用者**のドリフトも解消する。
@@ -423,7 +430,19 @@ GUI 側の初期値を変えたらフィクスチャを取り直すこと。
 リポジトリルートで `java -jar <別の場所>/AozoraEpub3.jar` を実行すると
 リポジトリの `AozoraEpub3.ini` が読まれてしまい、「ini なし」の比較にならない。下記 26 を参照。
 
-### 26. CLI は ini をカレントディレクトリから読む（GUI は jar と同じ場所） — ✅ 修正済み
+**残件（2026-08-11、ゲート B・C の指摘）**:
+
+- **int 系ウィジェット初期値の単一ソース化が未完**: applet は boolean 系 25 か所で
+  `SettingDefaults.isSelected` を使うが、`getInt` の利用は 1 か所のみ。`jRadioTitleMiddle` /
+  DakutenType / MaxCoverLine / JpegQuality / SinglePageSizeW,H などの初期値はハードコードのまま。
+  `SettingDefaultsGuiParityTest` は静的フィクスチャとの照合なので、**GUI 側だけ変えても
+  テストは赤くならない**（フィクスチャ再取得までドリフトが復活しうる）。キー名定数化 PR
+  （項目 22 の残件）で `getInt` へ寄せる
+- **.NET ポートへの移植タスク**: `SettingDefaults` 拡張（項目 24）と ini 探索順（項目 26）は
+  `aozoraepub3-dotnet` 側に未移植。参照 EPUB 比較（全キー ini 使用）は影響を受けないが、
+  キー不在時の挙動が Java 側と食い違うため、port-back の項目として残す
+
+### 26. CLI の ini 探索がカレントのみで、配布フォルダ外からの実行で同梱 ini が無視される — ✅ 修正済み
 
 **発見**: 2026-08-10、項目 24 の before/after 実測中。両方の jar が同じ出力を返す不可解な結果を
 追いかけて判明した。
@@ -451,8 +470,8 @@ GUI からの利用も配布フォルダ内で完結するため。
 従来 CLI（カレントのみ）からの後方互換もカレント優先の方が厳密に優位なため
 （既存の全ケースが不変で「カレントに無いときだけ」挙動が増える純増）。
 実装は `AozoraEpub3.resolveDefaultIniFile`。両方に存在するときは
-「jar と同じ場所の ini は使用しません」、どちらにも無いときは
-「設定ファイルが無いため既定値で起動します」を info で 1 行出す（元バグの本質は沈黙）。
+「jar と同じ場所の ini は使用しません」、どちらにも無い（または読めない）ときは
+「設定ファイルが無いか読めないため既定値で起動します」を info で 1 行出す（元バグの本質は沈黙）。
 探索順のユーザー向け説明（README / docs/usage.md / docs/en/usage.md）は、同じ箇所を
 書き換える CLI ドキュメント整備ブランチ（docs/preview-cli-and-en-options）側に入れる。
 
@@ -477,6 +496,8 @@ ini 探索（項目 26）だけでなく `template/` / `web/` / `.cache` の解�
 `new File(...).getParent()`（両区切りを解釈する）にする。template/web/cache と ini で
 挙動が揃うよう、直すときは全経路まとめて。
 
+### 25. GUI 専用の設定が CLI に届かない / 単位の連結が壊れている — 🔶 一部対応（タイポのみ修正）
+
 **発見**: 2026-08-10、項目 24 の全キー棚卸し。項目 22 と**同じ型のキー名タイポ**が 1 件残っていた。
 
 - **`GothicUseBold` が恒久的に無効**: `src/com/github/hmdev/pipeline/WriterConfigurator.java:97` が
@@ -493,6 +514,12 @@ ini 探索（項目 26）だけでなく `template/` / `web/` / `.cache` の解�
 - **CLI に配線されていない GUI 設定**: `ChukiRuby` / `ForceIndent` / `ImageFloat` /
   `PubFirst` / `AuthorCommentStyle`。CLI は `setChukiRuby` / `setForceIndent` / `setImageFloat` を
   呼んでいない。既定値がすべて false のため初期状態では差が出ないが、**ini に書いても効かない**
+- **`AutoMarginPadding` が `AutoMarginNombreSize` で上書きされる**（2026-08-11、項目 24/26 の
+  ゲート B・C で発見）: `WriterConfigurator.java:61-63` で `AutoMarginPadding` を読んだ直後に
+  `autoMarginPadding = Float.parseFloat(props.getProperty("AutoMarginNombreSize"))` と
+  **同じ変数へ再代入**しており、`nobreSize` は `0.03f` 固定で ini から読まれない。
+  `AutoMargin=1` の ini では GUI（Padding 1.0 / NombreSize 3.0）と CLI の挙動が食い違う。
+  `AutoMargin` が OFF なら到達しない
 
 **修正方針**: `GothicUseBold` のタイポは単独で直せる（1 行）。単位連結と `ImageFloatType` は
 GUI 側の変換を `WriterConfigurator` に寄せて両者が同じ関数を通る形にする。

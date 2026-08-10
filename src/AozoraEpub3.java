@@ -180,7 +180,8 @@ public class AozoraEpub3
 				props.load(Files.newInputStream(propFile.toPath()));
 				logger.info("設定ファイルを読み込みました: {}", propFile.getAbsolutePath());
 			} catch (Exception e) { /* 意図的: 設定ファイル不在/I/O 失敗時は既定値で起動 */
-				logger.info("設定ファイルが無いため既定値で起動します: {}", propFile.getAbsolutePath());
+				logger.info("設定ファイルが無いか読めないため既定値で起動します: {}", propFile.getAbsolutePath());
+				logger.debug("設定ファイルの読み込みに失敗", e);
 			}
 			
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
