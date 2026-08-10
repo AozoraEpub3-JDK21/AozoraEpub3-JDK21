@@ -126,3 +126,57 @@ narou.rb 由来 5 ケースが全滅した。原因は、このテストが作�
   CLI 未配線の GUI 設定 5 件、柱注記の未対応
 - プレビューの `Host` ヘッダ検証なし（DNS リバインディングへの多層防御。トークンがあるため実害は低い）
 - FlatLaf: `JConfirmDialog` の固定 420px、`NarrowTitledBorder` の固定インセット、EDT 化
+
+---
+
+## 7. 中断時点の状態（2026-08-10 深夜、`/clear` 直前）
+
+### すぐやること（優先順）
+
+1. **`fix/ini-default-drift` の must-fix 1 を片付ける**。同梱 `AozoraEpub3.ini` の 8 キー
+   （`TocVertical` / `PageBreak` / `FitImage` / `ImageSizeType` / `SinglePageSizeW` /
+   `SinglePageSizeH` / `JpegQuality` / `MaxCoverLine`）は **GUI にも効く**
+   （`AozoraEpub3Applet.java:4916` の `setPropsSelected` が `props.containsKey` 判定）。
+   いまの「従来出力を維持する値」を入れたままだと、**配布物を新規展開した GUI が
+   自動改ページ OFF・画像合わせ OFF・目次横書きで起動する**。
+   **ユーザー判断（2026-08-10）**: 同梱 ini は GUI 初期値に戻し、
+   `test/JavaAozoraVsReferenceTest.java` に**専用 ini を `-i` で明示的に渡す**。
+   渡す ini は master の 24 キー版（参照 EPUB を作ったときの設定）を
+   `test_data/` に置いたものにする。**このテスト変更はユーザー承認済み**
+2. **`AozoraEpub3IniResolutionTest.prefersIniBesideJar` が赤**。ini 探索順を
+   「カレント優先 → jar フォールバック」に変えたため。**Fable に設計判断を依頼したが
+   結果は受け取れていない**（セッション終了のため）。再開時に再依頼するか、
+   自分で決めてテストを書き直す
+3. ゲート C（Fable）を 3 ブランチに対して実施 → push → PR → マージ
+4. リリースノートに互換性影響を追記（`DakutenType` 0→1 / `TitlePage` -1→1 /
+   `MaxCoverLine` 実質無制限→10 / `GothicUseBold` が効くようになる / ini 探索順の変更）
+
+### ゲート B（2026-08-10）の結果
+
+`fix/ini-default-drift` に対して must-fix 2 件・should-fix 2 件。上記 1・2 が must-fix。
+残る should-fix は「リリースノート未反映」。nice-to-have として:
+
+- パリティテストは表のキーしか走査しない。逆方向（CLI が読むキーが表にあるか）の検査があるとよい
+- **既存バグ（master 由来）**: `AozoraEpub3Applet.java:2213` の
+  `jRadioTitleHorizontal = new JRadioButton(...)` が `group.add(jRadioPageMarginUnit0)` を
+  潰しており、横書きラジオがオーファン化 + 余白単位ラジオがグループ未登録。要記録
+
+検証済みで問題なしとされた点: フィクスチャ 116 キーとソースの一致、`PageBreak` ブロックの
+意味不変、`-i` 指定時の挙動不変、同梱 ini × コードの実効値の全キー照合
+（差は `ImageFloatW/H` のみで `ImageFloatType=0` のため無害）。
+
+### スクリーンショット（済）
+
+`docs/assets/screenshot-app.png` を FlatLaf 適用後（ライト、886x533）に差し替え、
+`screenshot-app-dark.png` を追加済み（ブランチ `docs/v150-release-plan`）。
+`screenshot-preview.png` はブラウザ表示なので据え置き。
+
+### 未 push ブランチの最新
+
+| ブランチ | 先頭コミット | 備考 |
+|---|---|---|
+| `fix/ini-default-drift` | `adc8331` wip | **テスト 1 件が赤**。上記 1・2 が残件 |
+| `fix/kakuyomu-toc-cache-collision` | `66b74a5` | 緑。ゲート C 待ち |
+| `docs/preview-cli-and-en-options` | `7e98daf` | 緑。ゲート C 待ち |
+| `docs/v150-release-plan` | 本書 + スクショ | — |
+| `worktree-agent-a99e816fe008d21a0` | `c25ddad` | FlatLaf 一式。ライト既定 |
