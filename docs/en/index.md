@@ -20,17 +20,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.4.0-jdk21 (August 1, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.4.0-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.5.0-jdk21 (August 11, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.0-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -40,11 +40,13 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.4.0-jdk21
+## What's New in v1.5.0-jdk21
 
-- **Automatic title-page layout for long titles**: long web-novel titles (up to 100 characters) no longer overflow the title page or overlap the author name. The font size now adjusts automatically in 6 steps based on the displayed title length (thresholds derived from measured title-length distributions of 2,496 works across 3 sites). Output is unchanged for titles of 45 characters or less
-- **CLI now accepts archive URLs directly**: passing a zip / txtz / rar URL to `-url` downloads and converts it in one step (previously GUI / drag-and-drop only)
-- Output changes are limited to the title page (byte-identical comparison tests on the .NET port stay 5/5 PASS via a simultaneous port)
+- **EPUB preview**: check a converted EPUB in your default browser before transferring it to a device. Hierarchical table of contents, font / text size / line height / margin controls, dark mode, and a bookshelf (cover-thumbnail grid from up to 8 folders). Use `--preview` / `--library` from the CLI, or the "Preview" button after conversion in the GUI
+- **Modernized GUI look with FlatLaf**: light / dark themes bundled (light by default). Switch via the `UiTheme` ini key or the combo box at the top right of the window
+- **Fixed Hameln conversions failing** after the site's episode-list HTML redesign around August 2026 (with an old cache, all episodes are re-downloaded once)
+- **Fixed Kakuyomu missing newly published episodes** caused by a cache-path collision on the episode list
+- **Unified GUI and CLI setting defaults**: when a key is missing from the ini, the CLI now behaves like the GUI (chapter headings appear in the TOC, automatic page breaks work, etc.). CLI conversions using the bundled ini produce different output — see the compatibility section of the release notes
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 

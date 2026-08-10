@@ -23,17 +23,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.4.0-jdk21 (2026年8月1日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.4.0-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.5.0-jdk21 (2026年8月11日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.0-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.4.0-jdk21/AozoraEpub3-1.4.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -43,11 +43,13 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.4.0-jdk21 の主な変更
+## v1.5.0-jdk21 の主な変更
 
-- **表紙（タイトルページ）の長タイトル自動調整**: 小説家になろう等の長いタイトル（最大 100 文字）が表紙に収まらず著者名と重なる問題を修正。タイトルの表示文字数に応じて文字サイズを 6 段階で自動調整します（3 サイト 2,496 作品のタイトル文字数の実測分布に基づく閾値）。45 文字以下のタイトルでは従来と同一の出力です
-- **CLI で青空文庫 zip 等のアーカイブ URL を直接指定可能に**: `-url` に zip / txtz / rar の URL を渡すと、ダウンロードしてそのまま変換します（従来は GUI / ドラッグ&ドロップのみ対応）
-- 出力の変更はタイトルページのみ（`.NET` ポートの byte-identical 比較テスト 5/5 PASS を同時移植で維持）
+- **EPUB プレビュー機能**: 変換した EPUB を実機へ移す前に、既定のブラウザでそのまま確認できます。階層目次・フォント / 文字サイズ / 行間 / 余白の調整・ダークモード・本棚（フォルダから表紙サムネイル一覧、最大 8 フォルダ）に対応。CLI は `--preview` / `--library`、GUI は変換完了後の「プレビュー」ボタンから
+- **GUI の見た目を FlatLaf でモダン化**: ライト / ダークテーマを同梱（既定はライト）。ini の `UiTheme` キーまたは画面右上のコンボで切替できます
+- **ハーメルンの変換不能を修正**: 2026 年 8 月頃の話一覧 HTML 刷新に追従（旧キャッシュがあると初回だけ全話再取得になります）
+- **カクヨムで新着話を取り逃す不具合を修正**: 話一覧キャッシュの保存先衝突により新着話が反映されないことがありました
+- **GUI と CLI の設定既定値を統一**: ini にキーが無いときの CLI の挙動が GUI と揃い、章見出しが目次に入らない・自動改ページが効かない等の乖離を解消。同梱 ini を使った CLI 変換は出力が変わります（詳細はリリースノートの互換性欄）
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 
@@ -67,7 +69,6 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 </div>
 
 変換した EPUB は、リーダーアプリに移す前に**ブラウザでそのままプレビュー**できます。  
-プレビュー機能は未リリースです。もうちょっとお待ちください。  
 画面例は青空文庫の『銀河鉄道の夜』（宮沢賢治、著作権保護期間満了）を変換したものです。
 
 ---
