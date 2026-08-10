@@ -244,6 +244,8 @@ public class AozoraEpub3Applet extends JPanel
 	/** 本棚にするフォルダ。全体設定 (AozoraEpub3.ini) に連番キーで保存する */
 	DefaultListModel<String> libraryDirsModel;
 	JList<String> jListLibraryDirs;
+	/** 本棚リストのスクロールペイン (テーマ切替時に枠色を貼り替えるため保持する) */
+	JScrollPane jScrollLibraryDirs;
 	JButton jButtonLibraryAdd;
 	JButton jButtonLibraryRemove;
 	/** 本棚をブラウザで開く */
@@ -796,6 +798,8 @@ public class AozoraEpub3Applet extends JPanel
 			props.setProperty(UiThemeManager.INI_KEY, mode.iniValue());
 			//switchTo 内の FlatLaf.updateUI() が全ウィンドウのツリーを更新する
 			UiThemeManager.switchTo(mode, getPreferredJapaneseFontName());
+			//個別に setForeground / setBorder している箇所は updateUI では戻らないので明示的に再適用
+			applyThemeColors();
 		}});
 		panel.add(jComboTheme);
 
@@ -1013,13 +1017,12 @@ public class AozoraEpub3Applet extends JPanel
 		panel.add(jCheckSamePath);
 		jCheckSamePath.addChangeListener(new ChangeListener() { public void stateChanged(ChangeEvent e){
 			jComboDstPath.setEditable(!jCheckSamePath.isSelected());
-			jComboDstPath.setForeground(jCheckSamePath.isSelected()?Color.gray:Color.black);
+			applyDstPathForeground();
 			jComboDstPath.repaint();
 		}});
 		jComboDstPath = new JComboBox<>();
 		jComboDstPath.setToolTipText(I18n.t("ui.tooltip.dstPath"));
 		jComboDstPath.setEditable(false);
-		jComboDstPath.setForeground(Color.gray);
 		jComboDstPath.setPreferredSize(new Dimension(260, comboH));
 		//パスを追加
 		//vecDstPath.add("[入力ファイルと同じ場所]");
@@ -2352,7 +2355,7 @@ public class AozoraEpub3Applet extends JPanel
 		panel.add(Box.createHorizontalGlue());
 		
 		jLabelApiStatus = new JLabel(I18n.t("ui.label.apiUnused"));
-		jLabelApiStatus.setForeground(Color.GRAY);
+		jLabelApiStatus.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
 		jLabelApiStatus.setBorder(padding2);
 		panel.add(jLabelApiStatus);
 
@@ -2541,7 +2544,7 @@ public class AozoraEpub3Applet extends JPanel
 		jListLibraryDirs.setVisibleRowCount(5);
 		jListLibraryDirs.addListSelectionListener(e -> updateLibraryButtons());
 		JScrollPane libraryScrollPane = new JScrollPane(jListLibraryDirs);
-		libraryScrollPane.setBorder(new LineBorder(Color.lightGray, 1));
+		this.jScrollLibraryDirs = libraryScrollPane;
 		//リスト 5 行分の実寸から棚パネルの高さを決める (旧 132px 固定)
 		int libraryListH = libraryScrollPane.getPreferredSize().height;
 		panel.setMaximumSize(new Dimension(1920, libraryListH+detailInsets.top+detailInsets.bottom));
@@ -2622,7 +2625,8 @@ public class AozoraEpub3Applet extends JPanel
 		} catch (Throwable t) {
 			jTextArea.setFont(new Font(Font.DIALOG, Font.PLAIN, 13));
 		}
-		jTextArea.setBorder(new LineBorder(Color.white, 3));
+		//テキストエリアと同色の枠で内側に余白を作る (ダークテーマで白枠が浮くのを避ける)
+		jTextArea.setBorder(new LineBorder(uiColor("TextArea.background", Color.white), 3));
 		//new DropTarget(jTextArea, DnDConstants.ACTION_COPY_OR_MOVE, new DropListener(), true);
 		jTextArea.setTransferHandler(new TextAreaTransferHandler("text"));
 		jTextArea.getActionMap().put("copy-text", new CopyTextAction());
@@ -2874,8 +2878,11 @@ public class AozoraEpub3Applet extends JPanel
 		
 		//移動ボタン有効化
 		setProfileMoveEnable();
+
+		//UIManager 由来の色を反映 (テーマ切替時にも同じ経路で再適用する)
+		applyThemeColors();
 	}
-	
+
 	////////////////////////////////////////////////////////////////
 	class TextSelectFocusListener implements FocusListener
 	{
@@ -4455,16 +4462,46 @@ public class AozoraEpub3Applet extends JPanel
 		return false;
 	}
 	
+	/** UIManager から色を取得する。キーが無い L&F ではフォールバック色を返す */
+	static Color uiColor(String key, Color fallback)
+	{
+		Color color = UIManager.getColor(key);
+		return color != null ? color : fallback;
+	}
+
+	/** 出力先コンボの文字色を状態に合わせて設定 */
+	private void applyDstPathForeground()
+	{
+		if (jComboDstPath == null || jCheckSamePath == null) return;
+		jComboDstPath.setForeground(jCheckSamePath.isSelected()
+			? uiColor("ComboBox.disabledForeground", Color.gray)
+			: uiColor("ComboBox.foreground", Color.black));
+	}
+
+	/** UIManager 由来の色をコンポーネントへ再適用する。
+	 * 起動時と、テーマ切替 (UiThemeManager.switchTo) の直後に呼ぶ */
+	void applyThemeColors()
+	{
+		applyDstPathForeground();
+		updateApiStatusLabel();
+		if (this.jScrollLibraryDirs != null) {
+			this.jScrollLibraryDirs.setBorder(new LineBorder(uiColor("Component.borderColor", Color.lightGray), 1));
+		}
+		if (this.jTextArea != null) {
+			this.jTextArea.setBorder(new LineBorder(uiColor("TextArea.background", Color.white), 3));
+		}
+	}
+
 	/** なろうAPIステータスラベル更新 */
 	private void updateApiStatusLabel()
 	{
 		if (jCheckUseNarouApi != null && jLabelApiStatus != null) {
 			if (jCheckUseNarouApi.isSelected()) {
 				jLabelApiStatus.setText("API有効");
-				jLabelApiStatus.setForeground(new Color(0, 128, 0)); // 緑
+				jLabelApiStatus.setForeground(uiColor("Actions.Green", new Color(0, 128, 0)));
 			} else {
 				jLabelApiStatus.setText("API無効");
-				jLabelApiStatus.setForeground(Color.GRAY);
+				jLabelApiStatus.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
 			}
 		}
 	}
