@@ -561,7 +561,7 @@ CLI 未配線の設定は「CLI で対応する」か「ドキュメントに CL
 narou.rb 互換の出力を変えることになるので、`.NET` ポートの byte-identical 比較テストへの
 影響を確認してから決めること。
 
-### 21. カクヨムの TOC キャッシュ書き込みが AccessDeniedException になる — 未対応
+### 21. カクヨムの TOC キャッシュ書き込みが AccessDeniedException になる — 🔶 修正ブランチあり（`fix/kakuyomu-toc-cache-collision`、マージ待ち）
 
 **発見**: 2026-08-09、4 サイト（なろう / カクヨム / ハーメルン / 青空文庫）の実変換 dogfood 中。
 
