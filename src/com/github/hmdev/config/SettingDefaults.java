@@ -7,7 +7,7 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * GUI と CLI が共有する ini 設定の既定値テーブル(目次設定)。
+ * GUI と CLI が共有する ini 設定の既定値テーブル。
  *
  * <p>ini にキーが無いときの値は「GUI のチェックボックスの初期状態」が正であり、
  * CLI もこの表を通して同じ値を得る。CLI が {@code "1".equals(props.getProperty(key))} で
@@ -51,6 +51,25 @@ public final class SettingDefaults
 		map.put("ChapterNumParen", false);
 		map.put("ChapterNumParenTitle", false);
 		map.put("ChapterPattern", false);
+		//ページ出力 (docs/code-audit-followups.md 項目 24)
+		map.put("CoverPage", true);
+		map.put("TitlePageWrite", true);
+		map.put("TocPage", false);
+		map.put("TocVertical", true);
+		//本文変換
+		map.put("AutoYoko", true);
+		map.put("AutoYokoNum1", false);
+		map.put("AutoYokoNum3", false);
+		map.put("AutoYokoEQ1", false);
+		map.put("MarkId", false);
+		map.put("CommentPrint", false);
+		map.put("CommentConvert", false);
+		//自動改ページ。PageBreak が OFF だと下の 2 つと Size 系はすべて読まれない
+		map.put("PageBreak", true);
+		map.put("PageBreakEmpty", false);
+		map.put("PageBreakChapter", false);
+		//画像
+		map.put("FitImage", true);
 		return Collections.unmodifiableMap(map);
 	}
 
@@ -58,6 +77,23 @@ public final class SettingDefaults
 	{
 		Map<String, Integer> map = new LinkedHashMap<String, Integer>();
 		map.put("MaxChapterNameLength", 64);
+		//ページ出力 (docs/code-audit-followups.md 項目 24)
+		map.put("TitlePage", 1);
+		map.put("SpaceHyphenation", 0);
+		map.put("RemoveEmptyLine", 0);
+		map.put("MaxEmptyLine", 0);
+		map.put("DakutenType", 1);
+		map.put("MaxCoverLine", 10);
+		//自動改ページ (KB / 行数)
+		map.put("PageBreakSize", 400);
+		map.put("PageBreakEmptyLine", 2);
+		map.put("PageBreakEmptySize", 300);
+		map.put("PageBreakChapterSize", 200);
+		//画像
+		map.put("ImageSizeType", 3);
+		map.put("SinglePageSizeW", 400);
+		map.put("SinglePageSizeH", 600);
+		map.put("JpegQuality", 85);
 		return Collections.unmodifiableMap(map);
 	}
 

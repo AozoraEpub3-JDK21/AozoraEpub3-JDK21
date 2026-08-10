@@ -103,14 +103,30 @@ public class SettingDefaultsTest {
 			"ChapterH", "ChapterH1", "ChapterH2", "ChapterH3", "SameLineChapter",
 			"ChapterName", "ChapterNumOnly", "ChapterNumTitle",
 			"ChapterNumParen", "ChapterNumParenTitle", "ChapterPattern",
+			//項目 24 で追加。目次以外の GUI / CLI 既定値ドリフト
+			"CoverPage", "TitlePageWrite", "TocPage", "TocVertical",
+			"AutoYoko", "AutoYokoNum1", "AutoYokoNum3", "AutoYokoEQ1",
+			"MarkId", "CommentPrint", "CommentConvert",
+			"PageBreak", "PageBreakEmpty", "PageBreakChapter",
+			"FitImage",
 		};
 		assertEquals("boolean キーの件数", expectedBooleans.length, SettingDefaults.booleanKeys().size());
 		for (String key : expectedBooleans) {
 			assertTrue(key+" が表にあること", SettingDefaults.booleanKeys().contains(key));
 		}
 
-		assertEquals("int キーの件数", 1, SettingDefaults.intKeys().size());
-		assertTrue(SettingDefaults.intKeys().contains("MaxChapterNameLength"));
+		String[] expectedInts = {
+			"MaxChapterNameLength",
+			//項目 24 で追加
+			"TitlePage", "SpaceHyphenation", "RemoveEmptyLine", "MaxEmptyLine",
+			"DakutenType", "MaxCoverLine",
+			"PageBreakSize", "PageBreakEmptyLine", "PageBreakEmptySize", "PageBreakChapterSize",
+			"ImageSizeType", "SinglePageSizeW", "SinglePageSizeH", "JpegQuality",
+		};
+		assertEquals("int キーの件数", expectedInts.length, SettingDefaults.intKeys().size());
+		for (String key : expectedInts) {
+			assertTrue(key+" が表にあること", SettingDefaults.intKeys().contains(key));
+		}
 		//旧名は GUI が書かないので表に載せない (CLI が互換読み出しとして個別に扱う)
 		assertFalse(SettingDefaults.intKeys().contains("ChapterNameLength"));
 	}

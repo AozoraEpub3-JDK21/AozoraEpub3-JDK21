@@ -914,11 +914,12 @@ public class AozoraEpub3Applet extends JPanel
 		//ページ出力
 		label = new JLabel(I18n.t("ui.label.pageOutput"));
 		panel.add(label);
-		jCheckCoverPage = new JCheckBox(I18n.t("ui.label.cover")+" ", true);
+		//ウィジェットの初期状態は SettingDefaults に置いて CLI と共有する (項目 22 / 24)
+		jCheckCoverPage = new JCheckBox(I18n.t("ui.label.cover")+" ", SettingDefaults.isSelected("CoverPage"));
 		jCheckCoverPage.setFocusPainted(false);
 		panel.add(jCheckCoverPage);
 		//左右中央
-		jCheckTitlePage = new JCheckBox(I18n.t("ui.label.titleSinglePage"), true);
+		jCheckTitlePage = new JCheckBox(I18n.t("ui.label.titleSinglePage"), SettingDefaults.isSelected("TitlePageWrite"));
 		jCheckTitlePage.setToolTipText(I18n.t("ui.tooltip.titlePage"));
 		jCheckTitlePage.setFocusPainted(false);
 		panel.add(jCheckTitlePage);
@@ -945,14 +946,14 @@ public class AozoraEpub3Applet extends JPanel
 		buttonGroup.add(jRadioTitleHorizontal);
 		label = new JLabel(") ");
 		panel.add(label);
-		jCheckTocPage = new JCheckBox(I18n.t("ui.label.toc"));
+		jCheckTocPage = new JCheckBox(I18n.t("ui.label.toc"), SettingDefaults.isSelected("TocPage"));
 		jCheckTocPage.setToolTipText(I18n.t("ui.tooltip.tocPage"));
 		jCheckTocPage.setFocusPainted(false);
 		panel.add(jCheckTocPage);
 		label = new JLabel("(");
 		panel.add(label);
 		buttonGroup = new ButtonGroup();
-		jRadioTocV = new JRadioButton(I18n.t("ui.label.verticalShort"), true);
+		jRadioTocV = new JRadioButton(I18n.t("ui.label.verticalShort"), SettingDefaults.isSelected("TocVertical"));
 		jRadioTocV.setFocusPainted(false);
 		jRadioTocV.setIconTextGap(2);
 		jRadioTocV.setBorder(padding0);
@@ -1389,7 +1390,7 @@ public class AozoraEpub3Applet extends JPanel
 		label.setBorder(padding2H);
 		panel.add(label);
 		
-		jCheckFitImage = new JCheckBox(I18n.t("ui.chk.fitImage"), true);
+		jCheckFitImage = new JCheckBox(I18n.t("ui.chk.fitImage"), SettingDefaults.isSelected("FitImage"));
 		jCheckFitImage.setToolTipText(I18n.t("ui.tooltip.fitImage"));
 		jCheckFitImage.setFocusPainted(false);
 		jCheckFitImage.setBorder(padding2);
@@ -1733,7 +1734,7 @@ public class AozoraEpub3Applet extends JPanel
 		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		//半角2文字縦書き
-		jCheckAutoYoko = new JCheckBox(I18n.t("ui.chk.autoYoko")+" ", true);
+		jCheckAutoYoko = new JCheckBox(I18n.t("ui.chk.autoYoko")+" ", SettingDefaults.isSelected("AutoYoko"));
 		jCheckAutoYoko.setFocusPainted(false);
 		jCheckAutoYoko.setToolTipText(I18n.t("ui.tooltip.autoYoko"));
 		jCheckAutoYoko.setBorder(padding2);
@@ -1870,7 +1871,7 @@ public class AozoraEpub3Applet extends JPanel
 		panel.setMaximumSize(detailPanelSize);
 		tabPanel.add(panel);
 		
-		jCheckPageBreak = new JCheckBox(I18n.t("ui.chk.pageBreakEnable"), true);
+		jCheckPageBreak = new JCheckBox(I18n.t("ui.chk.pageBreakEnable"), SettingDefaults.isSelected("PageBreak"));
 		jCheckPageBreak.setToolTipText(I18n.t("ui.tooltip.pageBreak"));
 		jCheckPageBreak.setFocusPainted(false);
 		jCheckPageBreak.setBorder(padding2);

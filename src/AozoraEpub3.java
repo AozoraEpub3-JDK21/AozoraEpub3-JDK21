@@ -177,25 +177,27 @@ public class AozoraEpub3
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			
 			//コマンドラインオプション以外
-			boolean coverPage = "1".equals(props.getProperty("CoverPage"));//表紙追加
+			//ini にキーが無いときは GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
+			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22 / 24)
+			boolean coverPage = SettingDefaults.getBoolean(props, "CoverPage");//表紙追加
 			int titlePage = BookInfo.TITLE_NONE;
-			if ("1".equals(props.getProperty("TitlePageWrite"))) {
-				try { titlePage =Integer.parseInt(props.getProperty("TitlePage")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			if (SettingDefaults.getBoolean(props, "TitlePageWrite")) {
+				titlePage = SettingDefaults.getInt(props, "TitlePage");
 			}
-			boolean withMarkId = "1".equals(props.getProperty("MarkId"));
+			boolean withMarkId = SettingDefaults.getBoolean(props, "MarkId");
 			//boolean gaiji32 = "1".equals(props.getProperty("Gaiji32"));
-			boolean commentPrint = "1".equals(props.getProperty("CommentPrint"));
-			boolean commentConvert = "1".equals(props.getProperty("CommentConvert"));
-			boolean autoYoko = "1".equals(props.getProperty("AutoYoko"));
-			boolean autoYokoNum1 = "1".equals(props.getProperty("AutoYokoNum1"));
-			boolean autoYokoNum3 = "1".equals(props.getProperty("AutoYokoNum3"));
-			boolean autoYokoEQ1 = "1".equals(props.getProperty("AutoYokoEQ1"));
-			int spaceHyp = 0; try { spaceHyp = Integer.parseInt(props.getProperty("SpaceHyphenation")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			boolean tocPage = "1".equals(props.getProperty("TocPage"));//目次追加
-			boolean tocVertical = "1".equals(props.getProperty("TocVertical"));//目次縦書き
+			boolean commentPrint = SettingDefaults.getBoolean(props, "CommentPrint");
+			boolean commentConvert = SettingDefaults.getBoolean(props, "CommentConvert");
+			boolean autoYoko = SettingDefaults.getBoolean(props, "AutoYoko");
+			boolean autoYokoNum1 = SettingDefaults.getBoolean(props, "AutoYokoNum1");
+			boolean autoYokoNum3 = SettingDefaults.getBoolean(props, "AutoYokoNum3");
+			boolean autoYokoEQ1 = SettingDefaults.getBoolean(props, "AutoYokoEQ1");
+			int spaceHyp = SettingDefaults.getInt(props, "SpaceHyphenation");
+			boolean tocPage = SettingDefaults.getBoolean(props, "TocPage");//目次追加
+			boolean tocVertical = SettingDefaults.getBoolean(props, "TocVertical");//目次縦書き
 			boolean coverPageToc = SettingDefaults.getBoolean(props, "CoverPageToc");
-			int removeEmptyLine = 0; try { removeEmptyLine = Integer.parseInt(props.getProperty("RemoveEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			int maxEmptyLine = 0; try { maxEmptyLine = Integer.parseInt(props.getProperty("MaxEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			int removeEmptyLine = SettingDefaults.getInt(props, "RemoveEmptyLine");
+			int maxEmptyLine = SettingDefaults.getInt(props, "MaxEmptyLine");
 			
 			WriterConfigurator.apply(props, epub3Writer, epub3ImageWriter);
 			
@@ -206,17 +208,16 @@ public class AozoraEpub3
 			int forcePageBreakEmptySize = 0;
 			int forcePageBreakChapter = 0;
 			int forcePageBreakChapterSize = 0;
-			if ("1".equals(props.getProperty("PageBreak"))) {
-				try {
-					try { forcePageBreakSize = Integer.parseInt(props.getProperty("PageBreakSize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-					if ("1".equals(props.getProperty("PageBreakEmpty"))) {
-						try { forcePageBreakEmpty = Integer.parseInt(props.getProperty("PageBreakEmptyLine")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-						try { forcePageBreakEmptySize = Integer.parseInt(props.getProperty("PageBreakEmptySize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-					} if ("1".equals(props.getProperty("PageBreakChapter"))) {
-						forcePageBreakChapter = 1;
-						try { forcePageBreakChapterSize = Integer.parseInt(props.getProperty("PageBreakChapterSize")) * 1024; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-					}
-				} catch (Exception e) { /* 意図的: PageBreak ブロック内で個別 catch が拾わない例外も既定値のまま続行 */ }
+			if (SettingDefaults.getBoolean(props, "PageBreak")) {
+				forcePageBreakSize = SettingDefaults.getInt(props, "PageBreakSize") * 1024;
+				if (SettingDefaults.getBoolean(props, "PageBreakEmpty")) {
+					forcePageBreakEmpty = SettingDefaults.getInt(props, "PageBreakEmptyLine");
+					forcePageBreakEmptySize = SettingDefaults.getInt(props, "PageBreakEmptySize") * 1024;
+				}
+				if (SettingDefaults.getBoolean(props, "PageBreakChapter")) {
+					forcePageBreakChapter = 1;
+					forcePageBreakChapterSize = SettingDefaults.getInt(props, "PageBreakChapterSize") * 1024;
+				}
 			}
 			//目次設定はキー不在時に GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
 			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22)
@@ -243,7 +244,13 @@ public class AozoraEpub3
 			boolean chapterNumParen = SettingDefaults.getBoolean(props, "ChapterNumParen");
 			//GUI は "ChapterNumParenTitle" で書く。先頭の C が欠けており、CLI では永久に false だった
 			boolean chapterNumParenTitle = SettingDefaults.getBoolean(props, "ChapterNumParenTitle");
-			String chapterPattern = ""; if (SettingDefaults.getBoolean(props, "ChapterPattern")) chapterPattern = props.getProperty("ChapterPatternText");
+			//ChapterPattern=1 だけを書いた手書き ini では ChapterPatternText が無く、
+			//null のまま setChapterLevel に渡って「パターンが不正」の警告が出ていた (項目 23)
+			String chapterPattern = "";
+			if (SettingDefaults.getBoolean(props, "ChapterPattern")) {
+				String patternText = props.getProperty("ChapterPatternText");
+				if (patternText != null) chapterPattern = patternText;
+			}
 			
 			//オプション指定を反映
 			boolean useFileName = false;//表題に入力ファイル名利用
@@ -283,7 +290,7 @@ public class AozoraEpub3
 			//変換オプション設定
 			aozoraConverter.setAutoYoko(autoYoko, autoYokoNum1, autoYokoNum3, autoYokoEQ1);
 			//文字出力設定
-			int dakutenType = 0; try { dakutenType = Integer.parseInt(props.getProperty("DakutenType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			int dakutenType = SettingDefaults.getInt(props, "DakutenType");
 			boolean printIvsBMP = "1".equals(props.getProperty("IvsBMP"));
 			boolean printIvsSSP = "1".equals(props.getProperty("IvsSSP"));
 			
@@ -495,7 +502,7 @@ public class AozoraEpub3
 					//先頭からの場合で指定行数以降なら表紙無し
 					if ("".equals(coverFileName)) {
 						try {
-							int maxCoverLine = Integer.parseInt(props.getProperty("MaxCoverLine"));
+							int maxCoverLine = SettingDefaults.getInt(props, "MaxCoverLine");
 							if (maxCoverLine > 0 && bookInfo.firstImageLineNum >= maxCoverLine) {
 								coverImageIndex = -1;
 								coverFileName = null;
