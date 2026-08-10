@@ -77,6 +77,16 @@ distribution.
    software to handle RAR archives without limitations free of charge, but
    cannot be used to re-create the RAR compression algorithm.
 
+--------------------------------------------------------------------------------
+
+7. FlatLaf (Flat Look and Feel)
+   - flatlaf 3.7.2
+
+   Copyright: 2019 FormDev Software GmbH
+   License: Apache License 2.0
+   URL: https://www.formdev.com/flatlaf/
+   License File: LICENSE/flatlaf.txt
+
 ================================================================================
 
 For complete license texts, please refer to the LICENSE/ directory or visit
