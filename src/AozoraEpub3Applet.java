@@ -90,7 +90,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.TransferHandler;
-import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.border.LineBorder;
 import javax.swing.event.ChangeEvent;
@@ -4465,8 +4464,7 @@ public class AozoraEpub3Applet extends JPanel
 	/** UIManager から色を取得する。キーが無い L&F ではフォールバック色を返す */
 	static Color uiColor(String key, Color fallback)
 	{
-		Color color = UIManager.getColor(key);
-		return color != null ? color : fallback;
+		return UiThemeManager.uiColor(key, fallback);
 	}
 
 	/** 出力先コンボの文字色を状態に合わせて設定 */
@@ -5551,7 +5549,9 @@ public class AozoraEpub3Applet extends JPanel
 		try {
 			int w = (int)Float.parseFloat(applet.props.getProperty("SizeW"));
 			int h = (int)Float.parseFloat(applet.props.getProperty("SizeH"));
-			jFrame.setSize(w, h);
+			//旧バージョンの保存値 (640x400 等) は新しい最小サイズを下回る。
+			//最小サイズ未満の setSize の扱いはプラットフォーム依存なので明示的にクランプする
+			jFrame.setSize(Math.max(w, MIN_FRAME_WIDTH), Math.max(h, MIN_FRAME_HEIGHT));
 		} catch (Exception e) { /* 意図的: サイズ情報なしなら既定サイズで起動 */ }
 		
 		jFrame.addWindowListener(new WindowAdapter() {

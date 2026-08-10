@@ -33,6 +33,7 @@ import javax.swing.JPanel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.hmdev.gui.UiThemeManager;
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.CoverEditInfo;
 
@@ -78,7 +79,8 @@ public class JCoverImagePanel extends JPanel implements MouseListener, MouseMoti
 		this.addMouseMotionListener(this);
 		this.addMouseWheelListener(this);
 		new DropTarget(this, DnDConstants.ACTION_COPY_OR_MOVE, this, true);
-		this.setBackground(Color.LIGHT_GRAY);
+		//ダークテーマで明るい灰色が浮くため、テーマ由来の色を使う
+		this.setBackground(UiThemeManager.uiColor("Panel.background", Color.LIGHT_GRAY));
 		
 		this.setFocusable(true);
 		this.addKeyListener(this);

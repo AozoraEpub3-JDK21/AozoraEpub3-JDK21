@@ -1,5 +1,6 @@
 package com.github.hmdev.gui;
 
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.io.InputStream;
@@ -33,8 +34,11 @@ public final class UiThemeManager
 	/** OS ダークモード検出コマンドのタイムアウト（秒） */
 	private static final long DETECT_TIMEOUT_SEC = 1;
 
-	/** 既定の UI フォントサイズ（pt） */
-	private static final int DEFAULT_FONT_SIZE = 12;
+	/** 出力読み取りスレッドの終了待ち上限（ミリ秒） */
+	private static final long READER_JOIN_TIMEOUT_MS = 200;
+
+	/** L&F からフォントサイズを取得できなかった場合の UI フォントサイズ（pt） */
+	private static final int FALLBACK_FONT_SIZE = 12;
 
 	/** テーマ種別 */
 	public enum Mode
@@ -99,6 +103,10 @@ public final class UiThemeManager
 	/**
 	 * 外部コマンドを実行して標準出力を返す。異常終了・タイムアウト時は null。
 	 * GUI 起動をブロックしないよう {@link #DETECT_TIMEOUT_SEC} 秒で打ち切る。
+	 *
+	 * <p>出力の読み取りは必ず別スレッドで行うこと。呼び出しスレッドで EOF まで読むと、
+	 * 何も出力せず終了もしないコマンドに当たったときに read() で無期限ブロックし、
+	 * waitFor() のタイムアウトに到達できず GUI 起動が止まる。</p>
 	 */
 	private static String runCommand(String... command)
 	{
@@ -107,21 +115,35 @@ public final class UiThemeManager
 			ProcessBuilder pb = new ProcessBuilder(command);
 			pb.redirectErrorStream(true);
 			process = pb.start();
-			StringBuilder sb = new StringBuilder();
-			try (InputStream is = process.getInputStream()) {
-				byte[] buf = new byte[1024];
-				int len;
-				while ((len = is.read(buf)) > 0) {
-					sb.append(new String(buf, 0, len, java.nio.charset.StandardCharsets.UTF_8));
-					if (sb.length() > 8192) break;
-				}
-			}
+			final Process target = process;
+			final StringBuilder sb = new StringBuilder();
+			Thread reader = new Thread(() -> {
+				try (InputStream is = target.getInputStream()) {
+					byte[] buf = new byte[1024];
+					int len;
+					while ((len = is.read(buf)) > 0) {
+						synchronized (sb) {
+							sb.append(new String(buf, 0, len, java.nio.charset.StandardCharsets.UTF_8));
+							if (sb.length() > 8192) break;
+						}
+					}
+				} catch (Throwable ignore) { /* 意図的: 読み取り失敗時は出力なしとして扱う */ }
+			}, "ui-theme-detect");
+			reader.setDaemon(true);
+			reader.start();
+
 			if (!process.waitFor(DETECT_TIMEOUT_SEC, TimeUnit.SECONDS)) {
 				process.destroyForcibly();
 				return null;
 			}
+			//プロセス終了後は EOF まで即座に読めるが、念のため上限を設けて待つ
+			reader.join(READER_JOIN_TIMEOUT_MS);
 			if (process.exitValue() != 0) return null;
-			return sb.toString();
+			synchronized (sb) { return sb.toString(); }
+		} catch (InterruptedException e) {
+			//割り込みステータスを復元してから既定 (ライト) 扱いにする
+			Thread.currentThread().interrupt();
+			return null;
 		} catch (Throwable t) {
 			return null;
 		} finally {
@@ -168,8 +190,7 @@ public final class UiThemeManager
 	public static void setup(Mode mode, String fontFamily)
 	{
 		try {
-			applyDefaultFont(fontFamily);
-			setLookAndFeel(mode);
+			installLaf(mode, fontFamily);
 		} catch (Throwable t) {
 			logger.warn("Look and Feel の初期化に失敗しました。既定の L&F で続行します", t);
 		}
@@ -185,19 +206,49 @@ public final class UiThemeManager
 	public static void switchTo(Mode mode, String fontFamily)
 	{
 		try {
-			applyDefaultFont(fontFamily);
-			setLookAndFeel(mode);
+			installLaf(mode, fontFamily);
 			FlatLaf.updateUI();
 		} catch (Throwable t) {
 			logger.warn("テーマ切り替えに失敗しました", t);
 		}
 	}
 
-	/** defaultFont を UIManager に設定（FlatLaf のスケーリング機構に乗せる） */
-	private static void applyDefaultFont(String fontFamily)
+	/**
+	 * UIManager から色を取得する。キーが無い L&F ではフォールバック色を返す。
+	 */
+	public static Color uiColor(String key, Color fallback)
+	{
+		Color color = UIManager.getColor(key);
+		return color != null ? color : fallback;
+	}
+
+	/**
+	 * L&F を適用し、UI 既定フォントのファミリだけを日本語対応フォントへ差し替える。
+	 *
+	 * <p>フォントサイズは L&F が OS から取得した値（Windows のテキスト拡大設定など）を
+	 * そのまま使う。{@code defaultFont} は L&F の初期化時に読まれるため、
+	 * サイズを知るために一度 L&F を適用してから設定し、もう一度適用する。</p>
+	 */
+	private static void installLaf(Mode mode, String fontFamily) throws Exception
+	{
+		setLookAndFeel(mode);
+		if (applyDefaultFont(fontFamily)) setLookAndFeel(mode);
+	}
+
+	/** defaultFont を UIManager に設定（FlatLaf のスケーリング機構に乗せる）。設定したら true */
+	private static boolean applyDefaultFont(String fontFamily)
 	{
 		String family = (fontFamily == null || fontFamily.isEmpty()) ? getPreferredJapaneseFontName() : fontFamily;
-		UIManager.put("defaultFont", new FontUIResource(family, Font.PLAIN, DEFAULT_FONT_SIZE));
+		Font base = UIManager.getFont("defaultFont");
+		if (base == null) base = UIManager.getFont("Label.font");
+		int size = (base != null && base.getSize() > 0) ? base.getSize() : FALLBACK_FONT_SIZE;
+		if (base != null && family.equals(base.getFamily()) && base.getSize() == size
+			&& base.getStyle() == Font.PLAIN && base instanceof FontUIResource) {
+			//既に同じ指定。再適用不要（L&F の二重インストールを避ける）
+			return false;
+		}
+		UIManager.put("defaultFont", new FontUIResource(family, Font.PLAIN, size));
+		return true;
 	}
 
 	/** モードを解決して FlatLightLaf / FlatDarkLaf を適用 */
