@@ -491,10 +491,20 @@ public class WebAozoraConverter
 	 * 書き込み側をそこに合わせる。画像には適用しない（参照されない場所に書いても直らないため、
 	 * 従来どおり失敗させる）。
 	 *
+	 * <p>初回変換ではまず {@code <workId>} に平ファイルとして書かれ、各話取得時の
+	 * {@code cacheFile()} の祖先リネーム（ファイル → ディレクトリ + index.html）で
+	 * ディレクトリ化される。以降の実行は本メソッドが同じ {@code <dir>/index.html} に
+	 * 収束する — この収束は祖先リネームの存在に依存している。
+	 *
+	 * <p>ディレクトリ配下の {@code index.html} が symlink でキャッシュ外を指すケースを
+	 * 弾くため、付与後のパスも {@link #safeResolve} で再検証する（呼び出し元の検証は
+	 * 付与前のパスにしか効かない）。
+	 *
 	 * <p>docs/code-audit-followups.md 項目 21
 	 */
-	static File resolveHtmlCacheFile(File cacheFile) {
-		return cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
+	static File resolveHtmlCacheFile(File cacheFile) throws IOException {
+		if (!cacheFile.isDirectory()) return cacheFile;
+		return safeResolve(cacheFile.toPath(), "index.html");
 	}
 	
 	/** 変換実行 (ファイル名指定あり) */
@@ -598,8 +608,9 @@ public class WebAozoraConverter
 			LogAppender.println("一覧ページの取得に失敗しました。 ");
 			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
 			if (!cacheFile.exists()) return null;
-			
+
 			LogAppender.println("キャッシュファイルを利用します。");
+			LogAppender.println("(一覧が古い場合、新着話は反映されません)");
 		}
 		
 		//パスならlist.txtの情報を元にキャッシュ後に青空txt変換して改ページで繋げて出力
@@ -2895,7 +2906,13 @@ public class WebAozoraConverter
 	private boolean cacheFile(String urlString, File cacheFile, String referer) throws IOException
 	{
 		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) { /* 意図的: 削除失敗時は直後のディレクトリチェックで対処 */ }
-		if (cacheFile.isDirectory()) { LogAppender.println("フォルダがあるためキャッシュできません : "+cacheFile.getAbsolutePath()); }
+		if (cacheFile.isDirectory()) {
+			LogAppender.println("フォルダがあるためキャッシュできません : "+cacheFile.getAbsolutePath());
+			//従来はこのまま落ちて Files.newOutputStream(ディレクトリ) の
+			//AccessDeniedException になっていた。無駄なダウンロードの前に同じ扱い
+			//(呼び出し元が catch する IOException) で早期に失敗させる
+			throw new IOException("フォルダがあるためキャッシュできません: "+cacheFile.getAbsolutePath());
+		}
 		// 祖先パスにファイルが存在する場合 → index.html にリネームしてディレクトリ化
 		File ancestor = cacheFile.getParentFile();
 		while (ancestor != null && !ancestor.isDirectory()) {
