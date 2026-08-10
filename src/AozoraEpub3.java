@@ -172,7 +172,7 @@ public class AozoraEpub3
 			
 			//propsから読み込み
 			props = new Properties();
-			//-i の指定が無いときは jar と同じ場所の ini を優先する。無ければカレントを見る (項目 26)
+			//-i の指定が無いときはカレントの ini を優先し、無ければ jar と同じ場所を見る (項目 26)
 			File propFile = commandLine.hasOption("i")
 				? new File(propFileName)
 				: resolveDefaultIniFile(jarPath, propFileName);
