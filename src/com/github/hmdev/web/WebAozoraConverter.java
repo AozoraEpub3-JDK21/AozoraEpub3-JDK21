@@ -476,6 +476,26 @@ public class WebAozoraConverter
 	private File safeDstFile(String fileName) throws IOException {
 		return safeResolve(Path.of(this.dstPath), fileName);
 	}
+
+	/**
+	 * HTML キャッシュの書き込み先を決める。同名のディレクトリが既にある場合はその配下の
+	 * index.html に寄せる。
+	 *
+	 * <p>URL 末尾に「/」が無いサイト（カクヨム等）では、一覧の保存先 {@code <workId>} と
+	 * 各話の保存先 {@code <workId>/<episodeId>} が同じ名前を取り合う。先に各話ディレクトリが
+	 * できていると一覧を同名ファイルとして開けず AccessDeniedException になり、例外は握られて
+	 * 古いキャッシュにフォールバックするため、<b>一覧だけ永久に更新されず新着話を取り逃す</b>
+	 * （ユーザーには「キャッシュファイルを利用します」としか見えない）。
+	 *
+	 * <p>読み出し側は以前から {@code <dir>/index.html} へのフォールバックを持っているので、
+	 * 書き込み側をそこに合わせる。画像には適用しない（参照されない場所に書いても直らないため、
+	 * 従来どおり失敗させる）。
+	 *
+	 * <p>docs/code-audit-followups.md 項目 21
+	 */
+	static File resolveHtmlCacheFile(File cacheFile) {
+		return cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
+	}
 	
 	/** 変換実行 (ファイル名指定あり) */
 	public File convertToAozoraText(String urlString, File cachePath, int interval, float modifiedExpire,
@@ -549,7 +569,8 @@ public class WebAozoraConverter
 		this.dstPath = cachePath.getAbsolutePath()+"/"+dstRelative;
 
 		//urlStringのファイルをキャッシュ (cachePath 配下であることを検証)
-		File cacheFile = safeResolve(cachePath.toPath(), urlFilePath);
+		//同名ディレクトリが先にできている場合は <dir>/index.html に寄せる (項目 21)
+		File cacheFile = resolveHtmlCacheFile(safeResolve(cachePath.toPath(), urlFilePath));
 		
 		// なろうAPI処理: メタデータ取得を試行
 		NovelMetadata apiMetadata = null;
@@ -944,7 +965,7 @@ public class WebAozoraConverter
 						File chapterCacheFile;
 						try {
 							//cachePath 配下であることを検証（パストラバーサル対策）
-							chapterCacheFile = safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+							chapterCacheFile = resolveHtmlCacheFile(safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":"")));
 						} catch (IOException e) {
 							logger.error("章キャッシュパスを扱えないためスキップ: {}", chapterHref, e);
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 扱えないパスのためスキップします: "+chapterHref+" ("+e.getMessage()+")");
@@ -1056,7 +1077,7 @@ public class WebAozoraConverter
 						File chapterCacheFile;
 						try {
 							//cachePath 配下であることを検証（パストラバーサル対策）
-							chapterCacheFile = safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":""));
+							chapterCacheFile = resolveHtmlCacheFile(safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":"")));
 						} catch (IOException e) {
 							logger.error("章キャッシュパスを扱えないためスキップ: {}", chapterHref, e);
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 扱えないパスのためスキップします: "+chapterHref+" ("+e.getMessage()+")");
