@@ -145,78 +145,61 @@ Settings are saved in `setting_narourb.ini` and are compatible with narou.rb's `
 java -jar AozoraEpub3.jar [OPTIONS] input_file
 ```
 
-### Common Options
+### Options
 
-#### Input/Output
+| Option | What it does | Example |
+|--------|--------------|---------|
+| `-h, --help` | Show usage | |
+| `-i <file>` | Read settings from an ini file | `-i settings.ini` |
+| `-enc <encoding>` | Input file encoding (default `MS932`) | `-enc UTF-8` |
+| `-t <type>` | Title layout in the body text (`0`: title → author (default) / `1`: author → title / `2`: title → author, subtitle first / `3`: title only, one line / `4`: title + author only, two lines / `5`: none) | `-t 1` |
+| `-tf` | Use the input file name as the title | |
+| `-c <image>` | Cover image (`0`: first illustration / `1`: image with the same name as the input file / a file name or URL) | `-c cover.jpg` |
+| `-d <directory>` | Output directory | `-d ./output/` |
+| `-ext <extension>` | Output file extension | `-ext .kepub.epub` |
+| `-of` | Name the output after the input file (default is `[author] title.epub`) | |
+| `-hor` | Horizontal writing mode (default: vertical) | |
+| `-device <type>` | Apply device-specific handling | `-device kindle` |
+| `-url <URL>` | Convert directly from a web novel URL, or a `.zip` / `.txtz` / `.rar` archive URL (repeatable) | `-url https://ncode.syosetu.com/nXXXX/` |
+| `-narou` | Apply narou.rb-compatible format settings | |
+| `-interval <seconds>` | Page fetch interval (only with `-url`, default 1.0) | `-interval 1.5` |
+| `-cache <path>` | Cache directory (only with `-url`, defaults to `.cache` next to the jar) | `-cache .cache` |
+| `--preview` | Open the converted EPUB in your default browser | `--preview foo.epub` |
+| `--library <folder>` | Open a folder as a library (repeatable, up to 8) | `--library ./output/` |
+
+That is the complete list. Text size, line height, margins, image scaling, gaiji and dakuten
+handling have **no command-line switches** — configure them in the GUI and reuse the saved ini,
+or pass one of the device presets in `presets/` with `-i`.
+
 ```bash
--enc <encoding>     Input file encoding (UTF-8, Shift_JIS, etc.)
--of                 Overwrite existing output file
--d <directory>      Output directory
--o <filename>       Output filename (without extension)
+java -jar AozoraEpub3.jar -i presets/kindle_pw.ini -of -d ./output/ input.txt
 ```
 
-#### Device Presets
-```bash
--p <preset.ini>     Use device preset file
-```
+Presets in the `presets/` directory:
 
-Available presets (in `presets/` directory):
-- `kobo__full.ini` - Kobo maximum size
-- `kobo_glo.ini` - Kobo Glo
-- `kobo_touch.ini` - Kobo Touch
-- `kindle_pw.ini` - Kindle Paperwhite
-- `reader.ini` - Sony Reader
-- `reader_t3.ini` - Sony Reader T3
+- `kobo__full.ini` — Kobo maximum size
+- `kobo_glo.ini` — Kobo Glo
+- `kobo_touch.ini` — Kobo Touch
+- `kindle_pw.ini` — Kindle Paperwhite
+- `reader.ini` — Sony Reader
+- `reader_t3.ini` — Sony Reader T3
 
-#### Style Options
-```bash
--y                  Horizontal writing mode (default: vertical)
--fs <size>          Font size percentage (80-150, default: 100)
--lh <height>        Line height (1.0-2.0, default: 1.75)
--mar <top>,<bottom>,<left>,<right>  Margins in em (default: 0,0,0,0)
-```
+#### How the settings file (AozoraEpub3.ini) is located
 
-#### Image Options
-```bash
--ih <height>        Image max height in pixels
--iw <width>         Image max width in pixels
--isize <kb>         Image max size in KB
--jpeg <quality>     JPEG quality (1-100, default: 85)
--rmargin            Remove image margins
-```
+The CLI looks for its settings file in this order. If none is found, it runs with the
+built-in defaults (same as the GUI's initial state) and logs a line saying so.
 
-#### Table of Contents
-```bash
--tocnest <level>    TOC nesting level (1-3, default: 2)
--toctitle <title>   TOC title (default: "目次")
-```
+1. The file given with `-i <file>`
+2. `AozoraEpub3.ini` in the current directory
+3. `AozoraEpub3.ini` next to the jar (the bundled settings file)
 
-#### Cover Image
-```bash
--cover <image>      Cover image file
-```
-
-#### Advanced
-```bash
--gaiji <mode>       Gaiji (external characters) mode
-                    0=Use UTF-8, 1=Use alternative characters
--dakuten <mode>     Dakuten font mode (0-2)
--autopage <lines>   Auto page break after N lines
-```
-
-#### Web Novel URL
-```bash
--url <URL>          Convert from URL directly (web novel page, or a
-                    .zip / .txtz / .rar archive URL)
--narou              Apply narou.rb-compatible format settings
--interval <seconds> Page fetch interval (default: 1.0)
--cache <path>       Cache directory (default: .cache)
-```
-
-#### Preview
-```bash
---preview           Open the converted EPUB in your default browser
-```
+**The GUI reads and writes `AozoraEpub3.ini` in its startup working directory.** When
+launched via `AozoraEpub3.exe` or by double-clicking, the working directory is the
+distribution folder, so in practice this is the bundled ini next to the jar (note that
+`AozoraEpub3.sh` keeps the directory you run it from as the working directory). When you run the CLI from outside the distribution folder, step 3 picks up that same
+bundled ini the GUI normally reads and writes. Note that because of step 2, a file named
+`AozoraEpub3.ini` in your working directory silently takes precedence. The startup log
+(`設定ファイルを読み込みました: <path>`) shows which file was read.
 
 ### EPUB Preview
 
@@ -230,7 +213,9 @@ java -jar AozoraEpub3.jar --preview foo.epub
 java -jar AozoraEpub3.jar -of -d ./output/ --preview input.txt
 ```
 
-In the GUI, the "Preview" button becomes available once a conversion finishes.
+In the GUI, the "Preview" button becomes available once a conversion finishes. Turning on
+"Open the preview automatically after conversion" on the "Preview" tab opens it after every
+conversion (off by default).
 
 | Control | What it does |
 |---------|--------------|
@@ -245,9 +230,28 @@ The default body font is UD Digi Kyokasho, falling back to Yu Mincho and others 
 not installed. Display settings are stored in `~/.aozoraepub3/preview-settings.json` and
 restored on the next run.
 
-The server listens on a random port on `127.0.0.1` behind a URL token, so it is not reachable
-from other machines. In CLI mode it shuts down automatically once you close the browser
+The server listens on a random port on the loopback address (`127.0.0.1`, or `::1` where IPv6
+takes precedence) behind a URL token, so it is not reachable from other machines. In CLI mode it shuts down automatically once you close the browser
 (Ctrl-C also works).
+
+#### Library
+
+Open a folder that holds your EPUB files as a library and pick a book from a grid of cover
+thumbnails. Subfolders are scanned as well. Up to 8 folders can be registered.
+
+```bash
+# Open the library only (no input file)
+java -jar AozoraEpub3.jar --library ./output/
+
+# Open several library folders
+java -jar AozoraEpub3.jar --library ./output/ --library ./novels/
+
+# Convert, preview the result, and open the library too
+java -jar AozoraEpub3.jar -of -d ./output/ --library ./output/ input.txt
+```
+
+In the GUI, add folders under "Library folders" on the "Preview" tab and click "Open library".
+The folders you add are stored in `AozoraEpub3.ini`.
 
 > This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
 > rendering engines, so the result will not match a real device exactly.
@@ -261,13 +265,16 @@ java -jar AozoraEpub3.jar -enc UTF-8 -of -d output novel.txt
 
 #### Convert with Kobo preset
 ```bash
-java -jar AozoraEpub3.jar -p presets/kobo_glo.ini -of -d output novel.txt
+java -jar AozoraEpub3.jar -i presets/kobo_glo.ini -of -d output novel.txt
 ```
 
-#### Horizontal writing with custom style
+#### Horizontal writing
 ```bash
-java -jar AozoraEpub3.jar -y -fs 110 -lh 1.8 -of -d output essay.txt
+java -jar AozoraEpub3.jar -hor -of -d output essay.txt
 ```
+
+Text size and line height have no command-line switches — set them in the GUI and pass the
+saved ini with `-i`.
 
 #### Batch conversion
 ```bash
@@ -281,7 +288,7 @@ java -jar AozoraEpub3.jar -of -d output novel_archive.zip
 
 #### With cover image
 ```bash
-java -jar AozoraEpub3.jar -cover cover.jpg -of -d output novel.txt
+java -jar AozoraEpub3.jar -c cover.jpg -of -d output novel.txt
 ```
 
 #### Convert web novel from URL
@@ -339,9 +346,9 @@ Preset files (`.ini`) contain optimized settings for specific e-readers.
 
 **GUI**: Select from "Device Preset" dropdown
 
-**CLI**: Use `-p` option
+**CLI**: Pass the preset ini with `-i`
 ```bash
-java -jar AozoraEpub3.jar -p presets/kobo_glo.ini input.txt
+java -jar AozoraEpub3.jar -i presets/kobo_glo.ini input.txt
 ```
 
 ### Preset File Format
@@ -370,7 +377,7 @@ java -jar AozoraEpub3.jar -p presets/kobo_glo.ini input.txt
 1. Copy an existing preset file
 2. Edit values in a text editor
 3. Save with `.ini` extension
-4. Use with `-p` option
+4. Pass it with `-i`
 
 ---
 
@@ -444,9 +451,11 @@ Common encodings:
 
 **Problem**: Images too large for device
 
-**Solution**: Use image resize options
+**Solution**: Set the maximum image width / height in the GUI (or in the ini) and pass that ini
+with `-i`. There are no command-line switches for image sizing.
+
 ```bash
-java -jar AozoraEpub3.jar -iw 758 -ih 1024 input.txt
+java -jar AozoraEpub3.jar -i presets/kobo_glo.ini input.txt
 ```
 
 ### Memory Issues
@@ -569,25 +578,47 @@ AozoraEpub3 handles external characters using:
 
 ### Auto Page Break
 
-Split large files into multiple pages:
+Long files can be split into several XHTML pages so readers stay responsive. This is an ini
+setting, not a command-line switch — set it in the GUI, or edit `AozoraEpub3.ini`:
 
-```bash
-java -jar AozoraEpub3.jar -autopage 100 large_novel.txt
+```ini
+PageBreak=1
+# split once the page grows past this many KB
+PageBreakSize=400
+# split at PageBreakEmptyLine consecutive blank lines, once the page is past PageBreakEmptySize KB
+PageBreakEmpty=1
+PageBreakEmptyLine=2
+PageBreakEmptySize=300
+# split at chapter headings, once the page is past PageBreakChapterSize KB
+PageBreakChapter=1
+PageBreakChapterSize=200
 ```
 
-Creates page breaks every 100 lines.
+Every `*Size` is the minimum page size (KB) at which that trigger starts to apply — blank lines
+and chapter headings do not split a page that is still smaller than the threshold.
+Note that if the unconditional threshold (`PageBreakSize`) is smaller than an enabled
+`PageBreakEmptySize` / `PageBreakChapterSize`, it is internally raised to the largest of them,
+so the unconditional split cannot preempt the blank-line / chapter triggers.
+
+Then pass the ini with `-i`:
+
+```bash
+java -jar AozoraEpub3.jar -i AozoraEpub3.ini -of -d ./output/ large_novel.txt
+```
 
 ### Table of Contents Depth
 
-Control TOC nesting:
+Whether chapter headings nest under their parent chapter is also an ini setting:
 
-```bash
-java -jar AozoraEpub3.jar -tocnest 3 novel.txt
+```ini
+# nest entries in nav.xhtml
+NavNest=1
+# nest entries in toc.ncx
+NcxNest=1
 ```
 
-- `1` - Chapter titles only
-- `2` - Chapters and sections (default)
-- `3` - Full hierarchy
+Set them to `0` for a flat table of contents. Which headings become entries at all is
+controlled by the `Chapter*` keys (`ChapterH1` … `ChapterH3`, `ChapterName`, and so on).
 
 ---
 

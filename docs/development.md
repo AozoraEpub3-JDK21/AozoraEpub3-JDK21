@@ -121,7 +121,7 @@ java -jar build/libs/AozoraEpub3.jar -of -d out input.txt
 java -jar build/libs/AozoraEpub3.jar -enc UTF-8 test_data/test_title.txt
 
 ## 横書きサンプル
-java -jar build/libs/AozoraEpub3.jar -enc UTF-8 -y test_data/test_yoko.txt
+java -jar build/libs/AozoraEpub3.jar -enc UTF-8 -hor test_data/test_yoko.txt
 ```
 
 ---
