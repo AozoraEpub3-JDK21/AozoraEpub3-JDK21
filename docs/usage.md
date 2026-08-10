@@ -182,12 +182,13 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 |----------|------|-----|
 | `-h, --help` | ヘルプを表示 | |
 | `-i <ファイル>` | INI設定ファイルを指定 | `-i settings.ini` |
-| `-enc <エンコード>` | 入力ファイルのエンコード | `-enc UTF-8` |
-| `-t <タイプ>` | タイトル抽出方法 | `-t 0` (0=本文内から抽出) |
-| `-c <画像>` | 表紙指定 | `-c cover.jpg` |
+| `-enc <エンコード>` | 入力ファイルのエンコード（既定 `MS932`） | `-enc UTF-8` |
+| `-t <種別>` | 本文内の表題種別（`0`:表題→著者名（既定） / `1`:著者名→表題 / `2`:表題→著者名（副題優先） / `3`:表題のみ / `4`:なし） | `-t 1` |
+| `-tf` | 入力ファイル名を表題に利用 | |
+| `-c <画像>` | 表紙画像（`0`:先頭の挿絵 / `1`:入力ファイル名と同じ画像 / ファイル名 or URL） | `-c cover.jpg` |
 | `-d <パス>` | 出力先ディレクトリ | `-d ./output/` |
 | `-ext <拡張子>` | 出力ファイル拡張子 | `-ext .kepub.epub` |
-| `-of` | ファイル名から表題を生成 | |
+| `-of` | 出力ファイル名を入力ファイル名に合わせる（既定は `[著者名] 表題.epub`） | |
 | `-hor` | 横書きで出力 | |
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
 | `-url <URL>` | Web小説URL・アーカイブURLから直接変換 | `-url https://ncode.syosetu.com/nXXXX/` |
@@ -195,6 +196,42 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-interval <秒>` | ページ取得間隔（デフォルト 1.0秒） | `-interval 1.5` |
 | `-cache <パス>` | キャッシュディレクトリ | `-cache .cache` |
 | `--preview` | 変換した EPUB を既定ブラウザでプレビュー表示 | `--preview foo.epub` |
+| `--library <フォルダ>` | フォルダを本棚として開く（複数指定可、最大 8 個） | `--library ./output/` |
+
+CLI オプションはここに挙げたものがすべてです。文字サイズ・行間・余白・画像縮小・外字・濁点フォント
+などの詳細設定にコマンドライン引数はありません。GUI で設定して保存した ini か、`presets/` の
+プリセットを `-i` で渡してください。
+
+```bash
+java -jar AozoraEpub3.jar -i presets/kindle_pw.ini -of -d ./output/ input.txt
+```
+
+#### ini でしか指定できない主な設定
+
+長いファイルを複数ページに分割する自動改ページ:
+
+```ini
+PageBreak=1
+# 1 ページがこのサイズ（KB）に達したら改ページ
+PageBreakSize=400
+# または空行がこの行数続いたら改ページ
+PageBreakEmpty=1
+PageBreakEmptyLine=3
+PageBreakEmptySize=300
+# または章見出しで改ページ
+PageBreakChapter=1
+PageBreakChapterSize=200
+```
+
+目次を入れ子にするかどうか:
+
+```ini
+NavNest=1
+NcxNest=1
+```
+
+`0` にすると目次はフラットになります。どの見出しを目次に載せるかは `Chapter*` キー
+（`ChapterH1`〜`ChapterH3`、`ChapterName` など）で決まります。
 
 ### EPUB プレビュー
 
@@ -208,7 +245,8 @@ java -jar AozoraEpub3.jar --preview foo.epub
 java -jar AozoraEpub3.jar -of -d ./output/ --preview input.txt
 ```
 
-GUI では変換完了後に「プレビュー」ボタンが有効になります。
+GUI では変換完了後に「プレビュー」ボタンが有効になります。「プレビュー」タブの
+「変換完了後に自動でプレビューを開く」をオンにすると、変換のたびに自動で開きます（既定はオフ）。
 
 | 操作 | 内容 |
 |------|------|
@@ -224,6 +262,25 @@ GUI では変換完了後に「プレビュー」ボタンが有効になりま�
 
 サーバは `127.0.0.1` のランダムポートに URL トークン付きで待ち受けるため、外部からは接続できません。
 CLI ではブラウザを閉じると自動的に終了します（Ctrl-C でも終了）。
+
+#### 本棚
+
+EPUB を置いているフォルダを本棚として開くと、表紙サムネイル付きの一覧から選んで表示できます。
+サブフォルダも探索します。登録できるフォルダは最大 8 個です。
+
+```bash
+# 本棚だけを開く（入力ファイルを省略）
+java -jar AozoraEpub3.jar --library ./output/
+
+# 複数の本棚を開く
+java -jar AozoraEpub3.jar --library ./output/ --library ./novels/
+
+# 変換してプレビューしつつ、本棚も一緒に開く
+java -jar AozoraEpub3.jar -of -d ./output/ --library ./output/ input.txt
+```
+
+GUI では「プレビュー」タブでフォルダを追加し、「本棚を開く」で表示します。
+登録したフォルダは `AozoraEpub3.ini` に保存されます。
 
 > 画面サイズ・フォントの近似表示です。Kindle / Kobo / Apple Books は独自の描画エンジンを
 > 使うため、実機とまったく同じ見た目にはなりません。
