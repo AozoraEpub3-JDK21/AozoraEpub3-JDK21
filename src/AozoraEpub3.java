@@ -717,14 +717,15 @@ public class AozoraEpub3
 	/**
 	 * {@code -i} の指定が無いときに読む ini を決める。
 	 *
-	 * <p>jar と同じ場所（GUI が読み書きするのと同じ場所）を優先し、そこに無ければ
-	 * 従来どおりカレントディレクトリを見る。CLI は {@code template/} や {@code web/} を
+	 * <p>従来どおり<b>カレントディレクトリを優先</b>し、そこに無ければ jar と同じ場所
+	 * （GUI が読み書きするのと同じ場所）を見る。CLI は {@code template/} や {@code web/} を
 	 * jar 基準で解決しているのに ini だけカレント基準だったため、配布フォルダの外から
 	 * {@code java -jar /path/to/AozoraEpub3.jar} を実行すると同梱 ini が無言で無視され、
 	 * GUI で設定した内容も反映されなかった（docs/code-audit-followups.md 項目 26）。
 	 *
-	 * <p>カレントを完全に捨てないのは、カレントに ini を置いて使い分けている既存の
-	 * 運用（narou.rb の起動の仕方を含む）を壊さないため。
+	 * <p>jar 隣を先に見ないのは、配布フォルダには必ず同梱 ini があるため、
+	 * jar 優先にすると<b>カレントに ini を置いて使い分けている運用が常に無視される</b>から。
+	 * カレント優先 + jar フォールバックなら、どちらの使い方も壊れない。
 	 *
 	 * @param jarPath jar のあるディレクトリ。クラスパス実行時などは空文字
 	 * @param fileName ini のファイル名
@@ -732,11 +733,13 @@ public class AozoraEpub3
 	 */
 	static File resolveDefaultIniFile(String jarPath, String fileName)
 	{
+		File inWorkingDir = new File(fileName);
+		if (inWorkingDir.isFile()) return inWorkingDir;
 		if (jarPath != null && jarPath.length() > 0) {
-			File beside = new File(jarPath + fileName);
+			File beside = new File(jarPath, fileName);
 			if (beside.isFile()) return beside;
 		}
-		return new File(fileName);
+		return inWorkingDir;
 	}
 
 	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) throws IOException
