@@ -93,19 +93,21 @@ v1.4.0-jdk21（2026-08-01）以降に master へ入ったもの + 本セッシ�
 手順の詳細は [`release-procedure.md`](release-procedure.md) を**必ず最初から最後まで読む**こと。
 
 - [x] 各ブランチの 3 ゲート + 検証ラウンド → push → PR（#75〜#78）
-- [ ] PR #75 → #76 → #77 → #78 の順で CI 確認 → マージ
+- [x] PR #75 → #76 → #77 → #78 の順で CI 確認 → マージ
 - [x] **README / docs のスクリーンショット撮り直し**（FlatLaf 適用後、本ブランチに含む）
-- [ ] README / `docs/index.md` の「※プレビュー機能は未リリースです」注記を削除
+- [x] README / `docs/index.md` の「※プレビュー機能は未リリースです」注記を削除
       （`docs/en/index.md` には注記が入っていないので追加不要）
-- [ ] バージョン更新 5 ファイル: `src/AozoraEpub3.java` / `NarouApiClient.java` /
+- [x] バージョン更新 5 ファイル: `src/AozoraEpub3.java` / `NarouApiClient.java` /
       `build.gradle` / `docs/index.md` / `docs/en/index.md`
-- [ ] `RELEASE_NOTES.md` の「未リリース」節をバージョン節へ（互換性影響は #78 で記載済み）
-- [ ] `gradlew --no-daemon clean test` → `dist` → 配布物の必須ファイル目視（手順書 §3.4）。
+- [x] `RELEASE_NOTES.md` の「未リリース」節をバージョン節へ（互換性影響は #78 で記載済み）
+- [x] `gradlew --no-daemon clean test` → `dist` → 配布物の必須ファイル目視（手順書 §3.4）。
       **FlatLaf の jar が増えるので `unzip -l` のサイズ確認も**
-- [ ] リリース前 E2E ゲート（手順書 §2.1.1）。なろう / 青空文庫 / キャッシュ再利用 /
+- [x] リリース前 E2E ゲート（手順書 §2.1.1）。なろう / 青空文庫 / キャッシュ再利用 /
       旧キャッシュ互換 / 終了コード両方向 / `.exe` 経由 / epubcheck / 生成 EPUB の目視
-- [ ] `.NET` ポート `JavaComparisonTests` 5/5（本セッションで一度 PASS 確認済み。マージ後に再確認）
-- [ ] サブエージェントによる最終チェック（CLAUDE.md §7）→ タグ → `gh release create`
+- [x] `.NET` ポート `JavaComparisonTests` 5/5（本セッションで一度 PASS 確認済み。マージ後に再確認）
+- [x] サブエージェントによる最終チェック（CLAUDE.md §7。README のバージョン更新漏れを検出 → 修正して dist 再生成済み）
+- [ ] **最終 GO（ユーザー判断）**: `git push origin master`（ローカル 3 コミット: `07ad8dc` release / `1cecab1` README 修正 / 本更新）→ `git tag v1.5.0-jdk21`（SSH 自動署名）→ tag push → CI 緑確認 → `gh release create v1.5.0-jdk21 <zip> <tar.gz> <SHA256SUMS> --notes-file <ノート>`。配布物は `build/distributions/`（SHA256: zip=6203033e… / tar.gz=48ca46af…）。ノートは RELEASE_NOTES.md の 1.5.0 節 + SHA256SUMS から作成
+- リリース後: `gh release view` でアセット確認 / GitHub Pages デプロイ確認 / narou.rb 経由 1 変換 / memory の最新リリース記載更新 / 残骸ブランチ `feat/preview-reveal-folder` の削除
 
 ### リリースノートに必ず書くこと
 
