@@ -106,8 +106,9 @@ v1.4.0-jdk21（2026-08-01）以降に master へ入ったもの + 本セッシ�
       旧キャッシュ互換 / 終了コード両方向 / `.exe` 経由 / epubcheck / 生成 EPUB の目視
 - [x] `.NET` ポート `JavaComparisonTests` 5/5（本セッションで一度 PASS 確認済み。マージ後に再確認）
 - [x] サブエージェントによる最終チェック（CLAUDE.md §7。README のバージョン更新漏れを検出 → 修正して dist 再生成済み）
-- [ ] **最終 GO（ユーザー判断）**: `git push origin master`（ローカル 3 コミット: `07ad8dc` release / `1cecab1` README 修正 / 本更新）→ `git tag v1.5.0-jdk21`（SSH 自動署名）→ tag push → CI 緑確認 → `gh release create v1.5.0-jdk21 <zip> <tar.gz> <SHA256SUMS> --notes-file <ノート>`。配布物は `build/distributions/`（SHA256: zip=6203033e… / tar.gz=48ca46af…）。ノートは RELEASE_NOTES.md の 1.5.0 節 + SHA256SUMS から作成
-- リリース後: `gh release view` でアセット確認 / GitHub Pages デプロイ確認 / narou.rb 経由 1 変換 / memory の最新リリース記載更新 / 残骸ブランチ `feat/preview-reveal-folder` の削除
+- [x] **最終 GO（ユーザー判断）**: 2026-08-11 に実施。`git push origin master` → `git tag v1.5.0-jdk21`（SSH 自動署名）→ tag push → CI 緑確認 → `gh release create`。公開: <https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.0-jdk21>（アセット: zip / tar.gz / SHA256SUMS。SHA256: zip=6203033e… / tar.gz=48ca46af…）
+- [x] リリース後: `gh release view` でアセット 3 点確認 / GitHub Pages デプロイ成功確認（未リリース注記の削除が公開ページに反映）/ memory の最新リリース記載更新 / 残骸ブランチ `feat/preview-reveal-folder` 削除（唯一のコミット c4ec526 は master にパッチ等価で取り込み済みを確認の上、ローカル・origin とも削除）
+- [ ] リリース後（残）: narou.rb 経由 1 変換（配布物での最終確認。§2.1.1 の E2E はリリース前に全 PASS 済みのため補完的位置づけ）
 
 ### リリースノートに必ず書くこと
 
