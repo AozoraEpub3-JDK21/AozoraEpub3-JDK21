@@ -30,6 +30,13 @@
 | 15 | 🟡 中 | 出典 URL の `<a href>` に縦中横注記が混入しリンクが機能しない | ✅ 対応済（Java 側） | #47 |
 | 16 | 🟡 中 | CLI `-url` に zip / txtz / rar の URL を渡すと変換できない | ✅ 対応済 | #51 |
 | 17 | 🟡 中 | タイトルページの外字画像が `<img src="null"/>` になる | ✅ 対応済 | #49 |
+| 18 | 🟢 低 | 起動引数のファイルを 1 個ずつ別 worker で変換してしまう（並走） | ❌ 未対応 | — |
+| 19 | 🟢 低 | エピソード URL の組み立てが 4 か所に重複している | ❌ 未対応 | — |
+| 20 | 🟢 低 | 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる | ❌ 未対応 | — |
+| 21 | 🟢 低 | カクヨムの TOC キャッシュ書き込みが `AccessDeniedException` になる | ❌ 未対応 | — |
+| 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
+| 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ❌ 未対応 | — |
+| 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） | ❌ 未対応 | — |
 
 ---
 
@@ -205,7 +212,7 @@ urlString.substring(...).replaceAll("\\?\\*\\&\\|\\<\\>\"\\\\", "_")
 
 ## 🔴 高（追加分）
 
-### 22. CLI で変換すると章見出しが目次に入らない — 未対応
+### 22. CLI で変換すると章見出しが目次に入らない — ✅ 修正済み
 
 **発見**: 2026-08-09、青空文庫の実変換 dogfood 中。**GUI では正常、CLI だけの問題**。
 
@@ -243,18 +250,102 @@ boolean chapterName = "1".equals(props.getProperty("ChapterName"));
   キー追加時のドリフト再発を防げる。あわせて `ChapterUseNextLine` / `SameLineChapter` /
   `ChapterNum*` も GUI 既定値と突き合わせて同時に監査する
 
-**着手前に確認すること（既定値を変えるため）**:
+**実装（2026-08-10）**: 設計判断どおり **D の形で B + A を実施**。
 
-1. `.NET` ポートの比較テストは**凍結済み `reference.epub` との比較**なので即座には壊れないが、
-   reference 再生成スクリプト `tests/integration/generate-reference-epubs.ps1` は
-   narou.rb 側の jar と ini で Java CLI を実行する。**その ini に Chapter\* キーがあるか**を先に見る
-   （あれば当該経路は無影響）
-2. 修正前後の jar で比較テストの 5 ケース（特に見出しを含む `aozora_1567_14913`）を変換し、
-   `nav.xhtml` / `toc.ncx` / opf を diff する
-3. narou.rb 経由も 1 冊 before/after で確認する
-4. 差分が出たら `.NET` ポートへ同じ既定値をポートバックする（`java-port-back-guide.md`）
+- 新規 `src/com/github/hmdev/config/SettingDefaults.java` — 目次設定 18 キー（boolean）+
+  `MaxChapterNameLength`（int）の既定値テーブル。既定値は **GUI のチェックボックス初期状態が正**
+  という原則をコードに固定した
+  - `isSelected(key)` — GUI のウィジェット生成用
+  - `getBoolean(props, key)` / `getInt(props, key)` — CLI 用。`props.containsKey` なら ini 優先、
+    無ければ GUI と同じ既定値（GUI の `setPropsSelected` と同じ意味論）
+  - **表に無いキーは `IllegalArgumentException`**。かつての `hapterNumParenTitle`（先頭の C 欠落）の
+    ようなタイポが黙って false になる事故を型ではなく実行時契約で塞ぐ
+- `AozoraEpub3.java`（CLI）/ `AozoraEpub3Applet.java`（GUI）/ `WriterConfigurator.java`（NavNest・NcxNest）が
+  すべてこの表を参照する。`"1".equals(props.getProperty(...))` を各所に散らさない
+- 同梱 `AozoraEpub3.ini` に `ChapterExclude` / `ChapterSection` / `ChapterH` / `ChapterH1` / `ChapterH2` /
+  `ChapterH3` / `ChapterName` / `MaxChapterNameLength` を明示追記（A。既定値の明文化）
+- テスト `test/com/github/hmdev/config/SettingDefaultsTest.java`（5 件）
+
+**CLI 既定値の変化**（GUI 既定値に合わせた結果）:
+
+| キー | 変更前 | 変更後 |
+|---|---|---|
+| `ChapterH` / `ChapterH1` / `ChapterH2` / `ChapterH3` | false | **true** |
+| `ChapterName` | false | **true** |
+| `ChapterExclude` | false | **true** |
+| `TitleToc` | false | **true** |
+| その他（`ChapterUseNextLine` / `SameLineChapter` / `ChapterNum*` / `ChapterPattern` / `CoverPageToc` / `NavNest` / `NcxNest` / `ChapterSection` / `MaxChapterNameLength`） | 変更なし | 変更なし |
+
+**着手前チェックの結果（すべて実測、2026-08-10）**:
+
+1. `.NET` ポートの比較テスト `JavaComparisonTests` は **ini 経路をまったく通らない**
+   （`GenerateEpubWithDotNet` は `ApplyIniSettings` / `SetChapterLevel` を呼ばず、
+   Core 側のフィールド既定値＝全 ON をそのまま使う）。よって影響なし。
+   なお `src/AozoraEpub3.Cli/Program.cs` の `GetBool(ini, "ChapterH2")` 等は Java の旧実装と同じ形なので、
+   **.NET CLI 側には同じバグが残っている**（ポートバック対象。下記）
+2. 修正前後の jar で比較テスト 5 ケースを **ini なし**で変換 → `dcterms:modified` 以外は完全一致。
+   navPoint 数も 1 / 98 / 46 / 32 / 50 で不変。
+   これらは narou.rb 形式テキストで `［＃改ページ］` 境界が既に `ChapterSection` に拾われており、
+   中見出しが追加のエントリを生まないため
+3. narou.rb 側の ini（`D:\MyNovel\AozoraEpub3_\AozoraEpub3.ini`）は GUI が保存した全 123 キー版で、
+   `ChapterH=` / `ChapterName=` / `ChapterSection=` / `ChapterH1..3=1` / `ChapterExclude=1` / `TitleToc=1` を
+   **すべて明示的に持つ**。実際に n9623lp を before/after 変換しても `dcterms:modified` 以外は完全一致（51 navPoint）
+4. 再現ケース（`456_ruby_145.zip` 銀河鉄道の夜）: **1 件 → 10 件**（表題 + 9 章）。
+   同梱 ini なしでも 9 件（表題ページ自体が出ないため）
+
+**残件**:
+
+- `.NET` ポート（`src/AozoraEpub3.Cli/Program.cs`）へ同じ既定値テーブルをポートバックする
+  （`java-port-back-guide.md`）。`.NET` CLI も ini に Chapter\* キーが無いと章見出しを目次に入れない。
+  比較テストは ini 経路を通らないため、ポートバックしても既存テストは壊れない
+- **キー名のコンパイル時安全化**: `SettingDefaults` は文字列キーで引くため、呼び出し側のタイポは
+  実行時例外（GUI なら構築時クラッシュ）になる。旧実装の「黙って false」よりは大幅に良いが、
+  enum か `public static final String` 定数に寄せればコンパイル時に落とせる。
+  ini の読み書き（`props.setProperty` 側）も同時に定数化しないと中途半端になるため、別 PR で扱う
+
+**リリースノートに書くこと**: `-i` で目次キーを持たない自作 ini を使っている CLI 利用者は、
+章見出しと表題が目次に入るように**出力が変わる**（意図した修正）。従来の目次に戻したい場合は
+ini に `ChapterH=` / `ChapterH1=` / `ChapterH2=` / `ChapterH3=` / `ChapterName=` / `TitleToc=` を明示する。
 
 ## 🟢 低
+
+### 23. `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる — 未対応
+
+**場所**: `src/AozoraEpub3.java:245`
+
+```java
+String chapterPattern = ""; if (SettingDefaults.getBoolean(props, "ChapterPattern")) chapterPattern = props.getProperty("ChapterPatternText");
+```
+
+`ChapterPattern=1` だけを書いた手書き ini では `chapterPattern` が null のまま
+`setChapterLevel` に渡る。項目 22 の修正時に発見した既存バグ（本修正の前後で挙動は同じ）。
+GUI は必ず両方を書くため GUI 経路では起きない。
+
+**修正方針**: null / 空文字なら空文字にフォールバックする。あわせて
+`MaxChapterNameLength` が不正値のときに旧名 `ChapterNameLength` へフォールバックしない件
+（同 226-229 行）も、意図した挙動か整理する。
+
+
+### 24. 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` ほか） — 未対応
+
+**発見**: 2026-08-10、項目 22 のゲート C（Fable）。項目 22 で目次まわりの 19 キーは
+`SettingDefaults` に集約したが、**同じ形のドリフトが表の外に残っている**。
+
+| キー | GUI 既定 | CLI（キー不在時） | 同梱 `AozoraEpub3.ini` | 実害 |
+|---|---|---|---|---|
+| `TocVertical` | 縦書き（`AozoraEpub3Applet.java:955` の `jRadioTocV` が `true`） | `false`（横書き） | **無い** | **同梱 ini のままの CLI 変換は目次ページが横書き、GUI は縦書き**。現に食い違っている |
+| `CoverPage` | ON（同 917） | `false` | `CoverPage=1` あり | 同梱 ini では出ない。`-i` の自作 ini のみ |
+| `TitlePageWrite` | ON（同 921） | `false` | `TitlePageWrite=1` あり | 同上 |
+
+いずれも `src/AozoraEpub3.java:194-195` 等で `"1".equals(props.getProperty(...))` を直読みしている。
+
+**修正方針**: `SettingDefaults` の表にこれらを足し、CLI 側を `getBoolean` に置き換える。
+項目 22 と同じ形なので実装は小さいが、**`TocVertical` は出力（目次ページの writing-mode）が変わる**ため
+リリースをまたぐ変更として単独 PR で扱う。あわせて GUI ウィジェット初期値の直書きを
+`SettingDefaults.isSelected` に寄せ、表に無いキーが残っていないかを全キー棚卸しする。
+
+**予防策の候補（nice-to-have）**: `src/` を grep して `props.getProperty("Chapter…` 等の
+直読みを禁止する簡易テストを置く。キー名の定数化 PR（項目 22 の残件）で同時に扱うのが自然。
 
 ### 20. 章タイトルページの「柱」注記が未対応で、作品名が本文と目次に漏れる — 未対応
 
