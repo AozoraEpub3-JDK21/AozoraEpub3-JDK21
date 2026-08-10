@@ -352,7 +352,7 @@ GUI は必ず両方を書くため GUI 経路では起きない。
 #### 全キー棚卸しの結果（2026-08-10、実測）
 
 GUI をまっさらな状態で起動 → 終了させて**初期状態の ini を実物として生成**し（126 キー）、
-同梱 `AozoraEpub3.ini`（24 キー）および CLI のキー不在時の実効値と 3 者比較した。
+同梱 `AozoraEpub3.ini`（23 キー）および CLI のキー不在時の実効値と 3 者比較した。
 
 **判明した重要事実**:
 
@@ -395,7 +395,7 @@ Web 変換系（`UseNarouApi` / `ApiFallback` / `WebBeforeChapter*` / `WebConver
 `WebModified*` / `WebSkipImages`）も同様。
 
 **決定した方針（2026-08-10、ユーザー判断）**: 項目 22 と同じ **A+B**。
-同梱 ini を全キー版にし（実行時状態は除外、既存 24 キーの意図的な値は維持）、あわせて
+同梱 ini を全キー版にし（実行時状態は除外、既存 23 キーの意図的な値は維持）、あわせて
 `SettingDefaults` を拡張して**古い ini を持ち込む利用者**のドリフトも解消する。
 
 #### 実装と実測（2026-08-10）— ✅ 対応済
@@ -431,15 +431,16 @@ GUI 側の初期値を変えたらフィクスチャを取り直すこと。
 | 経路 | ini の探索先 | 該当箇所 |
 |---|---|---|
 | CLI | **カレントディレクトリ**（`propFileName` は `"AozoraEpub3.ini"` の相対パス） | `src/AozoraEpub3.java:174` |
-| GUI | **jar と同じフォルダ**（`jarPath + propFileName`） | `src/AozoraEpub3Applet.java:553,770,5675` |
+| GUI | **起動時のカレントディレクトリ**（`jarPath` は `""` 固定のため相対。`.exe` / ダブルクリック起動ではカレント = 配布フォルダ。当初「jar と同じフォルダ」と記録していたが誤り — 2026-08-10 の docs ブランチのゲート C で発覚） | `src/AozoraEpub3Applet.java:542,552,769` |
 
 CLI 側は `template/` や `web/` は `jarPath` 基準で解決しているのに、**ini だけカレント基準**という
-非対称になっている。
+CLI 内部の非対称になっている（GUI は ini も template もすべてカレント基準で、`.exe` 起動なら
+配布フォルダに一致するため一貫している）。
 
 **影響**: 配布フォルダの外から `java -jar /path/to/AozoraEpub3.jar input.txt` を実行すると、
-**同梱 `AozoraEpub3.ini` が読まれず**、GUI で設定した内容も反映されない（`SettingDefaults` の
-既定値で動く）。エラーも警告も出ないため気づけない。逆に、たまたまカレントに別の
-`AozoraEpub3.ini` があるとそれを拾う。
+**同梱 `AozoraEpub3.ini` が読まれず**、（通常の `.exe` / ダブルクリック起動の）GUI で設定した
+内容も反映されない（`SettingDefaults` の既定値で動く）。エラーも警告も出ないため気づけない。
+逆に、たまたまカレントに別の `AozoraEpub3.ini` があるとそれを拾う。
 
 **なぜ今まで表面化しなかったか**: narou.rb は AozoraEpub3 のフォルダをカレントにして起動し、
 GUI からの利用も配布フォルダ内で完結するため。

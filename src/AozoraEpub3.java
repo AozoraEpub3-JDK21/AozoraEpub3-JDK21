@@ -88,7 +88,7 @@ public class AozoraEpub3
 			Options options = new Options();
 			options.addOption("h", "help", false, "show usage");
 			options.addOption("i", "ini", true, "指定したiniファイルから設定を読み込みます (コマンドラインオプション以外の設定)");
-			options.addOption("t", true, "本文内の表題種別\n[0:表題→著者名] (default)\n[1:著者名→表題]\n[2:表題→著者名(副題優先)]\n[3:表題のみ]\n[4:なし]");
+			options.addOption("t", true, "本文内の表題種別\n[0:表題→著者名] (default)\n[1:著者名→表題]\n[2:表題→著者名(副題優先)]\n[3:表題のみ(1行)]\n[4:表題+著者名のみ(2行)]\n[5:なし]");
 			options.addOption("tf", false, "入力ファイル名を表題に利用");
 			options.addOption("c", "cover", true, "表紙画像\n[0:先頭の挿絵]\n[1:ファイル名と同じ画像]\n[ファイル名 or URL]");
 			options.addOption("ext", true, "出力ファイル拡張子\n[.epub] (default)\n[.kepub.epub]");
@@ -719,8 +719,9 @@ public class AozoraEpub3
 	 * {@code -i} の指定が無いときに読む ini を決める。
 	 *
 	 * <p>従来どおり<b>カレントディレクトリを優先</b>し、そこに無ければ jar と同じ場所
-	 * （GUI が読み書きするのと同じ場所）を見る。CLI は {@code template/} や {@code web/} を
-	 * jar 基準で解決しているのに ini だけカレント基準だったため、配布フォルダの外から
+	 * （配布フォルダの同梱 ini。{@code .exe} 起動の GUI が実質読み書きする場所）を見る。
+	 * CLI は {@code template/} や {@code web/} を jar 基準で解決しているのに ini だけ
+	 * カレント基準だったため、配布フォルダの外から
 	 * {@code java -jar /path/to/AozoraEpub3.jar} を実行すると同梱 ini が無言で無視され、
 	 * GUI で設定した内容も反映されなかった（docs/code-audit-followups.md 項目 26）。
 	 *
