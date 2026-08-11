@@ -512,6 +512,13 @@ public class WebAozoraConverter
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
 	{
 		this.canceled = false;
+		//サービス終了サイト: extract.txt に DEFUNCT が定義されていたら変換せず理由を表示する
+		//(サイト消滅後は DNS エラー等の分かりにくい失敗になるため、明示的に伝える)
+		ExtractInfo[] defunctInfos = this.queryMap.get(ExtractId.DEFUNCT);
+		if (defunctInfos != null && defunctInfos.length > 0) {
+			LogAppender.error("このサイトはサービスを終了しているため変換できません : "+defunctInfos[0].query);
+			return null;
+		}
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;

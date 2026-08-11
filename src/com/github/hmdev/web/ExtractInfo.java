@@ -5,6 +5,9 @@ import java.util.regex.Pattern;
 public class ExtractInfo
 {
 	enum ExtractId {
+		/** サービス終了サイトのマーカー。値は利用者向けの説明文 (セレクタではない)。
+		 * 定義されていると WebAozoraConverter は変換せずメッセージを表示して中断する */
+		DEFUNCT,
 		COOKIE, PAGE_REGEX,
 		SERIES, TITLE, AUTHOR, DESCRIPTION, COVER_IMG, COVER_HREF,
 		PAGE_NUM, PAGE_URL,
