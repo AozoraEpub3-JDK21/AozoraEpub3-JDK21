@@ -20,17 +20,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.5.0-jdk21 (August 11, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.0-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.5.1-jdk21 (August 11, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.1-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.0-jdk21/AozoraEpub3-1.5.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -40,13 +40,14 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.5.0-jdk21
+## What's New in v1.5.1-jdk21
 
-- **EPUB preview**: check a converted EPUB in your default browser before transferring it to a device. Hierarchical table of contents, font / text size / line height / margin controls, dark mode, and a bookshelf (cover-thumbnail grid from up to 8 folders). Use `--preview` / `--library` from the CLI, or the "Preview" button after conversion in the GUI
-- **Modernized GUI look with FlatLaf**: light / dark themes bundled (light by default). Switch via the `UiTheme` ini key or the combo box at the top right of the window
-- **Fixed Hameln conversions failing** after the site's episode-list HTML redesign around August 2026 (with an old cache, all episodes are re-downloaded once)
-- **Fixed Kakuyomu missing newly published episodes** caused by a cache-path collision on the episode list
-- **Unified GUI and CLI setting defaults**: when a key is missing from the ini, the CLI now behaves like the GUI (chapter headings appear in the TOC, automatic page breaks work, etc.). CLI conversions using the bundled ini produce different output — see the compatibility section of the release notes
+- **Fixed duplicated titles for Aozora Bunko HTML URLs**: converting a single-story page (e.g. Run, Melos!) produced a doubled title like "走れメロス 走れメロス"
+- **Auto-preview after conversion now works from the CLI and narou.rb**: enable "Open the preview automatically after conversion" in the GUI (`AutoPreview=1` in the ini) and conversions invoked by narou.rb / narou.rs open the finished EPUB in your browser. The preview runs in a separate process, so the caller is never blocked
+- **Fixed FC2 novel conversions failing** after the site changed its title-heading markup
+- **Clear notice for shut-down sites**: URLs of defunct sites (dNoVeLs / Arcadia / NEWVEL-LIBRARY) now report "this site has been discontinued" instead of an obscure network error
+- **Fixed CLI auto-margin cropping**: the `AutoMarginNombreSize` ini key was ignored and corrupted `AutoMarginPadding` in CLI conversions
+- **Build updated to Gradle 9.6.1** (distribution contents unchanged)
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 

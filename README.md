@@ -92,12 +92,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.5.0-jdk21.zip
+AozoraEpub3-1.5.1-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.5.0-jdk21.tar.gz
+AozoraEpub3-1.5.1-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -148,6 +148,13 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.5.1-jdk21 (2026-08-11)
+- **青空文庫 HTML URL の表題二重を修正**: 単話ページの変換で表題が「走れメロス 走れメロス」のように二重になっていました
+- **エンコード後の自動プレビューが CLI・narou.rb 経由でも動作**: ini の `AutoPreview=1`（GUI のチェックボックス）で、narou.rb / narou.rs からの変換でも完成した EPUB がブラウザで開きます（別プロセスで開くため呼び出し側は止まりません）
+- **FC2 小説の変換不能を修正**（タイトル見出しのサイト改修へ追従）・**サービス終了サイト（dNoVeLs / Arcadia / NEWVEL-LIBRARY）は理由を明示して中断**
+- **CLI の画像自動余白除去を修正**: `AutoMarginNombreSize` が反映されず `AutoMarginPadding` が壊れていた問題
+- ビルドを Gradle 9.6.1 に更新（配布物の内容は不変）
 
 ### v1.5.0-jdk21 (2026-08-11)
 - **EPUB プレビュー機能**: 変換した EPUB を実機へ移す前に既定のブラウザで確認。階層目次・表示調整・ダークモード・本棚（最大 8 フォルダ）。CLI は `--preview` / `--library`
