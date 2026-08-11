@@ -1339,3 +1339,41 @@ Windows 11 の実測フォント名に基づいている。macOS の `ヒラギ�
   (当初は Ctrl-C のみとしていたが、ブラウザを閉じた後もプロセスが裏に残るため変更)
 - 本棚のスキャン既定は GUI 出力先フォルダ、サブフォルダ再帰は ON (深さ上限を設ける)
 - デバイスプロファイルは `preview/devices/*.ini` を新設 (`presets/*.ini` は流用しない)
+
+---
+
+## 起票: CLI 変換でも ini の AutoPreview を尊重する (2026-08-11、v1.5.1 対象)
+
+**要望** (ユーザー 2026-08-11): GUI の「エンコード後にプレビュー」チェック
+(全体設定 `AozoraEpub3.ini` の `AutoPreview` キー) を入れておけば、CLI 変換でも
+`-preview` フラグなしでプレビューが開いてほしい。narou.rb / narou.rs が
+`-preview` フラグを付けて呼んでくれることは期待できないため、
+**呼び出し側の変更なしに ini だけで有効化できる**ことが要件。
+
+**現状**:
+- CLI の `-preview` は実装済み (v1.5.0)。入力が .epub のみなら変換なしで表示も可能
+- ただしプレビュー判定は `-preview` / `-library` フラグのみ (`AozoraEpub3.java:146`)
+  で、ini の `AutoPreview` は GUI 専用 (`AozoraEpub3Applet.java:2525, 4706`)
+
+**設計上の論点 — ブロッキング**:
+- 現行 CLI プレビューは「heartbeat 途絶 (ブラウザタブを閉じる) か Ctrl-C まで待機」する。
+  この挙動のまま `AutoPreview` を CLI に配線すると、narou.rb のバッチ変換
+  (複数作品の連続変換) が 1 冊ごとにブラウザを閉じるまで停止する
+- よって **ini 起動時は非ブロックが必須**。候補:
+  - **案 A (推奨)**: 自分自身を `-preview <生成EPUB>` 引数で別プロセスとして spawn し、
+    親 (変換プロセス) は即終了する。プレビューサーバーは子プロセスが持つため
+    heartbeat 設計をそのまま流用できる。多重起動時のポート衝突は
+    PreviewServer の既存のポート割り当てロジックに従う
+  - 案 B: 変換プロセス内で開いて待機しない (サーバーごと即死するため表示が壊れる。不採用)
+  - 案 C: narou.rb 側の変換後 hook に任せる (呼び出し側変更が必要になり要件に反する)
+- 連続変換で N 冊分のプレビュータブが一斉に開く問題は許容するか、
+  「最後の 1 冊だけ開く」かを実装時に決める (narou.rb は 1 変換 1 プロセスのため
+  実際には問題になりにくい)
+
+**実装箇所の見込み**:
+- `AozoraEpub3.java:146` の preview 判定に `"1".equals(props.getProperty("AutoPreview"))` を追加
+  (プロパティ読み込み後に判定を移す必要あり)
+- 非ブロック spawn の実装 (`ProcessBuilder` で `java -jar <自jar> -preview <epub>`)
+- GUI との二重起動 (GUI が既にプレビューサーバーを持っている場合) の挙動確認
+- ドキュメント: `docs/narou-setup.md` + `docs/en/narou-setup.md` をペア更新
+  (feedback_docs_sync)
