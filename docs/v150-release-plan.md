@@ -108,7 +108,7 @@ v1.4.0-jdk21（2026-08-01）以降に master へ入ったもの + 本セッシ�
 - [x] サブエージェントによる最終チェック（CLAUDE.md §7。README のバージョン更新漏れを検出 → 修正して dist 再生成済み）
 - [x] **最終 GO（ユーザー判断）**: 2026-08-11 に実施。`git push origin master` → `git tag v1.5.0-jdk21`（SSH 自動署名）→ tag push → CI 緑確認 → `gh release create`。公開: <https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.0-jdk21>（アセット: zip / tar.gz / SHA256SUMS。SHA256: zip=6203033e… / tar.gz=48ca46af…）
 - [x] リリース後: `gh release view` でアセット 3 点確認 / GitHub Pages デプロイ成功確認（未リリース注記の削除が公開ページに反映）/ memory の最新リリース記載更新 / 残骸ブランチ `feat/preview-reveal-folder` 削除（唯一のコミット c4ec526 は master にパッチ等価で取り込み済みを確認の上、ローカル・origin とも削除）
-- [ ] リリース後（残）: narou.rb 経由 1 変換（配布物での最終確認。§2.1.1 の E2E はリリース前に全 PASS 済みのため補完的位置づけ）
+- [x] リリース後（残）: narou.rb 経由 1 変換 — **2026-08-11 完了**（v1.5.1-jdk21 の配布 ZIP を GitHub から DL → SHA256 検証 → narou.rb 3.9.1 の `aozoraepub3dir` を更新 → `narou convert` で EPUB 出力成功。v1.5.0 の補完確認は v1.5.1 の同経路検証で兼ねる）
 
 ### リリースノートに必ず書くこと
 
