@@ -45,20 +45,24 @@ public class WebAozoraConverterDefunctTest {
 			convert("http://www.newvel.jp/library/12345/"));
 	}
 
-	/** 稼働中サイトの extract.txt に DEFUNCT が誤って定義されていないこと */
+	/**
+	 * web/ 全サイトを列挙し、DEFUNCT が定義されているのは既知の消滅 3 サイトだけであること。
+	 * サイトを追加したときも自動でこのチェックの対象になる
+	 */
 	@Test
-	public void testActiveSitesAreNotDefunct() throws Exception {
-		String[] activeSites = {
-			"ncode.syosetu.com", "novel18.syosetu.com", "kakuyomu.jp",
-			"novel.syosetu.org", "www.aozora.gr.jp", "novel.fc2.com",
-			"novelist.jp", "2.novelist.jp", "www.akatsuki-novels.com",
-		};
-		for (String fqdn : activeSites) {
-			java.nio.file.Path extract = java.nio.file.Paths.get("web", fqdn, "extract.txt");
-			assertTrue(fqdn + " の extract.txt が存在すること", java.nio.file.Files.exists(extract));
-			for (String line : java.nio.file.Files.readAllLines(extract)) {
-				assertFalse(fqdn + " に DEFUNCT が定義されていないこと", line.startsWith("DEFUNCT\t"));
-			}
+	public void testOnlyKnownDefunctSitesHaveMarker() throws Exception {
+		java.util.Set<String> knownDefunct = java.util.Set.of(
+			"www.dnovels.net", "www.mai-net.net", "www.newvel.jp");
+		File[] siteDirs = WEB_CONFIG.listFiles(File::isDirectory);
+		assertNotNull("web/ 配下にサイトディレクトリがあること", siteDirs);
+		assertTrue("サイト数が想定以上あること", siteDirs.length >= 12);
+		for (File dir : siteDirs) {
+			java.nio.file.Path extract = dir.toPath().resolve("extract.txt");
+			if (!java.nio.file.Files.exists(extract)) continue;
+			boolean hasDefunct = java.nio.file.Files.readAllLines(extract).stream()
+				.anyMatch(line -> line.startsWith("DEFUNCT\t"));
+			assertEquals(dir.getName() + " の DEFUNCT 定義有無が既知の消滅サイト一覧と一致すること",
+				knownDefunct.contains(dir.getName()), hasDefunct);
 		}
 	}
 }

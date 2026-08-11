@@ -198,7 +198,13 @@ public class WebAozoraConverter
 							if (line.length() == 0 || line.charAt(0) == '#') continue;
 							String[] values = line.split("\t", -1);
 							if (values.length > 1) {
-								ExtractId extractId = ExtractId.valueOf(values[0]);
+								//未知のキーは無視して続行 (将来のキー追加に対する前方互換。.NET ポートと同挙動)
+								ExtractId extractId;
+								try { extractId = ExtractId.valueOf(values[0]); }
+								catch (IllegalArgumentException e) {
+									LogAppender.println("未対応の抽出設定キーを無視します : "+values[0]);
+									continue;
+								}
 								String[] queryStrings = values[1].split(",");
 								Pattern pattern = values.length > 2 ? Pattern.compile(values[2]) : null; //ExtractInfoが複数でも同じ値を設定
 								String replaceValue = values.length > 3 ? values[3] : null; //ExtractInfoが複数でも同じ値を設定
@@ -221,7 +227,13 @@ public class WebAozoraConverter
 								if (line.length() == 0 || line.charAt(0) == '#') continue;
 								String[] values = line.split("\t");
 								if (values.length > 1) {
-									ExtractId extractId = ExtractId.valueOf(values[0]);
+									//未知のキーは無視して続行 (extract.txt 側と同じ前方互換)
+									ExtractId extractId;
+									try { extractId = ExtractId.valueOf(values[0]); }
+									catch (IllegalArgumentException e) {
+										LogAppender.println("未対応の置換設定キーを無視します : "+values[0]);
+										continue;
+									}
 									ArrayList<String[]> vecReplace = this.replaceMap.get(extractId);
 									if (vecReplace == null) {
 										vecReplace = new ArrayList<String[]>();
@@ -512,19 +524,21 @@ public class WebAozoraConverter
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
 	{
 		this.canceled = false;
-		//サービス終了サイト: extract.txt に DEFUNCT が定義されていたら変換せず理由を表示する
-		//(サイト消滅後は DNS エラー等の分かりにくい失敗になるため、明示的に伝える)
-		ExtractInfo[] defunctInfos = this.queryMap.get(ExtractId.DEFUNCT);
-		if (defunctInfos != null && defunctInfos.length > 0) {
-			LogAppender.error("このサイトはサービスを終了しているため変換できません : "+defunctInfos[0].query);
-			return null;
-		}
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
 		this.bookTitle = null;
 		//日付一覧が取得できない場合は常に更新
 		this.updated = true;
+		//サービス終了サイト: extract.txt に DEFUNCT が定義されていたら変換せず理由を表示する
+		//(サイト消滅後は DNS エラー等の分かりにくい失敗になるため、明示的に伝える)。
+		//状態リセットより後・最初の HTTP アクセスより前に置く。updated=true の後でないと
+		//GUI の「更新分のみ変換」で null 返却が「スキップしました」と誤表示される
+		ExtractInfo[] defunctInfos = this.queryMap.get(ExtractId.DEFUNCT);
+		if (defunctInfos != null && defunctInfos.length > 0) {
+			LogAppender.error("このサイトはサービスを終了しているため変換できません : "+defunctInfos[0].query);
+			return null;
+		}
 		
 		// なろう等のレート制限対策: 最低1秒間隔
 		this.interval = Math.max(1000, interval);
