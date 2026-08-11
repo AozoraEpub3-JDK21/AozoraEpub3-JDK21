@@ -60,7 +60,7 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x ./gradlew
 
-      # Gradle 9.2.1 の launcher JVM は JDK 21 までしか対応しない (Groovy 4.0.28 が
+      # Gradle 9.6.1 の launcher JVM は JDK 21 までしか対応しない (Groovy 4.0.32 が
       # JDK 26 bytecode 不可)。matrix 版を toolchain として使うため、JDK 21 を launcher に
       # 残しつつ matrix 版を追加で install。multi-line java-version は最後の項目を JAVA_HOME に
       # するので、matrix 版を上、JDK 21 を下に書く。

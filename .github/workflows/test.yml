@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Gradle 9.2.1 の launcher JVM は JDK 21 までしか対応しない。
+      # Gradle 9.6.1 の launcher JVM は JDK 21 までしか対応しない。
       # matrix 版を toolchain として使うため JDK 21 を launcher に残しつつ matrix 版を追加 install。
       # multi-line java-version は最後の項目を JAVA_HOME にするので 21 を最後に書く。
       - name: Set up JDK (toolchain ${{ matrix.java-version }} + launcher 21)

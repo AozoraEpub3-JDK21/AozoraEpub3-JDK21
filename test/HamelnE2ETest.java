@@ -59,9 +59,10 @@ public class HamelnE2ETest {
 		// 章ありの連載作品 (なろう同様のデモ用として小規模なものを選択)
 		new TestCase("hameln_chapter", "https://novel.syosetu.org/402358/",
 			"章ありハーメルン作品", 1, false, false),
-		// 章なし作品 (isUrlExists で存在確認するため URL が削除されていてもテストはスキップされる)
-		// 旧 URL novel.syosetu.org/7/ は投稿者削除済み (docs/e2e-followups.md 項目 4) のため
-		// 2026-08-11 に実在確認済みの章なし・フラット話リスト作品へ差し替え
+		// 章なし作品。旧 URL novel.syosetu.org/7/ は投稿者削除済み (docs/e2e-followups.md 項目 4)
+		// のため 2026-08-11 に実在確認済みの章なし・フラット話リスト作品へ差し替え。
+		// 注意: ハーメルンは削除済み作品でも案内ページを HTTP 200 で返すため、isUrlExists では
+		// 削除を検出できない。作品が消えるとスキップではなく変換失敗になるので再差し替えが必要
 		new TestCase("hameln_nochapter", "https://novel.syosetu.org/422019/",
 			"章なしハーメルン作品", 0, false, false)
 	);
