@@ -61,3 +61,8 @@ converter が解決できず「画像ファイルなし images/__/nimg/...」で
 - dnovels.net / mai-net.net / newvel.jp の 3 サイトに DEFUNCT を定義
 - テスト: `test/WebAozoraConverterDefunctTest.java` (3 サイトの中断 + 稼働中 9 サイトに
   DEFUNCT が誤定義されていないことの網羅チェック)
+
+**`.NET` ポートへの移植残**: FC2 の extract.txt 修正 (web/ のコピーを持つ場合) と
+DEFUNCT マーカーの解釈 (`WebAozoraConverter.cs` の ExtractId 相当 + 変換前チェック) は
+`aozoraepub3-dotnet` 側に未移植。次回ポートバック時に対応
+(`D:\git\aozoraepub3-dotnet\docs\java-port-back-guide.md` の運用に従う)。
