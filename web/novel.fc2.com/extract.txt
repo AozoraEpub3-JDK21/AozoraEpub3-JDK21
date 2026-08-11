@@ -1,6 +1,24 @@
 ################################
 ## FC2小説
-## http://novel.fc2.com/
+## https://novel.fc2.com/
+##
+## 対応URL例:
+##   目次: https://novel.fc2.com/novel.php?mode=tc&nid=600
+##   本文: https://novel.fc2.com/novel.php?mode=rd&nid=600&pg=1
+##
+## 調査日: 2026-08-11 (実機確認。dogfood で TITLE 取得失敗を検出して修正)
+##
+## 【2026-08-11 の構造変更】
+##   作品タイトルの見出しが .sh_heading_main_a → <h2 class="default_page_title"> に変更され、
+##   「SERIES/TITLE : タイトルがありません」で変換不能になっていた。
+##   それ以外のセレクタ (.username / .novel_comment / .novel_img / .noveldescription /
+##   .novel_first / .novel_maincontent 系) は 2026-08-11 時点の HTML でも健在。
+##   旧セレクタはキャッシュ済み HTML のために候補として残してある。
+##
+## 【変換モデル】
+##   目次 (mode=tc) の「最初から読む」(.novel_first a) を起点に、PAGE_URL で
+##   pg=1..PAGE_NUM (.noveldescription のページ数、例: 441) を順に取得する。
+##   各ページの中見出しは .novel_subtitle (無いページでは出力されない)
 ################################
 
 ## 変換対象URLパターン
@@ -9,7 +27,8 @@
 ################################
 ## 一覧ページの抽出設定
 ## タイトル
-TITLE	.sh_heading_main_a:0
+## 新: <h2 class="default_page_title"> / 旧: .sh_heading_main_a (キャッシュ用に残置)
+TITLE	.default_page_title:0,.sh_heading_main_a:0
 ## 著者
 AUTHOR	.username a:0,.username:0
 ## 説明
