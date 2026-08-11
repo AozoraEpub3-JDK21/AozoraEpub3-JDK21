@@ -689,14 +689,7 @@ public class WebAozoraConverter
 				printImage(null, images.get(0), coverImageFile);
 			}
 			
-			if (series != null) {
-				printText(bw, series);
-				bw.append('\n');
-			}
-			if (title != null) {
-				printText(bw, title);
-				bw.append('\n');
-			}
+			printSeriesAndTitle(bw, series, title);
 
 			// APIメタデータから全話数をログ出力
 			if (apiMetadata != null && apiMetadata.getGeneralAllNo() > 0) {
@@ -2499,6 +2492,21 @@ public class WebAozoraConverter
 		           .replace(PH_BRACKET_CLOSE, '］')
 		           .replace(PH_HASH, '＃')
 		           .replace(PH_KOME, '※');
+	}
+
+	/** 中間テキスト先頭のシリーズ名・表題を出力
+	 * SERIES と TITLE が同一要素にマッチするサイト (青空文庫の単話 HTML 等) では
+	 * 表題が二重になるため、series が title と同一の場合は出力しない */
+	private void printSeriesAndTitle(BufferedWriter bw, String series, String title) throws IOException
+	{
+		if (series != null && !series.equals(title)) {
+			printText(bw, series);
+			bw.append('\n');
+		}
+		if (title != null) {
+			printText(bw, title);
+			bw.append('\n');
+		}
 	}
 
 	/** 文字を出力 特殊文字は注記に変換 */

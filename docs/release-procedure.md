@@ -1,7 +1,7 @@
 # AozoraEpub3 リリース手順書
 
 最終更新: 2026-04-30
-対象: AozoraEpub3-JDK21（Java 21、Gradle 9.2.1）
+対象: AozoraEpub3-JDK21（Java 21、Gradle 9.6.1）
 
 > 本書は **ローカルビルド + `gh release create`** 方式でのリリース手順を定める。
 > CI（`release.yml`）はテスト＆ビルド検証のみを担当し、配布アーティファクトは生成しない。
