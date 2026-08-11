@@ -109,6 +109,8 @@ public class SettingDefaultsTest {
 			"MarkId", "CommentPrint", "CommentConvert",
 			"PageBreak", "PageBreakEmpty", "PageBreakChapter",
 			"FitImage",
+			//AutoPreview の CLI 連動で追加 (docs/epub-preview-plan.md の起票セクション)
+			"AutoPreview",
 		};
 		assertEquals("boolean キーの件数", expectedBooleans.length, SettingDefaults.booleanKeys().size());
 		for (String key : expectedBooleans) {

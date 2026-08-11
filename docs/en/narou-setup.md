@@ -197,6 +197,9 @@ After initialization, an **`AozoraEpub3.ini`** file appears in the same director
 
 > **Note**: Closing the AozoraEpub3 GUI **rewrites this file in full** from the GUI's own settings, so hand-written comments are not preserved. If you mix GUI use with manual editing, edit the file after closing the GUI.
 
+**Note: Opening a preview automatically after conversion (v1.5.1+)**
+If you enable "Open the preview automatically after conversion" in the GUI (or set `AutoPreview=1` in `AozoraEpub3.ini`), conversions invoked via narou.rb / narou.rs also open the finished EPUB in your browser. The preview runs in a separate process, so narou.rb is never blocked; closing the browser tab shuts the preview process down automatically. Note that batch conversions such as `narou update` open **one tab per novel**, so consider turning this off during bulk operations.
+
 ---
 
 ## 8. Troubleshooting Tips

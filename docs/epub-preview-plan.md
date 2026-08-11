@@ -1342,7 +1342,19 @@ Windows 11 の実測フォント名に基づいている。macOS の `ヒラギ�
 
 ---
 
-## 起票: CLI 変換でも ini の AutoPreview を尊重する (2026-08-11、v1.5.1 対象)
+## 起票: CLI 変換でも ini の AutoPreview を尊重する (2026-08-11、v1.5.1 対象) — ✅ 実装済み
+
+**実装 (2026-08-11、案 A)**: `AozoraEpub3.java` のバッチ変換後、`-preview` 指定が
+無い場合に `SettingDefaults.getBoolean(props, "AutoPreview")` を見て、有効なら
+`buildAutoPreviewCommand()` で自分自身を `-cp java.class.path` + `-preview <EPUB>` の
+別プロセスとして起動し、待機せず終了する (`spawnDetachedPreview()`)。
+`AutoPreview` は `SettingDefaults` の boolean 表に追加し、GUI 側の読み出しも表経由に統一。
+narou.rb は jar と同じフォルダの `AozoraEpub3.ini` を使う (docs/narou-setup.md §7 補足) ため、
+ini 解決順序の懸念は無かった。子プロセスは既存の `-preview` 経路に入るため再帰しない
+(`-preview` + .epub 入力は ini 読み込み前に previewFiles で return する)。
+実機確認: 変換親プロセスは 1 秒で exit 0、子プロセスが
+`java -cp <classpath> AozoraEpub3 -preview <epub>` で起動。
+テスト: `test/AozoraEpub3AutoPreviewTest.java`。以下は起票時の記録。
 
 **要望** (ユーザー 2026-08-11): GUI の「エンコード後にプレビュー」チェック
 (全体設定 `AozoraEpub3.ini` の `AutoPreview` キー) を入れておけば、CLI 変換でも

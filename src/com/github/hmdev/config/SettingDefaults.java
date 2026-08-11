@@ -70,6 +70,8 @@ public final class SettingDefaults
 		map.put("PageBreakChapter", false);
 		//画像
 		map.put("FitImage", true);
+		//プレビュー。CLI も ini から読む (AutoPreview の CLI 連動、docs/epub-preview-plan.md)
+		map.put("AutoPreview", false);
 		return Collections.unmodifiableMap(map);
 	}
 

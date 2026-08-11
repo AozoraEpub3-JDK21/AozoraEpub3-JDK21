@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -571,6 +572,17 @@ public class AozoraEpub3
 					errorCount++;
 				}
 			}
+			//-preview 指定が無くても、ini の AutoPreview (GUI の「変換完了後に自動でプレビューを開く」)
+			//が有効なら変換後にプレビューを開く。narou.rb 等の呼び出し側はフラグを付けてくれないため
+			//ini だけで有効化できるようにする (docs/epub-preview-plan.md の起票セクション参照)。
+			//本プロセスで開くと awaitTermination が呼び出し側をブロックするため、
+			//自分自身を -preview 付きの別プロセスとして起動して即座に終了する。
+			//lastOutputFile は .epub 出力のときだけ代入される (convertFile 後の拡張子ガード) ため、
+			//-ext が .epub 以外でも子プロセスが isAllEpub を外れて変換フローに迷い込むことはない
+			else if (SettingDefaults.getBoolean(props, "AutoPreview")
+					&& lastOutputFile != null && lastOutputFile.isFile()) {
+				spawnDetachedPreview(lastOutputFile);
+			}
 		} catch (Exception e) {
 			logger.error("バッチ変換処理でエラー", e);
 			return 1;
@@ -607,6 +619,51 @@ public class AozoraEpub3
 		}
 		if (errorCount < fileNames.length) awaitTermination();
 		return errorCount > 0 ? 1 : 0;
+	}
+
+	/**
+	 * ini の AutoPreview 用に、自分自身を -preview 付きで再起動するコマンドを組み立てる。
+	 * -jar ではなく -cp + main クラスで起動する (開発時のクラスディレクトリ実行でも動くように
+	 * java.class.path をそのまま渡す。パース・分解はしない)
+	 */
+	static List<String> buildAutoPreviewCommand(File epubFile)
+	{
+		//Windows では CreateProcess が .exe を補うため OS 判定は不要。
+		//親の JVM オプション (-Xmx / -Dfile.encoding 等) は意図的に伝播しない
+		//(-preview 経路は EPUB の展開と HTTP 配信だけで既定ヒープで足りる)
+		String javaBin = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
+		List<String> command = new ArrayList<>();
+		command.add(javaBin);
+		command.add("-cp");
+		command.add(System.getProperty("java.class.path"));
+		command.add(AozoraEpub3.class.getName());
+		command.add("-preview");
+		command.add(epubFile.getAbsolutePath());
+		return command;
+	}
+
+	/**
+	 * プレビューを別プロセスで開き、待機せずに戻る。
+	 * 子プロセス側は -preview の既存経路 (previewFiles) に入り、ブラウザのタブが
+	 * 閉じられると heartbeat 途絶で自滅する。narou.rb 等のバッチ呼び出しを
+	 * ブロックしないため、この親プロセスは起動だけして即座に終了する。
+	 * プレビューは補助機能なので、起動に失敗しても変換自体は成功のまま扱う
+	 */
+	static void spawnDetachedPreview(File epubFile)
+	{
+		try {
+			List<String> command = buildAutoPreviewCommand(epubFile);
+			//子の出力は DISCARD で見えないため、切り分け用にコマンド列だけ残す
+			logger.debug("AutoPreview spawn: {}", command);
+			new ProcessBuilder(command)
+				.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+				.redirectError(ProcessBuilder.Redirect.DISCARD)
+				.start();
+			LogAppender.println("AutoPreview: プレビューを別プロセスで開きます : "+epubFile.getName());
+		} catch (Exception e) {
+			logger.error("AutoPreview の起動に失敗: {}", epubFile, e);
+			LogAppender.error("AutoPreview の起動に失敗しました : "+e.getMessage());
+		}
 	}
 
 	/**
