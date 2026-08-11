@@ -2522,7 +2522,7 @@ public class AozoraEpub3Applet extends JPanel
 		jCheckAutoPreview.setFocusPainted(false);
 		jCheckAutoPreview.setBorder(padding2);
 		//棚と同じく全体設定から読む。既定は OFF (今までどおり変換して終わる)
-		jCheckAutoPreview.setSelected("1".equals(this.props.getProperty("AutoPreview")));
+		jCheckAutoPreview.setSelected(SettingDefaults.getBoolean(this.props, "AutoPreview"));
 		panel.add(jCheckAutoPreview);
 		panel.add(Box.createHorizontalGlue());
 
