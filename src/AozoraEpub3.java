@@ -576,7 +576,9 @@ public class AozoraEpub3
 			//が有効なら変換後にプレビューを開く。narou.rb 等の呼び出し側はフラグを付けてくれないため
 			//ini だけで有効化できるようにする (docs/epub-preview-plan.md の起票セクション参照)。
 			//本プロセスで開くと awaitTermination が呼び出し側をブロックするため、
-			//自分自身を -preview 付きの別プロセスとして起動して即座に終了する
+			//自分自身を -preview 付きの別プロセスとして起動して即座に終了する。
+			//lastOutputFile は .epub 出力のときだけ代入される (convertFile 後の拡張子ガード) ため、
+			//-ext が .epub 以外でも子プロセスが isAllEpub を外れて変換フローに迷い込むことはない
 			else if (SettingDefaults.getBoolean(props, "AutoPreview")
 					&& lastOutputFile != null && lastOutputFile.isFile()) {
 				spawnDetachedPreview(lastOutputFile);
@@ -626,7 +628,9 @@ public class AozoraEpub3
 	 */
 	static List<String> buildAutoPreviewCommand(File epubFile)
 	{
-		//Windows では CreateProcess が .exe を補うため OS 判定は不要
+		//Windows では CreateProcess が .exe を補うため OS 判定は不要。
+		//親の JVM オプション (-Xmx / -Dfile.encoding 等) は意図的に伝播しない
+		//(-preview 経路は EPUB の展開と HTTP 配信だけで既定ヒープで足りる)
 		String javaBin = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
 		List<String> command = new ArrayList<>();
 		command.add(javaBin);
@@ -648,7 +652,10 @@ public class AozoraEpub3
 	static void spawnDetachedPreview(File epubFile)
 	{
 		try {
-			new ProcessBuilder(buildAutoPreviewCommand(epubFile))
+			List<String> command = buildAutoPreviewCommand(epubFile);
+			//子の出力は DISCARD で見えないため、切り分け用にコマンド列だけ残す
+			logger.debug("AutoPreview spawn: {}", command);
+			new ProcessBuilder(command)
 				.redirectOutput(ProcessBuilder.Redirect.DISCARD)
 				.redirectError(ProcessBuilder.Redirect.DISCARD)
 				.start();
