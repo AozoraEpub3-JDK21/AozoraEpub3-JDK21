@@ -63,7 +63,7 @@
 **Java 21以降** が必要です（Java 25 LTS まで動作確認済み）。
 
 - **実行**: JRE 21以降で動作します（JDK不要）。[Adoptium Temurin](https://adoptium.net/) などのランタイム配布を推奨。配布物は Java 21 ターゲットでビルドされている（class file version 65）ため、JDK 21 LTS から JDK 25 LTS までいずれの環境でも動作します（JDK 26 ランタイムも CI で起動確認済）。
-- **ビルド/開発**: JDK 21 が必要です（Gradle 9.2.1 launcher は JDK 21 固定）。`./gradlew -PjavaToolchainVersion=26 jar` で JDK 26 toolchain によるビルドも可能です。
+- **ビルド/開発**: JDK 21 が必要です（Gradle 9.6.1 launcher は JDK 21 固定）。`./gradlew -PjavaToolchainVersion=26 jar` で JDK 26 toolchain によるビルドも可能です。
 - **推奨**: **Java 25 LTS** を推奨します（Java 21 LTS でも動作します）。Temurin による JDK 26 のバイナリ配布が出揃い次第、推奨を更新する予定です。
 
 Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から Java 25 LTS をダウンロードしてください。

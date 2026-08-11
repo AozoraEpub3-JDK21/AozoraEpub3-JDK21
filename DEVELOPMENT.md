@@ -93,7 +93,7 @@ AozoraEpub3/
 
 ### Java環境
 - **Java**: 21（実行はJRE 21で可、開発/ビルドはJDK 21が必要）
-- **ビルドツール**: Gradle 9.2.1（Wrapper 同梱）
+- **ビルドツール**: Gradle 9.6.1（Wrapper 同梱）
 - **テスト**: JUnit 4.13.2
 
 ### 主要ライブラリ（抜粋）
