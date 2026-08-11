@@ -37,9 +37,10 @@
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
 | 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
-| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポのみ修正） | — |
+| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポ + `AutoMarginPadding` 上書きを修正） | — |
 | 26 | 🟡 中 | CLI の ini 探索がカレントのみで、配布フォルダ外から実行すると同梱 ini が無視される | ✅ 対応済 | — |
 | 27 | 🟢 低 | jar パス導出がクラスパス区切り・パス区切りとも固定文字で環境非対応 | ❌ 未対応（記録のみ） | — |
+| 28 | 🟡 中 | 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） | ✅ 対応済 | — |
 
 ---
 
@@ -496,7 +497,12 @@ ini 探索（項目 26）だけでなく `template/` / `web/` / `.cache` の解�
 `new File(...).getParent()`（両区切りを解釈する）にする。template/web/cache と ini で
 挙動が揃うよう、直すときは全経路まとめて。
 
-### 28. 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） — 未対応
+### 28. 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） — ✅ 修正済み
+
+**対応（2026-08-11、v1.5.1 向け）**: `WebAozoraConverter` の series / title 出力を
+`printSeriesAndTitle()` に抽出し、`series != null && !series.equals(title)` のときのみ
+series を出力するガードを追加。テストは `test/WebAozoraConverterSeriesTitleTest.java`
+（同一マッチ / 異なる場合 / null 各系 4 ケース）。`.NET` ポートも同時修正。
 
 **発見**: 2026-08-11、v1.5.0-jdk21 リリース後の実サイト dogfood（GUI 経由）。
 `https://www.aozora.gr.jp/cards/000035/files/1567_14913.html`（走れメロス）を変換すると
@@ -543,12 +549,12 @@ extract.txt 側で `SERIES` をコメントアウトする案もあるが、コ�
 - **CLI に配線されていない GUI 設定**: `ChukiRuby` / `ForceIndent` / `ImageFloat` /
   `PubFirst` / `AuthorCommentStyle`。CLI は `setChukiRuby` / `setForceIndent` / `setImageFloat` を
   呼んでいない。既定値がすべて false のため初期状態では差が出ないが、**ini に書いても効かない**
-- **`AutoMarginPadding` が `AutoMarginNombreSize` で上書きされる**（2026-08-11、項目 24/26 の
-  ゲート B・C で発見）: `WriterConfigurator.java:61-63` で `AutoMarginPadding` を読んだ直後に
-  `autoMarginPadding = Float.parseFloat(props.getProperty("AutoMarginNombreSize"))` と
-  **同じ変数へ再代入**しており、`nobreSize` は `0.03f` 固定で ini から読まれない。
-  `AutoMargin=1` の ini では GUI（Padding 1.0 / NombreSize 3.0）と CLI の挙動が食い違う。
-  `AutoMargin` が OFF なら到達しない
+- ~~**`AutoMarginPadding` が `AutoMarginNombreSize` で上書きされる**~~（2026-08-11、項目 24/26 の
+  ゲート B・C で発見 → **✅ 2026-08-11 修正済み、v1.5.1 向け**）: `WriterConfigurator.java:61-63` で
+  `AutoMarginPadding` を読んだ直後に `AutoMarginNombreSize` を**同じ変数へ再代入**しており、
+  `nobreSize` は `0.03f` 固定で ini から読まれなかった。GUI と同じく
+  `nobreSize = 値 * 0.01f` に修正。回帰テストは
+  `test/com/github/hmdev/pipeline/WriterConfiguratorTest.java`
 
 **修正方針**: `GothicUseBold` のタイポは単独で直せる（1 行）。単位連結と `ImageFloatType` は
 GUI 側の変換を `WriterConfigurator` に寄せて両者が同じ関数を通る形にする。
