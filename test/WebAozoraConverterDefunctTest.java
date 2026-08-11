@@ -10,8 +10,8 @@ import com.github.hmdev.web.WebAozoraConverter;
  *
  * extract.txt に DEFUNCT が定義されたサイトは、ネットワークアクセスせずに
  * 変換を中断してメッセージを表示する (docs/web-site-support-status.md 残件 2)。
- * DEFUNCT チェックは convertToAozoraText の先頭 (URL 補正の HTTP アクセスより前)
- * にあるため、このテストは消滅済みドメインを指定してもネットワークに出ない。
+ * DEFUNCT チェックは convertToAozoraText の状態リセット直後 (URL 補正の HTTP
+ * アクセスより前) にあるため、このテストは消滅済みドメインを指定してもネットワークに出ない。
  *
  * 実行方法:
  *   gradlew test --tests WebAozoraConverterDefunctTest
