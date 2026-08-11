@@ -60,7 +60,8 @@ public final class WriterConfigurator {
 			try { autoMarginWhiteLevel = Integer.parseInt(props.getProperty("AutoMarginWhiteLevel")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			try { autoMarginPadding = Float.parseFloat(props.getProperty("AutoMarginPadding")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 			try { autoMarginNombre = Integer.parseInt(props.getProperty("AutoMarginNombre")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			try { autoMarginPadding = Float.parseFloat(props.getProperty("AutoMarginNombreSize")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+			//GUI (AozoraEpub3Applet) と同じく ini の値 (%) を 0.01 倍して比率で渡す
+			try { nobreSize = Float.parseFloat(props.getProperty("AutoMarginNombreSize"))*0.01f; } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		}
 
 		epub3Writer.setImageParam(dispW, dispH, coverW, coverH, resizeW, resizeH, singlePageSizeW, singlePageSizeH, singlePageWidth, imageSizeType, fitImage, svgImage, rotateImage,
