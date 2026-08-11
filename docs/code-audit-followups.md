@@ -503,6 +503,9 @@ ini 探索（項目 26）だけでなく `template/` / `web/` / `.cache` の解�
 `printSeriesAndTitle()` に抽出し、`series != null && !series.equals(title)` のときのみ
 series を出力するガードを追加。テストは `test/WebAozoraConverterSeriesTitleTest.java`
 （同一マッチ / 異なる場合 / null 各系 4 ケース）。`.NET` ポートも同時修正。
+なお TITLE 欠落 + SERIES ありのフォールバック経路（`title = series` 代入、
+`WebAozoraConverter.java:636-639`）も従来は同一行が二重出力されていたのが
+1 行になる（改善方向の挙動変化、`.NET` と一致）。
 
 **発見**: 2026-08-11、v1.5.0-jdk21 リリース後の実サイト dogfood（GUI 経由）。
 `https://www.aozora.gr.jp/cards/000035/files/1567_14913.html`（走れメロス）を変換すると
@@ -546,6 +549,10 @@ extract.txt 側で `SERIES` をコメントアウトする案もあるが、コ�
   （`AozoraEpub3Applet.java:3682` 付近）。CLI は `+1` しないため、float を有効にした ini で
   GUI と CLI の挙動が食い違う。ただし `ImageFloat` チェックボックス自体を CLI が読まないため、
   現状では到達しない
+- **`AutoMarginWhiteLevel` のフォールバック既定値が GUI とずれている**（2026-08-11、
+  ゲート B 最終レビューで発見）: `WriterConfigurator.java:53` は `80`、GUI
+  （`AozoraEpub3Applet.java:3652`）は `0` を初期値にしている。同梱 ini にキーが
+  あるため実害は parse 失敗時のみ。項目 24 のキー名定数化と合わせて解消する
 - **CLI に配線されていない GUI 設定**: `ChukiRuby` / `ForceIndent` / `ImageFloat` /
   `PubFirst` / `AuthorCommentStyle`。CLI は `setChukiRuby` / `setForceIndent` / `setImageFloat` を
   呼んでいない。既定値がすべて false のため初期状態では差が出ないが、**ini に書いても効かない**
