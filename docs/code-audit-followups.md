@@ -37,10 +37,10 @@
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
 | 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
-| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポ + `AutoMarginPadding` 上書きを修正） | — |
+| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポ + `AutoMarginPadding` 上書きを修正） | #80 |
 | 26 | 🟡 中 | CLI の ini 探索がカレントのみで、配布フォルダ外から実行すると同梱 ini が無視される | ✅ 対応済 | — |
 | 27 | 🟢 低 | jar パス導出がクラスパス区切り・パス区切りとも固定文字で環境非対応 | ❌ 未対応（記録のみ） | — |
-| 28 | 🟡 中 | 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） | ✅ 対応済 | — |
+| 28 | 🟡 中 | 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） | ✅ 対応済 | #80 |
 
 ---
 
