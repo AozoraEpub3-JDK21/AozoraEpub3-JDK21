@@ -19,7 +19,7 @@ Web 変換まわりの変更時にここを更新しながら回す
 | **暁 (www.akatsuki-novels.com)** | `stories/index/novel_id~8654` | ✅ EPUB 178KB 生成 |
 | **novelist.jp** | `388.html` (WHITE BOOK) | ✅ EPUB 471KB 生成 |
 | **2.novelist.jp (二次創作)** | `6027.html` (ゆらのと、373 ページ) | ✅ EPUB 687KB 生成。PAGE_URL のページネーションも 373 ページ完走 |
-| **FC2小説 (novel.fc2.com)** | `novel.php?mode=tc&nid=600` | ❌ **変換不能「SERIES/TITLE : タイトルがありません」** (下記) |
+| **FC2小説 (novel.fc2.com)** | `novel.php?mode=tc&nid=600` | ❌→✅ **v1.5.1 で修正済み** (残件 1 参照。挿絵のルート相対 src は既知問題として残る) |
 | www.dnovels.net | — | ⚠️ **サイト消滅** (DNS 解決不可) |
 | www.mai-net.net | — | ⚠️ **サイト消滅** (DNS 解決不可) |
 | www.newvel.jp | — | ⚠️ **サイト消滅** (DNS 解決不可) |

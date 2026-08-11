@@ -44,7 +44,7 @@
 
 ### 検証
 
-- `gradlew test` 557 件 PASS / CI 全緑
+- `gradlew test` 557 件・失敗 0（ネットワーク依存テスト等はスキップ）/ CI 全緑
 - `.NET` ポート `JavaComparisonTests` 5/5 PASS
 - 全 12 対応サイトの実変換 dogfood（`docs/web-site-support-status.md`）
 
