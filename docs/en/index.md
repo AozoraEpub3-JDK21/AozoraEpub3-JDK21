@@ -42,7 +42,7 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21â€
 
 ## What's New in v1.5.2-jdk21
 
-- **Fixed painfully slow scrolling on the "Detailed settings" tab**: one mouse-wheel notch moved the panel by just 3 pixels, so reaching the settings at the bottom took endless scrolling. A notch now scrolls about three rows (and follows the display scaling)
+- **Fixed painfully slow scrolling on the "Detailed settings" tab**: one mouse-wheel notch moved the panel by just 3 pixels, so reaching the settings at the bottom took endless scrolling. A notch now scrolls about three rows (the step is derived from the font metrics measured at startup)
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 

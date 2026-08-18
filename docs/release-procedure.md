@@ -48,7 +48,8 @@
 - [ ] **なろう短編 1 件**: URL → 変換 → EPUB 生成を確認
 - [ ] **同じ URL で再実行** → 各話の再ダウンロードが走らないこと
       ※ 「キャッシュファイルを利用します。」は**一覧ページの取得に失敗してキャッシュへ
-      フォールバックしたとき**のログであり（`WebAozoraConverter.java:633`）、正常なキャッシュ
+      フォールバックしたとき**のログであり（`WebAozoraConverter#convertToAozoraText` の
+      一覧取得 catch 節）、正常なキャッシュ
       再利用では出力されない。判定は **HTTP リクエストが一覧ページの数件だけで、
       話数分のダウンロードが発生しないこと**で行う（例: 149 話の作品が数秒で変換完了する）
 - [ ] **青空文庫 URL 1 件**（`cards/NNNNNN/files/NNNN_NNNNN.html` の単話ページ）
@@ -90,15 +91,20 @@
 
 ### 2.3 バージョン更新箇所
 
-以下の **5 ファイル** すべてを新バージョンに更新する。漏れると VERSION 表示と JAR メタデータが食い違う：
+以下の **7 ファイル** すべてを新バージョンに更新する。漏れると VERSION 表示と JAR メタデータが食い違う：
 
 | ファイル | 更新箇所 |
 |---------|---------|
 | `src/AozoraEpub3.java` | `public static final String VERSION = "1.x.x-jdk21";` |
 | `src/com/github/hmdev/web/api/NarouApiClient.java` | User-Agent ヘッダ内のバージョン文字列 |
 | `build.gradle` | `version = '1.x.x-jdk21'` |
-| `docs/index.md` | バージョン・日付・ダウンロードリンク |
+| `docs/index.md` | バージョン・日付・ダウンロードリンク・「主な変更」節 |
 | `docs/en/index.md` | 英語版（日本語と必ずセットで更新） |
+| `README.md` | 配布ファイル名（ZIP / TAR.GZ）と「最近の変更」節 |
+| `RELEASE_NOTES.md` | 新しいバージョン節を追加（「未リリース」節はプレースホルダとして残す） |
+
+> `README.md` は配布 ZIP/TAR にも同梱される（`build.gradle` の include リスト）。
+> **README を更新したら dist を作り直す**こと。
 
 ---
 
