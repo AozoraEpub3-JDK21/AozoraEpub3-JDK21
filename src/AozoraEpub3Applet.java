@@ -1654,6 +1654,10 @@ public class AozoraEpub3Applet extends JPanel
 		tabScrollPane.setBorder(null);
 		tabScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		tabScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		//ビューが Scrollable 非実装の JPanel なので unit increment が既定 1px になり
+		//ホイール 1 ノッチ 3px しか動かない。行高基準に引き上げる (DPI スケールに追従)
+		tabScrollPane.getVerticalScrollBar().setUnitIncrement(rowH);
+		tabScrollPane.getVerticalScrollBar().setBlockIncrement(rowH * 4);
 		jTabbedPane.addTab(I18n.t("ui.tab.pageSettings"), pageSettingIcon, tabScrollPane);
 		
 		////////////////////////////////

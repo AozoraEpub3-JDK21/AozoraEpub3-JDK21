@@ -20,17 +20,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.5.1-jdk21 (August 11, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.1-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.5.2-jdk21 (August 18, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.2-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -40,14 +40,9 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.5.1-jdk21
+## What's New in v1.5.2-jdk21
 
-- **Fixed duplicated titles for Aozora Bunko HTML URLs**: converting a single-story page (e.g. Run, Melos!) produced a doubled title like "走れメロス 走れメロス"
-- **Auto-preview after conversion now works from the CLI and narou.rb**: enable "Open the preview automatically after conversion" in the GUI (`AutoPreview=1` in the ini) and conversions invoked by narou.rb / narou.rs open the finished EPUB in your browser. The preview runs in a separate process, so the caller is never blocked
-- **Fixed FC2 novel conversions failing** after the site changed its title-heading markup
-- **Clear notice for shut-down sites**: URLs of defunct sites (dNoVeLs / Arcadia / NEWVEL-LIBRARY) now report "this site has been discontinued" instead of an obscure network error
-- **Fixed CLI auto-margin cropping**: the `AutoMarginNombreSize` ini key was ignored and corrupted `AutoMarginPadding` in CLI conversions
-- **Build updated to Gradle 9.6.1** (distribution contents unchanged)
+- **Fixed painfully slow scrolling on the "Detailed settings" tab**: one mouse-wheel notch moved the panel by just 3 pixels, so reaching the settings at the bottom took endless scrolling. A notch now scrolls about three rows (and follows the display scaling)
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 

@@ -23,17 +23,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.5.1-jdk21 (2026年8月11日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.1-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.5.2-jdk21 (2026年8月18日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.2-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.1-jdk21/AozoraEpub3-1.5.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -43,14 +43,9 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.5.1-jdk21 の主な変更
+## v1.5.2-jdk21 の主な変更
 
-- **青空文庫 HTML URL の表題二重を修正**: 単話ページ（例: 走れメロス）の変換で表題が「走れメロス 走れメロス」のように二重になっていました
-- **エンコード後の自動プレビューが CLI・narou.rb 経由でも動作**: GUI の「変換完了後に自動でプレビューを開く」（ini の `AutoPreview=1`）を有効にすると、narou.rb / narou.rs からの変換でも完成した EPUB がブラウザで開きます。プレビューは別プロセスで開くため呼び出し側は止まりません
-- **FC2 小説の変換不能を修正**: サイト改修によるタイトル見出しの変更に追従しました
-- **サービス終了サイトの案内表示**: 閉鎖済みサイト（dNoVeLs / Arcadia / NEWVEL-LIBRARY）の URL を指定すると、わかりにくい通信エラーではなく「サービスを終了しているため変換できません」と表示します
-- **CLI の画像自動余白除去の修正**: ini の `AutoMarginNombreSize`（ノンブル高さ）が反映されず、`AutoMarginPadding` が壊れていた問題を修正
-- **ビルドを Gradle 9.6.1 に更新**（配布物の内容は不変）
+- **「詳細設定」タブのスクロールが極端に遅い問題を修正**: マウスホイール 1 ノッチで 3 ピクセルしか動かず、下端の設定にたどり着くまで延々とホイールを回す必要がありました。1 ノッチで約 3 行分スクロールします（表示倍率にも追従）
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 
