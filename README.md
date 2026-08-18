@@ -92,12 +92,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.5.1-jdk21.zip
+AozoraEpub3-1.5.2-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.5.1-jdk21.tar.gz
+AozoraEpub3-1.5.2-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -148,6 +148,9 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.5.2-jdk21 (2026-08-18)
+- **「詳細設定」タブのスクロールが極端に遅い問題を修正**: マウスホイール 1 ノッチで 3 ピクセルしか動かなかった。1 ノッチで約 3 行分スクロールする（表示倍率にも追従）
 
 ### v1.5.1-jdk21 (2026-08-11)
 - **青空文庫 HTML URL の表題二重を修正**: 単話ページの変換で表題が「走れメロス 走れメロス」のように二重になっていました
