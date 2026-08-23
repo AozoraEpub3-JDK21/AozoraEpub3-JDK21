@@ -23,17 +23,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.5.2-jdk21 (2026年8月18日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.2-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.6.0-jdk21 (2026年8月23日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.6.0-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -43,9 +43,13 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.5.2-jdk21 の主な変更
+## v1.6.0-jdk21 の主な変更
 
-- **「詳細設定」タブのスクロールが極端に遅い問題を修正**: マウスホイール 1 ノッチで 3 ピクセルしか動かず、下端の設定にたどり着くまで延々とホイールを回す必要がありました。1 ノッチで約 3 行分スクロールします（送り量は起動時のフォントメトリクスから算出されます）
+- **バージョン更新確認**: GitHub の最新リリースと実行中のバージョンを比べて、更新の有無をお知らせします。GUI は画面上部の「更新確認」ボタン、CLI は `--check-update` です。自動更新も起動時の自動チェックもありません（ダウンロードと差し替えはご自身で行ってください）
+- **表題ページの「横書き」が保存されない問題を修正**: GUI で「横書き」を選んでも設定が「中央」のままになっていました。同じ原因で「スタイル」タブの余白パネルが 1 つに合体していた表示崩れと、余白の指定が正しく出力されない問題も直っています
+- **ダークテーマでメニューの文字が黒いままだった問題を修正**: 「言語」「端末設定」のメニューが暗い背景に黒文字で表示されて読めませんでした
+- **表紙設定「表紙無し」が保存されない問題を修正**: あわせて設定の保存形式を UI 言語に依存しない形に変更したため、日本語⇔英語を切り替えても設定が保たれます
+- **コマンドラインの余白設定が正しく出力されない問題を修正**: `presets/` のプリセットを `-i` で渡したときに、余白の単位が欠けた不正な指定になっていました
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 

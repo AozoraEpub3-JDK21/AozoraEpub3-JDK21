@@ -20,17 +20,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.5.2-jdk21 (August 18, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.5.2-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.6.0-jdk21 (August 23, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.6.0-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.5.2-jdk21/AozoraEpub3-1.5.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -40,9 +40,13 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.5.2-jdk21
+## What's New in v1.6.0-jdk21
 
-- **Fixed painfully slow scrolling on the "Detailed settings" tab**: one mouse-wheel notch moved the panel by just 3 pixels, so reaching the settings at the bottom took endless scrolling. A notch now scrolls about three rows (the step is derived from the font metrics measured at startup)
+- **Update check**: compares the latest GitHub release with the version you are running and tells you whether an update exists. Use the "Check for Updates" button at the top of the GUI, or `--check-update` on the command line. Nothing is updated automatically, and no check runs at startup — downloading and replacing the files is up to you
+- **Fixed the title page "horizontal" setting not being saved**: choosing "horizontal" in the GUI still left the setting on "centered". The same root cause also broke the layout of the margin panels on the "Style" tab and produced an invalid `@page` margin
+- **Fixed black-on-dark menu text in the dark theme**: the "Language" and "Device settings" menus were unreadable against the dark background
+- **Fixed the cover setting "no cover" not being saved**: the setting is now stored in a language-independent form, so it survives switching the UI between Japanese and English
+- **Fixed invalid margins on the command line**: passing a preset from `presets/` with `-i` produced a margin declaration with the unit missing
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 
