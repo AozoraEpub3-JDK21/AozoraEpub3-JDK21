@@ -178,9 +178,18 @@ public class AozoraEpub3Applet extends JPanel
 	/** 言語切替 */
 	JButton jButtonLanguage;
 	JPopupMenu jPopupLanguage;
+	/** ini の Cover に書く「入力ファイル名と同じ画像」。表示ラベルは UI 言語で変わるので使わない */
+	static final String COVER_SAME_FILE = "#samefile";
+	/** ini の Cover に書く「表紙無し」。同上 */
+	static final String COVER_NONE = "#none";
 	/** テーマ切替 (システム追従/ライト/ダーク) */
 	JLabel jLabelTheme;
 	JComboBox<String> jComboTheme;
+	/** テーマ切替時に手動で L&F を反映するポップアップメニュー。
+	 * JPopupMenu は表示するまでどのウィンドウのツリーにも属さないため、
+	 * FlatLaf.updateUI() (= 全ウィンドウの updateComponentTreeUI) が届かず、
+	 * 生成時の配色 (文字色) のまま取り残される */
+	final List<JPopupMenu> themedPopups = new ArrayList<>();
 
 	/** 表題 */
 	JComboBox<String> jComboTitle;
@@ -701,7 +710,8 @@ public class AozoraEpub3Applet extends JPanel
 		label = new JLabel("  ");
 		panel.add(label);
 		jPopupPreset = new JPopupMenu();
-		
+		this.themedPopups.add(jPopupPreset);
+
 		//presetsファイルから名称を取得してPopupに追加
 		java.util.List<Path> presetFiles;
 		try (java.util.stream.Stream<Path> stream = Files.list(Path.of(jarPath+"presets"))) {
@@ -738,6 +748,7 @@ public class AozoraEpub3Applet extends JPanel
 
 		// 言語切替メニュー
 		jPopupLanguage = new JPopupMenu();
+		this.themedPopups.add(jPopupLanguage);
 		JMenuItem langJa = new JMenuItem(I18n.t("ui.language.ja"));
 		langJa.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
 			props.setProperty("UILang", "ja");
@@ -2199,26 +2210,32 @@ public class AozoraEpub3Applet extends JPanel
 		for (int i=0; i<jTextPageMargins.length; i++) {
 			label = new JLabel(marginLabels[i]);
 			panel.add(label);
-			JTextField tf = new JTextField();
+			//ini に PageMargin が無いときはこの初期値がそのまま @page margin になる。
+			//空欄のままだと "margin: em em em em" という壊れた CSS が出る
+			JTextField tf = new JTextField("0.5");
 			tf.setHorizontalAlignment(JTextField.RIGHT);
+			tf.addFocusListener(new TextSelectFocusListener(tf));
 			tf.setInputVerifier(numberVerifier0);
 			tf.setMaximumSize(text3);
 			tf.setPreferredSize(text3);
 			panel.add(tf);
 			jTextPageMargins[i] = tf;
 		}
+		panel.add(new JLabel("  "));
 		ButtonGroup group = new ButtonGroup();
 		jRadioPageMarginUnit0 = new JRadioButton(I18n.t("ui.radio.marginUnit.char")+" ", true);
 		jRadioPageMarginUnit0.setBorder(padding0);
 		jRadioPageMarginUnit0.setFocusPainted(false);
 		panel.add(jRadioPageMarginUnit0);
-			jRadioTitleHorizontal = new JRadioButton(I18n.t("ui.label.titleHorizontal"));
+		group.add(jRadioPageMarginUnit0);
 		jRadioPageMarginUnit1 = new JRadioButton("%");
 		jRadioPageMarginUnit1.setBorder(padding0);
 		jRadioPageMarginUnit1.setFocusPainted(false);
 		panel.add(jRadioPageMarginUnit1);
 		group.add(jRadioPageMarginUnit1);
-		
+
+		////////////////////////////////
+		panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
 		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.textMarginHtml")));
 		panelH.add(panel);
@@ -2663,6 +2680,7 @@ public class AozoraEpub3Applet extends JPanel
 			}
 		});
 		final JPopupMenu jTextPopup = new JPopupMenu();
+		this.themedPopups.add(jTextPopup);
 		jTextPopup.add(jCopyMenu);
 		jTextPopup.add(jPasteMenu);
 		jTextArea.addMouseListener(new MouseListener() {
@@ -4486,6 +4504,10 @@ public class AozoraEpub3Applet extends JPanel
 	 * 起動時と、テーマ切替 (UiThemeManager.switchTo) の直後に呼ぶ */
 	void applyThemeColors()
 	{
+		//未表示の JPopupMenu は FlatLaf.updateUI() の対象外なので個別に更新する
+		for (JPopupMenu popup : this.themedPopups) {
+			SwingUtilities.updateComponentTreeUI(popup);
+		}
 		applyDstPathForeground();
 		updateApiStatusLabel();
 		if (this.jScrollLibraryDirs != null) {
@@ -5076,8 +5098,13 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsSelected(jCheckPubFirst, props, "PubFirst");
 		setPropsSelected(jCheckUseFileName, props, "UseFileName");
 		//表紙
-		if (props.getProperty("Cover")==null||props.getProperty("Cover").length()==0) jComboCover.setSelectedIndex(0);
-		else jComboCover.setSelectedItem(props.getProperty("Cover"));
+		String coverValue = props.getProperty("Cover");
+		if (coverValue == null || coverValue.length() == 0) jComboCover.setSelectedIndex(0);
+		else if (COVER_SAME_FILE.equals(coverValue)) jComboCover.setSelectedIndex(1);
+		else if (COVER_NONE.equals(coverValue)) jComboCover.setSelectedIndex(2);
+		//旧形式 (表示ラベルをそのまま書いていた ini) は、同じ UI 言語ならここで一致する。
+		//言語が変わっていれば一致せず選択なしになるが、これは旧 ini 固有の制限
+		else jComboCover.setSelectedItem(coverValue);
 		//表紙履歴
 		setPropsSelected(jCheckCoverHistory, props, "CoverHistory");
 		//有効行数
@@ -5334,9 +5361,16 @@ public class AozoraEpub3Applet extends JPanel
 		props.setProperty("Ext", ""+this.jComboExt.getEditor().getItem().toString().trim());
 		props.setProperty("ChkConfirm", this.jCheckConfirm.isSelected()?"1":"");
 		
-		//先頭の挿絵と表紙無しのみ記憶
-		if (this.jComboCover.getSelectedIndex() == 0) props.setProperty("Cover","");
-		else if (this.jComboCover.getSelectedIndex() == 1) props.setProperty("Cover", ""+this.jComboCover.getEditor().getItem().toString().trim());
+		//プリセット項目 ([先頭の挿絵] / [入力ファイル名と同じ画像] / [表紙無し]) だけ記憶する。
+		//個別のファイルパスや URL (選択なし = index -1、または http://) は次回に持ち越さない。
+		//上流では [入力ファイル名と同じ画像] が index 1 に挿入された際に条件が更新されず、
+		//[表紙無し] を選んでも ini に書かれない (前回値が残る) 状態になっていた。
+		//表示ラベルではなく言語非依存のトークンで書くこと。ラベルを書くと UI 言語を
+		//切り替えた次の起動で復元できず、ラベル名のファイルを探しに行ってしまう
+		int coverIndex = this.jComboCover.getSelectedIndex();
+		if (coverIndex == 1) props.setProperty("Cover", COVER_SAME_FILE);
+		else if (coverIndex == 2) props.setProperty("Cover", COVER_NONE);
+		else props.setProperty("Cover", "");
 		props.setProperty("CoverHistory", this.jCheckCoverHistory.isSelected()?"1":"");
 		
 		props.setProperty("MaxCoverLine", this.jTextMaxCoverLine.getText());
