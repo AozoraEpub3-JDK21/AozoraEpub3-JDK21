@@ -111,10 +111,12 @@ import com.github.hmdev.info.BookInfoHistory;
 import com.github.hmdev.info.ProfileInfo;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.preview.LibraryScanner;
+import com.github.hmdev.preview.PreviewLauncher;
 import com.github.hmdev.preview.PreviewLibraryPrefs;
 import com.github.hmdev.swing.JConfirmDialog;
 import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
+import com.github.hmdev.update.UpdateChecker;
 import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.util.I18n;
@@ -178,6 +180,9 @@ public class AozoraEpub3Applet extends JPanel
 	/** 言語切替 */
 	JButton jButtonLanguage;
 	JPopupMenu jPopupLanguage;
+	/** 更新確認 */
+	JButton jButtonUpdate;
+
 	/** ini の Cover に書く「入力ファイル名と同じ画像」。表示ラベルは UI 言語で変わるので使わない */
 	static final String COVER_SAME_FILE = "#samefile";
 	/** ini の Cover に書く「表紙無し」。同上 */
@@ -792,6 +797,16 @@ public class AozoraEpub3Applet extends JPanel
 			jPopupLanguage.show(jButtonLanguage, 8, 20);
 		}});
 		panel.add(jButtonLanguage);
+
+		// 更新確認 (手動のみ。自動更新も起動時チェックも行わない)
+		jButtonUpdate = new JButton(I18n.t("ui.update.button"));
+		jButtonUpdate.setToolTipText(I18n.t("ui.update.tooltip"));
+		jButtonUpdate.setBorder(padding3);
+		jButtonUpdate.setFocusPainted(false);
+		jButtonUpdate.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
+			checkUpdate();
+		}});
+		panel.add(jButtonUpdate);
 
 		//テーマ切替 (行の右端)
 		panel.add(Box.createHorizontalGlue());
@@ -4498,6 +4513,74 @@ public class AozoraEpub3Applet extends JPanel
 		jComboDstPath.setForeground(jCheckSamePath.isSelected()
 			? uiColor("ComboBox.disabledForeground", Color.gray)
 			: uiColor("ComboBox.foreground", Color.black));
+	}
+
+	/**
+	 * 最新リリースを確認して結果をダイアログで知らせる。自動更新はしない。
+	 * 通信は EDT を止めないよう SwingWorker で行い、その間はボタンを無効化して二重実行を防ぐ。
+	 */
+	void checkUpdate()
+	{
+		this.jButtonUpdate.setEnabled(false);
+		LogAppender.println(I18n.t("ui.update.checking"));
+		new SwingWorker<UpdateChecker.Result, Void>() {
+			@Override
+			protected UpdateChecker.Result doInBackground()
+			{
+				return UpdateChecker.check(AozoraEpub3.VERSION);
+			}
+			@Override
+			protected void done()
+			{
+				jButtonUpdate.setEnabled(true);
+				UpdateChecker.Result result;
+				try {
+					result = get();
+				} catch (InterruptedException e) {
+					//「確認しています...」だけ残して黙らないよう、中断もログに出す
+					Thread.currentThread().interrupt();
+					LogAppender.error(I18n.t("ui.update.failed.log", "interrupted"));
+					return;
+				} catch (Exception e) {
+					LogAppender.error(I18n.t("ui.update.failed.log", String.valueOf(e.getMessage())));
+					return;
+				}
+				showUpdateResult(result);
+			}
+		}.execute();
+	}
+
+	/** 更新確認の結果表示。更新があればダウンロードページを開くか確認する */
+	private void showUpdateResult(UpdateChecker.Result result)
+	{
+		String title = I18n.t("ui.update.title");
+		if (!result.isSuccess()) {
+			LogAppender.error(I18n.t("ui.update.failed.log", result.error()));
+			JOptionPane.showMessageDialog(this.jFrameParent,
+				I18n.t("ui.update.failed", result.error(), result.downloadPageUrl()),
+				title, JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		if (!result.updateAvailable()) {
+			LogAppender.println(I18n.t("ui.update.latest.log", result.currentVersion()));
+			JOptionPane.showMessageDialog(this.jFrameParent,
+				I18n.t("ui.update.latest", result.currentVersion()),
+				title, JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		LogAppender.println(I18n.t("ui.update.available.log", result.latestVersion(), result.currentVersion()));
+		Object[] options = { I18n.t("ui.update.open"), I18n.t("ui.update.close") };
+		int selected = JOptionPane.showOptionDialog(this.jFrameParent,
+			I18n.t("ui.update.available", result.latestVersion(), result.currentVersion(), result.downloadPageUrl()),
+			title, JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+		if (selected == 0) {
+			try {
+				PreviewLauncher.openInBrowser(result.downloadPageUrl());
+			} catch (Exception e) {
+				LogAppender.error(I18n.t("ui.update.open.failed", result.downloadPageUrl()));
+				logger.debug("ダウンロードページを開けませんでした", e);
+			}
+		}
 	}
 
 	/** UIManager 由来の色をコンポーネントへ再適用する。
