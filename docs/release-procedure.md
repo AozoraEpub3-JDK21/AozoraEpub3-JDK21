@@ -175,6 +175,22 @@ java -jar build/libs/AozoraEpub3.jar -h
 java -jar build/libs/AozoraEpub3.jar &  # 5 秒以内に Window が出ること
 ```
 
+> **⚠️ GUI を起動したら、必ず `git status` で `AozoraEpub3.ini` を確認する。**
+> GUI は**終了時にリポジトリの `AozoraEpub3.ini` を書き戻す**（コメントを全部落とした
+> フラットな全キーダンプになる）。**dist より前に GUI を起動すると、その ini が配布物に入る。**
+> 実際に v1.6.0 のリリース作業で踏み、配布 ZIP に説明コメントの消えた ini が入った状態で
+> ビルドされていた（公開前に発見して再ビルド）。
+>
+> ```bash
+> git status --short AozoraEpub3.ini   # 差分が出ていたら
+> git restore AozoraEpub3.ini          # 戻してから dist をやり直す
+> ```
+>
+> GUI 起動確認をこの §3.4（dist の後）に置いているのはこのため。
+> §2.1.1 の E2E で GUI を触った場合も同様に確認すること。
+> `LastDir` / `DstPath` にローカルの作業パスが載ることもあるので、
+> **配布前に必ず中身を見る**（`unzip -p build/distributions/*.zip AozoraEpub3.ini | head`）。
+
 **必須**: 上記 grep の出力に `chuki_*.txt`、`template/`、`gaiji/`、`web/`、`presets/`、`setting_narourb.ini`、`AozoraEpub3.ini` が**すべて**現れること。1 つでも欠けていれば §6.1 を参照して `build.gradle` の 3 箇所を確認する。
 
 ### 3.5 SHA256SUMS 生成
@@ -496,6 +512,11 @@ gh release edit v1.x.x-jdk21 --draft
 
 ## 9. 改訂履歴
 
+- 2026-08-23: v1.6.0-jdk21 リリース時の実施結果を反映。§3.4 に「GUI 起動後は
+  `AozoraEpub3.ini` の差分を必ず確認する」警告を追加（GUI が終了時に同梱 ini を
+  書き戻すため、dist 前に GUI を起動すると配布物に混入する。今回実際に踏んだ）。
+  §2.1.1 の「旧バージョンのキャッシュ互換」は、旧配布フォルダの `.cache` を
+  **temp にコピーしてから**検証すると利用者のキャッシュを汚さずに済む
 - 2026-08-18: v1.5.2-jdk21 リリース時の実施結果を反映。§2.1.1 のキャッシュ再利用の判定条件を訂正
   （「キャッシュファイルを利用します」はフォールバック時のみのログで、正常な再利用では出力されない）
 - 2026-08-01: 監査 #16 の修正（CLI `-url` の zip / txtz / rar 対応）に合わせて §2.1.1 を更新。§6.11 の epubcheck jar の記述を現状に合わせて更新
