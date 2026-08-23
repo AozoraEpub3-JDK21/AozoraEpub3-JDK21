@@ -27,6 +27,7 @@ import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.pipeline.WriterConfigurator;
+import com.github.hmdev.update.UpdateChecker;
 import com.github.hmdev.web.NarouFormatSettings;
 import com.github.hmdev.web.WebAozoraConverter;
 import com.github.hmdev.writer.Epub3ImageWriter;
@@ -37,7 +38,7 @@ public class AozoraEpub3
 {
 	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3.class);
 
-	public static final String VERSION = "1.5.2-jdk21";
+	public static final String VERSION = "1.6.0-jdk21";
 
 	/** 最後に出力に成功した EPUB。CLI の --preview が変換後に開く対象。
 	 * GUI は変換経路が異なるため AozoraEpub3Applet.previewTargetFile を使う */
@@ -88,6 +89,8 @@ public class AozoraEpub3
 			//コマンドライン オプション設定
 			Options options = new Options();
 			options.addOption("h", "help", false, "show usage");
+			options.addOption("cu", "check-update", false,
+				"最新バージョンを GitHub で確認し、更新があればダウンロードページを案内します (自動更新はしません)");
 			options.addOption("i", "ini", true, "指定したiniファイルから設定を読み込みます (コマンドラインオプション以外の設定)");
 			options.addOption("t", true, "本文内の表題種別\n[0:表題→著者名] (default)\n[1:著者名→表題]\n[2:表題→著者名(副題優先)]\n[3:表題のみ(1行)]\n[4:表題+著者名のみ(2行)]\n[5:なし]");
 			options.addOption("tf", false, "入力ファイル名を表題に利用");
@@ -133,6 +136,10 @@ public class AozoraEpub3
 			if (commandLine.hasOption('h') ) {
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return 0;
+			}
+			//更新確認（-h と同じく入力ファイル無しで指定されるため、ファイル数チェックより先に処理する）
+			if (commandLine.hasOption("check-update")) {
+				return checkUpdate();
 			}
 			String[] libraryDirs = commandLine.getOptionValues("library");
 			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
@@ -597,6 +604,28 @@ public class AozoraEpub3
 			if (!fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".epub")) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * 最新リリースを確認して結果を表示する。自動更新は行わない。
+	 * @return 確認に成功したら 0（更新の有無は問わない）、通信できなければ 1
+	 */
+	static int checkUpdate()
+	{
+		LogAppender.println("最新バージョンを確認しています...");
+		UpdateChecker.Result result = UpdateChecker.check(VERSION);
+		if (!result.isSuccess()) {
+			LogAppender.error("更新の確認に失敗しました: "+result.error());
+			LogAppender.println("ダウンロードページ: "+result.downloadPageUrl());
+			return 1;
+		}
+		if (result.updateAvailable()) {
+			LogAppender.println("新しいバージョンがあります: "+result.latestVersion()+" (使用中: "+result.currentVersion()+")");
+			LogAppender.println("ダウンロードページ: "+result.downloadPageUrl());
+		} else {
+			LogAppender.println("最新バージョンを使用しています: "+result.currentVersion());
+		}
+		return 0;
 	}
 
 	/** EPUB を変換せずにプレビューし、ブラウザが閉じられるか Ctrl-C まで待機する */

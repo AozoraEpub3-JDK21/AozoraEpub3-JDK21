@@ -37,10 +37,13 @@
 | 22 | 🔴 高 | CLI で変換すると章見出しが目次に入らない（GUI 既定値との乖離） | ✅ 対応済 | — |
 | 23 | 🟢 低 | `ChapterPattern=1` で `ChapterPatternText` が無いと章パターンが null になる | ✅ 対応済 | — |
 | 24 | 🟡 中 | 目次以外にも GUI / CLI の既定値ドリフトが残る（`TocVertical` / `PageBreak` / `FitImage` ほか） | ✅ 対応済 | — |
-| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポ + `AutoMarginPadding` 上書きを修正） | #80 |
+| 25 | 🟡 中 | `GothicUseBold` のキー名タイポ / `BodyMarginUnit` の連結不正 / CLI 未配線の GUI 設定 | 🔶 一部対応（タイポ + `AutoMarginPadding` 上書き + margin 単位連結を修正） | #80 |
 | 26 | 🟡 中 | CLI の ini 探索がカレントのみで、配布フォルダ外から実行すると同梱 ini が無視される | ✅ 対応済 | — |
 | 27 | 🟢 低 | jar パス導出がクラスパス区切り・パス区切りとも固定文字で環境非対応 | ❌ 未対応（記録のみ） | — |
 | 28 | 🟡 中 | 青空文庫 HTML URL 変換で表題が二重になる（SERIES と TITLE が同一マッチ） | ✅ 対応済 | #80 |
+| 29 | 🔴 高 | i18n 一括置換の事故で GUI 生成コードが破損（表題ページ横書きが保存されない / 余白パネル合体 / `margin: em`） | ✅ 対応済 | — |
+| 30 | 🟢 低 | 表紙コンボの選択が ini に保存されない / 多言語ラベルのまま保存（言語切替で復元できない） | ✅ 対応済 | — |
+| 31 | 🔴 高 | `PreviewServer.serveSettings` の `readNBytes` がボディ読み取りでブロックし、サーバスレッドが永久に固まる（`PreviewServerTest` が 2 件ハング/失敗） | ❌ 未対応（別 PR） | — |
 
 ---
 
@@ -542,9 +545,14 @@ extract.txt 側で `SERIES` をコメントアウトする案もあるが、コ�
   `props.getProperty("gothicUseBold")` と**先頭小文字**で読んでいる。GUI が書くキーは
   `GothicUseBold` なので、ini に何を書いても常に false。
   項目 22 で直した `hapterNumParenTitle`（先頭 C 欠落）と同種
-- **`BodyMarginUnit` の連結が壊れている**: 上記 `WriterConfigurator.java:83,90` の単位連結。
-  GUI は `"em"` / `"%"` に変換してから渡すのに、CLI は ini の生値（`"0"` / `"1"`）を連結するため
-  `"00"` のような不正な CSS 値になる。`BodyMargin` が 0 のときだけ無害
+- ~~**`BodyMarginUnit` / `PageMarginUnit` の連結が壊れている**~~（**✅ 2026-08-23 修正済み**）:
+  `WriterConfigurator` の単位連結。GUI は `"em"` / `"%"` に変換してから渡すのに、
+  CLI は ini の生値（`"0"` / `"1"`）を連結するため `"0.50"` のような不正な CSS 値になっていた。
+  `PageMargin` 側も同じ壊れ方で、**`presets/kobo_glo.ini` / `kobo_touch.ini` は
+  `PageMargin=0,0.5,0,0` + `PageMarginUnit=0` を同梱しているため `-i` で渡すと実際に発現していた**。
+  `WriterConfigurator.cssMarginUnit()` を追加して `"1"` → `%`、それ以外 → `em` に変換する
+  （テスト: `WriterConfiguratorTest` の margin 4 ケース）。
+  同梱 `AozoraEpub3.ini` が `PageMargin` / `BodyMargin` を意図的に省いていた回避策は不要になった
 - **`ImageFloatType` が 1 ずれる**: GUI はコンボの index（0/1）で保存し、内部で `+1` して使う
   （`AozoraEpub3Applet.java:3682` 付近）。CLI は `+1` しないため、float を有効にした ini で
   GUI と CLI の挙動が食い違う。ただし `ImageFloat` チェックボックス自体を CLI が読まないため、
@@ -1293,6 +1301,110 @@ epubcheck 5.2.0（CI 版）でも 5.3.0（ローカル）でも、タイトル�
 このまま junrar を上げると回帰に気づけない。junrar 更新の前に、
 RAR4 フィクスチャ + 抽出テストを追加して現行動作のベースラインを確立すること。
 これは junrar のバージョン判断と独立して価値がある。
+
+---
+
+## GUI 状態の永続化まわり（2026-08-23 追加）
+
+### 29. i18n 作業のミスで GUI コンポーネント生成コードが壊れていた — ✅ 修正済み
+
+**発見**: 2026-08-23、ユーザー報告「表題ページで横書きを選んでも ini の `TitlePage` が 1 になる」。
+
+**原因**: `90256ae`（変換タブのラベル多言語化）で一括置換が暴走し、
+`src/AozoraEpub3Applet.java` のスタイルタブ余白パネル生成部の行が別の文に上書きされていた。
+
+| 消えた行 | 上書きした行 | 症状 |
+|---|---|---|
+| `group.add(jRadioPageMarginUnit0);` | `jRadioTitleHorizontal = new JRadioButton(...)` | 画面上の「横書き」ラジオとフィールドが別インスタンスになり、`TitlePage=2` を保存も復元もできない。`PageMarginUnit` の 字/% も排他にならない |
+| `panel = new JPanel();` | （`3257c1c` で削除されたまま復元されず） | 「テキスト余白 (html margin)」の 4 欄が「@page margin」パネルに合流 |
+| `JTextField jTextField = new JTextField("0.5");` | `new JTextField()` | ini に `PageMargin` が無い配布時状態で欄が空 →`margin: em em em em` という壊れた CSS を出力 |
+
+`jCheckTocPage` / `jRadioTocV` / `jRadioTocH` を巻き込んだ分は `3257c1c` で対応済みだった。
+
+**対応**: 3 点とも復元。あわせて全 `JRadioButton` フィールドについて
+「生成 1 回・ButtonGroup 登録 1 回」を、全 Swing フィールドについて
+「どこかの `add()` に渡っている」ことを機械的に確認した（他に取りこぼしなし）。
+
+**再発防止のヒント**: 同種の事故は
+`grep -oP '^\s*\Kj\w+(?=\s*=\s*new\s)' | sort | uniq -c | awk '$1>1'`
+（フィールドの二重代入検出）で機械的に見つかる。i18n / 一括置換の後はこれを回す。
+
+### 30. 表紙コンボの選択が ini に保存されない / 多言語ラベルのまま保存される — ✅ 修正済み
+
+**発見**: 2026-08-23、項目 29 の類似事象調査（後半はサブエージェントレビューの指摘）。
+
+**問題 1（永続化漏れ）**: `AozoraEpub3Applet` の `Cover` 保存は
+`index == 0` と `index == 1` しか書いていなかった。上流 1.0.6b19（`5e41829`）で
+`[入力ファイル名と同じ画像]` が index 1 に挿入され `[表紙無し]` が index 2 へずれた際に
+条件が更新されず、**`[表紙無し]` を選んでも ini に書かれない**（前回値が残る）状態だった。
+
+**問題 2（多言語ラベル依存）**: 保存していた値が **UI 言語のラベル文字列そのもの**
+（`[入力ファイル名と同じ画像]` / `[Cover: same as input file]`）だったため、
+言語を切り替えて再起動すると `setSelectedItem` がどの項目にも一致せず選択なし（index -1）になり、
+変換時は「そのラベル名のファイル」を探しに行っていた。
+
+**対応**: 言語非依存のトークンで書くようにした。
+
+- 保存: index 1 → `#samefile`、index 2 → `#none`、それ以外（先頭の挿絵 / `http://` /
+  個別パス）→ 空文字。個別のファイルパス・URL を次回に持ち越さないのは従来どおり
+- 読み込み: 空 → index 0、`#samefile` → index 1、`#none` → index 2、
+  それ以外は従来どおり `setSelectedItem`（**旧形式のラベル文字列を書いた既存 ini も、
+  同じ UI 言語であればここで一致する**）
+- 定数は `AozoraEpub3Applet.COVER_SAME_FILE` / `COVER_NONE`
+
+`Cover` は GUI 専用キー（CLI / `SettingDefaults` は読まない）なので影響範囲は GUI に閉じる。
+
+### 31. `serveSettings` の `readNBytes` でサーバスレッドが永久にブロックする — ❌ 未対応（別 PR で対応）
+
+**発見**: 2026-08-23、項目 29/30 の修正後に `gradlew test` が 50 分以上無反応になったため
+スレッドダンプを取得。**clean な HEAD ワークツリー（`5811d02`、差分ゼロ）でも同じ場所で再現**するため、
+既存のバグ。
+
+**症状**: `gradlew test` が `PreviewServerTest` で停止して完了しない。同クラスで 2 件が壊れている。
+
+| テスト | 症状 |
+|---|---|
+| `settingsRoundTripThroughApi` | **ハング**（テストランナーごと停止） |
+| `postFromAnotherOriginIsRejected` | `PreviewServerTest.java:850` で `ComparisonFailure`（`GET /api/settings` が `{}` を返さない） |
+
+**スレッドダンプ（要点）**:
+
+```
+"Test worker"          → HttpClientImpl.send        (PreviewServerTest.java:764)   ← レスポンス待ち
+"aozora-preview-http"  → InputStream.readNBytes     (PreviewServer.java:451)       ← ボディ待ち
+                          sun.nio.ch.SocketDispatcher.read0 (RUNNABLE)
+```
+
+**原因**: `PreviewServer.java:451`
+
+```java
+byte[] body = exchange.getRequestBody().readNBytes(PreviewSettingsStore.MAX_BYTES + 1);
+```
+
+`InputStream.readNBytes(n)` は **「n バイト読む」か「EOF」まで戻らない**。
+リクエストボディが 16 バイトしか無くても 65537 バイト読もうとして待ち続け、
+クライアントはレスポンスを待つ、という相互待ちになる。
+サーバ側は `com.sun.net.httpserver` の固定長ストリームなので、本来は残量 0 で `-1` が返るはずだが、
+この環境（JDK 21.0.12）では socket read でブロックしたままになっている。
+
+**影響範囲**: プレビュー機能の `POST /api/settings` のみ。実ブラウザでも、
+Content-Length どおりにボディが届かなければ HTTP サーバのスレッドプールが 1 本ずつ潰れる
+（`aozora-preview-http` のスレッド枯渇 → プレビューが応答しなくなる）。
+変換機能そのものには影響しない。
+
+**修正方針（別 PR）**:
+
+- `readNBytes(n)` をやめ、Content-Length を見て**その分だけ**読む。
+  上限超過（`> MAX_BYTES`）は読み切らずに 413 で切る
+- ヘッダが無い / チャンク送信のケースは `readAllBytes()` + サイズ上限のガードで受ける
+- あわせて `HttpServer` 側にボディ読み取りのタイムアウトを持たせるか検討する
+- テストは既存の `settingsRoundTripThroughApi` /
+  `postFromAnotherOriginIsRejected` がそのまま回帰テストになる。
+  加えて「Content-Length より短いボディ」ケースを足すと再発を確実に捕まえられる
+
+**当面の回避**: `gradlew test` を回すときは `PreviewServerTest` を除外する
+（init script で `filter { excludeTestsMatching "com.github.hmdev.preview.PreviewServerTest" }`）。
+除外した状態では 497 件すべて PASS することを確認済み。
 
 ---
 

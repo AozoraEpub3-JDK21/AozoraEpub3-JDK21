@@ -75,4 +75,64 @@ public class WriterConfiguratorTest {
 		assertEquals(0.0f, getFloatField(writer, "autoMarginPadding"), 0.0001f);
 		assertEquals(0.03f, getFloatField(writer, "autoMarginNombreSize"), 0.0001f);
 	}
+
+	private String[] getStringArrayField(Epub3Writer writer, String name) throws Exception {
+		Field f = Epub3Writer.class.getDeclaredField(name);
+		f.setAccessible(true);
+		return (String[])f.get(writer);
+	}
+
+	/** ini の単位 "0" を CSS の em に変換すること (旧: 生値 "0" を連結して "0.50" になっていた) */
+	@Test
+	public void testPageMarginUnitCharBecomesEm() throws Exception {
+		Properties props = new Properties();
+		props.setProperty("PageMargin", "0,0.5,0,0");
+		props.setProperty("PageMarginUnit", "0");
+
+		Epub3Writer writer = new Epub3Writer("");
+		WriterConfigurator.apply(props, writer, new Epub3ImageWriter(""));
+
+		assertArrayEquals(new String[]{"0em", "0.5em", "0em", "0em"},
+			getStringArrayField(writer, "pageMargin"));
+	}
+
+	/** ini の単位 "1" は % */
+	@Test
+	public void testBodyMarginUnitPercent() throws Exception {
+		Properties props = new Properties();
+		props.setProperty("BodyMargin", "1,0.5,1,0.5");
+		props.setProperty("BodyMarginUnit", "1");
+
+		Epub3Writer writer = new Epub3Writer("");
+		WriterConfigurator.apply(props, writer, new Epub3ImageWriter(""));
+
+		assertArrayEquals(new String[]{"1%", "0.5%", "1%", "0.5%"},
+			getStringArrayField(writer, "bodyMargin"));
+	}
+
+	/** 単位キーが無ければ GUI と同じ既定 (字 = em) に倒す */
+	@Test
+	public void testMarginUnitDefaultsToEm() throws Exception {
+		assertEquals("em", WriterConfigurator.cssMarginUnit(null));
+		assertEquals("em", WriterConfigurator.cssMarginUnit(""));
+		assertEquals("em", WriterConfigurator.cssMarginUnit("0"));
+		assertEquals("em", WriterConfigurator.cssMarginUnit("2"));
+		assertEquals("%", WriterConfigurator.cssMarginUnit("1"));
+		//ini の値に空白が混ざっても判定できること
+		assertEquals("%", WriterConfigurator.cssMarginUnit(" 1 "));
+	}
+
+	/** 要素数が 4 でない壊れた値は 0,0,0,0 にフォールバックし、単位も付けない */
+	@Test
+	public void testBrokenMarginFallsBackWithoutUnit() throws Exception {
+		Properties props = new Properties();
+		props.setProperty("PageMargin", ",,,");
+		props.setProperty("PageMarginUnit", "1");
+
+		Epub3Writer writer = new Epub3Writer("");
+		WriterConfigurator.apply(props, writer, new Epub3ImageWriter(""));
+
+		assertArrayEquals(new String[]{"0", "0", "0", "0"},
+			getStringArrayField(writer, "pageMargin"));
+	}
 }
