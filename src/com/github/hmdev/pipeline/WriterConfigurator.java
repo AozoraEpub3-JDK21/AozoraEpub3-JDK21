@@ -77,15 +77,15 @@ public final class WriterConfigurator {
 		try { pageMargin = props.getProperty("PageMargin").split(","); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		if (pageMargin.length != 4) pageMargin = new String[]{"0", "0", "0", "0"};
 		else {
-			String pageMarginUnit = props.getProperty("PageMarginUnit");
-			for (int i=0; i<4; i++) { pageMargin[i] += pageMarginUnit; }
+			String pageMarginUnit = cssMarginUnit(props.getProperty("PageMarginUnit"));
+			for (int i=0; i<4; i++) { pageMargin[i] = pageMargin[i].trim() + pageMarginUnit; }
 		}
 		String[] bodyMargin = {};
 		try { bodyMargin = props.getProperty("BodyMargin").split(","); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
 		if (bodyMargin.length != 4) bodyMargin = new String[]{"0", "0", "0", "0"};
 		else {
-			String bodyMarginUnit = props.getProperty("BodyMarginUnit");
-			for (int i=0; i<4; i++) { bodyMargin[i] += bodyMarginUnit; }
+			String bodyMarginUnit = cssMarginUnit(props.getProperty("BodyMarginUnit"));
+			for (int i=0; i<4; i++) { bodyMargin[i] = bodyMargin[i].trim() + bodyMarginUnit; }
 		}
 		float lineHeight = 1.8f;
 		try { lineHeight = Float.parseFloat(props.getProperty("LineHeight")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
@@ -96,5 +96,22 @@ public final class WriterConfigurator {
 		//常に false だった (docs/code-audit-followups.md 項目 25)
 		boolean gothicUseBold = "1".equals(props.getProperty("GothicUseBold"));
 		epub3Writer.setStyles(pageMargin, bodyMargin, lineHeight, fontSize, boldUseGothic, gothicUseBold);
+	}
+
+	/**
+	 * ini の margin 単位（{@code "0"} = 字 / {@code "1"} = %）を CSS の単位に変換する。
+	 *
+	 * <p>GUI（{@code AozoraEpub3Applet} の変換直前処理）は {@code "em"} / {@code "%"} を
+	 * 付けてから {@code Epub3Writer} に渡すのに対し、CLI はここで ini の生値をそのまま
+	 * 連結していたため、{@code PageMargin=0,0.5,0,0} + {@code PageMarginUnit=0} が
+	 * {@code margin: 00 0.50 00 00} という不正な CSS になっていた
+	 * （{@code presets/kobo_glo.ini} などは既にこの組み合わせを同梱している）。
+	 * docs/code-audit-followups.md 項目 25。</p>
+	 *
+	 * @param iniValue ini の値。null や未知の値は既定の {@code "em"} に倒す
+	 */
+	static String cssMarginUnit(String iniValue)
+	{
+		return "1".equals(iniValue == null ? null : iniValue.trim()) ? "%" : "em";
 	}
 }
