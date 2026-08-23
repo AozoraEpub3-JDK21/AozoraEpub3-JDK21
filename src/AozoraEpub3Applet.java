@@ -540,6 +540,9 @@ public class AozoraEpub3Applet extends JPanel
 		Border padding1 = BorderFactory.createEmptyBorder(1, 1, 1, 1);
 		Border padding2 = BorderFactory.createEmptyBorder(2, 2, 2, 2);
 		Border padding3 = BorderFactory.createEmptyBorder(3, 3, 3, 3);
+		//上段の文字だけのボタン (端末設定 / 言語 / 更新確認) 用。左右 3px だと
+		//隣のボタンとラベルがくっついて 1 つの文字列に見えるため広めに取る
+		Border paddingTopButton = BorderFactory.createEmptyBorder(3, 8, 3, 8);
 		Border padding5H3V = BorderFactory.createEmptyBorder(3, 5, 3, 5);
 		Border padding2H = BorderFactory.createEmptyBorder(0, 2, 0, 2);
 		Border padding4H = BorderFactory.createEmptyBorder(0, 4, 0, 4);
@@ -744,7 +747,7 @@ public class AozoraEpub3Applet extends JPanel
 		}
 		jButtonPreset = new JButton(I18n.t("ui.button.preset"), new ImageIcon(AozoraEpub3Applet.class.getResource("images/viewer.png")));
 		jButtonPreset.setToolTipText(I18n.t("ui.tooltip.preset"));
-		jButtonPreset.setBorder(padding3);
+		jButtonPreset.setBorder(paddingTopButton);
 		jButtonPreset.setFocusPainted(false);
 		jButtonPreset.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent arg0) {
 			jPopupPreset.show(jButtonPreset, 8, 20);
@@ -789,9 +792,10 @@ public class AozoraEpub3Applet extends JPanel
 		jPopupLanguage.add(langJa);
 		jPopupLanguage.add(langEn);
 
+		panel.add(Box.createHorizontalStrut(4));
 		jButtonLanguage = new JButton(I18n.t("ui.language.button"));
 		jButtonLanguage.setToolTipText(I18n.t("ui.language.tooltip"));
-		jButtonLanguage.setBorder(padding3);
+		jButtonLanguage.setBorder(paddingTopButton);
 		jButtonLanguage.setFocusPainted(false);
 		jButtonLanguage.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
 			jPopupLanguage.show(jButtonLanguage, 8, 20);
@@ -799,9 +803,10 @@ public class AozoraEpub3Applet extends JPanel
 		panel.add(jButtonLanguage);
 
 		// 更新確認 (手動のみ。自動更新も起動時チェックも行わない)
+		panel.add(Box.createHorizontalStrut(4));
 		jButtonUpdate = new JButton(I18n.t("ui.update.button"));
 		jButtonUpdate.setToolTipText(I18n.t("ui.update.tooltip"));
-		jButtonUpdate.setBorder(padding3);
+		jButtonUpdate.setBorder(paddingTopButton);
 		jButtonUpdate.setFocusPainted(false);
 		jButtonUpdate.addActionListener(new ActionListener() { public void actionPerformed(ActionEvent e) {
 			checkUpdate();
