@@ -5363,9 +5363,11 @@ public class AozoraEpub3Applet extends JPanel
 		}
 		propValue = props.getProperty("PageMarginUnit");
 		if (propValue != null) {
-			jRadioPageMarginUnit0.setSelected("0".equals(propValue));
 			jRadioPageMarginUnit1.setSelected("1".equals(propValue));
-			//jRadioPageMarginUnit2.setSelected("2".equals(propValue));
+			//"1" 以外の未知の値 (旧 ini の "2" 等) は CLI の WriterConfigurator.cssMarginUnit と
+			//同じく 字 (em) に倒す。両方とも非選択のままにすると GUI は % 扱いになって CLI と食い違い、
+			//さらに保存時に "2" が書き戻されて固定化する
+			jRadioPageMarginUnit0.setSelected(!"1".equals(propValue));
 		}
 		propValue = props.getProperty("BodyMargin");
 		if (propValue != null) {
@@ -5377,9 +5379,9 @@ public class AozoraEpub3Applet extends JPanel
 		}
 		propValue = props.getProperty("BodyMarginUnit");
 		if (propValue != null) {
-			jRadioBodyMarginUnit0.setSelected("0".equals(propValue));
 			jRadioBodyMarginUnit1.setSelected("1".equals(propValue));
-			//jRadioBodyMarginUnit2.setSelected("2".equals(propValue));
+			//PageMarginUnit と同じ理由で、"1" 以外は 字 (em) に倒す
+			jRadioBodyMarginUnit0.setSelected(!"1".equals(propValue));
 		}
 		propValue = props.getProperty("LineHeight");
 		if (propValue != null && !"".equals(propValue)) jComboLineHeight.setSelectedItem(propValue);
