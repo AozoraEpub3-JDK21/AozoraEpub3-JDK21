@@ -59,6 +59,27 @@
 - [ ] **旧バージョンのキャッシュ互換**: 前リリースで生成したキャッシュディレクトリに対して新バージョンを実行し、
       **キャッシュが再利用される（パスが変わって全再取得にならない）**こと
       ※ `CharUtils.escapeUrlToFile` / `replaceInvalidFileChars` を触ったリリースでは**最重要**
+
+      **歴代リリースの展開先は `D:\MyNobel_rs\AozoraEpub3-<version>-jdk21\`**（narou.rs の管理フォルダ配下）。
+      v1.3.6 〜 v1.6.0 が並んでいるので、ここの旧版 jar を使って検証する。
+      実物のキャッシュは `D:\MyNobel_rs\AozoraEpub3-1.3.6-jdk21\.cache\`（`ncode.syosetu.com` 配下・84 ファイル）にある。
+      v1.4.0 以降のフォルダに `.cache` は無い（narou.rb / narou.rs は txt を渡すので URL キャッシュを作らない）。
+
+      **利用者のキャッシュを汚さない手順**（旧版フォルダ内で直接動かさない）:
+
+      ```bash
+      # 1) 旧版 jar で temp にキャッシュを作る
+      java -jar /d/MyNobel_rs/AozoraEpub3-1.6.0-jdk21/AozoraEpub3.jar \
+        -of -d "$TMP/out" -cache "$TMP/.cache" -url <検証 URL>
+
+      # 2) 新版 jar を同じ -cache に向けて実行し、再ダウンロードが 0 件であることを確認
+      java -jar build/libs/AozoraEpub3.jar \
+        -of -d "$TMP/out" -cache "$TMP/.cache" -url <検証 URL>
+      ```
+
+      判定は **`再ダウンロード` のログが 0 件**かつ **`.cache` 配下のファイル数・ディレクトリ数が増えないこと**。
+      逆方向（新版が作ったキャッシュを旧版に読ませる）も同じコマンドで確認でき、
+      話数の多い作品を再ダウンロードせずに命名規則の同一性を検証できる。
 - [ ] **終了コードの両方向**: 成功時 `0`（narou.rb が成功判定に使う）/ 失敗時 `1`（入力ファイル不在などで確認。オフライン可）
 - [ ] **`.exe` ランチャー経由で 1 変換**（配布物の実行経路。jar 直叩きでは検証されない）
 - [ ] 生成した EPUB を `epubcheck` に通す
