@@ -181,6 +181,59 @@ public class GaijiFallbackTest
 		assertTrue(converter.isGaijiFallback(new String(Character.toChars(U_2231E))));
 	}
 
+	//------------------------------------------------------------------
+	// 仮名＋濁点/半濁点（同梱の gaiji/dakuten/*.ttf で表示できる）
+	//------------------------------------------------------------------
+
+	/** 半濁点付き平仮名か chuki_utf.txt:7341 → か(U+304B) + 結合半濁点(U+309A) */
+	static final String CHUKI_HANDAKUTEN_KA = "※［＃半濁点付き平仮名か、1-4-87］";
+	/** 濁点付き二の字点 → 〻(U+303B) + 結合濁点(U+3099) */
+	static final String CHUKI_DAKUTEN_NONOJITEN = "※［＃濁点付き二の字点、ページ数-行数］";
+
+	/**
+	 * 仮名＋濁点/半濁点は抑止しない。
+	 *
+	 * 結合半濁点 U+309A は JIS に無いので水準は LEVEL_OUT になるが、
+	 * この組み合わせは dakutenType のどの設定でも端末フォント頼みにならない
+	 * （2 なら同梱の gaiji/dakuten/u304b-u309a.ttf、1 なら CSS で重ね、0 ならそのまま並べる）。
+	 * hasGaijiFont は 1文字フォントのマップしか見ないためこの経路を拾えない。
+	 */
+	@Test
+	public void 濁点付き仮名は抑止しない()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String converted = converter.convertGaijiChuki(CHUKI_HANDAKUTEN_KA, true, false);
+		assertEquals("か"+new String(Character.toChars(0x309A)), converted);
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 濁点付き二の字点も抑止しない()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String converted = converter.convertGaijiChuki(CHUKI_DAKUTEN_NONOJITEN, true, false);
+		assertEquals("〻"+new String(Character.toChars(0x3099)), converted);
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 濁点判定は仮名と濁点の2文字だけを対象にする()
+	{
+		//結合文字と正規化後の両方を受ける
+		assertTrue(converter.isDakutenKana("か"+new String(Character.toChars(0x309A))));
+		assertTrue(converter.isDakutenKana("か"+new String(Character.toChars(0x309C))));
+		assertTrue(converter.isDakutenKana("カ"+new String(Character.toChars(0x3099))));
+		assertTrue(converter.isDakutenKana("〻"+new String(Character.toChars(0x3099))));
+		//仮名以外・濁点以外・長さ違いは対象外
+		assertFalse(converter.isDakutenKana("漢"+new String(Character.toChars(0x3099))));
+		assertFalse(converter.isDakutenKana("かき"));
+		assertFalse(converter.isDakutenKana("か"));
+		assertFalse(converter.isDakutenKana("かき"+new String(Character.toChars(0x3099))));
+		assertFalse(converter.isDakutenKana(null));
+	}
+
 	@Test
 	public void 外字を含まない行は素通しする()
 	{

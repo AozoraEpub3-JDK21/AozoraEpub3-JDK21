@@ -1518,9 +1518,33 @@ public class AozoraEpub3Converter
 	{
 		if (gaiji == null || this.gaijiFallbackLevel <= 0) return false;
 		if (!JisLevelUtil.exceeds(gaiji, this.gaijiFallbackLevel)) return false;
+		//仮名＋濁点/半濁点は端末のフォント頼みにならないので抑止しない
+		if (isDakutenKana(gaiji)) return false;
 		//1文字フォントがあれば端末フォントに依存せず表示できるので抑止しない
 		//convertGaijiChuki は convertChar のフォント探索より手前で動くため、ここで先に見る必要がある
 		return !hasGaijiFont(gaiji);
+	}
+
+	/** 仮名＋濁点/半濁点の 2 文字か
+	 * <p>この形は dakutenType のどの設定でも端末フォント頼みにならない。
+	 * が・ぱ のように合成済みの文字がある組み合わせはその文字に置き換わり、
+	 * 無い場合も 0 なら仮名と濁点をそのまま並べ、1 なら CSS で重ね、
+	 * 2 なら同梱の `gaiji/dakuten/u<base>-u<mark>.ttf` を使う。
+	 * どれも第1・2水準の字形か同梱フォントで出るので、水準で抑止してはいけない。</p>
+	 * <p>結合文字 (U+3099/U+309A) は convertRubyText の前処理で
+	 * U+309B/U+309C に正規化されるが、convertGaijiChuki はその手前で動くので両方を受ける。
+	 * {@link #hasGaijiFont(String)} が拾えないのは、この組み合わせが
+	 * 1文字フォントのマップではなく出力時のファイル名解決で引かれるため。</p>
+	 * @param str 判定する文字列 変換後の外字
+	 * @return 仮名＋濁点/半濁点なら true */
+	boolean isDakutenKana(String str)
+	{
+		if (str == null || str.length() != 2) return false;
+		char mark = str.charAt(1);
+		if (mark != '゙' && mark != '゚' && mark != '゛' && mark != '゜') return false;
+		char base = str.charAt(0);
+		//convertTcyText の濁点分岐と同じ範囲にする (二の字点も濁点付きが存在する)
+		return CharUtils.isHiragana(base) || CharUtils.isKatakana(base) || base == '〻';
 	}
 
 	/** 変換後の文字に対応する1文字フォントが gaiji/ にあるか
