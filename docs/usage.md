@@ -13,6 +13,7 @@ description: AozoraEpub3-JDK21の使い方ガイドです。GUIでのファイ�
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
+  <a href="gaiji-settings.html">外字の設定</a> | 
   <a href="narou-setup.html">narou.rb</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <a href="development.html">開発者向け</a> | 
@@ -65,7 +66,7 @@ Web小説サイト（ニコニコ小説、小説家になろう など）のURL�
 |---------|---------|------|--------|
 | 更新日時を各話に表示 | `show_post_date` | 各話の最終更新日時を本文末に表示 | OFF |
 | 初回公開日を各話に表示 | `show_publish_date` | 改稿済の話の初回公開日を表示（更新日時と別行） | OFF |
-| 前書き・後書きの自動検出 | `enable_author_comments` | `*44`/`*48` 個パターンで前書き・後書きを検出 | ON |
+| 前書き・後書きの自動検出 | `enable_author_comments` | `*` が 44 個続く行を前書き、48 個続く行を後書きの区切りとして検出 | ON |
 | 自動行頭字下げ | `enable_auto_indent` | 行頭の字下げを自動挿入 | ON |
 | 改ページ直後の見出し化 | `enable_enchant_midashi` | 改ページ後の最初の行を見出しとして処理 | ON |
 | 空行圧縮 | `enable_pack_blank_line` | 連続空行を圧縮 | ON |
@@ -78,10 +79,10 @@ Web小説サイト（ニコニコ小説、小説家になろう など）のURL�
 設定は `setting_narourb.ini` に保存され、narou.rb の `setting.ini` とキー互換があります。
 
 **注意事項:**
-- **レート制限**: サイトへの負荷を避けるため、各話取得時に1.5秒の間隔を設けています
-- **HTML構造変更**: サイトのレイアウト変更により動作しない場合があります（特に「小説家になろう」は構造が変更されており、現在未対応の可能性があります）
+- **レート制限**: サイトへの負荷を避けるため、各話の取得間隔を空けています（GUI の既定は 0.5 秒、CLI の `-interval` の既定は 1.0 秒）
+- **HTML構造変更**: サイトのレイアウト変更により動作しなくなる場合があります。各サイトの対応状況は [Web 小説サイト対応状況](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/docs/web-site-support-status.md) を参照してください
 - **長編作品**: 話数が多い作品は完了まで時間がかかります（100話で約3分）
-- **推奨**: Web取得機能は実験的機能です。確実に変換したい場合は、手動でテキストをダウンロードして変換することをお勧めします
+- **注意**: Web取得機能は実験的機能です。確実に変換したい場合は、手動でテキストをダウンロードして変換してください
 
 ---
 
@@ -111,7 +112,7 @@ Web小説サイト（ニコニコ小説、小説家になろう など）のURL�
 | `.epub` | 標準 | 標準的な EPUB 3.3 準拠形式（EPUB 3.2後方互換） |
 | `.kepub.epub` | Kobo | Kobo向け拡張形式 |
 | `.fxl.kepub.epub` | Kobo | Kobo固定レイアウト用 |
-| `.mobi` | Kindle | Kindle形式（kindlegenjの別途インストール必要） |
+| `.mobi` | Kindle | Kindle形式（kindlegen の別途インストールが必要） |
 
 ### 画像処理
 
@@ -292,7 +293,7 @@ GUI では変換完了後に「プレビュー」ボタンが有効になりま�
 | 本文の左右端クリック / ホイール / ← → / Space | ページ送り |
 | `[` `]` | セクション送り |
 
-本文フォントの既定は UD デジタル教科書体（無い環境では游明朝などへ順に落ちます）。
+本文フォントの既定は UD デジタル教科書体です（該当フォントが無い環境では游明朝などへ順に切り替わります）。
 表示設定は `~/.aozoraepub3/preview-settings.json` に保存され、次回起動時に復元されます。
 
 サーバはループバックアドレス（`127.0.0.1`、IPv6 優先環境では `::1`）のランダムポートに
@@ -428,14 +429,14 @@ your-directory/
 ├── template/           ← カスタマイズ可能
 │   ├── OPS/
 │   │   ├── package.vm
-│   │   ├── nav.xhtml.vm
 │   │   ├── css/
 │   │   │   ├── vertical_text.vm
 │   │   │   └── horizontal_text.vm
 │   │   └── xhtml/
+│   │       ├── xhtml_nav.vm
 │   │       └── *.vm
 │   └── META-INF/
-│       └── *.vm
+│       └── container.xml
 ├── gaiji/              ← 外字追加可能
 ├── presets/            ← プリセット編集可能
 └── web/
@@ -448,7 +449,7 @@ your-directory/
 | テンプレート | 用途 |
 |-------------|------|
 | `OPS/package.vm` | EPUB メタデータ・マニフェスト |
-| `OPS/nav.xhtml.vm` | ナビゲーション目次 |
+| `OPS/xhtml/xhtml_nav.vm` | ナビゲーション目次 |
 | `OPS/css/vertical_text.vm` | 縦書きCSS |
 | `OPS/css/horizontal_text.vm` | 横書きCSS |
 | `OPS/xhtml/*.vm` | 本文XHTML生成 |

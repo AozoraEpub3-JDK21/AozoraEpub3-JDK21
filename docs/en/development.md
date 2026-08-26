@@ -9,6 +9,7 @@ description: AozoraEpub3 developer guide: JDK 21 setup, Gradle build commands, p
   <strong>📚 Documentation:</strong>
   <a href="index.html">Home</a> | 
   <a href="usage.html">Usage</a> | 
+  <a href="gaiji-settings.html">Gaiji Settings</a> | 
   <a href="narou-setup.html">narou.rb Setup</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <strong>Development</strong> | 
@@ -41,8 +42,8 @@ Developer documentation for contributing to AozoraEpub3 or understanding its int
 
 ### Requirements
 
-- **Java**: JDK 21+ (build), JRE 21+ (runtime)
-- **Gradle**: 8.0+ (Gradle Wrapper recommended)
+- **Java**: JDK 25 LTS recommended (JDK 21 or later works for building and running)
+- **Gradle**: 9.6.1 (use the bundled Gradle Wrapper)
 - **Git**: Version control
 - **IDE**: IntelliJ IDEA, Eclipse, VS Code, etc.
 
@@ -189,9 +190,10 @@ AozoraEpub3/
 
 #### Conversion Pipeline
 - `Epub3Writer`: EPUB 3 file generation (uses Velocity)
-- `AozoraEpubConverter`: Aozora notation parsing and conversion
-- `BookInfoReader`: Title/author extraction
-- `CharacterConverter`: Gaiji and ruby conversion
+- `AozoraEpub3Converter`: Aozora notation parsing, conversion, and ruby handling
+- `BookInfo`: Holds bibliographic data such as title and author
+- `AozoraGaijiConverter` / `JisConverter` / `LatinConverter`: Gaiji annotation conversion
+- `JisLevelUtil`: JIS level detection (used by the gaiji annotation fallback)
 
 #### I/O & Archives
 - `ArchiveTextExtractor`: Text extraction from zip/rar (with caching)
@@ -200,21 +202,20 @@ AozoraEpub3/
 
 #### Image Processing
 - `ImageInfoReader`: Image metadata reading
-- `ImageConverter`: Image resizing and optimization
+- `ImageUtils`: Image resizing and optimization
 
 #### Configuration
-- `IniFile`: INI file parsing
-- `ConfigValues`: Configuration value storage
+- `SettingDefaults`: Default values for ini keys, shared by the GUI and the CLI
 
 ---
 
 ## Code Architecture
 
-### Recent Improvements (v1.2.4+)
+### Improvements in v1.2.4 (historical record)
 
 #### Modularization and Class Extraction
 
-Separated responsibilities from the large `AozoraEpub3.java` (originally 645 lines) to improve maintainability:
+Separated responsibilities out of the large `AozoraEpub3.java` (645 lines at the time) to improve maintainability. All line counts below are the figures from that release:
 
 **Extracted Classes:**
 
@@ -570,7 +571,7 @@ GPL v3 - See [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21#lic
 ---
 
 <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
-  <p>© 2025 AozoraEpub3-JDK21 Project</p>
+  <p>© 2026 AozoraEpub3-JDK21 Project</p>
   <p>
     <a href="index.html">Home</a> |
     <a href="usage.html">Usage</a> |

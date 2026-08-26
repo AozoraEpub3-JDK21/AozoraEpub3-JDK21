@@ -9,6 +9,7 @@ description: AozoraEpub3-JDK21 usage: GUI and CLI conversion, device presets for
   <strong>📚 Documentation:</strong>
   <a href="index.html">Home</a> | 
   <strong>Usage</strong> | 
+  <a href="gaiji-settings.html">Gaiji Settings</a> | 
   <a href="narou-setup.html">narou.rb Setup</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <a href="development.html">Development</a> | 
@@ -66,7 +67,6 @@ java -jar AozoraEpub3.jar -enc UTF-8 -of -d output input.txt
 
 ### Main Window
 
-![GUI Screenshot](assets/images/gui_main.png)
 
 #### Input File Selection
 - **Supported formats**: `.txt`, `.zip`, `.rar`
@@ -130,10 +130,10 @@ Drag & drop a web novel URL or `.url` shortcut file to fetch and convert directl
 Settings are saved in `setting_narourb.ini` and are compatible with narou.rb's `setting.ini` keys.
 
 **Notes:**
-- **Rate limiting**: 1.5-second delay between chapter fetches to avoid server overload
-- **HTML structure changes**: May break if the target site redesigns (especially Narō)
+- **Rate limiting**: A delay is inserted between chapter fetches to avoid overloading the site (the GUI default is 0.5 seconds; the CLI `-interval` default is 1.0 seconds)
+- **HTML structure changes**: Fetching may stop working when a site is redesigned. See [Web novel site support status](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/blob/master/docs/web-site-support-status.md) for the current state of each site
 - **Long novels**: 100 chapters takes ~3 minutes
-- **Recommendation**: This is an experimental feature; manual download is more reliable
+- **Note**: Web fetching is experimental. For reliable results, download the text manually and convert that
 
 ---
 
@@ -166,6 +166,7 @@ java -jar AozoraEpub3.jar [OPTIONS] input_file
 | `-cache <path>` | Cache directory (only with `-url`, defaults to `.cache` next to the jar) | `-cache .cache` |
 | `--preview` | Open the converted EPUB in your default browser | `--preview foo.epub` |
 | `--library <folder>` | Open a folder as a library (repeatable, up to 8) | `--library ./output/` |
+| `-cu, --check-update` | Compare the running version against the latest GitHub release and report whether an update exists. It never downloads or replaces anything | |
 
 That is the complete list. Text size, line height, margins, image scaling, gaiji and dakuten
 handling have **no command-line switches** — configure them in the GUI and reuse the saved ini,
@@ -424,10 +425,7 @@ Variables from INI files or CLI options are automatically injected.
 
 Edit `package.vm` to modify EPUB metadata or manifest structure.
 
-**Note**: After modifying templates, rebuild the application:
-```bash
-./gradlew clean build
-```
+**Note**: No rebuild is required. A `template/` folder placed next to the JAR is read at runtime and takes priority over the copy bundled inside the JAR.
 
 ---
 
@@ -633,7 +631,7 @@ controlled by the `Chapter*` keys (`ChapterH1` … `ChapterH3`, `ChapterName`, a
 ---
 
 <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
-  <p>© 2025 AozoraEpub3-JDK21 Project</p>
+  <p>© 2026 AozoraEpub3-JDK21 Project</p>
   <p>
     <a href="index.html">Home</a> |
     <a href="usage.html">Usage</a> |

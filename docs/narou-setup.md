@@ -1,7 +1,7 @@
 ---
 layout: default
 lang: ja
-title: narou.rb 導入ガイド (2025年12月時点)
+title: narou.rb 導入ガイド (2026年4月時点)
 description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Windows環境でのRuby導入からgem install narou実行手順、tilt依存関係エラー・「小説家になろう」目次取得不具合・カクヨム構造変更の既知の不具合と回避策、AozoraEpub3を変換ツールとして設定する手順を解説します。
 ---
 
@@ -13,6 +13,7 @@ description: narou.rbとAozoraEpub3-JDK21の連携方法を解説します。Win
    <strong>📚 ドキュメント:</strong>
    <a href="./">ホーム</a> | 
    <a href="usage.html">使い方</a> | 
+   <a href="gaiji-settings.html">外字の設定</a> | 
    <strong>narou.rb</strong> |
    <a href="narou-rs-setup.html">narou.rs</a> |
    <a href="development.html">開発者向け</a> | 
@@ -193,7 +194,7 @@ narou init
 これで `narou.rb` が AozoraEpub3 の場所を記憶し、自動連携の設定は完了です。
 
 **補足: 設定ファイルについて**
-初期化後、`AozoraEpub3.jar` と同じディレクトリに **`AozoraEpub3.ini`** というファイルが使用（または作成）されます。行間やフォントサイズなどの変換設定を変更したい場合は、このファイルを編集するか、AozoraEpub3 の GUI から設定を保存してください。
+初期化後、`AozoraEpub3.jar` と同じディレクトリの **`AozoraEpub3.ini`** が参照されます（存在しない場合は新規作成されます）。行間やフォントサイズなどの変換設定を変更したい場合は、このファイルを編集するか、AozoraEpub3 の GUI から設定を保存してください。
 
 > **注意**: AozoraEpub3 の GUI を終了すると、このファイルは GUI の設定内容で**全体が書き直されます**（手で書いたコメントは残りません）。GUI と手編集を併用する場合は、GUI を閉じた後に編集してください。
 

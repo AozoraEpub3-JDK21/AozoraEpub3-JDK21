@@ -9,6 +9,7 @@ description: AozoraEpub3-JDK21 EPUB 3.3 support guide. Changes from 3.0 and impl
   <strong>📚 Documentation:</strong>
   <a href="index.html">Home</a> | 
   <a href="usage.html">Usage</a> | 
+  <a href="gaiji-settings.html">Gaiji Settings</a> | 
   <a href="narou-setup.html">narou.rb Setup</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <a href="development.html">Development</a> | 
@@ -27,8 +28,8 @@ Overview of EPUB 3.3 support in AozoraEpub3-JDK21.
 
 EPUB (Electronic Publication) 3.3 is the international standard for e-book formats.
 
-- **Official Specification**: [IDPF EPUB 3.3 Standard](https://www.w3.org/publishing/epub33/)
-- **Japanese Reference**: [Japanese Book Publishing Association EPUB 3 Production Guide](https://www.ebookjapan.jp/)
+- **Official Specification**: [EPUB 3.3 (W3C Recommendation)](https://www.w3.org/publishing/epub33/)
+- **Japanese Reference**: [Japanese Book Publishing Association EPUB 3 Production Guide](https://www.ebpaj.jp/counsel/guide)
 
 ---
 
@@ -84,10 +85,7 @@ EPUB 3.3 emphasizes more detailed metadata and structured information.
 ### Ruby (Furigana) Support
 
 ```xml
-<ruby>
-  <rb>漢字</rb>
-  <rt>かんじ</rt>
-</ruby>
+<ruby>漢字<rt>かんじ</rt></ruby>
 ```
 
 ### Vertical Text Layout

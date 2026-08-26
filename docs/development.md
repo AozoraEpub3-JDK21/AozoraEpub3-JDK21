@@ -9,6 +9,7 @@ description: AozoraEpub3の開発者向けガイドです。JDK 21環境のセ�
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
+  <a href="gaiji-settings.html">外字の設定</a> | 
   <a href="narou-setup.html">narou.rb</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <strong>開発者向け</strong> | 
@@ -41,8 +42,8 @@ AozoraEpub3の開発に参加する方、または内部実装を理解したい
 
 ### 必要な環境
 
-- **Java**: JDK 21 以上（ビルド時）、JRE 21 以上（実行時）
-- **Gradle**: 8.0 以上（Gradle Wrapper 推奨）
+- **Java**: JDK 25 LTS 推奨（JDK 21 以上でビルド・実行可能）
+- **Gradle**: 9.6.1（同梱の Gradle Wrapper を使用してください）
 - **Git**: バージョン管理
 - **IDE**: IntelliJ IDEA, Eclipse, VS Code など
 
@@ -189,9 +190,10 @@ AozoraEpub3/
 
 #### 変換パイプライン
 - `Epub3Writer`: EPUB 3形式でのファイル生成（Velocity使用）
-- `AozoraEpubConverter`: 青空文庫注記のパース・変換
-- `BookInfoReader`: タイトル・著者の抽出
-- `CharacterConverter`: 外字・ルビの変換
+- `AozoraEpub3Converter`: 青空文庫注記のパース・変換、ルビ処理
+- `BookInfo`: タイトル・著者などの書誌情報の保持
+- `AozoraGaijiConverter` / `JisConverter` / `LatinConverter`: 外字注記の変換
+- `JisLevelUtil`: JIS 水準の判定（外字の注記表示フォールバック用）
 
 #### I/O・アーカイブ
 - `ArchiveTextExtractor`: zip/rar からのテキスト抽出（キャッシュ機能）
@@ -200,21 +202,20 @@ AozoraEpub3/
 
 #### 画像処理
 - `ImageInfoReader`: 画像メタデータ読み込み
-- `ImageConverter`: 画像リサイズ・最適化
+- `ImageUtils`: 画像リサイズ・最適化
 
 #### 設定
-- `IniFile`: INI ファイルの解析
-- `ConfigValues`: 設定値の保持
+- `SettingDefaults`: ini キーの既定値テーブル（GUI と CLI で共有）
 
 ---
 
 ## コード構造とリファクタリング
 
-### 最近の改善（v1.2.4以降）
+### v1.2.4 での改善（当時の記録）
 
 #### モジュール化とクラス抽出
 
-大規模な `AozoraEpub3.java`（元々645行）から責任を分離し、保守性を向上しました：
+大規模な `AozoraEpub3.java`（当時 645 行）から責務を分離し、保守性を向上しました（行数はいずれも当時の値です）：
 
 **抽出されたクラス:**
 
@@ -570,7 +571,7 @@ GPL v3 - 詳細は [README](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK
 ---
 
 <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
-  <p>© 2025 AozoraEpub3-JDK21 Project</p>
+  <p>© 2026 AozoraEpub3-JDK21 Project</p>
   <p>
     <a href="index.html">ホーム</a> |
     <a href="usage.html">使い方</a> |
