@@ -9,6 +9,7 @@ description: Step-by-step beginner's guide to converting web novels into EPUB wi
    <strong>📚 Documentation:</strong>
    <a href="index.html">Home</a> | 
    <a href="usage.html">Usage</a> | 
+   <a href="gaiji-settings.html">Gaiji Settings</a> | 
    <a href="narou-setup.html">narou.rb Setup</a> |
    <strong>narou.rs</strong> |
    <a href="development.html">Development</a> | 

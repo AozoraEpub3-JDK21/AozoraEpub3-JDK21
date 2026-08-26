@@ -44,6 +44,7 @@
 | 29 | 🔴 高 | i18n 一括置換の事故で GUI 生成コードが破損（表題ページ横書きが保存されない / 余白パネル合体 / `margin: em`） | ✅ 対応済 | — |
 | 30 | 🟢 低 | 表紙コンボの選択が ini に保存されない / 多言語ラベルのまま保存（言語切替で復元できない） | ✅ 対応済 | — |
 | 31 | 🔴 高 | `PreviewServer.serveSettings` の `readNBytes` がボディ読み取りでブロックし、サーバスレッドが永久に固まる（`PreviewServerTest` が 2 件ハング/失敗） | ❌ 未対応（別 PR） | — |
+| 32 | 🔴 高 | ※ と 《》 の外字注記が混在すると `isEscapedChar` のパリティ判定が誤り、行末までの本文が消失（見出し先頭時は変換全体が異常終了）— upstream issue #34 | ❌ 未対応 | — |
 
 ---
 
@@ -1405,6 +1406,112 @@ Content-Length どおりにボディが届かなければ HTTP サーバのス�
 **当面の回避**: `gradlew test` を回すときは `PreviewServerTest` を除外する
 （init script で `filter { excludeTestsMatching "com.github.hmdev.preview.PreviewServerTest" }`）。
 除外した状態では 497 件すべて PASS することを確認済み。
+
+---
+
+## 外字注記のエスケープ判定（2026-08-24 追加）
+
+### 32. ※ と 《》 の外字注記が混在すると行末までの本文が消失する — ❌ 未対応
+
+**出自**: upstream issue [kyukyunyorituryo/AozoraEpub3#34](https://github.com/kyukyunyorituryo/AozoraEpub3/issues/34)（2026-08-16 起票、OPEN）。
+本 fork でも同一コードのまま残っていることを 2026-08-24 に実測で確認した。
+
+**場所**
+
+- `src/com/github/hmdev/util/CharUtils.java:305-326` — `isEscapedChar(char[]/StringBuilder, int)`
+- `src/com/github/hmdev/converter/AozoraEpub3Converter.java:2509-2515` — `convertRubyText` の『《』でのルビ開始判定
+- `src/com/github/hmdev/converter/AozoraEpub3Converter.java:2612-2615` — `convertRubyText` 行末処理の `if (rubyStart != -1)` ガード
+- `src/com/github/hmdev/converter/AozoraEpub3Converter.java:1344-1352` — 外字注記 → `※` 前置エスケープの生成側
+
+**原因**
+
+1. 外字注記変換は 1 文字の特殊外字（`※ 《 》 ｜ ＃`）に `※` を前置してエスケープする（`※［＃始め二重山括弧］` → `※《`）。
+2. `isEscapedChar` は「直前に連続する `※` の個数」の偶奇でエスケープ済みかを判定する（奇数＝エスケープ済み）。
+3. `※［＃米印］`（→ `※※`）などが直前に来ると `《` の前の `※` が**偶数個**になり、エスケープ済みの `《` をルビ開始と誤判定する。
+4. 誤って開いたルビはエスケープ済みの `※》` では閉じられず、行末まで `inRuby == true` のまま。
+   行末処理は `rubyStart != -1` のときしか出力しないため、`《` 以降が**すべて破棄**される。
+
+**再現（`build/libs/AozoraEpub3.jar` v1.6.0-jdk21 相当で実測）**
+
+| ケース | 入力（見出し／本文） | 結果 |
+|---|---|---|
+| 正常 | `※［＃始め二重山括弧］`（変換後 `※《`＝※1 個・奇数） | 正常変換 |
+| 破損 | `※※［＃始め二重山括弧］`（変換後 `※※《`＝2 個・偶数） | `《` 以降と閉じタグが消失 |
+| 破損 | `※※［＃米印］※［＃始め二重山括弧］`（変換後 `※※※※《`＝4 個・偶数） | 同上 |
+
+**本 fork 固有の悪化点（upstream の報告範囲より広い）**
+
+1. **本文行でも発生する** — issue は見出し例のみだが、通常の本文行でも `《` 以降が行末まで消える。
+   実測では該当行が丸ごと `<p><br/></p>` になった。
+2. **見出しが本文の先頭にあると変換が全滅する** — 不正 XHTML どころか
+   `java.lang.IllegalStateException: No current entry`（`Epub3Writer.endSection` → `Epub3Writer.java:1368`）で
+   例外終了し、`出力途中のファイルを削除しました` となって EPUB が 1 つも残らない。
+   セクションが 1 度も開始されないまま `endSection()` に到達している挙動だが、
+   内部機構は未確認（要調査）。本文の後ろに見出しがある場合は upstream 同様「不正 XHTML が出る」で止まる。
+3. **Web 小説経路で踏みやすい** — `src/com/github/hmdev/web/WebAozoraConverter.java:2219-2221` と `:2564-2566` で、
+   narou.rb 互換のため `≪`→`※［＃始め二重山括弧］`、`≫`→`※［＃終わり二重山括弧］`、`※`/`※※`→`※［＃米印、1-2-8］`
+   を**自動生成**している。ユーザーが青空注記を書かなくても、章題に `≪≫` や連続 `※` があるだけで条件に入り得る
+   （なろう／カクヨム／ハーメルン作品）。upstream より遭遇率が高い。
+
+**upstream の現状**
+
+作者は未閉じルビの復旧処理のみ暫定投入済み（[`461f5f9`](https://github.com/kyukyunyorituryo/AozoraEpub3/commit/461f5f9bdcea00020a2967f1517ad6c5e20153bd)）。
+`convertRubyText` の行末に以下を足すだけの 4 行パッチで、**本 fork には未取り込み**。
+
+```java
+} else if (inRuby && rubyTopStart != -1) {
+    // ルビ開始と誤認したまま行末に到達した場合は「《」以降をそのまま出力
+    convertTcyText(buf, ch, rubyTopStart, end, noTcy);
+}
+```
+
+作者自身も「『内部エスケープ文字』を分離が一番良さそうだけど、変更箇所が多いので確認が必要」とコメントしている
+（[解説記事](https://99nyorituryo.hatenablog.com/entry/2026/08/18/000155)）。
+
+**修正方針（未着手）**
+
+- **短期**: upstream `461f5f9` 相当を取り込み、消失を止める。
+  ただし本 fork 固有の「変換全体が異常終了」がこれで解消するかは要検証（別途 `Epub3Writer` 側の調査が必要）。
+- **本命**: `※` 前置をやめて内部エスケープ文字を分離し、`isEscapedChar` のパリティ方式ごと廃止する。
+  `CharUtils.removeRuby` / `CharUtils.getChapterName` / `convertGaijiChuki` / `convertRubyText` と広範囲に波及するため、
+  `.NET` ポートの byte-identical 比較テスト 5 件（CLAUDE.md の一覧）を回してからでないと着手できない。
+- **テスト**: 上表 3 ケース（奇数＝正常 / 偶数 2 パターン＝破損）を `test/com/github/hmdev/converter/` に回帰テストとして追加する。
+  本文行ケースと「見出しが先頭」ケースの両方を含めること。
+
+---
+
+### 33. 同じ長さのルビで 4バイト文字がサロゲートペアごと分断される — ❌ 未対応
+
+**出自**: PR #86（外字フォールバック）の Codex レビュー P2「Apply fallback in the one-to-one ruby path」を対応する過程で発見した既存バグ。
+フォールバック機能とは独立に、既定設定でも再現する。
+
+**場所**
+
+- `src/com/github/hmdev/converter/AozoraEpub3Converter.java` — `convertRubyText` の「同じ長さで同じ文字なら一文字づつルビを振る」分岐
+  （`convertReplacedChar(buf, ch, rubyStart+j, noTcy)` のループ）
+
+**現象**
+
+本文とルビの `char` 長が一致し、かつルビが同一文字の繰り返しのとき、本文を `char` 単位で 1 文字ずつルビ付きで出力する。
+本文が 4バイト文字（サロゲートペア）だとペアの上位・下位が別々の `<ruby>` 要素に振り分けられ、
+出力 XHTML に単独サロゲートが 2 つ残る。単独サロゲートは XML として不正なので epubcheck も通らない。
+
+| 入力 | 期待 | 実際 |
+|---|---|---|
+| `𠀋《ああ》` | `𠀋` に `ああ` のルビ | `{U+D840}` にルビ `あ` ＋ `{U+DC0B}` にルビ `あ` |
+
+**なぜ PR #86 で直さなかったか**
+
+`convertReplacedChar` は `char` 単位の API で、この分岐もペアを前提にしていない。
+直すにはループをコードポイント単位に組み替える必要があり、
+ルビの分配規則（何文字ぶんのルビをどの文字に振るか）の変更を伴うため、既存出力の byte-identical 比較に影響する。
+PR #86 のフォールバック側は「サロゲートは `convertTcyText` に任せる」ガードを入れて回避してある。
+
+**対応案**
+
+- ループをコードポイント単位（`Character.charCount` 進行）にし、本文側のコードポイント数とルビ側の文字数で長さ一致を判定する。
+- `.NET` ポートの byte-identical 比較テスト 5 件（CLAUDE.md の一覧）を回してから着手する。
+- 回帰テストは `test/com/github/hmdev/converter/` に、上表のケースで追加する。
 
 ---
 

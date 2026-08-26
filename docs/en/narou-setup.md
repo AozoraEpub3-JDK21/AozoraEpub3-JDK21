@@ -9,6 +9,7 @@ description: narou.rb installation, known issues (April 2026), and AozoraEpub3 i
    <strong>📚 Documentation:</strong>
    <a href="index.html">Home</a> | 
    <a href="usage.html">Usage</a> | 
+   <a href="gaiji-settings.html">Gaiji Settings</a> | 
    <strong>narou.rb Setup</strong> |
    <a href="narou-rs-setup.html">narou.rs</a> |
    <a href="development.html">Development</a> | 

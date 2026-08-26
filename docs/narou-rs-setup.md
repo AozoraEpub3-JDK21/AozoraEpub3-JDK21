@@ -13,6 +13,7 @@ description: narou.rs と AozoraEpub3-JDK21 を連携して Web 小説を EPUB �
    <strong>📚 ドキュメント:</strong>
    <a href="./">ホーム</a> | 
    <a href="usage.html">使い方</a> | 
+   <a href="gaiji-settings.html">外字の設定</a> | 
    <a href="narou-setup.html">narou.rb</a> |
    <strong>narou.rs</strong> |
    <a href="development.html">開発者向け</a> | 

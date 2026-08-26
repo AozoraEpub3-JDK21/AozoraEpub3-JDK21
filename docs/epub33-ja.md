@@ -9,6 +9,7 @@ description: AozoraEpub3-JDK21のEPUB 3.3対応状況と変更点を解説しま
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
+  <a href="gaiji-settings.html">外字の設定</a> | 
   <a href="narou-setup.html">narou.rb</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <a href="development.html">開発者向け</a> | 
@@ -27,8 +28,8 @@ AozoraEpub3-JDK21 による EPUB 3.3 対応の解説です。
 
 EPUB（Electronic Publication）3.3 は、国際的な電子書籍フォーマット標準です。
 
-- **公式仕様**: [IDPF EPUB 3.3 Standard](https://www.w3.org/publishing/epub33/)
-- **日本の参考**: [電書協 EPUB 3 制作ガイド](https://www.ebookjapan.jp/)
+- **公式仕様**: [EPUB 3.3 仕様 (W3C 勧告)](https://www.w3.org/publishing/epub33/)
+- **日本の参考**: [電書協 EPUB 3 制作ガイド](https://www.ebpaj.jp/counsel/guide)
 
 ---
 
@@ -72,8 +73,8 @@ EPUB 3.3 では、より詳細なメタデータと構造化情報が推奨さ�
 
 ## 利用技術
 
-- **言語**: Java 21 (LTS)
-- **ビルド**: Gradle 8
+- **言語**: Java 25 LTS 推奨（Java 21 以降で動作）
+- **ビルド**: Gradle 9.6.1
 - **検証**: epubcheck 5.x
 - **テンプレートエンジン**: Apache Velocity
 
@@ -82,7 +83,7 @@ EPUB 3.3 では、より詳細なメタデータと構造化情報が推奨さ�
 ## 参考リソース
 
 - [EPUB 3.3 仕様 (W3C)](https://www.w3.org/publishing/epub33/)
-- [電書協 EPUB 3 制作ガイド](https://www.ebookjapan.jp/)
+- [電書協 EPUB 3 制作ガイド](https://www.ebpaj.jp/counsel/guide)
 - [epubcheck プロジェクト](https://github.com/w3c/epubcheck)
 
 ---

@@ -13,6 +13,7 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
   <strong>📚 ドキュメント:</strong>
   <a href="./">ホーム</a> | 
   <a href="usage.html">使い方</a> | 
+  <a href="gaiji-settings.html">外字の設定</a> | 
   <a href="narou-setup.html">narou.rb</a> |
   <a href="narou-rs-setup.html">narou.rs</a> |
   <a href="development.html">開発者向け</a> | 
@@ -75,9 +76,9 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ## このプロジェクトについて
 
-本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rbとの互換性維持、Java 21〜26 対応と最新 OS 向けの調整を行った派生版です。
+本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rb との互換性の維持、Java 21〜26 への対応、最新 OS 向けの調整を行った派生版です。
 
-EPUB 3.3 および 電書協／電書連 EPUB 3 制作ガイドの準拠を目指し、epubcheck 5.x で検証しています。
+EPUB 3.3 および 電書協／電書連 EPUB 3 制作ガイドへの準拠を目指し、epubcheck 5.x で検証しています。
 
 ---
 
