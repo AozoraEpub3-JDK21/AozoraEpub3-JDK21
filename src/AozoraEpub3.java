@@ -38,7 +38,7 @@ public class AozoraEpub3
 {
 	private static final Logger logger = LoggerFactory.getLogger(AozoraEpub3.class);
 
-	public static final String VERSION = "1.6.0-jdk21";
+	public static final String VERSION = "1.6.1-jdk21";
 
 	/** 最後に出力に成功した EPUB。CLI の --preview が変換後に開く対象。
 	 * GUI は変換経路が異なるため AozoraEpub3Applet.previewTargetFile を使う */
