@@ -72,6 +72,10 @@ public final class SettingDefaults
 		map.put("FitImage", true);
 		//プレビュー。CLI も ini から読む (AutoPreview の CLI 連動、docs/epub-preview-plan.md)
 		map.put("AutoPreview", false);
+		//外字の注記表示フォールバック (docs/gaiji-fallback-plan.md 機能1)
+		//既定 false = 従来どおり変換する。互換性重視で、設定しない限り出力は変わらない
+		map.put("GaijiFallback", false);
+		map.put("GaijiFallbackCode", false);
 		return Collections.unmodifiableMap(map);
 	}
 
@@ -96,6 +100,9 @@ public final class SettingDefaults
 		map.put("SinglePageSizeW", 400);
 		map.put("SinglePageSizeH", 600);
 		map.put("JpegQuality", 85);
+		//外字を注記表示にする水準 3=第3水準以上 4=第4水準以上 9=JIS規格外のみ
+		//GaijiFallback が false ならこの値は読まれない
+		map.put("GaijiFallbackLevel", 4);
 		return Collections.unmodifiableMap(map);
 	}
 

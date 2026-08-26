@@ -118,6 +118,7 @@ import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
 import com.github.hmdev.update.UpdateChecker;
 import com.github.hmdev.util.ArchiveUrlUtils;
+import com.github.hmdev.util.JisLevelUtil;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.util.I18n;
 import com.github.hmdev.web.WebAozoraConverter;
@@ -406,6 +407,18 @@ public class AozoraEpub3Applet extends JPanel
 	JRadioButton jRadioDakutenType2;
 	JCheckBox jCheckIvsBMP;
 	JCheckBox jCheckIvsSSP;
+
+	/** 外字を注記表示にフォールバックする (docs/gaiji-fallback-plan.md 機能1) */
+	JCheckBox jCheckGaijiFallback;
+	/** 外字の詳細設定ダイアログを開くボタン */
+	JButton jButtonGaijiDetail;
+	/** 現在の水準設定の表示 ダイアログを開かなくても読めるようにするため */
+	JLabel jLabelGaijiFallbackSummary;
+	/** 注記表示にする水準 JisLevelUtil.LEVEL_3 / LEVEL_4 / LEVEL_OUT
+	 *  値は詳細ダイアログでのみ変更するので、ウィジェットではなくフィールドで保持する */
+	int gaijiFallbackLevel = JisLevelUtil.LEVEL_4;
+	/** 注記に水準コードを含める */
+	boolean gaijiFallbackCode = false;
 	
 	//Web
 	JTextField jTextWebInterval;
@@ -2334,7 +2347,37 @@ public class AozoraEpub3Applet extends JPanel
 		jCheckIvsSSP.setFocusPainted(false);
 		jCheckIvsSSP.setBorder(padding2);
 		panel.add(jCheckIvsSSP);
-		
+
+		////////////////////////////////
+		//外字の注記表示フォールバック (docs/gaiji-fallback-plan.md 機能1)
+		//「水準」を知らない利用者でも使えるよう、表のチェックは1つだけにして細かい指定は詳細に隠す
+		panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+		panel.setBorder(new NarrowTitledBorder(I18n.t("ui.border.gaijiFallback")));
+		tabPanel.add(panel);
+		jCheckGaijiFallback = new JCheckBox(I18n.t("ui.chk.gaijiFallback"), false);
+		jCheckGaijiFallback.setToolTipText(I18n.t("ui.tooltip.gaijiFallback"));
+		jCheckGaijiFallback.setFocusPainted(false);
+		jCheckGaijiFallback.setBorder(padding2);
+		panel.add(jCheckGaijiFallback);
+		//チェックボックスの文章と地続きに見えないよう間隔を空ける
+		panel.add(Box.createHorizontalStrut(12));
+		jButtonGaijiDetail = new JButton(I18n.t("ui.btn.gaijiFallbackDetail"));
+		jButtonGaijiDetail.setToolTipText(I18n.t("ui.tooltip.gaijiFallbackDetail"));
+		jButtonGaijiDetail.setFocusPainted(false);
+		jButtonGaijiDetail.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				showGaijiFallbackDialog();
+			}
+		});
+		panel.add(jButtonGaijiDetail);
+		//ダイアログを開かなくても現在の設定が読めるようにする
+		panel.add(Box.createHorizontalStrut(8));
+		jLabelGaijiFallbackSummary = new JLabel();
+		panel.add(jLabelGaijiFallbackSummary);
+		updateGaijiFallbackSummary();
+
 		////////////////////////////////////////////////////////////////
 		//Tab Web小説
 		////////////////////////////////////////////////////////////////
@@ -3751,6 +3794,10 @@ public class AozoraEpub3Applet extends JPanel
 			this.aozoraConverter.setAutoYoko(this.jCheckAutoYoko.isSelected(), this.jCheckAutoYokoNum1.isSelected(), this.jCheckAutoYokoNum3.isSelected(), this.jCheckAutoEQ1.isSelected());
 			//文字出力設定
 			this.aozoraConverter.setCharOutput(dakutenType, jCheckIvsBMP.isSelected(), jCheckIvsSSP.isSelected());
+			//外字の注記表示フォールバック (docs/gaiji-fallback-plan.md 機能1)
+			this.aozoraConverter.setGaijiFallback(
+					this.jCheckGaijiFallback.isSelected() ? this.gaijiFallbackLevel : 0,
+					this.gaijiFallbackCode);
 			//全角スペースの禁則
 			this.aozoraConverter.setSpaceHyphenation(this.jRadioSpaceHyp0.isSelected()?0:(this.jRadioSpaceHyp1.isSelected()?1:2));
 			//注記のルビ表示
@@ -4588,6 +4635,60 @@ public class AozoraEpub3Applet extends JPanel
 		}
 	}
 
+	/** 現在の水準設定をボタン横に表示する
+	 * <p>詳細ダイアログを開かないと何が設定されているか分からない状態を避けるため。</p> */
+	void updateGaijiFallbackSummary()
+	{
+		if (this.jLabelGaijiFallbackSummary == null) return;
+		String levelLabel;
+		switch (this.gaijiFallbackLevel) {
+		case JisLevelUtil.LEVEL_3: levelLabel = I18n.t("ui.combo.gaijiLevel3"); break;
+		case JisLevelUtil.LEVEL_OUT: levelLabel = I18n.t("ui.combo.gaijiLevelOut"); break;
+		default: levelLabel = I18n.t("ui.combo.gaijiLevel4"); break;
+		}
+		if (this.gaijiFallbackCode) levelLabel += I18n.t("ui.label.gaijiFallbackCodeSuffix");
+		this.jLabelGaijiFallbackSummary.setText(I18n.t("ui.label.gaijiFallbackCurrent", levelLabel));
+	}
+
+	/** 外字の注記表示フォールバックの詳細設定ダイアログを開く
+	 * <p>「水準」の指定は一般利用者には不要なので、表のチェックボックスから隠してここに置く。
+	 * キャンセル時は何も変更しない。(docs/gaiji-fallback-plan.md 機能1)</p> */
+	void showGaijiFallbackDialog()
+	{
+		//表示順と水準値の対応 コンボの選択インデックスから引く
+		final int[] levels = { JisLevelUtil.LEVEL_3, JisLevelUtil.LEVEL_4, JisLevelUtil.LEVEL_OUT };
+		String[] labels = {
+			I18n.t("ui.combo.gaijiLevel3"),
+			I18n.t("ui.combo.gaijiLevel4"),
+			I18n.t("ui.combo.gaijiLevelOut") };
+
+		JComboBox<String> jComboLevel = new JComboBox<String>(labels);
+		for (int i=0; i<levels.length; i++) {
+			if (levels[i] == this.gaijiFallbackLevel) jComboLevel.setSelectedIndex(i);
+		}
+		JCheckBox jCheckCode = new JCheckBox(I18n.t("ui.chk.gaijiFallbackCode"), this.gaijiFallbackCode);
+		jCheckCode.setToolTipText(I18n.t("ui.tooltip.gaijiFallbackCode"));
+
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		JPanel levelPanel = new JPanel();
+		levelPanel.setLayout(new BoxLayout(levelPanel, BoxLayout.X_AXIS));
+		levelPanel.add(new JLabel(I18n.t("ui.label.gaijiFallbackLevel")+" "));
+		levelPanel.add(jComboLevel);
+		panel.add(levelPanel);
+		panel.add(jCheckCode);
+
+		int ret = JOptionPane.showConfirmDialog(this.jFrameParent, panel,
+			I18n.t("ui.dialog.gaijiFallback.title"),
+			JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+		if (ret != JOptionPane.OK_OPTION) return;
+
+		int selected = jComboLevel.getSelectedIndex();
+		if (selected >= 0 && selected < levels.length) this.gaijiFallbackLevel = levels[selected];
+		this.gaijiFallbackCode = jCheckCode.isSelected();
+		this.updateGaijiFallbackSummary();
+	}
+
 	/** UIManager 由来の色をコンポーネントへ再適用する。
 	 * 起動時と、テーマ切替 (UiThemeManager.switchTo) の直後に呼ぶ */
 	void applyThemeColors()
@@ -5404,6 +5505,11 @@ public class AozoraEpub3Applet extends JPanel
 		}
 		setPropsSelected(jCheckIvsBMP, props, "IvsBMP");
 		setPropsSelected(jCheckIvsSSP, props, "IvsSSP");
+		//外字の注記表示フォールバック 既定は互換性重視で OFF (docs/gaiji-fallback-plan.md 機能1)
+		setPropsSelected(jCheckGaijiFallback, props, "GaijiFallback");
+		this.gaijiFallbackLevel = SettingDefaults.getInt(props, "GaijiFallbackLevel");
+		this.gaijiFallbackCode = SettingDefaults.getBoolean(props, "GaijiFallbackCode");
+		this.updateGaijiFallbackSummary();
 		
 		////////////////////////////////////////////////////////////////
 		//Web
@@ -5583,6 +5689,9 @@ public class AozoraEpub3Applet extends JPanel
 		props.setProperty("DakutenType", this.jRadioDakutenType0.isSelected()?"0":(this.jRadioDakutenType1.isSelected()?"1":"2"));
 		props.setProperty("IvsBMP", this.jCheckIvsBMP.isSelected()?"1":"");
 		props.setProperty("IvsSSP", this.jCheckIvsSSP.isSelected()?"1":"");
+		props.setProperty("GaijiFallback", this.jCheckGaijiFallback.isSelected()?"1":"");
+		props.setProperty("GaijiFallbackLevel", String.valueOf(this.gaijiFallbackLevel));
+		props.setProperty("GaijiFallbackCode", this.gaijiFallbackCode?"1":"");
 		
 		//Web
 		props.setProperty("WebInterval", this.jTextWebInterval.getText());

@@ -25,6 +25,7 @@ import com.github.hmdev.info.BookInfo.TitleType;
 import com.github.hmdev.info.ChapterLineInfo;
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.CharUtils;
+import com.github.hmdev.util.JisLevelUtil;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.writer.Epub3Writer;
 
@@ -85,7 +86,16 @@ public class AozoraEpub3Converter
 	boolean printIvsBMP = false;
 	/** 漢字用IVS(U+E0100-E01EF)を出力 */
 	boolean printIvsSSP = true;
-	
+
+	/** 外字を注記表示にフォールバックする水準 0=しない 3=第3水準以上 4=第4水準以上 9=JIS規格外のみ
+	 * <p>端末フォントに無い文字が ? や豆腐になるより、何の字か分かる注記を残す方がよい場合に使う。
+	 * docs/gaiji-fallback-plan.md 機能1。</p> */
+	int gaijiFallbackLevel = 0;
+	/** 注記表示に水準コード(第4水準2-12-11 等)も含める */
+	boolean gaijiFallbackCode = false;
+	/** 注記表示にフォールバックした件数 変換毎に 0 に戻す */
+	int gaijiFallbackCount = 0;
+
 	/** 奥付を別ページ */
 	boolean separateColophon = true;
 	
@@ -541,6 +551,16 @@ public class AozoraEpub3Converter
 		this.dakutenType = dakutenType;
 		this.printIvsBMP = printIvsBMP;
 		this.printIvsSSP = printIvsSSP;
+	}
+
+	/** 外字の注記表示フォールバック設定
+	 * @param gaijiFallbackLevel 抑止を開始する水準 0=フォールバックしない
+	 *   JisLevelUtil.LEVEL_3 / LEVEL_4 / LEVEL_OUT のいずれか
+	 * @param gaijiFallbackCode 注記に水準コードも含める */
+	public void setGaijiFallback(int gaijiFallbackLevel, boolean gaijiFallbackCode)
+	{
+		this.gaijiFallbackLevel = gaijiFallbackLevel;
+		this.gaijiFallbackCode = gaijiFallbackCode;
 	}
 	
 	/** コメント行内出力設定 */
@@ -1144,6 +1164,7 @@ public class AozoraEpub3Converter
 		//変換開始字のメンバ変数の初期化
 		this.pageByteSize = 0;
 		this.sectionCharLength = 0;
+		this.gaijiFallbackCount = 0;
 		this.lineNum = -1;
 		this.lineIdNum = 1;
 		this.tagLevel = 0;
@@ -1313,7 +1334,12 @@ public class AozoraEpub3Converter
 			
 			if (tagLevel == 0) lastZeroTagLevelLineNum = lineNum;
 		} while ((line = src.readLine()) != null);
-		
+
+		//フォールバック件数を報告する 無言で本文の表現を変えない
+		if (this.gaijiFallbackCount > 0) {
+			LogAppender.println("外字を注記表示にしました: "+this.gaijiFallbackCount+" 件");
+		}
+
 		} catch (Exception e) {
 			logger.error("EPUB 用テキスト変換中にエラー (lineNum={})", lineNum, e);
 			LogAppender.error(lineNum, "");
@@ -1377,7 +1403,13 @@ public class AozoraEpub3Converter
 				if (chukiInner.startsWith("U+") || chukiInner.startsWith("u+")) {
 					String gaiji = gaijiConverter.codeToCharString(chukiInner);
 					if (gaiji != null) {
-						buf.append(gaiji);
+						//端末で表示できない可能性が高い水準なら変換せず注記表示にする
+						if (this.isGaijiFallback(gaiji)) {
+							if (logged) LogAppender.info(lineNum, "外字を注記表示", chuki);
+							buf.append(this.gaijiFallbackString(chukiInner, hasInnerChuki(line, m.start())));
+						} else {
+							buf.append(gaiji);
+						}
 						begin = chukiStart+chuki.length();
 						continue;
 					}
@@ -1408,6 +1440,16 @@ public class AozoraEpub3Converter
 				if (gaiji == null) {
 					gaiji = gaijiConverter.toUtf(chukiValues[0]);
 				}
+				//端末で表示できない可能性が高い水準なら変換せず注記表示にする
+				//変換に成功した外字が対象なので、変換不可時の既存フォールバックより手前で判定する
+				if (this.isGaijiFallback(gaiji)) {
+					if (logged) LogAppender.info(lineNum, "外字を注記表示", chuki);
+					String label = this.gaijiFallbackCode ? chukiInner : chukiValues[0];
+					buf.append(this.gaijiFallbackString(label, hasInnerChuki(line, m.start())));
+					begin = chukiStart+chuki.length();
+					continue;
+				}
+
 				//外字注記変換をログに出力
 				if (gaiji != null) {
 					//if (logged) LogAppender.info(lineNum, "外字注記", chuki+" → U+"+Integer.toHexString(AozoraGaijiConverter.toUtfCode(gaiji)));
@@ -1467,7 +1509,75 @@ public class AozoraEpub3Converter
 		//残りの文字をつなげて返却
 		return buf.toString()+line.substring(begin);
 	}
-	
+
+	/** 外字を注記表示にフォールバックすべきか
+	 * <p>変換自体は成功しているが、端末フォントに無く ? や豆腐になる可能性が高い水準の場合に true。</p>
+	 * @param gaiji 変換後の文字列 null 可
+	 * @return 設定水準以上の文字を含む場合 true */
+	boolean isGaijiFallback(String gaiji)
+	{
+		if (gaiji == null || this.gaijiFallbackLevel <= 0) return false;
+		if (!JisLevelUtil.exceeds(gaiji, this.gaijiFallbackLevel)) return false;
+		//1文字フォントがあれば端末フォントに依存せず表示できるので抑止しない
+		//convertGaijiChuki は convertChar のフォント探索より手前で動くため、ここで先に見る必要がある
+		return !hasGaijiFont(gaiji);
+	}
+
+	/** 変換後の文字に対応する1文字フォントが gaiji/ にあるか
+	 * <p>判定できるのは 1 文字(+IVS)の場合のみ。複数文字やタグを含む場合は false を返す。</p>
+	 * @param gaiji 変換後の文字列
+	 * @return 1文字フォントが登録されていれば true */
+	boolean hasGaijiFont(String gaiji)
+	{
+		if (gaiji == null || gaiji.isEmpty()) return false;
+		int codePoint = gaiji.codePointAt(0);
+		int rest = gaiji.length() - Character.charCount(codePoint);
+		if (rest > 0) {
+			//IVS 付き 1 文字なら IVS 用のマップを見る それ以外の複数文字は対象外
+			int ivs = gaiji.codePointAt(Character.charCount(codePoint));
+			if (!JisLevelUtil.isVariationSelector(ivs)) return false;
+			if (rest != Character.charCount(ivs)) return false;
+			String className = "u"+Integer.toHexString(codePoint)+"-u"+Integer.toHexString(ivs);
+			if (ivs16FontMap != null && ivs16FontMap.containsKey(className)) return true;
+			if (ivs32FontMap != null && ivs32FontMap.containsKey(className)) return true;
+			return false;
+		}
+		if (utf16FontMap != null && utf16FontMap.containsKey(codePoint)) return true;
+		if (utf32FontMap != null && utf32FontMap.containsKey(codePoint)) return true;
+		return false;
+	}
+
+	/** 注記を経由しない生の文字を記号に置き換えるべきか
+	 * <p>1文字フォントの探索より後に呼ぶこと。フォントが同梱されていれば正しく表示できるので抑止しない。
+	 * 旧 gaiji32 は Kobo の描画バグ回避のため 4バイト文字を一律に落としていたが、
+	 * こちらは端末フォントのグリフ欠落が目的なので水準で判断する。</p>
+	 * @param codePoint 判定するコードポイント
+	 * @return 設定水準以上なら true */
+	boolean isRawCharFallback(int codePoint)
+	{
+		if (this.gaijiFallbackLevel <= 0) return false;
+		return JisLevelUtil.level(codePoint) >= this.gaijiFallbackLevel;
+	}
+
+	/** 注記表示にフォールバックした文字列を組み立てる
+	 * <p>変換不可時の既存フォールバック(「外字未変換」)と同じ書式にすること。
+	 * 同じ見た目の出力が 2 種類あると利用者が混乱する。</p>
+	 * <pre>
+	 * ※［＃「廴＋囘」、第4水準2-12-11］
+	 *   → 〓（「廴＋囘」）                    水準コードなし
+	 *   → 〓（「廴＋囘」、第4水準2-12-11）    水準コードあり
+	 * </pre>
+	 * @param label （）内に出す説明文
+	 * @param innerChuki 注記の中に居るか 中では注記タグを出せない
+	 * @return 出力する文字列 */
+	String gaijiFallbackString(String label, boolean innerChuki)
+	{
+		this.gaijiFallbackCount++;
+		//注記内に行右小書き注記を出すと注記が入れ子になって壊れるので記号のみにする
+		if (innerChuki) return "〓";
+		return "〓［＃行右小書き］（"+label+"）［＃行右小書き終わり］";
+	}
+
 	/** 注記内かチェック
 	 * @param gaijiStart これより前で注記が閉じていないかをチェック */
 	private boolean hasInnerChuki(String line, int gaijiStart)
@@ -2749,6 +2859,16 @@ public class AozoraEpub3Converter
 						}
 					}
 				}
+				//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+				//1文字フォントの探索より後に置くこと フォントがあれば正しく表示できるので抑止しない
+				//注記を経由していないので何の字かの情報が無く 〓 のみになる
+				if (this.isRawCharFallback(code)) {
+					buf.append('〓');
+					this.gaijiFallbackCount++;
+					LogAppender.info(lineNum, "拡張漢字を〓に置換", ""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+")");
+					i++; //次の文字へ
+					continue;
+				}
 				//通常の4バイト文字
 				/*if (!gaiji32) {
 					//4バイト文字を出力しない
@@ -2858,6 +2978,15 @@ public class AozoraEpub3Converter
 				}
 			}
 			
+			//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+			//1文字フォントの探索より後に置くこと フォントがあれば正しく表示できるので抑止しない
+			if (this.isRawCharFallback(ch[i])) {
+				buf.append('〓');
+				this.gaijiFallbackCount++;
+				LogAppender.info(lineNum, "文字を〓に置換", ""+ch[i]+"(u+"+Integer.toHexString(ch[i])+")");
+				continue;
+			}
+
 			//1文字フォントもIVSもない場合
 			//自動縦中横処理
 			if (this.vertical && !(inYoko || noTcy)) {

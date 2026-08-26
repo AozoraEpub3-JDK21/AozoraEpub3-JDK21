@@ -313,6 +313,12 @@ public class AozoraEpub3
 			boolean printIvsSSP = "1".equals(props.getProperty("IvsSSP"));
 			
 			aozoraConverter.setCharOutput(dakutenType, printIvsBMP, printIvsSSP);
+			//外字の注記表示フォールバック (docs/gaiji-fallback-plan.md 機能1)
+			//GUI だけに付けると narou.rb 経由 (CLI 呼び出し) の利用者に届かないため CLI も同じ ini を読む
+			aozoraConverter.setGaijiFallback(
+					SettingDefaults.getBoolean(props, "GaijiFallback")
+						? SettingDefaults.getInt(props, "GaijiFallbackLevel") : 0,
+					SettingDefaults.getBoolean(props, "GaijiFallbackCode"));
 			//全角スペースの禁則
 			aozoraConverter.setSpaceHyphenation(spaceHyp);
 			//コメント

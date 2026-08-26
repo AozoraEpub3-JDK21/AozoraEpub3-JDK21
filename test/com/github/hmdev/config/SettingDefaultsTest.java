@@ -111,6 +111,8 @@ public class SettingDefaultsTest {
 			"FitImage",
 			//AutoPreview の CLI 連動で追加 (docs/epub-preview-plan.md の起票セクション)
 			"AutoPreview",
+			//外字の注記表示フォールバックで追加 (docs/gaiji-fallback-plan.md 機能1)
+			"GaijiFallback", "GaijiFallbackCode",
 		};
 		assertEquals("boolean キーの件数", expectedBooleans.length, SettingDefaults.booleanKeys().size());
 		for (String key : expectedBooleans) {
@@ -124,6 +126,8 @@ public class SettingDefaultsTest {
 			"DakutenType", "MaxCoverLine",
 			"PageBreakSize", "PageBreakEmptyLine", "PageBreakEmptySize", "PageBreakChapterSize",
 			"ImageSizeType", "SinglePageSizeW", "SinglePageSizeH", "JpegQuality",
+			//外字の注記表示フォールバックで追加 (docs/gaiji-fallback-plan.md 機能1)
+			"GaijiFallbackLevel",
 		};
 		assertEquals("int キーの件数", expectedInts.length, SettingDefaults.intKeys().size());
 		for (String key : expectedInts) {
