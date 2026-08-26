@@ -250,4 +250,91 @@ public class GaijiFallbackTest
 		String out = convertLine("俠客");
 		assertTrue("俠 は第3水準なので残る: "+out, out.contains("俠"));
 	}
+
+	//------------------------------------------------------------------
+	// 異体字セレクタ付き（IVS/VS の分岐は水準判定より手前で出力していた）
+	//------------------------------------------------------------------
+
+	/** IVS U+E0100 見た目に出ない文字なのでコードポイントから作る */
+	static final String IVS_E0100 = new String(Character.toChars(0xE0100));
+	/** VS1 U+FE00 見た目に出ない文字なのでコードポイントから作る */
+	static final String VS_FE00 = new String(Character.toChars(0xFE00));
+
+	@Test
+	public void IVS付きの生の4バイト文字も抑止される() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String out = convertLine("𢌞"+IVS_E0100+"り");
+		assertFalse("𢌞 が残っている: "+out, out.contains("𢌞"));
+		assertFalse("異体字セレクタだけ残ってはいけない: "+out, out.contains(IVS_E0100));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("後続の文字は残る: "+out, out.contains("り"));
+		assertEquals(1, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void IVS付きの生のBMP文字も抑止される() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("俠"+IVS_E0100+"客");
+		assertFalse("俠 が残っている: "+out, out.contains("俠"));
+		assertFalse("異体字セレクタだけ残ってはいけない: "+out, out.contains(IVS_E0100));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("第1・2水準の 客 は残る: "+out, out.contains("客"));
+	}
+
+	@Test
+	public void VS付きの生のBMP文字も抑止される() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("俠"+VS_FE00+"客");
+		assertFalse("俠 が残っている: "+out, out.contains("俠"));
+		assertFalse("異体字セレクタだけ残ってはいけない: "+out, out.contains(VS_FE00));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("第1・2水準の 客 は残る: "+out, out.contains("客"));
+	}
+
+	@Test
+	public void IVS付きでも既定なら変換されたまま() throws IOException
+	{
+		String out = convertLine("𢌞"+IVS_E0100+"り");
+		assertTrue("本文に 𢌞 が残る: "+out, out.contains("𢌞"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	//------------------------------------------------------------------
+	// 同じ長さのルビ（convertTcyText を通らず convertReplacedChar に直接出力する経路）
+	//------------------------------------------------------------------
+
+	@Test
+	public void 一文字ルビの本文も抑止される() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		//本文とルビが同じ長さの場合は1文字ずつルビを振る経路に入り、縦中横変換を通らない
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("俠《き》");
+		assertFalse("俠 が残っている: "+out, out.contains("俠"));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("ルビは残る: "+out, out.contains("き"));
+	}
+
+	@Test
+	public void 一文字ルビでも既定なら変換されたまま() throws IOException
+	{
+		String out = convertLine("俠《き》");
+		assertTrue("本文に 俠 が残る: "+out, out.contains("俠"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 同じ長さのルビでも第1_2水準は抑止しない() throws IOException
+	{
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("崎《さ》");
+		assertTrue("本文に 崎 が残る: "+out, out.contains("崎"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
 }

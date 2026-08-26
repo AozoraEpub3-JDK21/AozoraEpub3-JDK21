@@ -1559,6 +1559,21 @@ public class AozoraEpub3Converter
 		return JisLevelUtil.level(codePoint) >= this.gaijiFallbackLevel;
 	}
 
+	/** 1文字フォントを自前で探索しない出力経路で、生の文字を記号に置き換えるべきか
+	 * <p>{@link #isRawCharFallback(int)} は「直前でフォント探索を済ませてある」前提だが、
+	 * IVS 付きの分岐にはセレクタ無しのフォントを引かないものがあり、
+	 * convertReplacedChar による直接出力(同じ長さのルビ等)にはフォント探索そのものが無い。
+	 * それらの経路から呼んで「フォントがあれば抑止しない」規則を揃える。</p>
+	 * <p>IVS 付きでもここに渡すのは基底字のコードポイントのみ。
+	 * {@link JisLevelUtil} はセレクタを判定から除外するので水準は基底字だけで決まる。</p>
+	 * @param codePoint 基底字のコードポイント
+	 * @return 設定水準以上で1文字フォントも無ければ true */
+	boolean isDirectCharFallback(int codePoint)
+	{
+		if (!this.isRawCharFallback(codePoint)) return false;
+		return !this.hasGaijiFont(new String(Character.toChars(codePoint)));
+	}
+
 	/** 注記表示にフォールバックした文字列を組み立てる
 	 * <p>変換不可時の既存フォールバック(「外字未変換」)と同じ書式にすること。
 	 * 同じ見た目の出力が 2 種類あると利用者が混乱する。</p>
@@ -2783,6 +2798,16 @@ public class AozoraEpub3Converter
 							}
 						}
 					}
+					//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+					//1文字フォントの探索より後、IVS出力より前に置くこと 置き換えるときはIVSも一緒に落とす
+					if (this.isDirectCharFallback(code)) {
+						buf.append('〓');
+						this.gaijiFallbackCount++;
+						LogAppender.info(lineNum, "拡張漢字を〓に置換(IVS除外)",
+								""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+"+"+ivsCode+")");
+						i+=3; //IVSの次へ
+						continue;
+					}
 					//4バイト文字とIVSを出力
 					/*if (!gaiji32) {
 						//4バイト文字を出力しない
@@ -2822,6 +2847,16 @@ public class AozoraEpub3Converter
 								continue;
 							}
 						}
+					}
+					//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+					//1文字フォントの探索より後、IVS出力より前に置くこと 置き換えるときはIVSも一緒に落とす
+					if (this.isDirectCharFallback(code)) {
+						buf.append('〓');
+						this.gaijiFallbackCount++;
+						LogAppender.info(lineNum, "拡張漢字を〓に置換(IVS除外)",
+								""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+"+"+Integer.toHexString(ch[i+2])+")");
+						i+=2; //IVSの次へ
+						continue;
 					}
 					//4バイト文字とIVSを出力
 					/*if (!gaiji32) {
@@ -2910,6 +2945,16 @@ public class AozoraEpub3Converter
 						}
 					}
 				}
+				//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+				//1文字フォントの探索より後、IVS出力より前に置くこと 置き換えるときはIVSも一緒に落とす
+				if (this.isDirectCharFallback(ch[i])) {
+					buf.append('〓');
+					this.gaijiFallbackCount++;
+					LogAppender.info(lineNum, "文字を〓に置換(IVS除外)",
+							""+ch[i]+"(u+"+Integer.toHexString(ch[i])+"+"+ivsCode+")");
+					i+=2; //IVSの次へ
+					continue;
+				}
 				//2バイト文字とIVSを出力
 				if (printIvsSSP) {
 					if (this.vertical) buf.append(chukiMap.get("正立")[0]);
@@ -2952,6 +2997,16 @@ public class AozoraEpub3Converter
 					}
 				}
 				
+				//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+				//1文字フォントの探索より後、IVS出力より前に置くこと 置き換えるときはIVSも一緒に落とす
+				if (this.isDirectCharFallback(ch[i])) {
+					buf.append('〓');
+					this.gaijiFallbackCount++;
+					LogAppender.info(lineNum, "文字を〓に置換(IVS除外)",
+							""+ch[i]+"(u+"+Integer.toHexString(ch[i])+"+"+Integer.toHexString(ch[i+1])+")");
+					i++; //IVSの次へ
+					continue;
+				}
 				//2バイト文字とIVSを出力
 				if (printIvsBMP) {
 					buf.append(ch[i]);
@@ -3202,7 +3257,19 @@ public class AozoraEpub3Converter
 	{
 		//NULL文字なら何も出力しない
 		if (ch[idx] == '\0') return;
-		
+
+		//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
+		//convertTcyText を通らずここに直接来る経路(同じ長さのルビを1文字ずつ振る場合など)の受け皿。
+		//4バイト文字はここでは対を判定できないので convertTcyText 側に任せる。
+		//異体字セレクタ自体は字ではないので置き換えない。
+		if (this.gaijiFallbackLevel > 0 && !Character.isSurrogate(ch[idx])
+				&& !JisLevelUtil.isVariationSelector(ch[idx]) && this.isDirectCharFallback(ch[idx])) {
+			buf.append('〓');
+			this.gaijiFallbackCount++;
+			LogAppender.info(lineNum, "文字を〓に置換", ""+ch[idx]+"(u+"+Integer.toHexString(ch[idx])+")");
+			return;
+		}
+
 		//String str = latinConverter.toLatinGlyphString(ch);
 		//if (str != null) out.write(str);
 		//else out.write(ch);
