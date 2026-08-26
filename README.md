@@ -92,12 +92,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.6.0-jdk21.zip
+AozoraEpub3-1.6.1-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.6.0-jdk21.tar.gz
+AozoraEpub3-1.6.1-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -148,6 +148,10 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.6.1-jdk21 (2026-08-26)
+- **端末で表示できない外字を注記表示に置き換える設定を追加**: JIS 第4水準の `𢌞` などは端末フォントに無いと `?` や □ になる。有効にすると `〓（「廴＋囘」）` のように何の字か分かる形で出力する。**既定は無効**で、設定しない限り出力は従来と 1 バイトも変わらない。ini キーは `GaijiFallback` / `GaijiFallbackLevel` / `GaijiFallbackCode`、GUI は「スタイル」タブの「外字」欄。1 文字フォント（`gaiji/*.ttf`）が登録されている文字は置き換えない
+- **外字の設定ページを日英で追加**（`docs/gaiji-settings.md`）。あわせて公開ドキュメント全 12 ページの誤った記述（電書協ガイドのリンク先、テンプレートのパス、Web 取得のレート制限、クラス名など）を修正
 
 ### v1.6.0-jdk21 (2026-08-23)
 - **バージョン更新確認**: GitHub の最新リリースと実行中のバージョンを比べて更新の有無を知らせます。GUI は画面上部の「更新確認」ボタン、CLI は `--check-update`。自動更新・起動時の自動チェックはありません

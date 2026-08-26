@@ -24,17 +24,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.6.0-jdk21 (2026年8月23日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.6.0-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.6.1-jdk21 (2026年8月26日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.6.1-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.0-jdk21/AozoraEpub3-1.6.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -44,13 +44,10 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.6.0-jdk21 の主な変更
+## v1.6.1-jdk21 の主な変更
 
-- **バージョン更新確認**: GitHub の最新リリースと実行中のバージョンを比べて、更新の有無をお知らせします。GUI は画面上部の「更新確認」ボタン、CLI は `--check-update` です。自動更新も起動時の自動チェックもありません（ダウンロードと差し替えはご自身で行ってください）
-- **表題ページの「横書き」が保存されない問題を修正**: GUI で「横書き」を選んでも設定が「中央」のままになっていました。同じ原因で「スタイル」タブの余白パネルが 1 つに合体していた表示崩れと、余白の指定が正しく出力されない問題も直っています
-- **ダークテーマでメニューの文字が黒いままだった問題を修正**: 「言語」「端末設定」のメニューが暗い背景に黒文字で表示されて読めませんでした
-- **表紙設定「表紙無し」が保存されない問題を修正**: あわせて設定の保存形式を UI 言語に依存しない形に変更したため、日本語⇔英語を切り替えても設定が保たれます
-- **コマンドラインの余白設定が正しく出力されない問題を修正**: `presets/` のプリセットを `-i` で渡したときに、余白の単位が欠けた不正な指定になっていました
+- **端末で表示できない外字を、注記表示に置き換える設定を追加**: `𢌞` のような JIS 第4水準の文字は、端末のフォントに無いと `?` や □ になります。この設定を有効にすると、文字の代わりに `〓（「廴＋囘」）` のように何の字かが分かる形で出力します。**既定は無効**で、設定を変えない限り出力はこれまでと変わりません。設定は「スタイル」タブの「外字」欄から行います（[使い方](gaiji-settings.html)）
+- **外字の設定ページを追加**: 水準の選び方、1 文字フォント（`gaiji/*.ttf`）の置き方、注記の書式を日英で説明しています
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 
