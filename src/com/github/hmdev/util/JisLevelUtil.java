@@ -93,8 +93,8 @@ public class JisLevelUtil
 	}
 
 	/** 文字列内で最も上位の (表現しにくい) 水準を返す
-	 * <p>異体字セレクタは判定から除外する。セレクタ自体は JIS に無いため、
-	 * 含めると基底字の水準が常に LEVEL_OUT に潰れてしまう。</p>
+	 * <p>異体字セレクタと結合濁点/半濁点は判定から除外する。どちらも単体では字にならず
+	 * JIS にも無いため、含めると基底字の水準が常に LEVEL_OUT に潰れてしまう。</p>
 	 * @param str 判定する文字列
 	 * @return 最も大きい水準値 判定対象が無ければ LEVEL_1_2 */
 	static public int maxLevel(String str)
@@ -105,7 +105,7 @@ public class JisLevelUtil
 		while (i < str.length()) {
 			int codePoint = str.codePointAt(i);
 			i += Character.charCount(codePoint);
-			if (isVariationSelector(codePoint)) continue;
+			if (isVariationSelector(codePoint) || isCombiningDakuten(codePoint)) continue;
 			int level = level(codePoint);
 			if (level > max) max = level;
 		}
@@ -117,6 +117,15 @@ public class JisLevelUtil
 	{
 		return (codePoint >= 0xFE00 && codePoint <= 0xFE0F)
 			|| (codePoint >= 0xE0100 && codePoint <= 0xE01EF);
+	}
+
+	/** 結合濁点/半濁点 (U+3099/U+309A) か
+	 * <p>単体では字にならず必ず直前の字に付く。本文経路では
+	 * AozoraEpub3Converter が U+309B/U+309C (第1・2水準) に正規化してから出力するため、
+	 * この符号位置が残っていることを理由に基底字ごと抑止してはいけない。</p> */
+	static public boolean isCombiningDakuten(int codePoint)
+	{
+		return codePoint == 0x3099 || codePoint == 0x309A;
 	}
 
 	/** 指定水準以上なら端末で表示できない可能性が高いと判断する

@@ -181,6 +181,146 @@ public class GaijiFallbackTest
 		assertTrue(converter.isGaijiFallback(new String(Character.toChars(U_2231E))));
 	}
 
+	//------------------------------------------------------------------
+	// 仮名＋濁点/半濁点（同梱の gaiji/dakuten/*.ttf で表示できる）
+	//------------------------------------------------------------------
+
+	/** 半濁点付き平仮名か chuki_utf.txt:7341 → か(U+304B) + 結合半濁点(U+309A) */
+	static final String CHUKI_HANDAKUTEN_KA = "※［＃半濁点付き平仮名か、1-4-87］";
+	/** 濁点付き二の字点 chuki_utf.txt:7323 → 〻(U+303B) + 結合濁点(U+3099) */
+	static final String CHUKI_DAKUTEN_NONOJITEN = "※［＃濁点付き二の字点］";
+	/** 井に濁点 chuki_utf.txt:7328 → 井(U+4E95) + 結合濁点(U+3099) 仮名でない唯一の濁点注記 */
+	static final String CHUKI_DAKUTEN_I = "※［＃「井に濁点」］";
+	/** 結合濁点 U+3099 */
+	static final String COMBINING_DAKUTEN = new String(Character.toChars(0x3099));
+	/** 結合半濁点 U+309A */
+	static final String COMBINING_HANDAKUTEN = new String(Character.toChars(0x309A));
+
+	/** 縦書き + 濁点フォント利用 (narou.rb の実測設定) にする */
+	void setDakutenFontMode()
+	{
+		converter.vertical = true;
+		converter.setCharOutput(2, false, false);
+	}
+
+	/** 縦書き + 濁点を CSS で重ねる (既定) にする */
+	void setDakutenSpanMode()
+	{
+		converter.vertical = true;
+		converter.setCharOutput(1, false, false);
+	}
+
+	/**
+	 * 基底字が第1・2水準の仮名＋濁点/半濁点は抑止しない。
+	 *
+	 * 結合半濁点 U+309A は JIS に無いので単体の水準は LEVEL_OUT になるが、
+	 * 単体では字にならず必ず基底字に付くので水準判定から除外する。
+	 * 出力は が・ぱ のような合成済み文字か、基底字 か(第1・2水準) + 濁点 のどちらかになり、
+	 * dakutenType のどの設定でも端末フォント頼みにならない。
+	 */
+	@Test
+	public void 濁点付き仮名は抑止しない()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String converted = converter.convertGaijiChuki(CHUKI_HANDAKUTEN_KA, true, false);
+		assertEquals("か"+COMBINING_HANDAKUTEN, converted);
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	/**
+	 * 仮名でない濁点注記も抑止しない。
+	 *
+	 * ※［＃「井に濁点」］ は 井(U+4E95・第1・2水準) + 結合濁点 の 2 文字で、
+	 * 仮名でないので濁点の対としては扱われないが、結合濁点を水準判定から外せば
+	 * 井 の水準だけで判断されるので抑止対象にならない。
+	 * 出力時に濁点は U+309B(第1・2水準) に正規化されるので表示できる。
+	 */
+	@Test
+	public void 仮名以外の濁点注記も抑止しない()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		assertEquals("井"+COMBINING_DAKUTEN, converter.convertGaijiChuki(CHUKI_DAKUTEN_I, true, false));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	/**
+	 * 基底字自体が第3水準の濁点付き文字は、出力の仕方で扱いが変わる。
+	 *
+	 * 〻(U+303B) は第3水準なので、第3水準以上を抑止する設定では基底字がそのまま出る形は使えない。
+	 * dakutenType=2 (narou.rb の実測設定) なら同梱の gaiji/dakuten/u303b-u3099.ttf で出せるので抑止しない。
+	 */
+	@Test
+	public void 濁点付き二の字点は濁点フォント利用なら抑止しない()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenFontMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String converted = converter.convertGaijiChuki(CHUKI_DAKUTEN_NONOJITEN, true, false);
+		assertEquals("〻"+COMBINING_DAKUTEN, converted);
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	/**
+	 * 同じ 〻＋濁点でも、濁点フォントを使わない設定では基底字が端末フォント頼みになるので抑止する。
+	 *
+	 * 修正前はここで基底字だけが 〓 になり、濁点が孤立して 〓゛ になっていた。
+	 */
+	@Test
+	public void 濁点付き二の字点は濁点フォントを使わなければ抑止する()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String converted = converter.convertGaijiChuki(CHUKI_DAKUTEN_NONOJITEN, true, false);
+		assertEquals("〓［＃行右小書き］（濁点付き二の字点）［＃行右小書き終わり］", converted);
+		assertEquals(1, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 第4水準以上の抑止では濁点付き二の字点は対象外()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		//〻 は第3水準なので第4水準以上の抑止では対象にならない
+		assertEquals("〻"+COMBINING_DAKUTEN, converter.convertGaijiChuki(CHUKI_DAKUTEN_NONOJITEN, true, false));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 濁点判定は仮名と濁点の2文字だけを対象にする()
+	{
+		//結合文字と正規化後の両方を受ける
+		assertTrue(converter.isDakutenKana("か"+COMBINING_HANDAKUTEN));
+		assertTrue(converter.isDakutenKana("か"+new String(Character.toChars(0x309C))));
+		assertTrue(converter.isDakutenKana("カ"+COMBINING_DAKUTEN));
+		assertTrue(converter.isDakutenKana("〻"+COMBINING_DAKUTEN));
+		//仮名以外・濁点以外・長さ違いは対象外
+		assertFalse(converter.isDakutenKana("漢"+COMBINING_DAKUTEN));
+		assertFalse(converter.isDakutenKana("かき"));
+		assertFalse(converter.isDakutenKana("か"));
+		assertFalse(converter.isDakutenKana("かき"+COMBINING_DAKUTEN));
+		assertFalse(converter.isDakutenKana(null));
+	}
+
+	/** 合成済みの文字になる組み合わせは、合成後の文字の水準で判断する */
+	@Test
+	public void 合成できる濁点は合成後の水準で判断する()
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		//か + 濁点 → が (第1・2水準)
+		assertEquals('が', AozoraEpub3Converter.composedDakuten('か', '゛'));
+		//ワ + 濁点 → ヷ (第3水準)
+		assertEquals('ヷ', AozoraEpub3Converter.composedDakuten('ワ', '゛'));
+		assertEquals(JisLevelUtil.LEVEL_3, JisLevelUtil.level('ヷ'));
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		assertFalse("が は第1・2水準なので抑止しない", converter.isDakutenPairFallback('か', '゛'));
+		assertTrue("ヷ は第3水準なので抑止する", converter.isDakutenPairFallback('ワ', '゛'));
+	}
+
 	@Test
 	public void 外字を含まない行は素通しする()
 	{
@@ -298,6 +438,33 @@ public class GaijiFallbackTest
 	}
 
 	@Test
+	public void IVS付きの文字に濁点が付いていても孤立しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		//IVS の分岐は対を見ずに IVS ごと読み飛ばすので、濁点を落とす処理が別に要る
+		String out = convertLine("俠"+IVS_E0100+DAKUTEN+"客");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("第1・2水準の 客 は残る: "+out, out.contains("客"));
+	}
+
+	@Test
+	public void IVS付きの4バイト文字に濁点が付いていても孤立しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String out = convertLine("𢌞"+IVS_E0100+DAKUTEN+"り");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("後続の文字は残る: "+out, out.contains("り"));
+	}
+
+	@Test
 	public void IVS付きでも既定なら変換されたまま() throws IOException
 	{
 		String out = convertLine("𢌞"+IVS_E0100+"り");
@@ -336,5 +503,166 @@ public class GaijiFallbackTest
 		String out = convertLine("崎《さ》");
 		assertTrue("本文に 崎 が残る: "+out, out.contains("崎"));
 		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	//------------------------------------------------------------------
+	// 仮名＋濁点/半濁点を行として変換したとき（濁点が孤立しないこと）
+	//------------------------------------------------------------------
+
+	/** 濁点 U+309B convertEscapedText が結合濁点を正規化した後の形 */
+	static final String DAKUTEN = "゛";
+
+	/**
+	 * 第3水準の基底字＋濁点を抑止するとき、濁点だけが取り残されてはいけない。
+	 *
+	 * 修正前は基底字 〻 が先に 〓 になり、後続の ゛(第1・2水準) がそのまま出て 〓゛ になっていた。
+	 */
+	@Test
+	public void 濁点付き二の字点を抑止しても濁点が孤立しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("〻"+DAKUTEN+"の字");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("後続の文字は残る: "+out, out.contains("の字"));
+		assertEquals(1, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 濁点フォント利用なら第3水準の基底字でも抑止しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenFontMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("〻"+DAKUTEN+"の字");
+		assertFalse("〓 になってはいけない: "+out, out.contains("〓"));
+		assertTrue("濁点フォントの glyph タグが出る: "+out, out.contains("u303b-u3099"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 第1_2水準の基底字の濁点は抑止しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		//か + 半濁点 は合成できないので基底字と濁点がそのまま出る どちらも第1・2水準
+		String out = convertLine("か"+new String(Character.toChars(0x309C))+"の字");
+		assertFalse("〓 になってはいけない: "+out, out.contains("〓"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	/**
+	 * 仮名でない基底字に濁点が付いていても、落とすときは濁点も連れて行く。
+	 *
+	 * 仮名でないので「対」としては扱わない（合成も濁点フォントも無い）が、
+	 * 基底字だけ 〓 にすると濁点が孤立して 〓゛ になる。
+	 */
+	@Test
+	public void 仮名でない基底字の濁点も一緒に落とす() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		//俠 は BMP 内の第3水準
+		String out = convertLine("俠"+DAKUTEN+"客");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("第1・2水準の 客 は残る: "+out, out.contains("客"));
+	}
+
+	@Test
+	public void 四バイト文字の濁点も一緒に落とす() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String out = convertLine("𢌞"+DAKUTEN+"り");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("後続の文字は残る: "+out, out.contains("り"));
+	}
+
+	/**
+	 * 濁点自身を基底字として扱う既存の挙動を変えない。
+	 *
+	 * CharUtils.isHiragana は `゛` にも true を返すので、濁点分岐は元々 `゛゛` を
+	 * 基底字＋濁点として受けていた。対の判定でここを除外すると
+	 * フォールバック無効でも出力が変わってしまう。
+	 */
+	@Test
+	public void 濁点が連続しても既定の出力を変えない() throws IOException
+	{
+		setDakutenSpanMode();
+		String out = convertLine(DAKUTEN+DAKUTEN);
+		assertTrue("濁点分岐の span 出力を維持する: "+out, out.contains("class=\"dakuten\""));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	@Test
+	public void 同じ長さのルビでも濁点が孤立しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		//本文とルビが同じ長さの場合は1文字ずつルビを振る経路に入り、縦中横変換を通らない
+		String out = convertLine("〻"+DAKUTEN+"《ああ》");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		//本文 2 文字を 〓 1 文字にしたので、本文の無い rt を残してはいけない
+		assertEquals("ルビは本文と同じ数だけ出す: "+out, 1, out.split("<rt>", -1).length-1);
+		//まとめた分のルビも落とさない
+		assertTrue("読みが欠けている: "+out, out.contains("<rt>ああ</rt>"));
+	}
+
+	/**
+	 * 同じ長さのルビ経路には合成も濁点フォントも無いので、基底字だけで判断する。
+	 *
+	 * この経路は printGlyphFontTag を通らないため、dakutenType=2 でも 〻 は生のまま出てしまう。
+	 * convertTcyText 向けの判定（フォントがあるから免除）をそのまま使うと免除しすぎになる。
+	 */
+	@Test
+	public void 同じ長さのルビでは濁点フォント利用でも基底字で判断する() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenFontMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("〻"+DAKUTEN+"《ああ》");
+		assertFalse("この経路では glyph タグが出ないので 〻 を残してはいけない: "+out, out.contains("〻"));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+	}
+
+	/**
+	 * 逆に、合成前の基底字が第1・2水準なら同じ長さのルビ経路では抑止しない。
+	 *
+	 * ワ＋濁点は convertTcyText なら ヷ(第3水準) に合成されるので抑止対象だが、
+	 * この経路では ワ と ゛ がそのまま並ぶだけでどちらも第1・2水準なので表示できる。
+	 */
+	@Test
+	public void 同じ長さのルビでは合成後の水準で抑止しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenFontMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("ワ"+DAKUTEN+"《ああ》");
+		assertFalse("〓 になってはいけない: "+out, out.contains("〓"));
+		assertTrue("基底字は残る: "+out, out.contains("ワ"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
+	/** 結合濁点は単体では字にならないので、それ自体を理由に 〓 にしてはいけない */
+	@Test
+	public void 結合濁点単体は水準判定から除外する()
+	{
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		assertFalse(converter.isRawCharFallback(0x3099));
+		assertFalse(converter.isRawCharFallback(0x309A));
+		assertEquals(JisLevelUtil.LEVEL_1_2, JisLevelUtil.maxLevel("井"+COMBINING_DAKUTEN));
 	}
 }

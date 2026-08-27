@@ -95,6 +95,8 @@ public class AozoraEpub3Converter
 	boolean gaijiFallbackCode = false;
 	/** 注記表示にフォールバックした件数 変換毎に 0 に戻す */
 	int gaijiFallbackCount = 0;
+	/** 同梱の濁点フォントの有無キャッシュ 変換中にファイルは増減しない */
+	final HashMap<String, Boolean> dakutenFontCache = new HashMap<String, Boolean>();
 
 	/** 奥付を別ページ */
 	boolean separateColophon = true;
@@ -1517,10 +1519,131 @@ public class AozoraEpub3Converter
 	boolean isGaijiFallback(String gaiji)
 	{
 		if (gaiji == null || this.gaijiFallbackLevel <= 0) return false;
+		//仮名＋濁点/半濁点は 2 文字で 1 字なので対で判断する
+		//片方だけ落とすと濁点が孤立して 〓゛ になる
+		if (isDakutenKana(gaiji)) return this.isDakutenPairFallback(gaiji.charAt(0), gaiji.charAt(1));
 		if (!JisLevelUtil.exceeds(gaiji, this.gaijiFallbackLevel)) return false;
 		//1文字フォントがあれば端末フォントに依存せず表示できるので抑止しない
 		//convertGaijiChuki は convertChar のフォント探索より手前で動くため、ここで先に見る必要がある
 		return !hasGaijiFont(gaiji);
+	}
+
+	/** 仮名＋濁点/半濁点の 2 文字か
+	 * <p>形だけの判定で、端末で表示できるかは見ない。表示可否は
+	 * {@link #isDakutenPairFallback(char, char)} が vertical と dakutenType を見て決める。</p>
+	 * <p>結合文字 (U+3099/U+309A) は {@link #convertEscapedText(StringBuilder, char[], int, int)} の
+	 * 前処理で U+309B/U+309C に正規化されるが、convertGaijiChuki と目次経路 (Epub3Writer からの
+	 * {@link #convertTcyText(String)}) はその手前・その外なので両方を受ける。
+	 * {@link #hasGaijiFont(String)} が拾えないのは、この組み合わせが
+	 * 1文字フォントのマップではなく出力時のファイル名解決で引かれるため。</p>
+	 * @param str 判定する文字列 変換後の外字
+	 * @return 仮名＋濁点/半濁点なら true */
+	boolean isDakutenKana(String str)
+	{
+		if (str == null || str.length() != 2) return false;
+		return isDakutenMark(str.charAt(1)) && isDakutenBase(str.charAt(0));
+	}
+
+	/** 濁点/半濁点か 結合文字 (U+3099/U+309A) と正規化後 (U+309B/U+309C) の両方を受ける */
+	static boolean isDakutenMark(char ch)
+	{
+		return ch == '゙' || ch == '゚' || ch == '゛' || ch == '゜';
+	}
+
+	/** 濁点/半濁点を付ける基底字になりうるか
+	 * <p>convertTcyText の濁点分岐と<b>同じ範囲</b>にすること (二の字点も濁点付きが存在する)。
+	 * {@link CharUtils#isHiragana(char)} は `゛゜ー` 等にも true を返すが、
+	 * 濁点分岐が元々それらを基底字として受けていたので、ここでも除外しない
+	 * (除外すると `゛゛` の出力が変わってしまう)。</p> */
+	static boolean isDakutenBase(char ch)
+	{
+		return CharUtils.isHiragana(ch) || CharUtils.isKatakana(ch) || ch == '〻';
+	}
+
+	/** 濁点側 (半濁点でない) か */
+	static boolean isDakuten(char mark)
+	{
+		return mark == '゙' || mark == '゛';
+	}
+
+	/** 基底字を 〓 に落としたときに、その直後の濁点/半濁点も落とす
+	 * <p>残すと `〓゛` になる。`i++` で読み飛ばすのでは足りない。
+	 * convertTcyText は `begin`〜`end` の区間毎に呼ばれ、区間の切れ目が基底字と濁点の間に来ることがある
+	 * (convertRubyText は文字種が変わる位置で区切るので `俠゛` は `俠` までで一度切れる)。
+	 * 区間の外まで読み飛ばすことはできないので、このクラスの既存の「除去済み」表現である
+	 * NULL 文字に置き換えて、どの経路から出力されても出ないようにする。</p>
+	 * @param ch 行の文字配列 濁点の位置を書き換える
+	 * @param idx 〓 に置き換えた基底字の位置 (4バイト文字なら下位サロゲートの位置) */
+	static void dropDakutenMark(char[] ch, int idx)
+	{
+		if (idx+1 < ch.length && isDakutenMark(ch[idx+1])) ch[idx+1] = '\0';
+	}
+
+	/** 仮名＋濁点/半濁点を 1 文字に合成できるならその文字を返す
+	 * <p>convertTcyText の濁点分岐と同じ組み合わせにすること。
+	 * が・ぱ のように合成済みの文字がある組み合わせはその文字で出力されるため、
+	 * 水準判定も合成後の文字に対して行う必要がある。</p>
+	 * @return 合成できなければ 0 */
+	static char composedDakuten(char base, char mark)
+	{
+		boolean dakuten = isDakuten(mark);
+		if (dakuten) {
+			if ('ッ' != base && ('か' <= base && base <= 'と' || 'カ' <= base && base <= 'ト')) return (char)(base+1);
+			switch (base) {
+			case 'ウ': return 'ヴ';
+			case 'ワ': return 'ヷ';
+			case 'ヲ': return 'ヺ';
+			case 'う': return 'ゔ';
+			case 'ゝ': return 'ゞ';
+			case 'ヽ': return 'ヾ';
+			}
+		}
+		if ('は' <= base && base <= 'ほ' || 'ハ' <= base && base <= 'ホ') {
+			return dakuten ? (char)(base+1) : (char)(base+2);
+		}
+		return 0;
+	}
+
+	/** 仮名＋濁点/半濁点の対を注記表示にフォールバックすべきか
+	 * <p>この対がどう出力されるかは vertical と dakutenType で変わるので、それに合わせて判断する。</p>
+	 * <p><b>{@link #convertTcyText(StringBuilder, char[], int, int, boolean)} の濁点分岐を通る場合の判断</b>で、
+	 * {@link #isGaijiFallback(String)} と convertTcyText 自身から呼ぶ。
+	 * {@link #convertReplacedChar(StringBuilder, char[], int, boolean)}（同じ長さのルビ経路）は
+	 * 合成も濁点フォントも通らず基底字がそのまま出るので、そちらでは使わず基底字だけで判断する。</p>
+	 * <ul>
+	 * <li>合成済みの文字になる (が・ぱ・ヷ 等) → 合成後の文字の水準で決まる</li>
+	 * <li>縦書き + dakutenType=2 で同梱の dakuten フォントがある → 端末フォントに依存しないので抑止しない</li>
+	 * <li>それ以外 (そのまま並べる / CSS で重ねる) → 基底字がそのまま出るので基底字の水準で決まる
+	 *     (濁点 ゛゜ 自体は第1・2水準なので基底字だけ見ればよい)</li>
+	 * </ul>
+	 * @param base 基底字
+	 * @param mark 濁点/半濁点
+	 * @return 抑止すべきなら true */
+	boolean isDakutenPairFallback(char base, char mark)
+	{
+		if (this.gaijiFallbackLevel <= 0) return false;
+		if (!isDakutenMark(mark) || !isDakutenBase(base)) return false;
+		if (this.vertical) {
+			char composed = composedDakuten(base, mark);
+			if (composed != 0) return JisLevelUtil.level(composed) >= this.gaijiFallbackLevel;
+			if (this.dakutenType == 2 && this.hasDakutenFont(base, mark)) return false;
+		}
+		return JisLevelUtil.level(base) >= this.gaijiFallbackLevel;
+	}
+
+	/** 同梱の濁点フォント gaiji/dakuten/u&lt;base&gt;-u&lt;mark&gt;.ttf があるか
+	 * <p>探索の仕方は {@link #printGlyphFontTag(StringBuilder, String, String, char)} と揃えること。
+	 * 出力時にも同じ判定が走るので、同じ字が繰り返し現れる本文で stat が二重に増えないよう
+	 * 結果をキャッシュする ({@link JisLevelUtil} の水準キャッシュと同じ考え方)。</p> */
+	boolean hasDakutenFont(char base, char mark)
+	{
+		if (this.writer == null) return false;
+		String className = "u"+Integer.toHexString(base)+(isDakuten(mark) ? "-u3099" : "-u309a");
+		Boolean cached = this.dakutenFontCache.get(className);
+		if (cached != null) return cached.booleanValue();
+		boolean exists = Files.isRegularFile(Path.of(this.writer.getGaijiFontPath()+"dakuten/"+className+".ttf"));
+		this.dakutenFontCache.put(className, Boolean.valueOf(exists));
+		return exists;
 	}
 
 	/** 変換後の文字に対応する1文字フォントが gaiji/ にあるか
@@ -1556,6 +1679,8 @@ public class AozoraEpub3Converter
 	boolean isRawCharFallback(int codePoint)
 	{
 		if (this.gaijiFallbackLevel <= 0) return false;
+		//結合濁点/半濁点は単体では字にならない 基底字と対で判断するのでここでは落とさない
+		if (JisLevelUtil.isCombiningDakuten(codePoint)) return false;
 		return JisLevelUtil.level(codePoint) >= this.gaijiFallbackLevel;
 	}
 
@@ -2662,9 +2787,18 @@ public class AozoraEpub3Converter
 									buf.setLength(buf.length()-rubyEndChuki.length());
 								}
 								for (int j=0; j<rubyTopStart-rubyStart; j++) {
+									//本文が除去済み(NULL)の文字は前の文字とまとめられている
+									//仮名＋濁点を対で 〓 に落とすと 2 文字目が NULL になるので、
+									//そのままだと本文の無い <rt> が残って 1 文字に 2 つルビが付く
+									if (ch[rubyStart+j] == '\0') continue;
 									convertReplacedChar(buf, ch, rubyStart+j, noTcy); //本文
 									buf.append(chukiMap.get("ルビ前")[0]);
 									convertReplacedChar(buf, ch, rubyTopStart+1+j, true);//ルビ
+									//まとめられた分のルビも同じ<rt>に入れる 読みを落とさない
+									while (j+1 < rubyTopStart-rubyStart && ch[rubyStart+j+1] == '\0') {
+										j++;
+										convertReplacedChar(buf, ch, rubyTopStart+1+j, true);//ルビ
+									}
 									buf.append(chukiMap.get("ルビ後")[0]);
 								}
 								buf.append(rubyEndChuki);
@@ -2806,6 +2940,7 @@ public class AozoraEpub3Converter
 						LogAppender.info(lineNum, "拡張漢字を〓に置換(IVS除外)",
 								""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+"+"+ivsCode+")");
 						i+=3; //IVSの次へ
+						dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 						continue;
 					}
 					//4バイト文字とIVSを出力
@@ -2856,6 +2991,7 @@ public class AozoraEpub3Converter
 						LogAppender.info(lineNum, "拡張漢字を〓に置換(IVS除外)",
 								""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+"+"+Integer.toHexString(ch[i+2])+")");
 						i+=2; //IVSの次へ
+						dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 						continue;
 					}
 					//4バイト文字とIVSを出力
@@ -2902,6 +3038,8 @@ public class AozoraEpub3Converter
 					this.gaijiFallbackCount++;
 					LogAppender.info(lineNum, "拡張漢字を〓に置換", ""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+")");
 					i++; //次の文字へ
+					//4バイト文字に付いた濁点も一緒に落とす 残すと 〓゛ になる
+					dropDakutenMark(ch, i);
 					continue;
 				}
 				//通常の4バイト文字
@@ -2953,6 +3091,7 @@ public class AozoraEpub3Converter
 					LogAppender.info(lineNum, "文字を〓に置換(IVS除外)",
 							""+ch[i]+"(u+"+Integer.toHexString(ch[i])+"+"+ivsCode+")");
 					i+=2; //IVSの次へ
+					dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 					continue;
 				}
 				//2バイト文字とIVSを出力
@@ -3005,6 +3144,7 @@ public class AozoraEpub3Converter
 					LogAppender.info(lineNum, "文字を〓に置換(IVS除外)",
 							""+ch[i]+"(u+"+Integer.toHexString(ch[i])+"+"+Integer.toHexString(ch[i+1])+")");
 					i++; //IVSの次へ
+					dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 					continue;
 				}
 				//2バイト文字とIVSを出力
@@ -3033,12 +3173,26 @@ public class AozoraEpub3Converter
 				}
 			}
 			
+			//仮名＋濁点/半濁点は 2 文字で 1 字なので対で判断する
+			//基底字だけ 〓 にすると濁点が孤立して 〓゛ になる (docs/gaiji-fallback-plan.md 残作業)
+			boolean dakutenPair = this.gaijiFallbackLevel > 0 && i+1 < ch.length
+					&& isDakutenMark(ch[i+1]) && isDakutenBase(ch[i]);
+			if (dakutenPair && this.isDakutenPairFallback(ch[i], ch[i+1])) {
+				buf.append('〓');
+				this.gaijiFallbackCount++;
+				LogAppender.info(lineNum, "濁点付き文字を〓に置換", ""+ch[i]+ch[i+1]);
+				dropDakutenMark(ch, i); //濁点も一緒に落とす
+				continue;
+			}
 			//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
 			//1文字フォントの探索より後に置くこと フォントがあれば正しく表示できるので抑止しない
-			if (this.isRawCharFallback(ch[i])) {
+			//対で出せる濁点付きの基底字はここで落とさず下の濁点分岐に任せる
+			if (!dakutenPair && this.isRawCharFallback(ch[i])) {
 				buf.append('〓');
 				this.gaijiFallbackCount++;
 				LogAppender.info(lineNum, "文字を〓に置換", ""+ch[i]+"(u+"+Integer.toHexString(ch[i])+")");
+				//仮名でない基底字(漢字など)に付いた濁点も一緒に落とす 残すと 〓゛ になる
+				dropDakutenMark(ch, i);
 				continue;
 			}
 
@@ -3150,26 +3304,15 @@ public class AozoraEpub3Converter
 			
 			if (this.vertical) {
 				//ひらがな/カタカナ＋濁点/半濁点 結合文字も対応
-				if (i+1<ch.length && (ch[i+1]=='゛' || ch[i+1]=='゜')) {
-					if (CharUtils.isHiragana(ch[i]) || CharUtils.isKatakana(ch[i]) || ch[i]=='〻') {
+				if (i+1<ch.length && isDakutenMark(ch[i+1])) {
+					if (isDakutenBase(ch[i])) {
+						//目次経路 (Epub3Writer からの convertTcyText) は convertEscapedText の
+						//U+3099/U+309A → U+309B/U+309C 正規化を通らないので、ここで濁点側を見て揃える
+						boolean dakuten = isDakuten(ch[i+1]);
 						//通常の濁点文字ならその文字で出力
-						if (ch[i+1]=='゛') {
-							if ('ッ' != ch[i] && ('か' <= ch[i] && ch[i] <= 'と' || 'カ' <= ch[i] && ch[i] <= 'ト')) {
-								ch[i] = (char)((int)ch[i]+1);
-								buf.append(ch[i]);
-								i++;
-								continue;
-							}
-							if ('ウ' == ch[i]) { buf.append('ヴ'); i++; continue; }
-							if ('ワ' == ch[i]) { buf.append('ヷ'); i++; continue; }
-							if ('ヲ' == ch[i]) { buf.append('ヺ'); i++; continue; }
-							if ('う' == ch[i]) { buf.append('ゔ'); i++; continue; }
-							if ('ゝ' == ch[i]) { buf.append('ゞ'); i++; continue; }
-							if ('ヽ' == ch[i]) { buf.append('ヾ'); i++; continue; }
-						}
-						if ('は' <= ch[i] && ch[i] <= 'ほ' || 'ハ' <= ch[i] && ch[i] <= 'ホ') {
-							if (ch[i+1]=='゛') buf.append((char)((int)ch[i]+1));
-							else buf.append((char)((int)ch[i]+2));
+						char composed = composedDakuten(ch[i], ch[i+1]);
+						if (composed != 0) {
+							buf.append(composed);
 							i++;
 							continue;
 						}
@@ -3178,16 +3321,14 @@ public class AozoraEpub3Converter
 							buf.append("<span class=\"dakuten\">");
 							buf.append(ch[i]);
 							buf.append("<span>");
-							if (ch[i+1]=='゛') buf.append("゛");
-							else buf.append("゜");
+							buf.append(dakuten ? '゛' : '゜');
 							buf.append("</span></span>");
 							i++;
 							continue;
 						} else if (this.dakutenType == 2) {
 							//1文字フォントで出力
 							String className = "u"+Integer.toHexString(ch[i]);
-							if (ch[i+1]=='゛') className += "-u3099";
-							else className += "-u309a";
+							className += dakuten ? "-u3099" : "-u309a";
 							//if (this.printGlyphFontTag(buf, "dakuten/"+className+".ttf", className, '〓')) {
 							if (this.printGlyphFontTag(buf, "dakuten/"+className+".ttf", className, ch[i])) {
 								LogAppender.info(lineNum, "濁点フォント利用", ""+ch[i]+ch[i+1]);
@@ -3262,12 +3403,19 @@ public class AozoraEpub3Converter
 		//convertTcyText を通らずここに直接来る経路(同じ長さのルビを1文字ずつ振る場合など)の受け皿。
 		//4バイト文字はここでは対を判定できないので convertTcyText 側に任せる。
 		//異体字セレクタ自体は字ではないので置き換えない。
+		//この経路には合成も濁点フォントも無く基底字がそのまま出るので、
+		//濁点の対でも判断材料は基底字だけ (isDakutenPairFallback は convertTcyText 用なので使わない)。
 		if (this.gaijiFallbackLevel > 0 && !Character.isSurrogate(ch[idx])
-				&& !JisLevelUtil.isVariationSelector(ch[idx]) && this.isDirectCharFallback(ch[idx])) {
-			buf.append('〓');
-			this.gaijiFallbackCount++;
-			LogAppender.info(lineNum, "文字を〓に置換", ""+ch[idx]+"(u+"+Integer.toHexString(ch[idx])+")");
-			return;
+				&& !JisLevelUtil.isVariationSelector(ch[idx])) {
+			if (this.isDirectCharFallback(ch[idx])) {
+				buf.append('〓');
+				this.gaijiFallbackCount++;
+				LogAppender.info(lineNum, "文字を〓に置換", ""+ch[idx]+"(u+"+Integer.toHexString(ch[idx])+")");
+				//基底字に付いている濁点/半濁点も一緒に落とす
+				//基底字だけ 〓 にすると濁点が孤立して 〓゛ になる (docs/gaiji-fallback-plan.md 残作業)
+				dropDakutenMark(ch, idx);
+				return;
+			}
 		}
 
 		//String str = latinConverter.toLatinGlyphString(ch);
