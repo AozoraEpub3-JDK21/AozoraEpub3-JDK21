@@ -539,6 +539,8 @@ public class GaijiFallbackTest
 		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
 		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
 		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		//本文 2 文字を 〓 1 文字にしたので、本文の無い rt を残してはいけない
+		assertEquals("ルビは本文と同じ数だけ出す: "+out, 1, out.split("<rt>", -1).length-1);
 	}
 
 	/** 結合濁点は単体では字にならないので、それ自体を理由に 〓 にしてはいけない */
