@@ -438,6 +438,33 @@ public class GaijiFallbackTest
 	}
 
 	@Test
+	public void IVS付きの文字に濁点が付いていても孤立しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		//IVS の分岐は対を見ずに IVS ごと読み飛ばすので、濁点を落とす処理が別に要る
+		String out = convertLine("俠"+IVS_E0100+DAKUTEN+"客");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("第1・2水準の 客 は残る: "+out, out.contains("客"));
+	}
+
+	@Test
+	public void IVS付きの4バイト文字に濁点が付いていても孤立しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String out = convertLine("𢌞"+IVS_E0100+DAKUTEN+"り");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("後続の文字は残る: "+out, out.contains("り"));
+	}
+
+	@Test
 	public void IVS付きでも既定なら変換されたまま() throws IOException
 	{
 		String out = convertLine("𢌞"+IVS_E0100+"り");

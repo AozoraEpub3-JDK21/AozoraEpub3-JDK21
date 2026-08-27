@@ -2940,6 +2940,7 @@ public class AozoraEpub3Converter
 						LogAppender.info(lineNum, "拡張漢字を〓に置換(IVS除外)",
 								""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+"+"+ivsCode+")");
 						i+=3; //IVSの次へ
+						dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 						continue;
 					}
 					//4バイト文字とIVSを出力
@@ -2990,6 +2991,7 @@ public class AozoraEpub3Converter
 						LogAppender.info(lineNum, "拡張漢字を〓に置換(IVS除外)",
 								""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+"+"+Integer.toHexString(ch[i+2])+")");
 						i+=2; //IVSの次へ
+						dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 						continue;
 					}
 					//4バイト文字とIVSを出力
@@ -3089,6 +3091,7 @@ public class AozoraEpub3Converter
 					LogAppender.info(lineNum, "文字を〓に置換(IVS除外)",
 							""+ch[i]+"(u+"+Integer.toHexString(ch[i])+"+"+ivsCode+")");
 					i+=2; //IVSの次へ
+					dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 					continue;
 				}
 				//2バイト文字とIVSを出力
@@ -3141,6 +3144,7 @@ public class AozoraEpub3Converter
 					LogAppender.info(lineNum, "文字を〓に置換(IVS除外)",
 							""+ch[i]+"(u+"+Integer.toHexString(ch[i])+"+"+Integer.toHexString(ch[i+1])+")");
 					i++; //IVSの次へ
+					dropDakutenMark(ch, i); //付いている濁点も落とす 残すと 〓゛ になる
 					continue;
 				}
 				//2バイト文字とIVSを出力
