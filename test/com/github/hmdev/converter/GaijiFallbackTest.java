@@ -528,6 +528,55 @@ public class GaijiFallbackTest
 		assertEquals(0, converter.gaijiFallbackCount);
 	}
 
+	/**
+	 * 仮名でない基底字に濁点が付いていても、落とすときは濁点も連れて行く。
+	 *
+	 * 仮名でないので「対」としては扱わない（合成も濁点フォントも無い）が、
+	 * 基底字だけ 〓 にすると濁点が孤立して 〓゛ になる。
+	 */
+	@Test
+	public void 仮名でない基底字の濁点も一緒に落とす() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		//俠 は BMP 内の第3水準
+		String out = convertLine("俠"+DAKUTEN+"客");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("第1・2水準の 客 は残る: "+out, out.contains("客"));
+	}
+
+	@Test
+	public void 四バイト文字の濁点も一緒に落とす() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenSpanMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_4, false);
+		String out = convertLine("𢌞"+DAKUTEN+"り");
+		assertFalse("濁点が孤立している: "+out, out.contains("〓"+DAKUTEN));
+		assertFalse("濁点だけ残ってはいけない: "+out, out.contains(DAKUTEN));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+		assertTrue("後続の文字は残る: "+out, out.contains("り"));
+	}
+
+	/**
+	 * 濁点自身を基底字として扱う既存の挙動を変えない。
+	 *
+	 * CharUtils.isHiragana は `゛` にも true を返すので、濁点分岐は元々 `゛゛` を
+	 * 基底字＋濁点として受けていた。対の判定でここを除外すると
+	 * フォールバック無効でも出力が変わってしまう。
+	 */
+	@Test
+	public void 濁点が連続しても既定の出力を変えない() throws IOException
+	{
+		setDakutenSpanMode();
+		String out = convertLine(DAKUTEN+DAKUTEN);
+		assertTrue("濁点分岐の span 出力を維持する: "+out, out.contains("class=\"dakuten\""));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
 	@Test
 	public void 同じ長さのルビでも濁点が孤立しない() throws IOException
 	{

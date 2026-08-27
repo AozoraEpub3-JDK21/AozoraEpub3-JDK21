@@ -95,6 +95,8 @@ public class AozoraEpub3Converter
 	boolean gaijiFallbackCode = false;
 	/** 注記表示にフォールバックした件数 変換毎に 0 に戻す */
 	int gaijiFallbackCount = 0;
+	/** 同梱の濁点フォントの有無キャッシュ 変換中にファイルは増減しない */
+	final HashMap<String, Boolean> dakutenFontCache = new HashMap<String, Boolean>();
 
 	/** 奥付を別ページ */
 	boolean separateColophon = true;
@@ -1549,11 +1551,12 @@ public class AozoraEpub3Converter
 	}
 
 	/** 濁点/半濁点を付ける基底字になりうるか
-	 * <p>convertTcyText の濁点分岐と同じ範囲にする (二の字点も濁点付きが存在する)。
-	 * {@link CharUtils#isHiragana(char)} は濁点自身にも true を返すので先に除く。</p> */
+	 * <p>convertTcyText の濁点分岐と<b>同じ範囲</b>にすること (二の字点も濁点付きが存在する)。
+	 * {@link CharUtils#isHiragana(char)} は `゛゜ー` 等にも true を返すが、
+	 * 濁点分岐が元々それらを基底字として受けていたので、ここでも除外しない
+	 * (除外すると `゛゛` の出力が変わってしまう)。</p> */
 	static boolean isDakutenBase(char ch)
 	{
-		if (isDakutenMark(ch)) return false;
 		return CharUtils.isHiragana(ch) || CharUtils.isKatakana(ch) || ch == '〻';
 	}
 
@@ -1561,6 +1564,19 @@ public class AozoraEpub3Converter
 	static boolean isDakuten(char mark)
 	{
 		return mark == '゙' || mark == '゛';
+	}
+
+	/** 基底字を 〓 に落としたときに、その直後の濁点/半濁点も落とす
+	 * <p>残すと `〓゛` になる。`i++` で読み飛ばすのでは足りない。
+	 * convertTcyText は `begin`〜`end` の区間毎に呼ばれ、区間の切れ目が基底字と濁点の間に来ることがある
+	 * (convertRubyText は文字種が変わる位置で区切るので `俠゛` は `俠` までで一度切れる)。
+	 * 区間の外まで読み飛ばすことはできないので、このクラスの既存の「除去済み」表現である
+	 * NULL 文字に置き換えて、どの経路から出力されても出ないようにする。</p>
+	 * @param ch 行の文字配列 濁点の位置を書き換える
+	 * @param idx 〓 に置き換えた基底字の位置 (4バイト文字なら下位サロゲートの位置) */
+	static void dropDakutenMark(char[] ch, int idx)
+	{
+		if (idx+1 < ch.length && isDakutenMark(ch[idx+1])) ch[idx+1] = '\0';
 	}
 
 	/** 仮名＋濁点/半濁点を 1 文字に合成できるならその文字を返す
@@ -1616,12 +1632,18 @@ public class AozoraEpub3Converter
 	}
 
 	/** 同梱の濁点フォント gaiji/dakuten/u&lt;base&gt;-u&lt;mark&gt;.ttf があるか
-	 * <p>探索の仕方は {@link #printGlyphFontTag(StringBuilder, String, String, char)} と揃えること。</p> */
+	 * <p>探索の仕方は {@link #printGlyphFontTag(StringBuilder, String, String, char)} と揃えること。
+	 * 出力時にも同じ判定が走るので、同じ字が繰り返し現れる本文で stat が二重に増えないよう
+	 * 結果をキャッシュする ({@link JisLevelUtil} の水準キャッシュと同じ考え方)。</p> */
 	boolean hasDakutenFont(char base, char mark)
 	{
 		if (this.writer == null) return false;
 		String className = "u"+Integer.toHexString(base)+(isDakuten(mark) ? "-u3099" : "-u309a");
-		return Files.isRegularFile(Path.of(this.writer.getGaijiFontPath()+"dakuten/"+className+".ttf"));
+		Boolean cached = this.dakutenFontCache.get(className);
+		if (cached != null) return cached.booleanValue();
+		boolean exists = Files.isRegularFile(Path.of(this.writer.getGaijiFontPath()+"dakuten/"+className+".ttf"));
+		this.dakutenFontCache.put(className, Boolean.valueOf(exists));
+		return exists;
 	}
 
 	/** 変換後の文字に対応する1文字フォントが gaiji/ にあるか
@@ -3014,6 +3036,8 @@ public class AozoraEpub3Converter
 					this.gaijiFallbackCount++;
 					LogAppender.info(lineNum, "拡張漢字を〓に置換", ""+ch[i]+ch[i+1]+"(u+"+Integer.toHexString(code)+")");
 					i++; //次の文字へ
+					//4バイト文字に付いた濁点も一緒に落とす 残すと 〓゛ になる
+					dropDakutenMark(ch, i);
 					continue;
 				}
 				//通常の4バイト文字
@@ -3153,7 +3177,7 @@ public class AozoraEpub3Converter
 				buf.append('〓');
 				this.gaijiFallbackCount++;
 				LogAppender.info(lineNum, "濁点付き文字を〓に置換", ""+ch[i]+ch[i+1]);
-				i++; //濁点も一緒に落とす
+				dropDakutenMark(ch, i); //濁点も一緒に落とす
 				continue;
 			}
 			//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
@@ -3163,6 +3187,8 @@ public class AozoraEpub3Converter
 				buf.append('〓');
 				this.gaijiFallbackCount++;
 				LogAppender.info(lineNum, "文字を〓に置換", ""+ch[i]+"(u+"+Integer.toHexString(ch[i])+")");
+				//仮名でない基底字(漢字など)に付いた濁点も一緒に落とす 残すと 〓゛ になる
+				dropDakutenMark(ch, i);
 				continue;
 			}
 
@@ -3381,11 +3407,9 @@ public class AozoraEpub3Converter
 				buf.append('〓');
 				this.gaijiFallbackCount++;
 				LogAppender.info(lineNum, "文字を〓に置換", ""+ch[idx]+"(u+"+Integer.toHexString(ch[idx])+")");
-				//仮名＋濁点/半濁点は 2 文字で 1 字なので濁点も一緒に落とす
+				//基底字に付いている濁点/半濁点も一緒に落とす
 				//基底字だけ 〓 にすると濁点が孤立して 〓゛ になる (docs/gaiji-fallback-plan.md 残作業)
-				if (idx+1 < ch.length && isDakutenMark(ch[idx+1]) && isDakutenBase(ch[idx])) {
-					ch[idx+1] = '\0'; //NULL文字は出力されず、ルビも振られない
-				}
+				dropDakutenMark(ch, idx);
 				return;
 			}
 		}
