@@ -2765,13 +2765,18 @@ public class AozoraEpub3Converter
 									buf.setLength(buf.length()-rubyEndChuki.length());
 								}
 								for (int j=0; j<rubyTopStart-rubyStart; j++) {
-									//本文が除去済み(NULL)の文字にはルビを振らない
+									//本文が除去済み(NULL)の文字は前の文字とまとめられている
 									//仮名＋濁点を対で 〓 に落とすと 2 文字目が NULL になるので、
 									//そのままだと本文の無い <rt> が残って 1 文字に 2 つルビが付く
 									if (ch[rubyStart+j] == '\0') continue;
 									convertReplacedChar(buf, ch, rubyStart+j, noTcy); //本文
 									buf.append(chukiMap.get("ルビ前")[0]);
 									convertReplacedChar(buf, ch, rubyTopStart+1+j, true);//ルビ
+									//まとめられた分のルビも同じ<rt>に入れる 読みを落とさない
+									while (j+1 < rubyTopStart-rubyStart && ch[rubyStart+j+1] == '\0') {
+										j++;
+										convertReplacedChar(buf, ch, rubyTopStart+1+j, true);//ルビ
+									}
 									buf.append(chukiMap.get("ルビ後")[0]);
 								}
 								buf.append(rubyEndChuki);

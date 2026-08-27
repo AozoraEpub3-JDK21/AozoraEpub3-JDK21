@@ -541,6 +541,8 @@ public class GaijiFallbackTest
 		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
 		//本文 2 文字を 〓 1 文字にしたので、本文の無い rt を残してはいけない
 		assertEquals("ルビは本文と同じ数だけ出す: "+out, 1, out.split("<rt>", -1).length-1);
+		//まとめた分のルビも落とさない
+		assertTrue("読みが欠けている: "+out, out.contains("<rt>ああ</rt>"));
 	}
 
 	/**
