@@ -126,6 +126,14 @@
 
 > `README.md` は配布 ZIP/TAR にも同梱される（`build.gradle` の include リスト）。
 > **README を更新したら dist を作り直す**こと。
+> 逆に **`RELEASE_NOTES.md` は配布物に入らない**ので、dist を作った後に直しても
+> SHA256SUMS は有効なまま（`unzip -l` で確認できる）。
+
+> **⚠️ `sed -i` で `.md` を直さない。** `.md` は `.gitattributes` の対象外で作業ツリーが CRLF、
+> `sed -i` は CR を落としてしまう。コミットは git が正規化するので diff には出ないが、
+> **dist は作業ツリーから読むので LF の `README.md` が配布物に入る**。
+> Edit ツールを使うこと。踏んでしまったら
+> `rm <file> && git checkout HEAD -- <file>` で CRLF 版に戻してから dist をやり直す。
 
 ---
 
@@ -152,11 +160,34 @@ ls build/launch4j/ 2>/dev/null
 
 **ゲート**: 失敗テストがあればここで停止。リリースに進まない。
 
+> **⚠️ `PreviewServerTest` がローカルでハングする間の回避**（`docs/code-audit-followups.md` 項目 31）
+>
+> `PreviewServerTest.settingsRoundTripThroughApi` が `HttpClient.send` でブロックし、
+> **フルテストが終わらない**（スレッドダンプで確認）。CI では全件 PASS するので、
+> ローカルでは当該クラスだけ外してゲートを回し、フルテストは CI の結果で担保する。
+>
+> ```bash
+> # パッケージ指定でゲートを回す（PreviewServerTest 以外の preview テストは含める）
+> ./gradlew --no-daemon test --tests "com.github.hmdev.converter.*" --tests "com.github.hmdev.util.*" \
+>   --tests "com.github.hmdev.epub.*" --tests "com.github.hmdev.writer.*" --tests "com.github.hmdev.config.*" \
+>   --tests "com.github.hmdev.info.*" --tests "com.github.hmdev.io.*" --tests "com.github.hmdev.pipeline.*" \
+>   --tests "com.github.hmdev.validator.*" --tests "com.github.hmdev.image.*" --tests "com.github.hmdev.web.*" \
+>   --tests "com.github.hmdev.update.*" --tests "com.github.hmdev.preview.PreviewLibraryPrefsTest" \
+>   --tests "com.github.hmdev.preview.PreviewSessionTest" --tests "com.github.hmdev.preview.PreviewSettingsStoreTest" \
+>   --tests "AozoraEpub3SmokeTest" --tests "AozoraEpub3AutoPreviewTest" --tests "AozoraTextFinalizerTest"
+> ```
+>
+> ハングしたら `jps -l` → `jstack <pid>` でブロック箇所を確認し、`taskkill //PID <pid> //F` で落とす。
+> **タグを打つ前に `gh run list --branch master` で CI が GREEN であることを必ず確認する。**
+
 ### 3.3 配布パッケージ生成
 
 ```bash
 ./gradlew --no-daemon dist
 ```
+
+> `dist` → `build` → `check` → `test` と依存するので、上記のハングが解消するまでは
+> **`./gradlew --no-daemon dist -x test`** で回す（§3.2 のゲートは別に済ませてあること）。
 
 `dist` タスクは `[zipDistribution, tarDistribution]` に依存し、内部で以下が走る：
 
@@ -533,6 +564,13 @@ gh release edit v1.x.x-jdk21 --draft
 
 ## 9. 改訂履歴
 
+- 2026-08-27: v1.6.1-jdk21 リリース時の実施結果を反映。
+  §3.2 に `PreviewServerTest` ハング時のゲートの回し方（`--tests` 列挙 + `jstack` での確認 +
+  タグ前の CI GREEN 確認）、§3.3 に `dist -x test` を追記。
+  §2.3 に「`RELEASE_NOTES.md` は配布物に入らないので dist 後に直しても SHA は有効」と
+  「`sed -i` で `.md` を直すと CRLF が壊れて配布物に LF の README が入る」を追記。
+  リリースノートのテスト件数は **`build/test-results/test/*.xml` から実測して書く**こと
+  （今回、直前レビューで 4 箇所の食い違いが見つかった）
 - 2026-08-23: v1.6.0-jdk21 リリース時の実施結果を反映。§3.4 に「GUI 起動後は
   `AozoraEpub3.ini` の差分を必ず確認する」警告を追加（GUI が終了時に同梱 ini を
   書き戻すため、dist 前に GUI を起動すると配布物に混入する。今回実際に踏んだ）。
