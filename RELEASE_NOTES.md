@@ -77,7 +77,8 @@
 
 ### 検証
 
-- パッケージ付きユニットテスト 324 件 PASS（新規は `JisLevelUtilTest` 9 件、`GaijiFallbackTest` 44 件）
+- パッケージ付きユニットテスト 354 件 PASS（新規は `JisLevelUtilTest` 10 件、`GaijiFallbackTest` 43 件）。
+  デフォルトパッケージのテストを含めると 379 件（失敗 0・スキップ 1）
 - 配布物 ZIP から `test_data/test_gaiji.txt`（第3・第4水準を網羅、MS932）を実変換し、
   水準 3 / 4 × `DakutenType` 1 / 2 と既定 2 通りの計 5 パターンすべてで epubcheck エラー 0・警告 0。
   `〓` と濁点が分かれて出る箇所が 0 件であることも確認
