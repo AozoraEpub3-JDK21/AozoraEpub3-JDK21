@@ -1590,6 +1590,10 @@ public class AozoraEpub3Converter
 
 	/** 仮名＋濁点/半濁点の対を注記表示にフォールバックすべきか
 	 * <p>この対がどう出力されるかは vertical と dakutenType で変わるので、それに合わせて判断する。</p>
+	 * <p><b>{@link #convertTcyText(StringBuilder, char[], int, int, boolean)} の濁点分岐を通る場合の判断</b>で、
+	 * {@link #isGaijiFallback(String)} と convertTcyText 自身から呼ぶ。
+	 * {@link #convertReplacedChar(StringBuilder, char[], int, boolean)}（同じ長さのルビ経路）は
+	 * 合成も濁点フォントも通らず基底字がそのまま出るので、そちらでは使わず基底字だけで判断する。</p>
 	 * <ul>
 	 * <li>合成済みの文字になる (が・ぱ・ヷ 等) → 合成後の文字の水準で決まる</li>
 	 * <li>縦書き + dakutenType=2 で同梱の dakuten フォントがある → 端末フォントに依存しないので抑止しない</li>
@@ -3364,22 +3368,19 @@ public class AozoraEpub3Converter
 		//convertTcyText を通らずここに直接来る経路(同じ長さのルビを1文字ずつ振る場合など)の受け皿。
 		//4バイト文字はここでは対を判定できないので convertTcyText 側に任せる。
 		//異体字セレクタ自体は字ではないので置き換えない。
+		//この経路には合成も濁点フォントも無く基底字がそのまま出るので、
+		//濁点の対でも判断材料は基底字だけ (isDakutenPairFallback は convertTcyText 用なので使わない)。
 		if (this.gaijiFallbackLevel > 0 && !Character.isSurrogate(ch[idx])
 				&& !JisLevelUtil.isVariationSelector(ch[idx])) {
-			//仮名＋濁点/半濁点は 2 文字で 1 字なので対で判断する
-			//基底字だけ 〓 にすると濁点が孤立して 〓゛ になる (docs/gaiji-fallback-plan.md 残作業)
-			if (idx+1 < ch.length && isDakutenMark(ch[idx+1]) && isDakutenBase(ch[idx])) {
-				if (this.isDakutenPairFallback(ch[idx], ch[idx+1])) {
-					buf.append('〓');
-					this.gaijiFallbackCount++;
-					LogAppender.info(lineNum, "濁点付き文字を〓に置換", ""+ch[idx]+ch[idx+1]);
-					ch[idx+1] = '\0'; //濁点も一緒に落とす NULL文字は出力されない
-					return;
-				}
-			} else if (this.isDirectCharFallback(ch[idx])) {
+			if (this.isDirectCharFallback(ch[idx])) {
 				buf.append('〓');
 				this.gaijiFallbackCount++;
 				LogAppender.info(lineNum, "文字を〓に置換", ""+ch[idx]+"(u+"+Integer.toHexString(ch[idx])+")");
+				//仮名＋濁点/半濁点は 2 文字で 1 字なので濁点も一緒に落とす
+				//基底字だけ 〓 にすると濁点が孤立して 〓゛ になる (docs/gaiji-fallback-plan.md 残作業)
+				if (idx+1 < ch.length && isDakutenMark(ch[idx+1]) && isDakutenBase(ch[idx])) {
+					ch[idx+1] = '\0'; //NULL文字は出力されず、ルビも振られない
+				}
 				return;
 			}
 		}

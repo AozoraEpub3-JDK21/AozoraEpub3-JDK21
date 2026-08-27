@@ -543,6 +543,41 @@ public class GaijiFallbackTest
 		assertEquals("ルビは本文と同じ数だけ出す: "+out, 1, out.split("<rt>", -1).length-1);
 	}
 
+	/**
+	 * 同じ長さのルビ経路には合成も濁点フォントも無いので、基底字だけで判断する。
+	 *
+	 * この経路は printGlyphFontTag を通らないため、dakutenType=2 でも 〻 は生のまま出てしまう。
+	 * convertTcyText 向けの判定（フォントがあるから免除）をそのまま使うと免除しすぎになる。
+	 */
+	@Test
+	public void 同じ長さのルビでは濁点フォント利用でも基底字で判断する() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenFontMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("〻"+DAKUTEN+"《ああ》");
+		assertFalse("この経路では glyph タグが出ないので 〻 を残してはいけない: "+out, out.contains("〻"));
+		assertTrue("〓 に置き換わる: "+out, out.contains("〓"));
+	}
+
+	/**
+	 * 逆に、合成前の基底字が第1・2水準なら同じ長さのルビ経路では抑止しない。
+	 *
+	 * ワ＋濁点は convertTcyText なら ヷ(第3水準) に合成されるので抑止対象だが、
+	 * この経路では ワ と ゛ がそのまま並ぶだけでどちらも第1・2水準なので表示できる。
+	 */
+	@Test
+	public void 同じ長さのルビでは合成後の水準で抑止しない() throws IOException
+	{
+		Assume.assumeTrue(JisLevelUtil.isJisX0213Available());
+		setDakutenFontMode();
+		converter.setGaijiFallback(JisLevelUtil.LEVEL_3, false);
+		String out = convertLine("ワ"+DAKUTEN+"《ああ》");
+		assertFalse("〓 になってはいけない: "+out, out.contains("〓"));
+		assertTrue("基底字は残る: "+out, out.contains("ワ"));
+		assertEquals(0, converter.gaijiFallbackCount);
+	}
+
 	/** 結合濁点は単体では字にならないので、それ自体を理由に 〓 にしてはいけない */
 	@Test
 	public void 結合濁点単体は水準判定から除外する()
