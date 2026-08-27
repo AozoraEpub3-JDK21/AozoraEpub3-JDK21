@@ -36,7 +36,11 @@ Thumbs.db
 
 ## IDE
 .vscode/
-.claude/
+# .claude/ は原則 ignore。ただし共有したい仕組み (PreToolUse フックとその設定) だけ追跡する。
+# ディレクトリごと ignore すると git が中に降りないので `.claude/*` にしてある。
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 .eclipse
 
 ## OS
