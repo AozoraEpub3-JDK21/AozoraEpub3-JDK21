@@ -2,7 +2,7 @@
 layout: default
 lang: en
 title: narou.rs Setup Guide (Windows 11, with Screenshots)
-description: Step-by-step beginner's guide to converting web novels into EPUB with narou.rs and AozoraEpub3-JDK21 on Windows 11. Covers downloading narou.rs, registering AozoraEpub3 with narou_rs init, the required device=EPUB setting in the Web UI, downloading a novel and locating the generated EPUB, plus fixes for VCRUNTIME140.dll errors, SmartScreen warnings, and a missing Java installation.
+description: Step-by-step beginner's guide to converting web novels into EPUB with narou.rs and AozoraEpub3-JDK21 on Windows 11. Covers the difference between the Java-free GPL edition (with AozoraEpub3_Lite built in) and the standard edition, downloading narou.rs, registering AozoraEpub3 with narou_rs init, the required device=EPUB setting in the Web UI, downloading a novel and locating the generated EPUB, plus fixes for VCRUNTIME140.dll errors, SmartScreen warnings, and a missing Java installation.
 ---
 
 <nav style="background: #f6f8fa; padding: 1em; margin-bottom: 2em; border-radius: 6px;">
@@ -22,11 +22,59 @@ description: Step-by-step beginner's guide to converting web novels into EPUB wi
 
 > ⚠️ **Notice**
 > - This article is **not** an official [narou.rs](https://github.com/Rumia-Channel/narou.rs) manual. For anything unclear, prefer the latest information in the **[narou.rs README](https://github.com/Rumia-Channel/narou.rs) and [Issues](https://github.com/Rumia-Channel/narou.rs/issues)**.
-> - Tested environment: Windows 11 (Japanese), narou.rs v0.3.4, AozoraEpub3 v1.4.0-jdk21
+> - Tested environment: Windows 11 (Japanese), narou.rs v0.3.4 (steps and screenshots) / v0.4.4 (behavior of the two editions, output comparison), AozoraEpub3 v1.4.0-jdk21 (steps and screenshots) / v1.6.1-jdk21 (output comparison)
 
-**narou.rs** (developed by [Rumia-Channel](https://github.com/Rumia-Channel)) is a compatible reimplementation (in Rust) of [narou.rb](narou-setup.html) (by whiteleaf7), the tool that downloads, updates, and converts web novels. Like narou.rb, it uses AozoraEpub3 as its conversion engine.
+**narou.rs** (developed by [Rumia-Channel](https://github.com/Rumia-Channel)) is a compatible reimplementation (in Rust) of [narou.rb](narou-setup.html) (by whiteleaf7), the tool that downloads, updates, and converts web novels. Like narou.rb, it uses AozoraEpub3 as its conversion engine. Since v0.4.0 there is also a **GPL edition** with an EPUB conversion engine built in ([see below](#editions)).
 
 Follow the steps on this page from top to bottom and you will end up with a setup where **pasting a novel URL into your browser is all it takes to get an EPUB**. It takes about 15 to 20 minutes.
+
+<a id="editions"></a>
+
+### Two Editions (v0.4.0 and Later)
+
+Starting with v0.4.0, each narou.rs version is distributed as two different zips.
+
+| | Standard edition | GPL edition |
+|---|---|---|
+| Zip name (64-bit Windows) | `narou_rs_win_x64.zip` | `narou_rs_win_x64-GPL.zip` |
+| EPUB conversion engine | External AozoraEpub3 (such as AozoraEpub3-JDK21 used in this guide) | Built-in [AozoraEpub3_Lite](https://github.com/Rumia-Channel/AozoraEpub3_Lite) (a Rust port of AozoraEpub3) |
+| Java | Required | **Not required** |
+| Downloading AozoraEpub3 | Required | **Not required** |
+| License | BSD-2-Clause | GPL-3.0 |
+
+**With the GPL edition you can skip step 1 (Java) and step 2 (AozoraEpub3).** Download the zip with `-GPL` in step 3, and do not register AozoraEpub3 when initializing in step 4 (see the GPL edition notes in [step 4](#4-initialize-and-register-aozoraepub3)). From step 5 on, everything is the same as the standard edition.
+
+As a rule of thumb:
+
+- **GPL edition**: you just want to get started quickly without installing Java
+- **Standard edition**: you want conversions done by AozoraEpub3 itself. Your AozoraEpub3 settings (`AozoraEpub3.ini`, gaiji fonts, automatic preview after conversion, and so on) apply as-is
+
+> **Point**: Even with the GPL edition, if AozoraEpub3 is registered (via `init -p`, or `AozoraEpub3` is on your PATH, etc.), **that AozoraEpub3 takes precedence**. The built-in engine is used only when no AozoraEpub3 can be found.
+> Also, without a registered AozoraEpub3, the gaiji fonts placed in AozoraEpub3's `gaiji` folder are not used.
+
+> **Point**: To switch editions later, download the other zip and extract it over `C:\Tools\narou`. The edition fetched by self-update can be chosen with `self-update.variant` in the Web UI settings (Global tab): `gpl` = GPL edition / `standard` = standard edition.
+
+#### Why the Licenses Differ
+
+AozoraEpub3 (the original by hmdev and its derivatives, such as "Kaizōban (Modified) AozoraEpub3" by kyukyunyorituryo and AozoraEpub3-JDK21) is released under the **GPL-3.0**. When you distribute software that incorporates GPL code, the distributed software as a whole must be released under the GPL (the GPL's **copyleft** takes effect). AozoraEpub3_Lite is a port of AozoraEpub3, so it is GPL-3.0 too. A narou.rs build that embeds it therefore becomes GPL-3.0 as a whole, which is why it ships as a separate zip from the BSD-2-Clause standard edition. The standard edition only launches AozoraEpub3 as a separate program, so it stays BSD-2-Clause.
+
+The license difference only matters if you **modify or redistribute the program**. If you just download and use it, either edition is fine.
+
+#### Output Comparison (Measured on This Site)
+
+We converted four novels from Syosetu (including one long series with 1,404 episodes; 1,678 body files in total) from the same text data with the GPL edition's built-in engine and with AozoraEpub3-JDK21 v1.6.1, and compared the results (narou.rs v0.4.4).
+
+| Item | Result |
+|---|---|
+| Conversion | Succeeded for all four novels with both engines |
+| Body text | Identical in every file |
+| Ruby (including readings) | Identical in all 15 occurrences |
+| Illustrations | Not verified (none of the novels had illustrations) |
+| epubcheck 5.2.0 | No errors or warnings for either |
+| Internal EPUB structure | **Different**. The built-in engine uses the same `item/` layout as [Kaizōban (Modified) AozoraEpub3](https://github.com/kyukyunyorituryo/AozoraEpub3) by kyukyunyorituryo (a fork that follows the DPFJ EPUB 3 production guide); AozoraEpub3-JDK21 uses an `OPS/` layout |
+| Heading and section-title markup | **Different**. For example, episode headings are `<h2>` in the built-in engine and `<div class="chap2">` in AozoraEpub3-JDK21 |
+
+The readable content is the same, but because the markup and CSS differ, the appearance, such as heading sizes and the layout of section title pages, may differ.
 
 ### Overview
 
@@ -70,6 +118,8 @@ Once you have copied a command, paste it into the PowerShell window with a **rig
 
 ## 1. Install Java
 
+> **Not needed for the GPL edition** → skip to [step 3](#3-install-narours).
+
 AozoraEpub3 needs Java to run. Open PowerShell and check with:
 
 ```powershell
@@ -85,6 +135,8 @@ If a version number (`21` or later) is displayed, you are good to go. If you get
 
 ## 2. Install AozoraEpub3 (in a Dedicated Folder for narou.rs)
 
+> **Not needed for the GPL edition** → skip to [step 3](#3-install-narours).
+
 1. Download `AozoraEpub3-x.x.x-jdk21.zip` from the **[AozoraEpub3-JDK21 download page](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/latest)**.
 2. Right-click the zip → "Extract All", type `C:\Tools\AozoraEpub3-jdk21` into the destination box, and extract.
 
@@ -98,15 +150,20 @@ If a version number (`21` or later) is displayed, you are good to go. If you get
 
 ## 3. Install narou.rs
 
-1. Download the Windows zip (its name contains `x86_64-pc-windows`) from the **[narou.rs Releases page](https://github.com/Rumia-Channel/narou.rs/releases/latest)**.
+1. Download the Windows zip from "Assets" on the **[narou.rs Releases page](https://github.com/Rumia-Channel/narou.rs/releases/latest)**.
+   - Standard edition: `narou_rs_win_x64.zip`
+   - GPL edition: `narou_rs_win_x64-GPL.zip` (see [Two Editions](#editions))
+   - On an ARM-based Windows PC, pick the one named `win_arm64` instead.
 2. Right-click the zip → "Extract All". It contains a `narou/` folder — place it so that it ends up at `C:\Tools\narou`.
 
-The extracted folder has the following structure.
+The extracted folder has the following structure (the same for both editions).
 
 ```text
 C:\Tools\narou\
   narou_rs.exe
   narou_rs_updater.exe.new
+  narou_rs_backup.exe
+  narou_rs_login.exe
   webnovel\
   preset\
   commitversion
@@ -117,9 +174,9 @@ C:\Tools\narou\
 > **Do not move them elsewhere or delete them.**
 
 > ⚠️ **Caution**: If you get "`VCRUNTIME140.dll` was not found" at startup,
-> install the official Microsoft **[Visual C++ Redistributable (x64)](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)**.
+> install the official Microsoft **[Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)** (usually the x64 version; the ARM64 version on ARM-based Windows).
 
-> ✅ **Checkpoint**: typing `C:\Tools\narou\narou_rs.exe version` in PowerShell prints a version number (for example `0.3.4`)
+> ✅ **Checkpoint**: typing `C:\Tools\narou\narou_rs.exe version` in PowerShell prints a version number (for example `0.4.4`)
 
 ---
 
@@ -148,6 +205,14 @@ AozoraEpub3 の構成ファイルを書き換えました
 グローバル設定を保存しました
 初期化が完了しました！
 ```
+
+**For the GPL edition**, initialize without registering AozoraEpub3. Run the following line instead of the command above, and when asked `AozoraEpub3のあるフォルダを入力して下さい` ("enter the folder containing AozoraEpub3"), **press Enter without typing anything**.
+
+```powershell
+C:\Tools\narou\narou_rs.exe init
+```
+
+Along the way it prints `!!!WARNING!!! AozoraEpub3の構成ファイルを書き換えます…` ("AozoraEpub3's configuration files will be rewritten"), but nothing is rewritten when you skip registration, so you can safely ignore it. You are done when `AozoraEpub3 の設定をスキップしました` ("AozoraEpub3 setup skipped") and `初期化が完了しました！` ("initialization complete") are displayed (EPUB conversion then uses the built-in engine).
 
 > **Point**: `-p` must point to **the folder where you extracted AozoraEpub3 in step 2**.
 > The line height defaults to 1.8× (only add `-l 2.0` or similar if you want to change it).
@@ -252,7 +317,8 @@ To undo it: press the Start button → type "environment variables" → open "Ed
 | `VCRUNTIME140.dll was not found` | Install the Visual C++ Redistributable → [step 3](#3-install-narours) |
 | `narou_rs` is "not recognized" | Run it with the full path (`C:\Tools\narou\narou_rs.exe`), or see [Add narou.rs to PATH (Optional)](#add-narours-to-path-optional) |
 | "Windows protected your PC" | Can appear if you double-click `narou_rs.exe`, for example. Get past it with the same steps as for the [SmartScreen warning](usage.html#windows-protected-your-pc-when-launching-aozoraepub3exe) |
-| A Java-related error during conversion | Check that Java is installed → [step 1](#1-install-java) |
+| A Java-related error during conversion | Check that Java is installed → [step 1](#1-install-java). Even the GPL edition uses Java when AozoraEpub3 is registered → [Two Editions](#editions) |
+| `AozoraEpub3 not found` during conversion | The standard edition has no AozoraEpub3 registered. Run `init -p ...` after step 2 → [step 4](#4-initialize-and-register-aozoraepub3). To convert without Java or AozoraEpub3, use the GPL edition → [Two Editions](#editions) |
 | Conversion runs but there is no `.epub` file | Check that device is set to EPUB → [step 6](#6--set-device-to-epub-required) |
 | Initialization ran but the Web UI shows nothing / the novel list is empty | You may have run the command in a different folder. Check that the prompt line shows `C:\Tools\narou-novels` → [step 4](#4-initialize-and-register-aozoraepub3) |
 | The firewall dialog appeared | Click "Allow access" (it only runs on localhost, so nothing is exposed externally) |
@@ -262,10 +328,11 @@ To undo it: press the Start button → type "environment variables" → open "Ed
 ## Reference Links
 
 - [narou.rs (GitHub)](https://github.com/Rumia-Channel/narou.rs) — README, latest releases, bug reports
+- [AozoraEpub3_Lite (GitHub)](https://github.com/Rumia-Channel/AozoraEpub3_Lite) — the conversion engine built into the GPL edition
 - [AozoraEpub3 Usage Guide](usage.html) — detailed conversion settings
 - [narou.rb Setup Guide](narou-setup.html) — if you want to use the Ruby version, narou.rb
 - [AozoraEpub3-JDK21 Releases](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) — download AozoraEpub3 itself
 
 ---
 
-<div style="text-align: right;"><small>Last updated: 2026-08-01 | This guide is not official narou.rs documentation.</small></div>
+<div style="text-align: right;"><small>Last updated: 2026-09-27 | This guide is not official narou.rs documentation.</small></div>
