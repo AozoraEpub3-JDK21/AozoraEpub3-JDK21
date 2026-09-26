@@ -52,7 +52,7 @@ As a rule of thumb:
 > **Point**: Even with the GPL edition, if AozoraEpub3 is registered (via `init -p`, or `AozoraEpub3` is on your PATH, etc.), **that AozoraEpub3 takes precedence**. The built-in engine is used only when no AozoraEpub3 can be found.
 > Also, without a registered AozoraEpub3, the gaiji fonts placed in AozoraEpub3's `gaiji` folder are not used.
 
-> **Point**: To switch editions later, download the other zip and extract it over `C:\Tools\narou`. The edition fetched by self-update can be chosen with `self-update.variant` in the Web UI settings (Global tab): `gpl` = GPL edition / `standard` = standard edition.
+> **Point**: To switch editions later, stop the Web UI (`Ctrl+C`) first, then download and extract the other zip, then copy the **contents** of the `narou` folder inside it into `C:\Tools\narou`, overwriting the existing files (choose "Replace the files"). The edition fetched by self-update can be chosen with `self-update.variant` in the Web UI settings (Global tab): `gpl` = GPL edition / `standard` = standard edition.
 
 #### Why the Licenses Differ
 
@@ -96,7 +96,7 @@ This guide uses the following three folders. If you put things elsewhere, adjust
 
 | Folder | Purpose |
 |---|---|
-| `C:\Tools\AozoraEpub3-jdk21` | AozoraEpub3 (the conversion engine) |
+| `C:\Tools\AozoraEpub3-jdk21` | AozoraEpub3 (the conversion engine). **Not needed for the GPL edition** |
 | `C:\Tools\narou` | narou.rs itself |
 | `C:\Tools\narou-novels` | Where your novels are stored and managed |
 
@@ -186,7 +186,7 @@ Create the folder that will hold your novels, then run a single initialization c
 
 1. In File Explorer, type `C:\Tools` into the address bar to open it, right-click an empty area → "New" → "Folder", type `narou-novels` as the folder name and press Enter.
 2. Open the new `narou-novels` folder, right-click an empty area inside it → choose "**Open in Terminal**" (a window opens whose prompt line shows `C:\Tools\narou-novels`).
-3. Paste the following single line and press Enter.
+3. Paste the following single line and press Enter (**for the GPL edition, use the command under "For the GPL edition" below instead**).
 
 ```powershell
 C:\Tools\narou\narou_rs.exe init -p "C:\Tools\AozoraEpub3-jdk21"
@@ -214,9 +214,10 @@ C:\Tools\narou\narou_rs.exe init
 
 Along the way it prints `!!!WARNING!!! AozoraEpub3の構成ファイルを書き換えます…` ("AozoraEpub3's configuration files will be rewritten"), but nothing is rewritten when you skip registration, so you can safely ignore it. You are done when `AozoraEpub3 の設定をスキップしました` ("AozoraEpub3 setup skipped") and `初期化が完了しました！` ("initialization complete") are displayed (EPUB conversion then uses the built-in engine).
 
-> **Point**: `-p` must point to **the folder where you extracted AozoraEpub3 in step 2**.
+> **Point**: If you use a PowerShell window opened from the Start menu instead, first run `cd C:\Tools\narou-novels` to move there (same for step 5).
+
+> **Point (standard edition)**: `-p` must point to **the folder where you extracted AozoraEpub3 in step 2**.
 > The line height defaults to 1.8× (only add `-l 2.0` or similar if you want to change it).
-> If you use a PowerShell window opened from the Start menu instead, first run `cd C:\Tools\narou-novels` to move there (same for step 5).
 > If the registration fails, just **run `init -p ...` again in the same folder**
 > (it will say the folder is already initialized, but the AozoraEpub3 configuration is redone).
 

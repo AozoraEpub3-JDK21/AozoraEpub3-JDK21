@@ -55,7 +55,7 @@ narou.rs v0.4.0 以降は、同じバージョンが 2 種類の zip で配布�
 > **Point**: GPL 版でも、AozoraEpub3 を登録している場合（`init -p` で登録した・`AozoraEpub3` に PATH が通っている など）は**そちらが優先して使われます**。組み込みエンジンが使われるのは、AozoraEpub3 が見つからないときだけです。
 > また、AozoraEpub3 を登録していない場合は、AozoraEpub3 の `gaiji` フォルダに置く外字フォントは使われません。
 
-> **Point**: あとから版を切り替える場合は、もう一方の zip をダウンロードして `C:\Tools\narou` に上書き展開します。セルフアップデートで取得する版は、Web UI の環境設定（Global タブ）の `self-update.variant` で選べます（`gpl` = GPL 版 / `standard` = 通常版）。
+> **Point**: あとから版を切り替える場合は、Web UI を終了（`Ctrl+C`）してから、もう一方の zip をダウンロードして展開し、中の `narou` フォルダの**中身**を `C:\Tools\narou` にコピーして上書きします（「ファイルを置き換える」を選びます）。セルフアップデートで取得する版は、Web UI の環境設定（Global タブ）の `self-update.variant` で選べます（`gpl` = GPL 版 / `standard` = 通常版）。
 
 #### ライセンスが分かれている理由
 
@@ -99,7 +99,7 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 
 | フォルダ | 用途 |
 |---|---|
-| `C:\Tools\AozoraEpub3-jdk21` | AozoraEpub3（変換エンジン） |
+| `C:\Tools\AozoraEpub3-jdk21` | AozoraEpub3（変換エンジン）。**GPL 版では不要** |
 | `C:\Tools\narou` | narou.rs 本体 |
 | `C:\Tools\narou-novels` | 小説の保存・管理フォルダ |
 
@@ -189,7 +189,7 @@ C:\Tools\narou\
 
 1. エクスプローラーのアドレス欄に `C:\Tools` と入力して開き、何もない場所を右クリック →「新規作成」→「フォルダー」を選び、フォルダ名を `narou-novels` と入力して Enter を押します。
 2. 作成した `narou-novels` フォルダを開き、フォルダ内の何もない場所を右クリック →「**ターミナルで開く**」を選びます（行頭に `C:\Tools\narou-novels` と表示された画面が開きます）。
-3. 開いた画面に次の 1 行を貼り付けて、Enter を押します。
+3. 開いた画面に次の 1 行を貼り付けて、Enter を押します（**GPL 版の場合はこのコマンドではなく、下の「GPL 版の場合」のコマンドを使います**）。
 
 ```powershell
 C:\Tools\narou\narou_rs.exe init -p "C:\Tools\AozoraEpub3-jdk21"
@@ -217,9 +217,10 @@ C:\Tools\narou\narou_rs.exe init
 
 途中で「!!!WARNING!!! AozoraEpub3の構成ファイルを書き換えます…」と表示されますが、AozoraEpub3 を登録しない場合は何も書き換えられないので、気にせず進めて構いません。最後に「AozoraEpub3 の設定をスキップしました」「初期化が完了しました！」と表示されれば OK です（EPUB への変換には組み込みエンジンが使われます）。
 
-> **Point**: `-p` には**手順 2 で AozoraEpub3 を展開したフォルダ**を指定します。
+> **Point**: スタートメニューから開いた PowerShell で実行する場合は、先に `cd C:\Tools\narou-novels` と入力して現在地を移動してください（手順 5 も同様です）。
+
+> **Point（通常版）**: `-p` には**手順 2 で AozoraEpub3 を展開したフォルダ**を指定します。
 > 行間は標準で 1.8 倍に設定されます（変えたい場合のみ `-l 2.0` のように追加します）。
-> スタートメニューから開いた PowerShell で実行する場合は、先に `cd C:\Tools\narou-novels` と入力して現在地を移動してください（手順 5 も同様です）。
 > 登録に失敗した場合も、**同じフォルダでもう一度 `init -p ...` を実行**すればやり直せます
 > （「既に初期化済みです」と表示されますが、AozoraEpub3 の設定はやり直せます）。
 
