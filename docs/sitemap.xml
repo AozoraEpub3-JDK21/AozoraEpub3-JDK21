@@ -64,6 +64,16 @@ layout: null
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/narou-rs-setup-details.html</loc>
+    <lastmod>2026-09-27</lastmod>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/en/narou-rs-setup-details.html</loc>
+    <lastmod>2026-09-27</lastmod>
+    <priority>0.4</priority>
+  </url>
+  <url>
     <loc>https://aozoraepub3-jdk21.github.io/AozoraEpub3-JDK21/gaiji-settings.html</loc>
     <lastmod>2026-08-26</lastmod>
     <priority>0.6</priority>
