@@ -117,7 +117,7 @@ java -version
    - 通常版: `narou_rs_win_x64.zip`
    - GPL 版: `narou_rs_win_x64-GPL.zip`
    - ARM 版 Windows の PC では、名前が `win_arm64` のものを選びます。
-2. zip を右クリック →「すべて展開」します。展開すると `narou` フォルダができるので、`C:\Tools\narou` となるように移動します。中のファイルは**移動・削除しないでください**。
+2. zip を右クリック →「すべて展開」します。展開すると `narou` フォルダができるので、`C:\Tools\narou` となるように移動します。中のファイルは**移動・削除しないでください**（[フォルダ構成](narou-rs-setup-details.html#folder-layout)）。
 
 > ✅ **ここまでの確認**: PowerShell で `C:\Tools\narou\narou_rs.exe version` と入力すると、バージョン番号（例: `0.4.4`）が表示される
 > （「`VCRUNTIME140.dll` が見つかりません」と表示されたら → [困ったときは](#困ったときは)）
@@ -156,7 +156,7 @@ C:\Tools\narou\narou_rs.exe init
 C:\Tools\narou\narou_rs.exe web
 ```
 
-ブラウザが自動的に開き、narou.rs の画面が表示されます。
+ブラウザが自動的に開き、narou.rs の画面が表示されます（[アドレスについて](narou-rs-setup-details.html#port)）。
 
 ![narou.rs Web UI のトップ画面。上部にメニュー、中央に黒いログ表示、下に小説リストが並ぶ](assets/narou-rs/02-web-top.png)
 

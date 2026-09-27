@@ -22,6 +22,15 @@ description: Companion to the narou.rs setup guide. Explains the GPL and standar
 
 This page is a companion to the **[narou.rs Setup Guide](narou-rs-setup.html)**. You do not need it to follow the steps; read it when you want to know why a step is done a certain way, or what the alternatives are.
 
+**On this page**
+
+- [Two editions](#editions) — which engine is used, switching editions, licensing, [output comparison](#output-comparison), [rendering comparison](#rendering)
+- [Why AozoraEpub3 gets its own folder](#dedicated-folder)
+- [narou.rs folder layout](#folder-layout)
+- [Initialization (init) in detail](#init)
+- [Web UI address (port number)](#port)
+- [Add narou.rs to PATH (optional)](#path)
+
 > ⚠️ **Notice**
 > - This article is **not** an official [narou.rs](https://github.com/Rumia-Channel/narou.rs) manual. For anything unclear, prefer the latest information in the **[narou.rs README](https://github.com/Rumia-Channel/narou.rs) and [Issues](https://github.com/Rumia-Channel/narou.rs/issues)**.
 > - Tested environment: Windows 11 (Japanese), narou.rs v0.3.4 (steps and screenshots) / v0.4.4 (behavior of the two editions, output comparison), AozoraEpub3 v1.4.0-jdk21 (steps and screenshots) / v1.6.1-jdk21 (output comparison), Thorium Reader 3.5.1 (rendering comparison)
@@ -60,6 +69,8 @@ AozoraEpub3 (the original by hmdev and its derivatives, such as "Kaizōban (Modi
 
 The license difference only matters if you **modify or redistribute the program**. If you just download and use it, either edition is fine.
 
+<a id="output-comparison"></a>
+
 ### Output Comparison (Measured on This Site)
 
 We converted four novels from Syosetu (including one long series with 1,404 episodes; 1,678 body files in total) from the same text data with the GPL edition's built-in engine and with AozoraEpub3-JDK21 v1.6.1, and compared the results (narou.rs v0.4.4).
@@ -84,7 +95,8 @@ We converted the same text with both engines and displayed the same pages side b
 
 - Text: Osamu Dazai's ["Run, Melos!" (Hashire Merosu) from Aozora Bunko](https://www.aozora.gr.jp/cards/000035/card1567.html) (public domain), arranged in the same shape as a Syosetu novel (2 chapters, 3 episodes) and run through narou.rs's normal conversion path
 - Conversion: narou.rs v0.4.4 GPL edition. Left: built-in engine; right: with AozoraEpub3-JDK21 v1.6.1 registered (both with narou.rs default settings)
-- Display: [Thorium Reader](https://thorium.edrlab.org/) 3.5.1 (Windows 11), same window size, default display settings. The blue arrows on the left and right are Thorium's page-turn buttons
+- Display: [Thorium Reader](https://thorium.edrlab.org/) 3.5.1 (Windows 11), same window size (700×900), default display settings. The images are the page area cropped and scaled down to 480px wide. The blue arrows on the left and right are Thorium's page-turn buttons
+- How they were made: the procedure and scripts in [tools/narou-rs-compare](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/tree/master/tools/narou-rs-compare) (in Japanese) reproduce them
 
 Rendering depends on the EPUB reader, so your reader may display things differently.
 
@@ -105,8 +117,8 @@ Rendering depends on the EPUB reader, so your reader may display things differen
 </tr>
 <tr>
 <td><strong>Chapter title page</strong></td>
-<td><img src="../assets/narou-rs/engine-compare/chapter-lite.png" alt="Built-in engine chapter title page: the running head and a large chapter title near the top center" width="480"/></td>
-<td><img src="../assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 chapter title page: the running head and a small chapter title at the top right" width="480"/></td>
+<td><img src="../assets/narou-rs/engine-compare/chapter-lite.png" alt="Built-in engine chapter title page: the running head and the chapter title near the top center" width="480"/></td>
+<td><img src="../assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 chapter title page: the running head and the chapter title at the top-right edge" width="480"/></td>
 </tr>
 <tr>
 <td><strong>Episode text</strong><br/>Heading and ruby</td>
@@ -122,7 +134,7 @@ The differences seen in this setup:
 |---|---|---|
 | Title page | Title in a serif (Mincho) font, left-aligned, author below a rule | Title and author in a sans-serif (Gothic) font, centered |
 | Table of contents | Episodes indented under chapters | Chapters and episodes as one flat bulleted list |
-| Chapter title page | Large chapter title, near the top center of the page | Smaller chapter title, at the top right together with the running head |
+| Chapter title page | Running head and chapter title near the top center of the page | Running head and chapter title at the top-right edge (chapter title about the same size) |
 | Episode text | Bold heading | Regular-weight heading. Body typesetting and ruby are the same |
 
 ---

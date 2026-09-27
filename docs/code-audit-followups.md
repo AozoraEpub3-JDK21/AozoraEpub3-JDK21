@@ -45,6 +45,8 @@
 | 30 | 🟢 低 | 表紙コンボの選択が ini に保存されない / 多言語ラベルのまま保存（言語切替で復元できない） | ✅ 対応済 | — |
 | 31 | 🔴 高 | `PreviewServer.serveSettings` の `readNBytes` がボディ読み取りでブロックし、サーバスレッドが永久に固まる（`PreviewServerTest` が 2 件ハング/失敗） | ❌ 未対応（別 PR） | — |
 | 32 | 🔴 高 | ※ と 《》 の外字注記が混在すると `isEscapedChar` のパリティ判定が誤り、行末までの本文が消失（見出し先頭時は変換全体が異常終了）— upstream issue #34 | ❌ 未対応 | — |
+| 33 | 🟡 中 | 同じ長さのルビで 4バイト文字（サロゲートペア）が 2 つの `<ruby>` に分断され、単独サロゲートが残る | ❌ 未対応 | — |
+| 34 | 🟢 低 | 章の中扉が Thorium Reader で左右中央に寄らず、ページ右端に出る（他リーダーは未確認） | ❓ 未調査 | — |
 
 ---
 
@@ -1517,27 +1519,32 @@ PR #86 のフォールバック側は「サロゲートは `convertTcyText` に�
 
 ## リーダーでの表示（2026-09-27 追加）
 
-### 34. 章の中扉が Thorium Reader で上下中央に寄らない — ❓ 未調査
+### 34. 章の中扉が Thorium Reader で左右中央に寄らない — ❓ 未調査
 
 **出自**: narou.rs 導入ガイドの補足ページに載せる「見た目の比較」（`docs/narou-rs-setup-details.md#rendering`）を撮影した際に気づいた。
+
+**意図されている配置**
+
+中扉ページが読み込む `template/OPS/css/vertical_middle.css` は、冒頭のコメントが「縦書き用 左右中央」で、
+`table.middle { padding-top: 3em }` / `table.middle td { vertical-align: top; padding-top: 2em }` を指定している。
+つまり**上下は上寄せ（余白つき）、左右はページ中央**が意図と読める。
 
 **現象**
 
 narou.rs v0.4.4 経由で v1.6.1-jdk21 が出力した章の中扉（`<table class="middle">` + `<div class="chap1">`）を
 Thorium Reader 3.5.1（Windows 11、既定の表示設定、ウィンドウ 700×900）で開くと、
-柱と章題がページ右上に寄り、`table.middle` が意図しているはずの上下中央配置にならない。
-なお、同じ本文を組み込みエンジン（AozoraEpub3_Lite）で変換した中扉も上下中央にはならない
-（章題が大きく、ページ上部の中央寄りに出る）ため、Thorium 側の挙動の可能性もある。
-画像は `docs/assets/narou-rs/engine-compare/chapter-java.png` / `chapter-lite.png`。
+柱と章題がページ**右端**に寄り、左右中央にならない（上寄せは意図どおり）。
+同じ本文を組み込みエンジン（AozoraEpub3_Lite）で変換した中扉は、ページ上部の中央寄りに出る。
+画像は `docs/assets/narou-rs/engine-compare/chapter-java.png` / `chapter-lite.png`（撮影後に幅 480px へ縮小）。
 
 **未確認のこと**
 
-- 他のリーダー（Kindle・Apple Books・Kobo など）でも同じか。Thorium 固有の挙動か、テンプレート側の問題か
+- 他のリーダー（Kindle・Apple Books・Kobo など）では左右中央になるか。Thorium 固有の挙動か、CSS 側の問題か
 - narou.rs を通さない AozoraEpub3 単体の変換でも同じか（narou.rs が渡す設定の影響か）
 
 **対応案**
 
-まず複数のリーダーで再現を確かめ、テンプレート（`template/OPS/css/vertical_middle.css` 等）側の問題なら直す。
+まず複数のリーダーで再現を確かめ、`vertical_middle.css` 側の問題なら直す。
 出力が変わるので、`.NET` ポートの byte-identical 比較テストへの影響も確認する。
 
 ---

@@ -114,7 +114,7 @@ If a version number (`21` or later) is displayed, you are good to go. If you get
    - Standard edition: `narou_rs_win_x64.zip`
    - GPL edition: `narou_rs_win_x64-GPL.zip`
    - On an ARM-based Windows PC, pick the one named `win_arm64` instead.
-2. Right-click the zip → "Extract All". It contains a `narou/` folder — place it so that it ends up at `C:\Tools\narou`. **Do not move or delete the files inside it.**
+2. Right-click the zip → "Extract All". It contains a `narou/` folder — place it so that it ends up at `C:\Tools\narou`. **Do not move or delete the files inside it** ([folder layout](narou-rs-setup-details.html#folder-layout)).
 
 > ✅ **Checkpoint**: typing `C:\Tools\narou\narou_rs.exe version` in PowerShell prints a version number (for example `0.4.4`)
 > (if you get "`VCRUNTIME140.dll` was not found" → [Troubleshooting](#troubleshooting))
@@ -153,7 +153,7 @@ Just like in step 4, open `C:\Tools\narou-novels`, choose "**Open in Terminal**"
 C:\Tools\narou\narou_rs.exe web
 ```
 
-Your browser opens automatically and shows the narou.rs screen.
+Your browser opens automatically and shows the narou.rs screen ([about the address](narou-rs-setup-details.html#port)).
 
 > The screenshots below show the Japanese UI; the layout is identical in English. You can switch the Web UI language with the "**Language: 日本語 ↔ English**" item in the "⚙ Options" menu at the top right.
 

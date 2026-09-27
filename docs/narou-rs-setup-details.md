@@ -25,6 +25,15 @@ description: narou.rs 導入ガイドの補足資料。GPL 版と通常版の違
 
 このページは **[narou.rs 導入ガイド](narou-rs-setup.html)** の補足です。手順どおりに進めるだけならこのページを読む必要はありません。「なぜそうするのか」「ほかの選択肢はあるか」を知りたいときに参照してください。
 
+**このページの内容**
+
+- [2 種類の配布版](#editions) — どちらのエンジンが使われるか・版の切り替え・ライセンス・[出力の比較](#output-comparison)・[見た目の比較](#rendering)
+- [AozoraEpub3 を narou.rs 専用のフォルダにする理由](#dedicated-folder)
+- [narou.rs のフォルダ構成](#folder-layout)
+- [初期化（init）の詳細](#init)
+- [Web UI のアドレス（ポート番号）](#port)
+- [PATH への登録（任意）](#path)
+
 > ⚠️ **注記**
 > - 本記事は [narou.rs](https://github.com/Rumia-Channel/narou.rs) の公式マニュアルではありません。不明な点は **[narou.rs の README](https://github.com/Rumia-Channel/narou.rs) や [Issues](https://github.com/Rumia-Channel/narou.rs/issues)** の最新情報を優先してください。
 > - 検証環境: Windows 11（日本語）、narou.rs v0.3.4（手順・画面）/ v0.4.4（2 種類の配布版の動作確認・出力比較）、AozoraEpub3 v1.4.0-jdk21（手順・画面）/ v1.6.1-jdk21（出力比較）、Thorium Reader 3.5.1（見た目の比較）
@@ -63,6 +72,8 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 
 ライセンスの違いが関係するのは、**プログラムを改変したり再配布したりする場合**です。ダウンロードして使うだけなら、どちらの版を選んでも問題ありません。
 
+<a id="output-comparison"></a>
+
 ### 出力の比較（本サイトでの実測）
 
 小説家になろうの 4 作品（1,404 話の長編 1 作を含む、本文ファイル計 1,678 個）を同じ本文データから変換し、GPL 版の組み込みエンジンと AozoraEpub3-JDK21 v1.6.1 の出力を比べました（narou.rs v0.4.4）。
@@ -87,7 +98,8 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 
 - 本文: 青空文庫の[太宰治「走れメロス」](https://www.aozora.gr.jp/cards/000035/card1567.html)（パブリックドメイン）を、小説家になろうの作品と同じ形（2 章・3 話）に組み立てたもの。narou.rs の通常の変換経路を通しています
 - 変換: narou.rs v0.4.4 GPL 版。左は組み込みエンジン、右は AozoraEpub3-JDK21 v1.6.1 を登録した状態（どちらも narou.rs の既定設定）
-- 表示: [Thorium Reader](https://thorium.edrlab.org/) 3.5.1（Windows 11）、同じウィンドウサイズ・既定の表示設定。左右の青い矢印は Thorium のページ送りボタンです
+- 表示: [Thorium Reader](https://thorium.edrlab.org/) 3.5.1（Windows 11）、同じウィンドウサイズ（700×900）・既定の表示設定。画像は本文エリアを切り出して幅 480px に縮小したものです。左右の青い矢印は Thorium のページ送りボタンです
+- 作り方: [tools/narou-rs-compare](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/tree/master/tools/narou-rs-compare) の手順とスクリプトで撮り直せます
 
 見え方は EPUB リーダーによって変わります。お使いのリーダーでは異なる表示になる場合があります。
 
@@ -108,8 +120,8 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 </tr>
 <tr>
 <td><strong>章の中扉</strong></td>
-<td><img src="assets/narou-rs/engine-compare/chapter-lite.png" alt="組み込みエンジンの章の中扉。ページ上部の中央寄りに、柱の書名と大きめの章題が表示される" width="480"/></td>
-<td><img src="assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 の章の中扉。右上に柱の書名と小さめの章題が表示される" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/chapter-lite.png" alt="組み込みエンジンの章の中扉。ページ上部の中央寄りに、柱の書名と章題が表示される" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 の章の中扉。ページ右上の端に、柱の書名と章題が表示される" width="480"/></td>
 </tr>
 <tr>
 <td><strong>話の本文</strong><br/>見出しとルビ</td>
@@ -125,7 +137,7 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 |---|---|---|
 | 扉 | 書名を明朝体で左寄せ、罫線の下に著者名 | 書名と著者名をゴシック体で中央揃え |
 | 目次 | 章の下に話を字下げした階層表示 | 章と話を同じ階層の箇条書きで表示 |
-| 章の中扉 | 章題が大きく、ページ上部の中央寄りに表示 | 章題は小さめで、柱とともにページ右上に表示 |
+| 章の中扉 | 柱と章題をページ上部の中央寄りに表示 | 柱と章題をページ右上の端に表示（章題の大きさはほぼ同じ） |
 | 話の本文 | 見出しが太字 | 見出しは通常の太さ。本文の組み方・ルビは同じ |
 
 ---
