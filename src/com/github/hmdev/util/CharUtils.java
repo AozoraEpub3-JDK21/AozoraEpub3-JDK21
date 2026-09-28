@@ -301,6 +301,18 @@ public class CharUtils
 		return buf.toString();
 	}
 	
+	/** 前に※を付けてエスケープする特殊文字ならtrue
+	 * 外字注記変換で付ける側と convertReplacedChar で外す側はこれを使う。
+	 * getChapterName の正規表現と removeRuby は別に持っている（項目 32 の内部エスケープ分離で置き換える予定） */
+	static public boolean isEscapableChar(char c)
+	{
+		switch (c) {
+		case '※': case '《': case '》': case '｜': case '＃':
+			return true;
+		}
+		return false;
+	}
+	
 	/** 文字がエスケープされた特殊文字ならtrue */
 	static public boolean isEscapedChar(char[] ch, int idx)
 	{
@@ -335,7 +347,7 @@ public class CharUtils
 	static public String getChapterName(String line, int maxLength, boolean reduce)
 	{
 		String name = line.replaceAll("［＃.+?］", "")//注記除去
-				.replaceAll("※(※|《|》|［|］|〔|〕|〔|〕|〔|〕|｜)", "$1") //エスケープ文字から※除外
+				.replaceAll("※(※|《|》|［|］|〔|〕|〔|〕|〔|〕|｜|＃)", "$1") //エスケープ文字から※除外
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
 		if (reduce) name = name.replaceAll("(=|＝|-|―|─)+", "$1");//連続する記号は1つに
 		//タグはimgとaを削除
