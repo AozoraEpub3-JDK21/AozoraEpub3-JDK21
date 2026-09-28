@@ -675,8 +675,8 @@ public class AozoraEpub3Converter
 	/** 左右中央の節で、1行がこれを超える字数 (表示文字・空白・字下げ) なら1列に収まらないとみなす
 	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ) */
 	static final int MIDDLE_LONG_LINE_CHARS = 20;
-	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない) */
-	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字");
+	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない、改行は列の数が読めない) */
+	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字|^改行$");
 	/** 字下げ注記 (N字下げ・ここからN字下げ) */
 	final static Pattern middleIndentChukiPattern = Pattern.compile("^(ここから)?([0-9０-９]+)字下げ$");
 	/** 数えている左右中央の注記行 数えていなければ-1 */
@@ -734,8 +734,9 @@ public class AozoraEpub3Converter
 			Matcher im = middleIndentChukiPattern.matcher(chukiName);
 			if (im.find()) {
 				int indent = Integer.parseInt(CharUtils.fullToHalf(im.group(2)));
+				//ここからN字下げ は同じ行の後ろの文字にも効く
 				if (im.group(1) != null) this.middleBlockIndent = indent;
-				else lineChars += indent;
+				lineChars += indent;
 			} else if (chukiName.startsWith("ここで字下げ終わり")) {
 				this.middleBlockIndent = 0;
 			}

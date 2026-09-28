@@ -184,7 +184,24 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
-	public void 下寄せと大きな文字のある節は表組みに倒す() throws Exception
+	public void 同じ行のブロックの字下げも数える() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"［＃ここから１０字下げ］" + repeat("字", n-9),
+				"［＃ここで字下げ終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃ここから１０字下げ］" + repeat("字", n-10),
+				"［＃ここで字下げ終わり］",
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertFalse(bookInfo.isLongMiddleLine(4));
+	}
+
+	@Test
+	public void 下寄せと大きな文字と改行のある節は表組みに倒す() throws Exception
 	{
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
@@ -198,12 +215,16 @@ public class AozoraEpub3ConverterLongMiddleTest
 				"［＃２段階大きな文字］題［＃大きな文字終わり］",
 				"［＃改ページ］",
 				"［＃ページの左右中央］",
+				"題［＃改行］名",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
 				"題",
 				"［＃改ページ］");
 		assertTrue(bookInfo.isLongMiddleLine(0));
 		assertTrue(bookInfo.isLongMiddleLine(4));
 		assertTrue(bookInfo.isLongMiddleLine(7));
-		assertFalse(bookInfo.isLongMiddleLine(10));
+		assertTrue("改行の注記", bookInfo.isLongMiddleLine(10));
+		assertFalse(bookInfo.isLongMiddleLine(13));
 	}
 
 	@Test
