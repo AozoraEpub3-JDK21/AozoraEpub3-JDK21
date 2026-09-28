@@ -683,8 +683,10 @@ public class AozoraEpub3Converter
 	static final int MIDDLE_LONG_LINE_CHARS = 20;
 	/** 数えている左右中央の注記行 数えていなければ-1 */
 	int middleCountLine = -1;
-	/** 数えている左右中央の節の文字のある行数 */
+	/** 数えている左右中央の節の行数 (文字のある行と、その間の空行) */
 	int middleCountLines = 0;
+	/** 数えている左右中央の節で、文字のある行の後に続いている空行の数 (次に文字のある行が来たら行数に足す) */
+	int middleCountBlankLines = 0;
 	/** 数えている左右中央の節に画像か1列に収まらない行があればtrue (従来の表組みに倒す) */
 	boolean middleCountForceTable = false;
 	
@@ -693,25 +695,31 @@ public class AozoraEpub3Converter
 	 * 列の終わりまで届く行があると白紙のページや文字の切れが出るため、
 	 * 行数が多い節と1列に収まらない行のある節は従来の表組みで出力する (監査34)。
 	 * 迷う形 (画像・強制改ページ等) は長い側に数えて従来の表組みに倒す */
-	void countMiddleSection(BookInfo bookInfo, String noRubyLine, int lineNum)
+	void countMiddleSection(BookInfo bookInfo, String noRubyLine, int lineNum, int edgeSpaces)
 	{
 		Matcher m = chukiPattern.matcher(noRubyLine);
 		int pos = 0;
 		boolean lineCounted = false;
-		int lineChars = 0;
+		//行頭・行末の空白 (事前走査では除去済み) も1字ずつ場所を取る
+		int lineChars = edgeSpaces;
 		while (true) {
 			boolean found = m.find();
 			int end = found ? m.start() : noRubyLine.length();
 			if (this.middleCountLine >= 0) {
 				int chars = 0;
+				//空白も1字ぶん場所を取る。ルビの開始記号は表示されない
 				for (int i=pos; i<end; i++) {
-					char c = noRubyLine.charAt(i);
-					if (c != ' ' && c != '　' && c != '\t' && c != '｜') chars++;
+					if (noRubyLine.charAt(i) != '｜') chars++;
 				}
 				if (chars > 0) {
 					lineChars += chars;
 					if (lineChars > MIDDLE_LONG_LINE_CHARS) this.middleCountForceTable = true;
-					if (!lineCounted) { this.middleCountLines++; lineCounted = true; }
+					if (!lineCounted) {
+						//間の空行も1列ずつ場所を取る
+						this.middleCountLines += this.middleCountBlankLines + 1;
+						this.middleCountBlankLines = 0;
+						lineCounted = true;
+					}
 				}
 			}
 			if (!found) break;
@@ -723,6 +731,7 @@ public class AozoraEpub3Converter
 				if (chukiFlagMiddle.contains(chukiName)) {
 					this.middleCountLine = lineNum;
 					this.middleCountLines = 0;
+					this.middleCountBlankLines = 0;
 					this.middleCountForceTable = false;
 				}
 			} else if (this.middleCountLine >= 0) {
@@ -732,6 +741,11 @@ public class AozoraEpub3Converter
 				if (chukiTag.toLowerCase().startsWith("<img")) this.middleCountForceTable = true;
 			}
 		}
+	}
+	/** 左右中央の節の中の空行を数える。文字のある行の前後の空行は出力されない (mapIgnoreLine) ので、間の空行だけ後で行数に足す */
+	void countMiddleBlankLine()
+	{
+		if (this.middleCountLine >= 0 && this.middleCountLines > 0) this.middleCountBlankLines++;
 	}
 	/** 数えている左右中央の節を閉じ、長ければbookInfoに登録 */
 	void endMiddleSection(BookInfo bookInfo)
@@ -796,7 +810,10 @@ public class AozoraEpub3Converter
 			this.lineNum++;
 			
 			//見出し等の取得のため前方参照注記は変換 外字文字は置換
-			line = CharUtils.removeSpace(this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false)));
+			String spacedLine = this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false));
+			line = CharUtils.removeSpace(spacedLine);
+			//除去した行頭・行末の空白の数 (左右中央の節の行の長さに数える)
+			int edgeSpaces = spacedLine.length() - line.length();
 			//注記と画像のチェックなので先にルビ除去
 			String noRubyLine = CharUtils.removeRuby(line);
 			
@@ -828,6 +845,7 @@ public class AozoraEpub3Converter
 			//空行チェック
 			if (noRubyLine.equals("") || noRubyLine.equals(" ") || noRubyLine.equals("　")) {
 				lastEmptyLine = lineNum;
+				this.countMiddleBlankLine();
 				//空行なので次の行へ
 				continue;
 			}
@@ -835,7 +853,7 @@ public class AozoraEpub3Converter
 			if (inComment && !this.commentPrint) continue;
 			
 			//左右中央の節の長さを数える
-			this.countMiddleSection(bookInfo, noRubyLine, lineNum);
+			this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);
 			
 			//2行前が改ページと画像の行かをチェックして行番号をbookInfoに保存
 			if (!noIllust) this.checkImageOnly(bookInfo, preLines, noRubyLine, this.lineNum);

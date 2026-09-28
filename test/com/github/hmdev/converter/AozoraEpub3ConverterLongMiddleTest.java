@@ -97,17 +97,61 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
-	public void 注記とルビと空白は数えない() throws Exception
+	public void 注記とルビは数えない() throws Exception
 	{
 		int half = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS / 2;
-		// ルビ・注記・空白を数えると境目を超える量。表示される文字は境目ちょうど
+		// ルビ・注記を数えると境目を超える量。表示される文字は境目ちょうど
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
 				"［＃ここから５字下げ］",
-				repeat("漢《かんじ》", half) + repeat("　字［＃「字」に傍点］", half),
+				repeat("漢《かんじ》", half) + repeat("｜字《じ》［＃「字」に傍点］", half),
 				"［＃ここで字下げ終わり］",
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(0));
+	}
+
+	@Test
+	public void 全角の空白も一字に数える() throws Exception
+	{
+		int half = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS / 2;
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"題" + repeat("　", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS) + "名",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				repeat("　", half+1) + repeat("字", half),
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				repeat("字", half) + repeat("　", half+1),
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertTrue("行頭の空白も数える", bookInfo.isLongMiddleLine(3));
+		assertTrue("行末の空白も数える", bookInfo.isLongMiddleLine(6));
+	}
+
+	@Test
+	public void 間の空行は一列に数え前後の空行は数えない() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINES;
+		String[] between = new String[n + 3];
+		int i = 0;
+		between[i++] = "［＃ページの左右中央］";
+		between[i++] = "題";
+		for (int k=0; k<n-1; k++) between[i++] = "";
+		between[i++] = "名";
+		between[i++] = "［＃改ページ］";
+		// 題・空行 n-1・名 で n+1 列
+		assertTrue(scan(between).isLongMiddleLine(0));
+
+		String[] edges = new String[n*2 + 4];
+		i = 0;
+		edges[i++] = "［＃ページの左右中央］";
+		for (int k=0; k<n; k++) edges[i++] = "";
+		edges[i++] = "題";
+		for (int k=0; k<n; k++) edges[i++] = "";
+		edges[i++] = "［＃改ページ］";
+		edges[i++] = "本文";
+		assertFalse("前後の空行は出力されない", scan(java.util.Arrays.copyOf(edges, i)).isLongMiddleLine(0));
 	}
 
 	@Test
