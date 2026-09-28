@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
+## 縦書きは、横書きの親の中に縦書きのブロックを置く (Kindle 向けは従来の表)
+#if (${bookInfo.Vertical} && !${kindle})
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja" class="hltr">
+#else
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
+#end
 <head>
 #if (${bookInfo.Vertical})
 <link rel="stylesheet" type="text/css" href="../css/vertical_text.css"/>
@@ -51,7 +56,11 @@
 #else
 <body>
 #end
+#if (${bookInfo.Vertical} && !${kindle})
+<div class="vrtl middle">
+#else
 <table class="middle"><tr><td>
+#end
 
 #if (${PUBLISHER})
 	<div class="publisher">${PUBLISHER}</div>
@@ -85,7 +94,11 @@
 	<div class="subcreator btm pb2">${SUBCREATOR}</div>
 #end
 
+#if (${bookInfo.Vertical} && !${kindle})
+</div>
+#else
 </td></tr></table>
+#end
 #if (${kindle})
 </div></div>
 #end

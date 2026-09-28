@@ -76,3 +76,25 @@ height: auto;
 body.kindle table.middle td {
 height: auto;
 }
+
+/* 左右中央・ページ左（Kindle 以外）: 横書きの親の中に縦書きのブロックを置く。
+   縦書きの表は width:100% が効かずに中身の幅へ縮み、ページ右端に寄るリーダーがある（監査 34） */
+html.hltr {
+writing-mode: horizontal-tb;
+-webkit-writing-mode: horizontal-tb;
+-epub-writing-mode: horizontal-tb;
+}
+html.hltr div.vrtl {
+writing-mode: vertical-rl;
+-webkit-writing-mode: vertical-rl;
+-epub-writing-mode: vertical-rl;
+}
+/* 左右中央: 上寄せ（余白つき）で左右中央 */
+html.hltr div.vrtl.middle {
+margin: 0 auto;
+padding-top: 5em;
+}
+/* ページ左 */
+html.hltr div.vrtl.bottom {
+margin: 0 auto 0 0;
+}

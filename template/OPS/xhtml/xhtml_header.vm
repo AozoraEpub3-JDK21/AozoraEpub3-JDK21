@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
+## 縦書きの左右中央・ページ左は、横書きの親の中に縦書きのブロックを置く (Kindle 向けは従来の表)
+#set ($hltrPage = false)
+#if (${bookInfo.Vertical} && !${kindle} && !${sectionInfo.ImagePage} && (${sectionInfo.Middle} || ${sectionInfo.Bottom}))
+#set ($hltrPage = true)
+#end
+#if (${hltrPage})
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja" class="hltr">
+#else
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
+#end
 <head>
 #if (${kindle} && ${bookInfo.ImageOnly})
 	<link rel="stylesheet" type="text/css" href="../css/kindle_image.css"/>
@@ -48,6 +57,13 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 #else
 <body>
 #end
+#if (${hltrPage})
+#if (${sectionInfo.Middle})
+<div class="vrtl middle">
+#else
+<div class="vrtl bottom">
+#end
+#else
 #if (${sectionInfo.Middle})
 #if (${kindle})
 <div class="kindle_outer"><div class="kindle_inner">
@@ -59,4 +75,5 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 <div class="kindle_outer bottom"><div class="kindle_inner">
 #end
 <table class="bottom"><tr><td>
+#end
 #end

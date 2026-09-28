@@ -1,4 +1,6 @@
-#if (${sectionInfo.Middle} || ${sectionInfo.bottom})
+#if (${bookInfo.Vertical} && !${kindle} && !${sectionInfo.ImagePage} && (${sectionInfo.Middle} || ${sectionInfo.Bottom}))
+</div>
+#elseif (${sectionInfo.Middle} || ${sectionInfo.bottom})
 </td></tr></table>
 #if (${kindle})
 </div></div>
