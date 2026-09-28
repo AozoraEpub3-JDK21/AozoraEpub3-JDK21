@@ -228,6 +228,90 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
+	public void 改ページの次が画像単ページなら表組みに倒す() throws Exception
+	{
+		// 表紙に移す画像の前の改ページは変換時に省かれ、後ろの本文が左右中央の節に入る
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"献辞",
+				"［＃改ページ］",
+				"［＃挿絵（cover.jpg）入る］",
+				"［＃改ページ］",
+				"本文",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"献辞",
+				"［＃改ページ］",
+				"本文");
+		assertTrue(bookInfo.isImageSectionLine(3));
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertFalse(bookInfo.isLongMiddleLine(7));
+	}
+
+	@Test
+	public void 字数の読めない字下げは表組みに倒し変換は止めない() throws Exception
+	{
+		BookInfo bookInfo = scan(
+				"［＃１２３４５６７８９０１字下げ］本文",
+				"［＃ページの左右中央］",
+				"［＃１２３４５６７８９０１字下げ］題",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃3字下げ］題",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃ここから２字下げ、折り返して４字下げ］",
+				"題",
+				"［＃ここで字下げ終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃ここから２字下げ、８字詰め］",
+				"題",
+				"［＃ここで字下げ終わり］",
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(1));
+		assertTrue("半角の数字", bookInfo.isLongMiddleLine(4));
+		assertTrue("折り返して", bookInfo.isLongMiddleLine(7));
+		assertTrue("字詰め", bookInfo.isLongMiddleLine(12));
+	}
+
+	@Test
+	public void 字下げは改ページと字下げ終わりの別の書き方で閉じる() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+		BookInfo bookInfo = scan(
+				"［＃ここから１０字下げ］",
+				"閉じ忘れた字下げ",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				repeat("題", n-5),
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃ここから１０字下げ］",
+				"字",
+				"［＃ここで字下げ、改行天付き終わり］",
+				repeat("題", n-5),
+				"［＃改ページ］");
+		assertFalse("改ページで閉じる", bookInfo.isLongMiddleLine(3));
+		assertFalse("ここで字下げ…終わり で閉じる", bookInfo.isLongMiddleLine(6));
+	}
+
+	@Test
+	public void 出力しないコメントの中の空行は数えない() throws Exception
+	{
+		String[] lines = new String[AozoraEpub3Converter.MIDDLE_LONG_LINES + 8];
+		int i = 0;
+		lines[i++] = "［＃ページの左右中央］";
+		lines[i++] = "題";
+		lines[i++] = "-------------------------------------------------------";
+		for (int k=0; k<AozoraEpub3Converter.MIDDLE_LONG_LINES; k++) lines[i++] = "";
+		lines[i++] = "-------------------------------------------------------";
+		lines[i++] = "名";
+		lines[i++] = "［＃改ページ］";
+		assertFalse(scan(java.util.Arrays.copyOf(lines, i)).isLongMiddleLine(0));
+	}
+
+	@Test
 	public void 行の途中で始まる節は前の文字を数えない() throws Exception
 	{
 		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
