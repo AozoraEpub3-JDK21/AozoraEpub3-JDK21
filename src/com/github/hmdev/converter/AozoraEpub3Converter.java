@@ -1796,8 +1796,12 @@ public class AozoraEpub3Converter
 			int chukiTagEnd = m.end();
 			
 			//後ろにルビがあったら前に移動して位置を調整
+			//閉じていないルビは動かさない -1 のまま substring すると前走査で例外になり変換全体が止まる
+			int rubyEnd = -1;
 			if (chukiTagEnd < line.length() && buf.charAt(chukiTagEnd+chOffset) == '《') {
-				int rubyEnd = buf.indexOf("》", chukiTagEnd+chOffset+2);
+				rubyEnd = findRubyEnd(buf, chukiTagEnd+chOffset+1);
+			}
+			if (rubyEnd != -1) {
 				String ruby = buf.substring(chukiTagEnd+chOffset, rubyEnd+1);
 				buf.delete(chukiTagEnd+chOffset, rubyEnd+1);
 				buf.insert(chukiTagStart+chOffset, ruby);
@@ -1882,6 +1886,23 @@ public class AozoraEpub3Converter
 		//置換後文字列を返却
 		return buf.toString();
 	}
+	/** from 以降で最初のエスケープされていない》の位置 閉じていなければ -1
+	 * ※》 はエスケープ済みの文字なのでルビの終わりではない。
+	 * 途中で次のルビの《に出会ったら、このルビは閉じていない（読みの中に別のルビは入らない。
+	 * 先へ進むと後ろのルビの》を拾い、別のルビや注記ごと動かしてしまう）。
+	 * 読みの中の注記（外字変換で入る［＃小書き］など）は特別扱いしない。
+	 * ［＃で打ち切ると小書き入りの閉じたルビを動かさなくなり、飛ばすとほかの注記を巻き込んだ */
+	static int findRubyEnd(StringBuilder buf, int from)
+	{
+		for (int i=Math.max(from, 0); i<buf.length(); i++) {
+			char c = buf.charAt(i);
+			if (CharUtils.isEscapedChar(buf, i)) continue;
+			if (c == '》') return i;
+			if (c == '《') return -1;
+		}
+		return -1;
+	}
+	
 	/** 前方参照注記の前タグ挿入位置を取得 */
 	private int getTargetStart(StringBuilder buf, int chukiTagStart, int chOffset, int targetLength)
 	{
@@ -2780,9 +2801,15 @@ public class AozoraEpub3Converter
 				break;
 			case '《':
 				//エスケープ文字なら処理しない
+				//親文字の無い《はルビにせず文字として出力する
+				//ルビとして開くと、後ろの《や》や｜や行末で《以降が捨てられていた
 				if (!CharUtils.isEscapedChar(ch, i)) {
-					inRuby = true;
-					rubyTopStart = i;
+					if (rubyStart != -1) {
+						inRuby = true;
+						rubyTopStart = i;
+					} else if (!noRuby) {
+						LogAppender.warn(lineNum, "ルビ開始文字無し");
+					}
 				}
 				break;
 			}
@@ -2837,9 +2864,6 @@ public class AozoraEpub3Converter
 								buf.append(rubyEndChuki);
 							}
 						}
-					}
-					if (rubyStart == -1 && !noRuby) {
-						LogAppender.warn(lineNum, "ルビ開始文字無し");
 					}
 					inRuby = false;
 					rubyStart = -1;
