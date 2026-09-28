@@ -225,6 +225,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 		assertTrue(bookInfo.isLongMiddleLine(7));
 		assertTrue("改行の注記", bookInfo.isLongMiddleLine(10));
 		assertFalse(bookInfo.isLongMiddleLine(13));
+		assertTrue("brタグの改行", scan("［＃ページの左右中央］", "題<br/>名", "［＃改ページ］").isLongMiddleLine(0));
 	}
 
 	@Test
@@ -294,6 +295,13 @@ public class AozoraEpub3ConverterLongMiddleTest
 				"［＃改ページ］");
 		assertFalse("改ページで閉じる", bookInfo.isLongMiddleLine(3));
 		assertFalse("ここで字下げ…終わり で閉じる", bookInfo.isLongMiddleLine(6));
+		assertFalse("字下げ終わり で閉じる", scan(
+				"［＃ページの左右中央］",
+				"［＃ここから１０字下げ］",
+				"字",
+				"［＃字下げ終わり］",
+				repeat("題", n-5),
+				"［＃改ページ］").isLongMiddleLine(0));
 	}
 
 	@Test
@@ -321,6 +329,22 @@ public class AozoraEpub3ConverterLongMiddleTest
 				"ああ［＃ページの左右中央］" + repeat("い", n-1),
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(2));
+	}
+
+	@Test
+	public void エスケープされた縦線は一字に数える() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+		// ※｜ は表示される｜。removeRuby の後は ※｜ の2字が残り、多めに数える
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				repeat("字", n-2) + "※［＃縦線］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				repeat("字", n-1) + "※［＃縦線］",
+				"［＃改ページ］");
+		assertFalse(bookInfo.isLongMiddleLine(0));
+		assertTrue(bookInfo.isLongMiddleLine(3));
 	}
 
 	@Test

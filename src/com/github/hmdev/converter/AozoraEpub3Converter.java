@@ -713,11 +713,11 @@ public class AozoraEpub3Converter
 			boolean found = m.find();
 			int end = found ? m.start() : noRubyLine.length();
 			if (this.middleCountLine >= 0) {
-				//空白も1字ぶん場所を取る。ルビの開始記号は表示されない。サロゲートペアは1字
+				//空白も1字ぶん場所を取る。サロゲートペアは1字
+				//(ルビの開始の｜は removeRuby で除去済みで、残る｜はエスケープされて表示されるもの。エスケープの※は多めに数える側に倒れる)
 				int chars = 0;
 				for (int i=pos; i<end; i++) {
-					char c = noRubyLine.charAt(i);
-					if (c != '｜' && !Character.isLowSurrogate(c)) chars++;
+					if (!Character.isLowSurrogate(noRubyLine.charAt(i))) chars++;
 				}
 				if (chars > 0) {
 					lineChars += chars;
@@ -743,7 +743,7 @@ public class AozoraEpub3Converter
 				lineChars += indent;
 			} else if (middleIndentOverChukiPattern.matcher(chukiName).find()) {
 				if (this.middleCountLine >= 0) this.middleCountForceTable = true;
-			} else if (chukiName.startsWith("ここで字下げ") && chukiName.endsWith("終わり")) {
+			} else if ((chukiName.startsWith("ここで字下げ") && chukiName.endsWith("終わり")) || chukiName.endsWith("字下げ終わり")) {
 				this.middleBlockIndent = 0;
 			}
 			if (chukiFlagPageBreak.contains(chukiName)) {
@@ -760,8 +760,9 @@ public class AozoraEpub3Converter
 					lineChars = edgeSpaces + this.middleBlockIndent;
 				}
 			} else if (this.middleCountLine >= 0) {
-				//画像注記とimgタグ (chukiPatternはタグにも一致する)
+				//画像注記とimgタグ、brタグの改行 (chukiPatternはタグにも一致する)
 				if (isImageChukiTag(chukiTag)) this.middleCountForceTable = true;
+				if (chukiTag.toLowerCase().startsWith("<br")) this.middleCountForceTable = true;
 				//地付き・字上げ・大きな文字
 				if (chukiTag.startsWith("［＃") && middleTableChukiPattern.matcher(chukiName).find()) this.middleCountForceTable = true;
 			}
