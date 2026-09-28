@@ -1502,7 +1502,7 @@ Content-Length どおりにボディが届かなければ HTTP サーバのス�
 
 `isEscapedChar` の偶奇方式をやめて内部エスケープ文字を分離する「本命」は未着手のまま。
 
-回帰テスト: `test/com/github/hmdev/converter/EscapedSpecialCharTest.java`。
+回帰テスト: `test/com/github/hmdev/converter/AozoraEpub3ConverterEscapedSpecialCharTest.java`。
 
 CLI で実際に変換した結果（mac、JDK 21、`-enc UTF-8`。pre＝master `5ea1c7a`、post＝この修正）:
 

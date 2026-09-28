@@ -16,7 +16,7 @@ import com.github.hmdev.writer.Epub3Writer;
  * 外字の特殊文字（※《》｜＃）は前に※をつけてエスケープし、isEscapedChar は直前の※の偶奇で判定する。
  * 裸の※が前にあると偶奇がずれて、エスケープ済みの『《』をルビ開始と誤判定する。
  */
-public class EscapedSpecialCharTest
+public class AozoraEpub3ConverterEscapedSpecialCharTest
 {
 	AozoraEpub3Converter converter;
 
