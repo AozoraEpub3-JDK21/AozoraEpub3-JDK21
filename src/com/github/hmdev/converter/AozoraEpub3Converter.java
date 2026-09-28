@@ -1398,7 +1398,7 @@ public class AozoraEpub3Converter
 		int chukiStart = 0;
 		
 		//外字が無ければそのまま返却
-		if (!m.find()) return line;
+		if (!m.find()) return escape ? escapeBareKome(line) : line;
 		
 		//変換後の文字列を出力するバッファ
 		StringBuilder buf = new StringBuilder();
@@ -1407,7 +1407,8 @@ public class AozoraEpub3Converter
 			String chuki = m.group();
 			chukiStart = m.start();
 			
-			buf.append(line.substring(begin, chukiStart));
+			String plain = line.substring(begin, chukiStart);
+			buf.append(escape ? escapeBareKome(plain) : plain);
 			
 			//外字はUTF-8に変換してそのまま継続
 			if (chuki.charAt(0) == '※') {
@@ -1512,7 +1513,16 @@ public class AozoraEpub3Converter
 		} while (m.find());
 		
 		//残りの文字をつなげて返却
-		return buf.toString()+line.substring(begin);
+		String rest = line.substring(begin);
+		return buf.toString()+(escape ? escapeBareKome(rest) : rest);
+	}
+
+	/** 外字注記の外に直接書かれた※を※※にエスケープする
+	 * 特殊文字のエスケープは直前の※の偶奇で判定するので(isEscapedChar)、
+	 * 裸の※が混じると後ろのエスケープ済み特殊文字の判定がずれる */
+	static String escapeBareKome(String text)
+	{
+		return text.indexOf('※') == -1 ? text : text.replace("※", "※※");
 	}
 
 	/** 外字を注記表示にフォールバックすべきか
