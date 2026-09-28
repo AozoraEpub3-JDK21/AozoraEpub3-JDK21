@@ -760,9 +760,8 @@ public class AozoraEpub3Converter
 					lineChars = edgeSpaces + this.middleBlockIndent;
 				}
 			} else if (this.middleCountLine >= 0) {
-				//画像注記とimgタグ、brタグの改行 (chukiPatternはタグにも一致する)
-				if (isImageChukiTag(chukiTag)) this.middleCountForceTable = true;
-				if (chukiTag.toLowerCase().startsWith("<br")) this.middleCountForceTable = true;
+				//画像注記と、タグ (chukiPatternはタグにも一致する。img・brは列を足し、対応しないタグは文字のまま出力されるので数えずに表組みに倒す)
+				if (isImageChukiTag(chukiTag) || chukiTag.startsWith("<")) this.middleCountForceTable = true;
 				//地付き・字上げ・大きな文字
 				if (chukiTag.startsWith("［＃") && middleTableChukiPattern.matcher(chukiName).find()) this.middleCountForceTable = true;
 			}
@@ -881,6 +880,8 @@ public class AozoraEpub3Converter
 					if (firstCommentLineNum == -1) firstCommentLineNum = this.lineNum;
 					//コメントブロックに入ったらタイトル著者終了
 					firstCommentStarted = true;
+					//左右中央の節の中で出力されるコメント (区切り線を含む) は数えずに表組みに倒す
+					if (this.commentPrint && this.middleCountLine >= 0) this.middleCountForceTable = true;
 					if (inComment) {
 						//コメント行終了
 						if (commentLineNum > 20) LogAppender.warn(lineNum, "コメントが "+commentLineNum+" 行 ("+(commentLineStart+1)+") -");
@@ -910,8 +911,9 @@ public class AozoraEpub3Converter
 			if (inComment && !this.commentPrint) continue;
 			
 			//左右中央の節の長さを数える
-			//変換せずにそのまま出力するコメントの行は注記を解釈しないので、節の中にあれば表組みに倒す
-			if (inComment && !this.commentConvert) {
+			//出力するコメントの行は、節の中にあれば表組みに倒す。変換するコメントの中の左右中央の注記は節を開く
+			if (inComment) {
+				if (this.commentConvert) this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);
 				if (this.middleCountLine >= 0) this.middleCountForceTable = true;
 			} else {
 				this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);

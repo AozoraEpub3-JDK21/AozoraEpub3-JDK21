@@ -226,6 +226,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 		assertTrue("改行の注記", bookInfo.isLongMiddleLine(10));
 		assertFalse(bookInfo.isLongMiddleLine(13));
 		assertTrue("brタグの改行", scan("［＃ページの左右中央］", "題<br/>名", "［＃改ページ］").isLongMiddleLine(0));
+		assertTrue("文字のまま出力されるタグ", scan("［＃ページの左右中央］", "題<small>名</small>", "［＃改ページ］").isLongMiddleLine(0));
 	}
 
 	@Test
@@ -320,7 +321,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
-	public void 変換せずに出力するコメントのある節は表組みに倒す() throws Exception
+	public void 出力するコメントのある節は表組みに倒す() throws Exception
 	{
 		String[] lines = {
 				"［＃ページの左右中央］",
@@ -335,9 +336,28 @@ public class AozoraEpub3ConverterLongMiddleTest
 		// 変換せずにそのまま出力する設定では、コメントの中の［＃改ページ］は改ページにならず本文が節に入る
 		converter.setCommentPrint(true, false);
 		assertTrue(scan(lines).isLongMiddleLine(0));
-		// 変換して出力する設定では、注記として数える
+		// 変換して出力する設定でも、区切り線ごと出力されるので数えずに表組みに倒す
 		converter.setCommentPrint(true, true);
-		assertFalse(scan(lines).isLongMiddleLine(0));
+		assertTrue(scan(lines).isLongMiddleLine(0));
+		// 変換するコメントの中で始まる左右中央の節も、表組みに倒す
+		converter.setCommentPrint(true, true);
+		assertTrue(scan("本文",
+				"-------------------------------------------------------",
+				"［＃ページの左右中央］",
+				"題",
+				"-------------------------------------------------------",
+				"［＃改ページ］").isLongMiddleLine(2));
+		// 閉じないまま終わるコメントの中で始まる節も
+		assertTrue(scan("本文",
+				"-------------------------------------------------------",
+				"［＃ページの左右中央］",
+				"題").isLongMiddleLine(2));
+		// 中身の無いコメントでも、区切り線が出力される
+		converter.setCommentPrint(true, false);
+		assertTrue(scan("［＃ページの左右中央］", "題",
+				"-------------------------------------------------------",
+				"-------------------------------------------------------",
+				"［＃改ページ］").isLongMiddleLine(0));
 	}
 
 	@Test
