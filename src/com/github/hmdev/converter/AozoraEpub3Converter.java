@@ -670,46 +670,50 @@ public class AozoraEpub3Converter
 		if (chapterLevel > 0) this.forcePageBreakSize = Math.max(this.forcePageBreakSize, chapterSize);
 	}
 	
-	/** タイトルと著作者を取得. 行番号も保存して出力時に変換出力
-	 * 章洗濯用に見出しの行もここで取得
-	 * @param src 青空テキストファイルのReader
-	 * @param imageInfoReader テキスト内の画像ファイル名を格納して返却
-	 * @param titleType 表題種別
-	 * @param coverFileName 表紙ファイル名 nullなら表紙無し ""は先頭ファイル "*"は同じファイル名 */
-	/** 左右中央の節で、これを超える文字のある行数なら1ページに収まらないとみなす */
+	/** 左右中央の節で、これを超える行数 (文字のある行と、その間の空行) なら1ページに収まらないとみなす */
 	static final int MIDDLE_LONG_LINES = 10;
-	/** 左右中央の節で、1行がこれを超える表示文字数なら1列に収まらないとみなす
+	/** 左右中央の節で、1行がこれを超える字数 (表示文字・空白・字下げ) なら1列に収まらないとみなす
 	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ) */
 	static final int MIDDLE_LONG_LINE_CHARS = 20;
+	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない) */
+	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字");
+	/** 字下げ注記 (N字下げ・ここからN字下げ) */
+	final static Pattern middleIndentChukiPattern = Pattern.compile("^(ここから)?([0-9０-９]+)字下げ$");
 	/** 数えている左右中央の注記行 数えていなければ-1 */
 	int middleCountLine = -1;
 	/** 数えている左右中央の節の行数 (文字のある行と、その間の空行) */
 	int middleCountLines = 0;
 	/** 数えている左右中央の節で、文字のある行の後に続いている空行の数 (次に文字のある行が来たら行数に足す) */
 	int middleCountBlankLines = 0;
-	/** 数えている左右中央の節に画像か1列に収まらない行があればtrue (従来の表組みに倒す) */
+	/** 数えている左右中央の節に、画像・1列に収まらない行・表組みに倒す注記があればtrue (従来の表組みに倒す) */
 	boolean middleCountForceTable = false;
+	/** ブロックの字下げ (ここからN字下げ) の字数 */
+	int middleBlockIndent = 0;
 	
 	/** 左右中央の節の長さを1行ぶん数える (getBookInfoの事前走査から呼ぶ)
 	 * 横書きの親の中の縦書きのブロックはページを超えると分割されずに本文が見えなくなり、
 	 * 列の終わりまで届く行があると白紙のページや文字の切れが出るため、
 	 * 行数が多い節と1列に収まらない行のある節は従来の表組みで出力する (監査34)。
-	 * 迷う形 (画像・強制改ページ等) は長い側に数えて従来の表組みに倒す */
+	 * 迷う形 (画像・下寄せ・大きな文字等) は従来の表組みに倒す
+	 * @param edgeSpaces 事前走査で除去した行頭・行末の空白の数 */
 	void countMiddleSection(BookInfo bookInfo, String noRubyLine, int lineNum, int edgeSpaces)
 	{
+		//左右中央の節の外で、注記も無ければ数えるものは無い
+		if (this.middleCountLine < 0 && noRubyLine.indexOf("［＃") < 0) return;
 		Matcher m = chukiPattern.matcher(noRubyLine);
 		int pos = 0;
 		boolean lineCounted = false;
-		//行頭・行末の空白 (事前走査では除去済み) も1字ずつ場所を取る
-		int lineChars = edgeSpaces;
+		//行頭・行末の空白と、ブロックの字下げも1字ずつ場所を取る
+		int lineChars = edgeSpaces + this.middleBlockIndent;
 		while (true) {
 			boolean found = m.find();
 			int end = found ? m.start() : noRubyLine.length();
 			if (this.middleCountLine >= 0) {
+				//空白も1字ぶん場所を取る。ルビの開始記号は表示されない。サロゲートペアは1字
 				int chars = 0;
-				//空白も1字ぶん場所を取る。ルビの開始記号は表示されない
 				for (int i=pos; i<end; i++) {
-					if (noRubyLine.charAt(i) != '｜') chars++;
+					char c = noRubyLine.charAt(i);
+					if (c != '｜' && !Character.isLowSurrogate(c)) chars++;
 				}
 				if (chars > 0) {
 					lineChars += chars;
@@ -726,6 +730,15 @@ public class AozoraEpub3Converter
 			pos = m.end();
 			String chukiTag = m.group();
 			String chukiName = chukiTag.substring(2, chukiTag.length()-1);
+			//字下げ
+			Matcher im = middleIndentChukiPattern.matcher(chukiName);
+			if (im.find()) {
+				int indent = Integer.parseInt(CharUtils.fullToHalf(im.group(2)));
+				if (im.group(1) != null) this.middleBlockIndent = indent;
+				else lineChars += indent;
+			} else if (chukiName.startsWith("ここで字下げ終わり")) {
+				this.middleBlockIndent = 0;
+			}
 			if (chukiFlagPageBreak.contains(chukiName)) {
 				this.endMiddleSection(bookInfo);
 				if (chukiFlagMiddle.contains(chukiName)) {
@@ -733,12 +746,22 @@ public class AozoraEpub3Converter
 					this.middleCountLines = 0;
 					this.middleCountBlankLines = 0;
 					this.middleCountForceTable = false;
+					//同じ行の注記より前の文字は前の節のもの
+					lineCounted = false;
+					lineChars = edgeSpaces + this.middleBlockIndent;
 				}
 			} else if (this.middleCountLine >= 0) {
-				//画像注記 （ファイル名.拡張子） と imgタグ (chukiPatternはタグにも一致する)
+				//画像注記 （ファイル名.拡張子）: 訓点送り仮名 （…） と区別するため、. が （ と ） の間にあるもの
 				int imageStartIdx = chukiTag.lastIndexOf('（');
-				if (imageStartIdx > -1 && chukiTag.indexOf('.', imageStartIdx) > -1) this.middleCountForceTable = true;
+				if (imageStartIdx > -1) {
+					int imageEndIdx = chukiTag.indexOf("）", imageStartIdx);
+					int imageDotIdx = chukiTag.indexOf('.', imageStartIdx);
+					if (imageDotIdx > -1 && imageDotIdx < imageEndIdx) this.middleCountForceTable = true;
+				}
+				//imgタグ (chukiPatternはタグにも一致する)
 				if (chukiTag.toLowerCase().startsWith("<img")) this.middleCountForceTable = true;
+				//地付き・字上げ・大きな文字
+				if (chukiTag.startsWith("［＃") && middleTableChukiPattern.matcher(chukiName).find()) this.middleCountForceTable = true;
 			}
 		}
 	}
@@ -757,6 +780,12 @@ public class AozoraEpub3Converter
 		this.middleCountLine = -1;
 	}
 	
+	/** タイトルと著作者を取得. 行番号も保存して出力時に変換出力
+	 * 章洗濯用に見出しの行もここで取得
+	 * @param src 青空テキストファイルのReader
+	 * @param imageInfoReader テキスト内の画像ファイル名を格納して返却
+	 * @param titleType 表題種別
+	 * @param coverFileName 表紙ファイル名 nullなら表紙無し ""は先頭ファイル "*"は同じファイル名 */
 	public BookInfo getBookInfo(File srcFile, BufferedReader src, ImageInfoReader imageInfoReader, TitleType titleType, boolean pubFirst) throws Exception
 	{
 		try {
@@ -804,6 +833,7 @@ public class AozoraEpub3Converter
 		
 		//左右中央の節の長さ
 		this.middleCountLine = -1;
+		this.middleBlockIndent = 0;
 		
 		//最後まで回す
 		while ((line = src.readLine()) != null) {

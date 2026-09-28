@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-## 縦書きの左右中央は、横書きの親の中に縦書きのブロックを置く
-## Kindle 向けと、1ページに収まらない長い節 (MiddleTable) は従来の表組み
-#set ($hltrPage = false)
-#if (${bookInfo.Vertical} && !${kindle} && !${sectionInfo.ImagePage} && ${sectionInfo.Middle} && !${sectionInfo.MiddleTable})
-#set ($hltrPage = true)
-#end
-#if (${hltrPage})
+## 縦書きの短い左右中央は、横書きの親の中に縦書きのブロックを置く (条件は Epub3Writer.startSection で決める)
+#if (${sectionInfo.Hltr})
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja" class="hltr">
 #else
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
@@ -58,7 +53,7 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 #else
 <body>
 #end
-#if (${hltrPage})
+#if (${sectionInfo.Hltr})
 <div class="vrtl middle">
 #else
 #if (${sectionInfo.Middle})

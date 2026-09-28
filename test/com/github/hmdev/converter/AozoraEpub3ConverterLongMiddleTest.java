@@ -103,9 +103,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 		// ルビ・注記を数えると境目を超える量。表示される文字は境目ちょうど
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
-				"［＃ここから５字下げ］",
 				repeat("漢《かんじ》", half) + repeat("｜字《じ》［＃「字」に傍点］", half),
-				"［＃ここで字下げ終わり］",
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(0));
 	}
@@ -152,6 +150,93 @@ public class AozoraEpub3ConverterLongMiddleTest
 		edges[i++] = "［＃改ページ］";
 		edges[i++] = "本文";
 		assertFalse("前後の空行は出力されない", scan(java.util.Arrays.copyOf(edges, i)).isLongMiddleLine(0));
+	}
+
+	@Test
+	public void 字下げの字数も数える() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"［＃３字下げ］［＃大見出し］" + repeat("章", n-3) + "［＃大見出し終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃３字下げ］［＃大見出し］" + repeat("章", n-2) + "［＃大見出し終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃ここから１０字下げ］",
+				repeat("字", n-10),
+				"［＃ここで字下げ終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃ここから１０字下げ］",
+				repeat("字", n-9),
+				"［＃ここで字下げ終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				repeat("字", n),
+				"［＃改ページ］");
+		assertFalse(bookInfo.isLongMiddleLine(0));
+		assertTrue(bookInfo.isLongMiddleLine(3));
+		assertFalse(bookInfo.isLongMiddleLine(6));
+		assertTrue(bookInfo.isLongMiddleLine(11));
+		assertFalse("字下げの終わりの後は数えない", bookInfo.isLongMiddleLine(16));
+	}
+
+	@Test
+	public void 下寄せと大きな文字のある節は表組みに倒す() throws Exception
+	{
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"献辞",
+				"［＃地付き］名前",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃地から２字上げ］名前",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"［＃２段階大きな文字］題［＃大きな文字終わり］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"題",
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertTrue(bookInfo.isLongMiddleLine(4));
+		assertTrue(bookInfo.isLongMiddleLine(7));
+		assertFalse(bookInfo.isLongMiddleLine(10));
+	}
+
+	@Test
+	public void 行の途中で始まる節は前の文字を数えない() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"題",
+				"ああ［＃ページの左右中央］" + repeat("い", n-1),
+				"［＃改ページ］");
+		assertFalse(bookInfo.isLongMiddleLine(2));
+	}
+
+	@Test
+	public void サロゲートペアは一字に数える() throws Exception
+	{
+		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				repeat("𠮟", n),
+				"［＃改ページ］");
+		assertFalse(bookInfo.isLongMiddleLine(0));
+	}
+
+	@Test
+	public void 括弧の後ろに点のある注記は画像とみなさない() throws Exception
+	{
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"題［＃（注）. ］",
+				"［＃改ページ］");
+		assertFalse(bookInfo.isLongMiddleLine(0));
 	}
 
 	@Test
