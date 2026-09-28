@@ -21,7 +21,8 @@ import com.github.hmdev.writer.Epub3Writer;
 /**
  * 監査項目34: 縦書きの左右中央の節は横書きの親の中に縦書きのブロックを置いて出力するが、
  * そのブロックはページを超えると分割されず、はみ出した本文がページ送りで見えなくなる。
- * 1ページに収まらない長い節は事前走査で数えて、従来の表組み（PAGE_MIDDLE_TABLE）で出力する。
+ * 行数が多い節と、1列に収まらない行のある節（列の終わりまで届くと Books は白紙のページを足し、
+ * Thorium は列の終わりの文字を切る）は事前走査で数えて、従来の表組み（PAGE_MIDDLE_TABLE）で出力する。
  */
 public class AozoraEpub3ConverterLongMiddleTest
 {
@@ -65,14 +66,14 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
-	public void 文字数の境目() throws Exception
+	public void 一行の文字数の境目() throws Exception
 	{
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
-				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_CHARS),
+				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS),
 				"［＃改ページ］",
 				"［＃ページの左右中央］",
-				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_CHARS+1),
+				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1),
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(0));
 		assertTrue(bookInfo.isLongMiddleLine(3));
@@ -98,13 +99,12 @@ public class AozoraEpub3ConverterLongMiddleTest
 	@Test
 	public void 注記とルビと空白は数えない() throws Exception
 	{
-		int half = AozoraEpub3Converter.MIDDLE_LONG_CHARS / 2;
+		int half = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS / 2;
 		// ルビ・注記・空白を数えると境目を超える量。表示される文字は境目ちょうど
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
 				"［＃ここから５字下げ］",
-				repeat("漢《かんじ》", half),
-				repeat("　字［＃「字」に傍点］", half),
+				repeat("漢《かんじ》", half) + repeat("　字［＃「字」に傍点］", half),
 				"［＃ここで字下げ終わり］",
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(0));
@@ -114,7 +114,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 	public void 注記の後ろの同じ行の本文も数える() throws Exception
 	{
 		BookInfo bookInfo = scan(
-				"［＃ページの左右中央］" + repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_CHARS+1),
+				"［＃ページの左右中央］" + repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1),
 				"［＃改ページ］");
 		assertTrue(bookInfo.isLongMiddleLine(0));
 	}
@@ -124,8 +124,20 @@ public class AozoraEpub3ConverterLongMiddleTest
 	{
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
-				"題" + "［＃改ページ］" + repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_CHARS+1));
+				"題" + "［＃改ページ］" + repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1));
 		assertFalse(bookInfo.isLongMiddleLine(0));
+	}
+
+	@Test
+	public void 短い行は注記をまたいで一行に数える() throws Exception
+	{
+		int half = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS / 2;
+		// 注記で区切られていても同じ行なら1列に並ぶ
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				repeat("あ", half) + "［＃傍点］" + repeat("い", half+1) + "［＃傍点終わり］",
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(0));
 	}
 
 	@Test
@@ -147,7 +159,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 	{
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
-				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_CHARS+1));
+				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1));
 		assertTrue(bookInfo.isLongMiddleLine(0));
 	}
 
@@ -158,7 +170,7 @@ public class AozoraEpub3ConverterLongMiddleTest
 				"［＃ページの左右中央］",
 				"題",
 				"［＃ページの左右中央］",
-				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_CHARS+1),
+				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1),
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(0));
 		assertTrue(bookInfo.isLongMiddleLine(2));

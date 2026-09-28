@@ -676,28 +676,29 @@ public class AozoraEpub3Converter
 	 * @param imageInfoReader テキスト内の画像ファイル名を格納して返却
 	 * @param titleType 表題種別
 	 * @param coverFileName 表紙ファイル名 nullなら表紙無し ""は先頭ファイル "*"は同じファイル名 */
-	/** 左右中央の節で、これを超える表示文字数なら1ページに収まらないとみなす */
-	static final int MIDDLE_LONG_CHARS = 300;
 	/** 左右中央の節で、これを超える文字のある行数なら1ページに収まらないとみなす */
 	static final int MIDDLE_LONG_LINES = 10;
+	/** 左右中央の節で、1行がこれを超える表示文字数なら1列に収まらないとみなす
+	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ) */
+	static final int MIDDLE_LONG_LINE_CHARS = 20;
 	/** 数えている左右中央の注記行 数えていなければ-1 */
 	int middleCountLine = -1;
-	/** 数えている左右中央の節の表示文字数 */
-	int middleCountChars = 0;
 	/** 数えている左右中央の節の文字のある行数 */
 	int middleCountLines = 0;
-	/** 数えている左右中央の節に画像があればtrue */
-	boolean middleCountImage = false;
+	/** 数えている左右中央の節に画像か1列に収まらない行があればtrue (従来の表組みに倒す) */
+	boolean middleCountForceTable = false;
 	
 	/** 左右中央の節の長さを1行ぶん数える (getBookInfoの事前走査から呼ぶ)
-	 * 横書きの親の中の縦書きのブロックはページを超えると分割されずに本文が見えなくなるため、
-	 * 1ページに収まらない節は従来の表組みで出力する (監査34)。
+	 * 横書きの親の中の縦書きのブロックはページを超えると分割されずに本文が見えなくなり、
+	 * 列の終わりまで届く行があると白紙のページや文字の切れが出るため、
+	 * 行数が多い節と1列に収まらない行のある節は従来の表組みで出力する (監査34)。
 	 * 迷う形 (画像・強制改ページ等) は長い側に数えて従来の表組みに倒す */
 	void countMiddleSection(BookInfo bookInfo, String noRubyLine, int lineNum)
 	{
 		Matcher m = chukiPattern.matcher(noRubyLine);
 		int pos = 0;
 		boolean lineCounted = false;
+		int lineChars = 0;
 		while (true) {
 			boolean found = m.find();
 			int end = found ? m.start() : noRubyLine.length();
@@ -708,7 +709,8 @@ public class AozoraEpub3Converter
 					if (c != ' ' && c != '　' && c != '\t' && c != '｜') chars++;
 				}
 				if (chars > 0) {
-					this.middleCountChars += chars;
+					lineChars += chars;
+					if (lineChars > MIDDLE_LONG_LINE_CHARS) this.middleCountForceTable = true;
 					if (!lineCounted) { this.middleCountLines++; lineCounted = true; }
 				}
 			}
@@ -720,15 +722,14 @@ public class AozoraEpub3Converter
 				this.endMiddleSection(bookInfo);
 				if (chukiFlagMiddle.contains(chukiName)) {
 					this.middleCountLine = lineNum;
-					this.middleCountChars = 0;
 					this.middleCountLines = 0;
-					this.middleCountImage = false;
+					this.middleCountForceTable = false;
 				}
 			} else if (this.middleCountLine >= 0) {
 				//画像注記 （ファイル名.拡張子） と imgタグ (chukiPatternはタグにも一致する)
 				int imageStartIdx = chukiTag.lastIndexOf('（');
-				if (imageStartIdx > -1 && chukiTag.indexOf('.', imageStartIdx) > -1) this.middleCountImage = true;
-				if (chukiTag.toLowerCase().startsWith("<img")) this.middleCountImage = true;
+				if (imageStartIdx > -1 && chukiTag.indexOf('.', imageStartIdx) > -1) this.middleCountForceTable = true;
+				if (chukiTag.toLowerCase().startsWith("<img")) this.middleCountForceTable = true;
 			}
 		}
 	}
@@ -736,7 +737,7 @@ public class AozoraEpub3Converter
 	void endMiddleSection(BookInfo bookInfo)
 	{
 		if (this.middleCountLine < 0) return;
-		if (this.middleCountChars > MIDDLE_LONG_CHARS || this.middleCountLines > MIDDLE_LONG_LINES || this.middleCountImage) {
+		if (this.middleCountLines > MIDDLE_LONG_LINES || this.middleCountForceTable) {
 			bookInfo.addLongMiddleLine(this.middleCountLine);
 		}
 		this.middleCountLine = -1;

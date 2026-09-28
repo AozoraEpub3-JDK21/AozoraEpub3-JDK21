@@ -77,24 +77,16 @@ body.kindle table.middle td {
 height: auto;
 }
 
-/* 左右中央（Kindle 以外・1ページに収まる節）: 横書きの親の中に縦書きのブロックを置く。
+/* 章の中扉など、1ページに収まる左右中央の節（Kindle 以外）: 横書きの親の中に縦書きのブロックを置く。
    縦書きの表は width:100% が効かずに中身の幅へ縮み、ページ右端に寄るリーダーがある（監査 34）。
-   高さをページに揃えるので、長い題は折り返し、下寄せ（地付き）も効く */
+   ブロックに高さ（100% や 100vh）や上の余白を付けると、Apple Books はページの後に白紙を入れ、
+   Thorium は列の終わりの文字を切るので、どちらも付けない（下寄せ・地付きは効かない） */
 html.hltr {
-height: 100%;
-margin: 0;
 writing-mode: horizontal-tb;
 -webkit-writing-mode: horizontal-tb;
 -epub-writing-mode: horizontal-tb;
 }
-html.hltr body {
-height: 100%;
-margin: 0;
-box-sizing: border-box;
-padding-top: 5em;
-}
 html.hltr div.vrtl {
-height: 100%;
 margin: 0 auto;
 writing-mode: vertical-rl;
 -webkit-writing-mode: vertical-rl;
