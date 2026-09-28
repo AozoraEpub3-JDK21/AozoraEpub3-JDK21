@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-## 縦書きの左右中央・ページ左は、横書きの親の中に縦書きのブロックを置く (Kindle 向けは従来の表)
+## 縦書きの左右中央は、横書きの親の中に縦書きのブロックを置く
+## Kindle 向けと、1ページに収まらない長い節 (MiddleTable) は従来の表組み
 #set ($hltrPage = false)
-#if (${bookInfo.Vertical} && !${kindle} && !${sectionInfo.ImagePage} && (${sectionInfo.Middle} || ${sectionInfo.Bottom}))
+#if (${bookInfo.Vertical} && !${kindle} && !${sectionInfo.ImagePage} && ${sectionInfo.Middle} && !${sectionInfo.MiddleTable})
 #set ($hltrPage = true)
 #end
 #if (${hltrPage})
@@ -58,11 +59,7 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 <body>
 #end
 #if (${hltrPage})
-#if (${sectionInfo.Middle})
 <div class="vrtl middle">
-#else
-<div class="vrtl bottom">
-#end
 #else
 #if (${sectionInfo.Middle})
 #if (${kindle})

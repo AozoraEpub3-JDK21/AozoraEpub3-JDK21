@@ -26,6 +26,9 @@ public class SectionInfo
 	/** ページ左右中央ならtrue */
 	public boolean isMiddle = false;
 	
+	/** ページ左右中央で、長い節なので従来の表組みで出力するならtrue */
+	public boolean isMiddleTable = false;
+	
 	/** ページ左ならtrue */
 	public boolean isBottom = false;
 	
@@ -102,6 +105,15 @@ public class SectionInfo
 		this.isMiddle = isMiddle;
 	}
 
+	public boolean isMiddleTable()
+	{
+		return isMiddleTable;
+	}
+	public void setMiddleTable(boolean isMiddleTable)
+	{
+		this.isMiddleTable = isMiddleTable;
+	}
+	
 	public boolean isBottom()
 	{
 		return isBottom;

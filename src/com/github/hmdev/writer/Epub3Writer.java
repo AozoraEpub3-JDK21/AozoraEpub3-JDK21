@@ -1344,6 +1344,7 @@ public class Epub3Writer
 			break;
 		}
 		if (pageType == PageBreakType.PAGE_MIDDLE) sectionInfo.setMiddle(true);
+		else if (pageType == PageBreakType.PAGE_MIDDLE_TABLE) { sectionInfo.setMiddle(true); sectionInfo.setMiddleTable(true); }
 		else if (pageType == PageBreakType.PAGE_BOTTOM) sectionInfo.setBottom(true);
 		this.sectionInfos.add(sectionInfo);
 		//セクション開始は名称がnullなので改ページ処理で文字列が設定されなければ出力されない 階層レベルは1
