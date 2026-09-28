@@ -141,6 +141,23 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
+	public void 長い節の判定は次の節に持ち越さない() throws Exception
+	{
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1),
+				"［＃ページの左右中央］",
+				"［＃挿絵（fig01.png）入る］",
+				"［＃改ページ］",
+				"［＃ページの左右中央］",
+				"題",
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertTrue(bookInfo.isLongMiddleLine(2));
+		assertFalse(bookInfo.isLongMiddleLine(5));
+	}
+
+	@Test
 	public void 画像のある節は長い側に倒す() throws Exception
 	{
 		BookInfo bookInfo = scan(
