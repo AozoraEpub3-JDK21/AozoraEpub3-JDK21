@@ -320,6 +320,27 @@ public class AozoraEpub3ConverterLongMiddleTest
 	}
 
 	@Test
+	public void 変換せずに出力するコメントのある節は表組みに倒す() throws Exception
+	{
+		String[] lines = {
+				"［＃ページの左右中央］",
+				"題",
+				"-------------------------------------------------------",
+				"［＃改ページ］",
+				"コメントの本文",
+				"-------------------------------------------------------",
+				"［＃改ページ］"};
+		// コメントを出力しない設定では、コメントは節に入らない
+		assertFalse(scan(lines).isLongMiddleLine(0));
+		// 変換せずにそのまま出力する設定では、コメントの中の［＃改ページ］は改ページにならず本文が節に入る
+		converter.setCommentPrint(true, false);
+		assertTrue(scan(lines).isLongMiddleLine(0));
+		// 変換して出力する設定では、注記として数える
+		converter.setCommentPrint(true, true);
+		assertFalse(scan(lines).isLongMiddleLine(0));
+	}
+
+	@Test
 	public void 行の途中で始まる節は前の文字を数えない() throws Exception
 	{
 		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;

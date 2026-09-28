@@ -910,7 +910,12 @@ public class AozoraEpub3Converter
 			if (inComment && !this.commentPrint) continue;
 			
 			//左右中央の節の長さを数える
-			this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);
+			//変換せずにそのまま出力するコメントの行は注記を解釈しないので、節の中にあれば表組みに倒す
+			if (inComment && !this.commentConvert) {
+				if (this.middleCountLine >= 0) this.middleCountForceTable = true;
+			} else {
+				this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);
+			}
 			
 			//2行前が改ページと画像の行かをチェックして行番号をbookInfoに保存
 			if (!noIllust) this.checkImageOnly(bookInfo, preLines, noRubyLine, this.lineNum);
