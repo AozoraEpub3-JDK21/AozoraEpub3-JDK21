@@ -1359,6 +1359,17 @@ public class AozoraEpub3Converter
 	{
 		return convertGaijiChuki(line, escape, true);
 	}
+	/** 外字が1文字の特殊文字（※《》｜＃）なら前に※をつけて文字出力時に例外処理
+	 * U+のコードのみの注記も含めすべての外字変換で通すこと。
+	 * 抜けると裸の特殊文字が残り、isEscapedCharの※の偶奇がずれてルビ判定が狂う */
+	static void appendGaijiEscape(StringBuilder buf, String gaiji)
+	{
+		if (gaiji.length() != 1) return;
+		switch (gaiji.charAt(0)) {
+		case '※': case '》': case '《': case '｜': case '＃':
+			buf.append('※');
+		}
+	}
 	public String convertGaijiChuki(String line, boolean escape, boolean logged)
 	{
 		/*
@@ -1410,6 +1421,7 @@ public class AozoraEpub3Converter
 							if (logged) LogAppender.info(lineNum, "外字を注記表示", chuki);
 							buf.append(this.gaijiFallbackString(chukiInner, hasInnerChuki(line, m.start())));
 						} else {
+							if (escape) appendGaijiEscape(buf, gaiji);
 							buf.append(gaiji);
 						}
 						begin = chukiStart+chuki.length();
@@ -1455,16 +1467,7 @@ public class AozoraEpub3Converter
 				//外字注記変換をログに出力
 				if (gaiji != null) {
 					//if (logged) LogAppender.info(lineNum, "外字注記", chuki+" → U+"+Integer.toHexString(AozoraGaijiConverter.toUtfCode(gaiji)));
-					if (gaiji.length() == 1 && escape) {
-						//特殊文字は 前に※をつけて文字出力時に例外処理
-						switch (gaiji.charAt(0)) {
-						case '※': buf.append('※'); break;
-						case '》': buf.append('※'); break;
-						case '《': buf.append('※'); break;
-						case '｜': buf.append('※'); break;
-						case '＃': buf.append('※'); break;
-						}
-					}
+					if (escape) appendGaijiEscape(buf, gaiji);
 					buf.append(gaiji);
 					begin = chukiStart+chuki.length();
 					continue;
@@ -2870,6 +2873,10 @@ public class AozoraEpub3Converter
 		if (rubyStart != -1) {
 			// ルビ開始チェック中で漢字以外ならキャンセルして出力
 			convertTcyText(buf, ch, rubyStart, end, noTcyAtRubyStart);
+		} else if (inRuby && rubyTopStart != -1) {
+			// 『《』をルビ開始と判定したまま閉じずに行末に来たら、『《』以降を捨てずに出力
+			// 裸の※が前にあると※の偶奇がずれて、エスケープ済みの『《』でもここに来る
+			convertTcyText(buf, ch, rubyTopStart, end, noTcy);
 		}
 		
 		return buf;
