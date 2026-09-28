@@ -1,4 +1,6 @@
-#if (${sectionInfo.Middle} || ${sectionInfo.bottom})
+#if (${sectionInfo.Hltr})
+</div>
+#elseif (${sectionInfo.Middle} || ${sectionInfo.bottom})
 </td></tr></table>
 #if (${kindle})
 </div></div>

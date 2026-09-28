@@ -26,6 +26,13 @@ public class SectionInfo
 	/** ページ左右中央ならtrue */
 	public boolean isMiddle = false;
 	
+	/** ページ左右中央で、長い節なので従来の表組みで出力するならtrue */
+	public boolean isMiddleTable = false;
+	
+	/** ページ左右中央を、横書きの親 (html.hltr) の中に縦書きのブロックを置いて出力するならtrue
+	 * (縦書き・Kindle以外・短い節。xhtml_header.vm と xhtml_footer.vm はこれだけを見る) */
+	public boolean isHltr = false;
+	
 	/** ページ左ならtrue */
 	public boolean isBottom = false;
 	
@@ -102,6 +109,24 @@ public class SectionInfo
 		this.isMiddle = isMiddle;
 	}
 
+	public boolean isMiddleTable()
+	{
+		return isMiddleTable;
+	}
+	public void setMiddleTable(boolean isMiddleTable)
+	{
+		this.isMiddleTable = isMiddleTable;
+	}
+	
+	public boolean isHltr()
+	{
+		return isHltr;
+	}
+	public void setHltr(boolean isHltr)
+	{
+		this.isHltr = isHltr;
+	}
+	
 	public boolean isBottom()
 	{
 		return isBottom;

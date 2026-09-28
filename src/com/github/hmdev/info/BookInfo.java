@@ -173,6 +173,8 @@ public class BookInfo
 	HashSet<Integer> mapPageBreakLine;
 	/** 改ページしない行 (［＃ページの左右中央］の前の［＃改ページ］) */
 	HashSet<Integer> mapNoPageBreakLine;
+	/** 1ページに収まらない長い左右中央の節の注記行 (従来の表組みで出力する) */
+	HashSet<Integer> mapLongMiddleLine;
 	/** 出力ページしない行 (左右中央後の空行と改ページ前の空行) */
 	HashSet<Integer> mapIgnoreLine;
 	/** 見出し行の情報 */
@@ -190,6 +192,7 @@ public class BookInfo
 		if (this.mapImageSectionLine != null) this.mapImageSectionLine.clear();
 		if (this.mapPageBreakLine != null) this.mapPageBreakLine.clear();
 		if (this.mapNoPageBreakLine != null) this.mapNoPageBreakLine.clear();
+		if (this.mapLongMiddleLine != null) this.mapLongMiddleLine.clear();
 		if (this.mapIgnoreLine != null) this.mapIgnoreLine.clear();
 	}
 	
@@ -244,6 +247,19 @@ public class BookInfo
 	{
 		if (this.mapNoPageBreakLine == null) return false;
 		return this.mapNoPageBreakLine.contains(lineNum);
+	}
+	
+	/** 長い左右中央の節の注記行を保存 */
+	public void addLongMiddleLine(int lineNum)
+	{
+		if (this.mapLongMiddleLine == null) this.mapLongMiddleLine = new HashSet<Integer>();
+		this.mapLongMiddleLine.add(lineNum);
+	}
+	/** 長い左右中央の節の注記行ならtrue */
+	public boolean isLongMiddleLine(int lineNum)
+	{
+		if (this.mapLongMiddleLine == null) return false;
+		return this.mapLongMiddleLine.contains(lineNum);
 	}
 	
 	/** 出力しない行数を保存 */

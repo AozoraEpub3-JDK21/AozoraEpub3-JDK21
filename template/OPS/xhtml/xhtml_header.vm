@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
+## 縦書きの短い左右中央は、横書きの親の中に縦書きのブロックを置く (条件は Epub3Writer.startSection で決める)
+#if (${sectionInfo.Hltr})
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja" class="hltr">
+#else
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
+#end
 <head>
 #if (${kindle} && ${bookInfo.ImageOnly})
 	<link rel="stylesheet" type="text/css" href="../css/kindle_image.css"/>
@@ -48,6 +53,9 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 #else
 <body>
 #end
+#if (${sectionInfo.Hltr})
+<div class="vrtl middle">
+#else
 #if (${sectionInfo.Middle})
 #if (${kindle})
 <div class="kindle_outer"><div class="kindle_inner">
@@ -59,4 +67,5 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 <div class="kindle_outer bottom"><div class="kindle_inner">
 #end
 <table class="bottom"><tr><td>
+#end
 #end

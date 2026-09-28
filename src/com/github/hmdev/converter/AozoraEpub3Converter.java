@@ -294,6 +294,8 @@ public class AozoraEpub3Converter
 	final static PageBreakType pageBreakMiddle = new PageBreakType(true, PageBreakType.PAGE_MIDDLE, PageBreakType.IMAGE_PAGE_NONE);
 	/** 改ページ左 */
 	final static PageBreakType pageBreakBottom = new PageBreakType(true, PageBreakType.PAGE_BOTTOM, PageBreakType.IMAGE_PAGE_NONE);
+	/** 左右中央 (長い節なので従来の表組み) */
+	final static PageBreakType pageBreakMiddleTable = new PageBreakType(true, PageBreakType.PAGE_MIDDLE_TABLE, PageBreakType.IMAGE_PAGE_NONE);
 	/** 改ページ画像単一ページ サイズに応じて自動調整 */
 	final static PageBreakType pageBreakImageAuto = new PageBreakType(true, 0, PageBreakType.IMAGE_PAGE_AUTO);
 	/** 改ページ画像単一ページ 幅100% */
@@ -668,6 +670,140 @@ public class AozoraEpub3Converter
 		if (chapterLevel > 0) this.forcePageBreakSize = Math.max(this.forcePageBreakSize, chapterSize);
 	}
 	
+	/** 左右中央の節で、これを超える行数 (文字のある行と、その間の空行) なら1ページに収まらないとみなす */
+	static final int MIDDLE_LONG_LINES = 10;
+	/** 左右中央の節で、1行がこれを超える字数 (表示文字・空白・字下げ) なら1列に収まらないとみなす
+	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ) */
+	static final int MIDDLE_LONG_LINE_CHARS = 20;
+	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない、改行は列の数が読めない) */
+	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字|^改行$|字詰め|折り返して");
+	/** 字下げ注記 (N字下げ・ここからN字下げ・ここからN字下げ、…) の字数。桁が多すぎるものは数えずに表組みに倒す */
+	final static Pattern middleIndentChukiPattern = Pattern.compile("^(ここから)?([０-９]{1,3})字下げ");
+	/** 字下げ注記で字数が読めないもの (桁が多い・半角) */
+	final static Pattern middleIndentOverChukiPattern = Pattern.compile("^(ここから)?[0-9０-９]+字下げ");
+	/** 数えている左右中央の注記行 数えていなければ-1 */
+	int middleCountLine = -1;
+	/** 数えている左右中央の節の行数 (文字のある行と、その間の空行) */
+	int middleCountLines = 0;
+	/** 数えている左右中央の節で、文字のある行の後に続いている空行の数 (次に文字のある行が来たら行数に足す) */
+	int middleCountBlankLines = 0;
+	/** 数えている左右中央の節に、画像・1列に収まらない行・表組みに倒す注記があればtrue (従来の表組みに倒す) */
+	boolean middleCountForceTable = false;
+	/** ブロックの字下げ (ここからN字下げ) の字数 */
+	int middleBlockIndent = 0;
+	/** 改ページで閉じた短い左右中央の節の {注記行, 改ページの行}。改ページの次が画像単ページなら表紙で改ページが省かれることがあるので、走査の後で確かめる */
+	ArrayList<int[]> middleClosedByPageBreak = new ArrayList<int[]>();
+	
+	/** 左右中央の節の長さを1行ぶん数える (getBookInfoの事前走査から呼ぶ)
+	 * 横書きの親の中の縦書きのブロックはページを超えると分割されずに本文が見えなくなり、
+	 * 列の終わりまで届く行があると白紙のページや文字の切れが出るため、
+	 * 行数が多い節と1列に収まらない行のある節は従来の表組みで出力する (監査34)。
+	 * 迷う形 (画像・下寄せ・大きな文字等) は従来の表組みに倒す
+	 * @param edgeSpaces 事前走査で除去した行頭・行末の空白の数 */
+	void countMiddleSection(BookInfo bookInfo, String noRubyLine, int lineNum, int edgeSpaces)
+	{
+		//左右中央の節の外で、注記も無ければ数えるものは無い
+		if (this.middleCountLine < 0 && noRubyLine.indexOf("［＃") < 0) return;
+		Matcher m = chukiPattern.matcher(noRubyLine);
+		int pos = 0;
+		boolean lineCounted = false;
+		//行頭・行末の空白と、ブロックの字下げも1字ずつ場所を取る
+		int lineChars = edgeSpaces + this.middleBlockIndent;
+		while (true) {
+			boolean found = m.find();
+			int end = found ? m.start() : noRubyLine.length();
+			if (this.middleCountLine >= 0) {
+				//空白も1字ぶん場所を取る。サロゲートペアは1字
+				//(ルビの開始の｜は removeRuby で除去済みで、残る｜はエスケープされて表示されるもの。エスケープの※は多めに数える側に倒れる)
+				int chars = 0;
+				for (int i=pos; i<end; i++) {
+					if (!Character.isLowSurrogate(noRubyLine.charAt(i))) chars++;
+				}
+				if (chars > 0) {
+					lineChars += chars;
+					if (lineChars > MIDDLE_LONG_LINE_CHARS) this.middleCountForceTable = true;
+					if (!lineCounted) {
+						//間の空行も1列ずつ場所を取る
+						this.middleCountLines += this.middleCountBlankLines + 1;
+						this.middleCountBlankLines = 0;
+						lineCounted = true;
+					}
+				}
+			}
+			if (!found) break;
+			pos = m.end();
+			String chukiTag = m.group();
+			String chukiName = chukiTag.substring(2, chukiTag.length()-1);
+			//字下げ
+			Matcher im = middleIndentChukiPattern.matcher(chukiName);
+			if (im.find()) {
+				int indent = Integer.parseInt(CharUtils.fullToHalf(im.group(2)));
+				//ここからN字下げ は同じ行の後ろの文字にも効く
+				if (im.group(1) != null) this.middleBlockIndent = indent;
+				lineChars += indent;
+			} else if (middleIndentOverChukiPattern.matcher(chukiName).find()) {
+				if (this.middleCountLine >= 0) this.middleCountForceTable = true;
+			} else if ((chukiName.startsWith("ここで字下げ") && chukiName.endsWith("終わり")) || chukiName.endsWith("字下げ終わり")) {
+				this.middleBlockIndent = 0;
+			}
+			if (chukiFlagPageBreak.contains(chukiName)) {
+				//変換時は改ページで字下げを閉じる
+				this.middleBlockIndent = 0;
+				this.endMiddleSection(bookInfo, chukiFlagMiddle.contains(chukiName) ? -1 : lineNum);
+				if (chukiFlagMiddle.contains(chukiName)) {
+					this.middleCountLine = lineNum;
+					this.middleCountLines = 0;
+					this.middleCountBlankLines = 0;
+					this.middleCountForceTable = false;
+					//同じ行の注記より前の文字は前の節のもの
+					lineCounted = false;
+					lineChars = edgeSpaces + this.middleBlockIndent;
+				}
+			} else if (this.middleCountLine >= 0) {
+				//画像注記と、タグ (chukiPatternはタグにも一致する。img・brは列を足し、対応しないタグは文字のまま出力されるので数えずに表組みに倒す)
+				if (isImageChukiTag(chukiTag) || chukiTag.startsWith("<")) this.middleCountForceTable = true;
+				//地付き・字上げ・大きな文字
+				if (chukiTag.startsWith("［＃") && middleTableChukiPattern.matcher(chukiName).find()) this.middleCountForceTable = true;
+			}
+		}
+	}
+	/** 左右中央の節の中の空行を数える。文字のある行の前後の空行は出力されない (mapIgnoreLine) ので、間の空行だけ後で行数に足す */
+	void countMiddleBlankLine()
+	{
+		if (this.middleCountLine >= 0 && this.middleCountLines > 0) this.middleCountBlankLines++;
+	}
+	/** 数えている左右中央の節を閉じ、長ければbookInfoに登録
+	 * @param pageBreakLine 閉じた改ページの行 (左右中央の注記・ファイルの終わりで閉じたら-1) */
+	void endMiddleSection(BookInfo bookInfo, int pageBreakLine)
+	{
+		if (this.middleCountLine < 0) return;
+		if (this.middleCountLines > MIDDLE_LONG_LINES || this.middleCountForceTable) {
+			bookInfo.addLongMiddleLine(this.middleCountLine);
+		} else if (pageBreakLine >= 0) {
+			this.middleClosedByPageBreak.add(new int[]{this.middleCountLine, pageBreakLine});
+		}
+		this.middleCountLine = -1;
+	}
+	/** 走査の後で、改ページの次が画像単ページの節を表組みに倒す (表紙に移す画像の前の改ページは変換時に省かれ、後ろの本文が同じ節に入る) */
+	void endMiddleSectionScan(BookInfo bookInfo)
+	{
+		this.endMiddleSection(bookInfo, -1);
+		for (int[] closed : this.middleClosedByPageBreak) {
+			if (bookInfo.isImageSectionLine(closed[1]+1)) bookInfo.addLongMiddleLine(closed[0]);
+		}
+		this.middleClosedByPageBreak.clear();
+	}
+	/** 画像注記 （ファイル名.拡張子） かimgタグならtrue。訓点送り仮名 （…） と区別するため、. が （ と ） の間にあるもの */
+	static boolean isImageChukiTag(String chukiTag)
+	{
+		if (chukiTag.toLowerCase().startsWith("<img")) return true;
+		int imageStartIdx = chukiTag.lastIndexOf('（');
+		if (imageStartIdx < 0) return false;
+		int imageEndIdx = chukiTag.indexOf("）", imageStartIdx);
+		int imageDotIdx = chukiTag.indexOf('.', imageStartIdx);
+		return imageDotIdx > -1 && imageDotIdx < imageEndIdx;
+	}
+	
 	/** タイトルと著作者を取得. 行番号も保存して出力時に変換出力
 	 * 章洗濯用に見出しの行もここで取得
 	 * @param src 青空テキストファイルのReader
@@ -719,12 +855,20 @@ public class AozoraEpub3Converter
 		//ブロック見出し注記、次の行を繋げる場合に設定
 		ChapterLineInfo preChapterLineInfo = null;
 		
+		//左右中央の節の長さ
+		this.middleCountLine = -1;
+		this.middleBlockIndent = 0;
+		this.middleClosedByPageBreak.clear();
+		
 		//最後まで回す
 		while ((line = src.readLine()) != null) {
 			this.lineNum++;
 			
 			//見出し等の取得のため前方参照注記は変換 外字文字は置換
-			line = CharUtils.removeSpace(this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false)));
+			String spacedLine = this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false));
+			line = CharUtils.removeSpace(spacedLine);
+			//除去した行頭・行末の空白の数 (左右中央の節の行の長さに数える)
+			int edgeSpaces = spacedLine.length() - line.length();
 			//注記と画像のチェックなので先にルビ除去
 			String noRubyLine = CharUtils.removeRuby(line);
 			
@@ -736,6 +880,8 @@ public class AozoraEpub3Converter
 					if (firstCommentLineNum == -1) firstCommentLineNum = this.lineNum;
 					//コメントブロックに入ったらタイトル著者終了
 					firstCommentStarted = true;
+					//左右中央の節の中で出力されるコメント (区切り線を含む) は数えずに表組みに倒す
+					if (this.commentPrint && this.middleCountLine >= 0) this.middleCountForceTable = true;
 					if (inComment) {
 						//コメント行終了
 						if (commentLineNum > 20) LogAppender.warn(lineNum, "コメントが "+commentLineNum+" 行 ("+(commentLineStart+1)+") -");
@@ -756,11 +902,22 @@ public class AozoraEpub3Converter
 			//空行チェック
 			if (noRubyLine.equals("") || noRubyLine.equals(" ") || noRubyLine.equals("　")) {
 				lastEmptyLine = lineNum;
+				//出力しないコメントの中の空行は数えない
+				if (!(inComment && !this.commentPrint)) this.countMiddleBlankLine();
 				//空行なので次の行へ
 				continue;
 			}
 			
 			if (inComment && !this.commentPrint) continue;
+			
+			//左右中央の節の長さを数える
+			//出力するコメントの行は、節の中にあれば表組みに倒す。変換するコメントの中の左右中央の注記は節を開く
+			if (inComment) {
+				if (this.commentConvert) this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);
+				if (this.middleCountLine >= 0) this.middleCountForceTable = true;
+			} else {
+				this.countMiddleSection(bookInfo, noRubyLine, lineNum, edgeSpaces);
+			}
 			
 			//2行前が改ページと画像の行かをチェックして行番号をbookInfoに保存
 			if (!noIllust) this.checkImageOnly(bookInfo, preLines, noRubyLine, this.lineNum);
@@ -999,6 +1156,8 @@ public class AozoraEpub3Converter
 			preLines[1] = preLines[0];
 			preLines[0] = noRubyLine;
 		}
+		//最後の左右中央の節と、改ページの次が画像単ページの節
+		this.endMiddleSectionScan(bookInfo);
 		
 		//行数設定
 		bookInfo.totalLineNum = lineNum;
@@ -2234,8 +2393,8 @@ public class AozoraEpub3Converter
 					
 					//改ページフラグ設定
 					if (chukiFlagMiddle.contains(chukiName)) {
-						//左右中央
-						this.setPageBreakTrigger(pageBreakMiddle);
+						//左右中央 1ページに収まらない長い節は従来の表組み
+						this.setPageBreakTrigger(bookInfo.isLongMiddleLine(lineNum) ? pageBreakMiddleTable : pageBreakMiddle);
 					} else if (chukiFlagBottom.contains(chukiName)) {
 						//ページ左
 						this.setPageBreakTrigger(pageBreakBottom);
