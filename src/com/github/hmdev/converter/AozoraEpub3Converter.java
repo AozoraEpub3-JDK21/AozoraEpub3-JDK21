@@ -1893,14 +1893,25 @@ public class AozoraEpub3Converter
 		while (targetLength > length && idx >= 0) {
 			switch (buf.charAt(idx)) {
 			case '》':
-				idx--;
-				//エスケープ文字
+				//エスケープ文字 ※》 は2文字 対象の長さ(removeRuby)も※を数えている
+				//判定は》自身の位置で行う 1つ戻してから判定するとエスケープ済みの》をルビの終わりと読む
 				if (CharUtils.isEscapedChar(buf, idx)) {
-					length++;
+					length += 2;
+					idx--;
 					break;
 				}
-				while (idx >= 0 && buf.charAt(idx) != '《' && !CharUtils.isEscapedChar(buf, idx)) {
+				int closeIdx = idx;
+				idx--;
+				//エスケープされていない《でだけ止まる ※※ や ※《 などエスケープ済みの文字は読みの一部として飛ばす
+				while (idx >= 0 && !(buf.charAt(idx) == '《' && !CharUtils.isEscapedChar(buf, idx))) {
 					idx--;
+				}
+				//ルビの《が無ければ》は普通の1文字として数える
+				//行頭より前まで戻すと -1 を返して呼び出し側の insert で例外になり、変換全体が止まる
+				if (idx < 0) {
+					idx = closeIdx;
+					length++;
+					break;
 				}
 				hasRuby = true;
 				break;
@@ -1928,6 +1939,9 @@ public class AozoraEpub3Converter
 		}
 		//ルビがあれば先頭の｜を含める
 		if (hasRuby && idx >= 0 && buf.charAt(idx) == '｜') return idx;
+		//対応する［《が無い入力の誤りでは行頭より前まで戻ることがある
+		//-1 を返すと呼び出し側の insert で例外になり、前走査で起きるので変換全体が止まる
+		if (idx < -1) return 0;
 		//一つ戻す
 		return idx + 1;
 	}
