@@ -1359,6 +1359,23 @@ public class AozoraEpub3Converter
 	{
 		return convertGaijiChuki(line, escape, true);
 	}
+	/** 変換した外字を出力する。escape なら特殊文字（{@link CharUtils#isEscapableChar(char)}）の前に※をつけて文字出力時に例外処理
+	 * コードや外字表から得た文字は1文字とは限らない（異体字セレクタ付きや U+XXXX-U+YYYY の2文字）ので、全部の文字を見る。
+	 * 代替文字（chuki_alt.txt）は ［＃縦中横］!!!［＃縦中横終わり］ のように注記やルビを書けるので、1文字のときだけ見る（従来どおり）。
+	 * U+のコードのみの注記も含めすべての外字変換で通すこと。
+	 * 抜けると裸の特殊文字が残り、isEscapedCharの※の偶奇がずれてルビ判定が狂う */
+	static void appendGaiji(StringBuilder buf, String gaiji, boolean escape, boolean isAlter)
+	{
+		if (!escape || (isAlter && gaiji.length() != 1)) {
+			buf.append(gaiji);
+			return;
+		}
+		for (int i=0; i<gaiji.length(); i++) {
+			char c = gaiji.charAt(i);
+			if (CharUtils.isEscapableChar(c)) buf.append('※');
+			buf.append(c);
+		}
+	}
 	public String convertGaijiChuki(String line, boolean escape, boolean logged)
 	{
 		/*
@@ -1410,7 +1427,7 @@ public class AozoraEpub3Converter
 							if (logged) LogAppender.info(lineNum, "外字を注記表示", chuki);
 							buf.append(this.gaijiFallbackString(chukiInner, hasInnerChuki(line, m.start())));
 						} else {
-							buf.append(gaiji);
+							appendGaiji(buf, gaiji, escape, false);
 						}
 						begin = chukiStart+chuki.length();
 						continue;
@@ -1420,6 +1437,7 @@ public class AozoraEpub3Converter
 				String[] chukiValues = chukiInner.split("、");
 				//注記文字グリフ or 代替文字変換
 				String gaiji = gaijiConverter.toAlterString(chukiValues[0]);
+				boolean isAlter = gaiji != null;
 				//注記内なら注記タグは除外する
 				if (gaiji != null) {
 					if (hasInnerChuki(line, m.start())) {
@@ -1455,17 +1473,7 @@ public class AozoraEpub3Converter
 				//外字注記変換をログに出力
 				if (gaiji != null) {
 					//if (logged) LogAppender.info(lineNum, "外字注記", chuki+" → U+"+Integer.toHexString(AozoraGaijiConverter.toUtfCode(gaiji)));
-					if (gaiji.length() == 1 && escape) {
-						//特殊文字は 前に※をつけて文字出力時に例外処理
-						switch (gaiji.charAt(0)) {
-						case '※': buf.append('※'); break;
-						case '》': buf.append('※'); break;
-						case '《': buf.append('※'); break;
-						case '｜': buf.append('※'); break;
-						case '＃': buf.append('※'); break;
-						}
-					}
-					buf.append(gaiji);
+					appendGaiji(buf, gaiji, escape, isAlter);
 					begin = chukiStart+chuki.length();
 					continue;
 				}
@@ -3425,18 +3433,9 @@ public class AozoraEpub3Converter
 		
 		//エスケープ文字を変換
 		boolean escaped = false;
-		if (idx > 0) {
-		switch (ch[idx]) {
-			case '》':
-			case '《':
-			case '｜':
-			case '＃':
-			case '※':
-				if (ch[idx-1] == '※') {
-					buf.setLength(length-1);//1文字削除
-					escaped = true;
-				}
-			}
+		if (idx > 0 && CharUtils.isEscapableChar(ch[idx]) && ch[idx-1] == '※') {
+			buf.setLength(length-1);//1文字削除
+			escaped = true;
 		}
 		
 		if (replaceMap != null) {
