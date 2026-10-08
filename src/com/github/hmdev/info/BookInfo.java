@@ -110,6 +110,8 @@ public class BookInfo
 	public String identifier;
 	/** 自動のファイル名の代わりに使う名前（拡張子なし）。null なら題と作者から作る */
 	public String outputBaseName;
+	/** 台帳のある作品のフォルダ。最初の変換で決まった EPUB の名前をここの台帳に記録する。null なら記録しない */
+	public File ledgerDir;
 	
 	////////////////////////////////
 	

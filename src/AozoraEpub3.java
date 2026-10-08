@@ -860,20 +860,23 @@ public class AozoraEpub3
 		//出力ファイル
 		if (dstPath == null) dstPath = srcFile.getAbsoluteFile().getParentFile();
 		String outFileName = "";
-		if (autoFileName && bookInfo.outputBaseName != null) {
+		if (autoFileName && (bookInfo.outputBaseName != null || bookInfo.creator != null || bookInfo.title != null)) {
 			//Web から取った作品は、題が変わっても台帳の名前のまま（同じ本が別の名前で増えないように）
-			outFileName = dstPath.getAbsolutePath()+"/"+bookInfo.outputBaseName;
-			if (outFileName.length() > 250) outFileName = outFileName.substring(0, 250);
-		} else if (autoFileName && (bookInfo.creator != null || bookInfo.title != null)) {
-			outFileName = dstPath.getAbsolutePath()+"/";
-			if (bookInfo.creator != null && bookInfo.creator.length() > 0) {
-				String str = bookInfo.creator.replaceAll("[\\\\|\\/|\\:|\\*|\\?|\\<|\\>|\\||\\\"|\t]", "");
-				if (str.length() > 64) str = str.substring(0, 64);
-				outFileName += "["+str+"] ";
+			String baseName = bookInfo.outputBaseName;
+			if (baseName == null) {
+				baseName = "";
+				if (bookInfo.creator != null && bookInfo.creator.length() > 0) {
+					String str = bookInfo.creator.replaceAll("[\\\\|\\/|\\:|\\*|\\?|\\<|\\>|\\||\\\"|\t]", "");
+					if (str.length() > 64) str = str.substring(0, 64);
+					baseName += "["+str+"] ";
+				}
+				if (bookInfo.title != null) {
+					baseName += bookInfo.title.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
+				}
+				//台帳より前に変換した本と同じ名前になるよう、今までと同じ作り方の名前を最初の変換で記録する
+				BookLedger.recordOutputBaseName(bookInfo, baseName);
 			}
-			if (bookInfo.title != null) {
-				outFileName += bookInfo.title.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
-			}
+			outFileName = dstPath.getAbsolutePath()+"/"+baseName;
 			if (outFileName.length() > 250) outFileName = outFileName.substring(0, 250);
 		} else {
 			outFileName = dstPath.getAbsolutePath()+"/"+srcFile.getName().replaceFirst("\\.[^\\.]+$", "");

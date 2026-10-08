@@ -2,6 +2,7 @@ package com.github.hmdev.web;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -34,6 +35,7 @@ public class WebAozoraConverterBookLedgerTest {
 	private HttpServer server;
 	private String registeredFqdn;
 	private volatile String title = "題";
+	private volatile String author = "<p class=\"author\">著者</p>";
 
 	@After
 	public void tearDown() {
@@ -54,7 +56,7 @@ public class WebAozoraConverterBookLedgerTest {
 		server.createContext("/", exchange -> {
 			String path = exchange.getRequestURI().getPath();
 			if (path.equals("/novel/")) {
-				respond(exchange, 200, "<html><body><h1>" + title + "</h1><p class=\"author\">著者</p><ul class=\"list\">"
+				respond(exchange, 200, "<html><body><h1>" + title + "</h1>" + author + "<ul class=\"list\">"
 					+ "<li><a href=\"/ep/1/\">第1話</a></li>"
 					+ "</ul></body></html>");
 			} else if (path.equals("/ep/1/")) {
@@ -100,7 +102,8 @@ public class WebAozoraConverterBookLedgerTest {
 		assertNotNull("txt の隣に台帳ができる", ledger);
 		assertEquals(base + "/novel/", ledger.sourceUrl);
 		assertEquals(BookLedger.identifierFor(base + "/novel/"), ledger.identifier);
-		assertEquals("[著者] 題", ledger.outputBaseName);
+		assertEquals("[著者] 題", ledger.textBaseName);
+		assertNull("EPUB の名前は、EPUB にする段で記録する", ledger.outputBaseName);
 	}
 
 	@Test
@@ -120,12 +123,33 @@ public class WebAozoraConverterBookLedgerTest {
 		assertEquals("題が変わっても txt は同じ名前", first.getAbsolutePath(), second.getAbsolutePath());
 		BookLedger after = BookLedger.load(second.getParentFile());
 		assertEquals(before.identifier, after.identifier);
-		assertEquals("[著者] 題", after.outputBaseName);
+		assertEquals("[著者] 題", after.textBaseName);
 		// 本の中の題は掲載先に合わせる
 		String text = new String(Files.readAllBytes(second.toPath()), StandardCharsets.UTF_8);
 		assertTrue("新しい題が本文の表題に入る: " + text, text.split("\n", 2)[0].endsWith("【書籍化】題"));
 		// 古い名前の txt が別に増えていない
 		File[] txts = second.getParentFile().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"));
 		assertEquals(1, txts.length);
+	}
+
+	@Test
+	public void aLedgerWithoutANameGetsOneWhenTheTitleBecomesUsable() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+
+		// 題がファイル名に使えない文字だけで、著者も無い
+		title = "???";
+		author = "";
+		File first = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertNotNull(first);
+		assertEquals("converted.txt", first.getName());
+		assertNull(BookLedger.load(first.getParentFile()).textBaseName);
+
+		// 題が取れるようになったら、台帳の名前を埋める
+		title = "題";
+		File second = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertEquals("題.txt", second.getName());
+		assertEquals("題", BookLedger.load(second.getParentFile()).textBaseName);
 	}
 }

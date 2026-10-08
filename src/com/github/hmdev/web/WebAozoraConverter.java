@@ -667,18 +667,24 @@ public class WebAozoraConverter
 			author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
 		}
 		
-		//作品の台帳。初めて取ったときの名前と、URL から決めた identifier を使い続ける（internal #11）
-		BookLedger ledger = BookLedger.load(new File(this.dstPath));
-		if (ledger == null) {
-			String baseName = null;
-			if (title != null && !title.isEmpty()) {
-				String safeTitle = BookLedger.safeFileName(title);
-				if (author != null && !author.isEmpty()) baseName = "[" + BookLedger.safeFileName(author) + "] " + safeTitle;
-				else baseName = safeTitle;
-			}
-			ledger = BookLedger.create(urlString, baseName);
+		//作品の台帳。txt の名前は初めて取ったときのもの、identifier は URL から決めたものを使い続ける（internal #11）
+		String textBaseName = null;
+		if (title != null && !title.isEmpty()) {
+			String safeTitle = BookLedger.safeFileName(title);
+			if (author != null && !author.isEmpty()) textBaseName = "[" + BookLedger.safeFileName(author) + "] " + safeTitle;
+			else textBaseName = safeTitle;
+		}
+		textBaseName = BookLedger.nameOrNull(textBaseName);
+		File workDir = new File(this.dstPath);
+		BookLedger ledger = BookLedger.load(workDir);
+		BookLedger toSave = null;
+		if (ledger == null) toSave = BookLedger.create(urlString, textBaseName);
+		//名前が取れなかった回に作った台帳は、取れた回に埋める
+		else if (ledger.textBaseName == null && textBaseName != null) toSave = ledger.withTextBaseName(textBaseName);
+		if (toSave != null) {
 			try {
-				ledger.save(new File(this.dstPath));
+				toSave.save(workDir);
+				ledger = toSave;
 			} catch (IOException e) {
 				//台帳が無くても変換はできる（題が変わったときに別の本として増えるだけ）
 				logger.warn("台帳を書けませんでした: {}", this.dstPath, e);
@@ -687,7 +693,8 @@ public class WebAozoraConverter
 		}
 		String fileName = outFileName;
 		if (fileName == null) {
-			fileName = ledger.outputBaseName != null ? ledger.outputBaseName + ".txt" : "converted.txt";
+			//台帳を書けなかったときも、今回の名前で書く
+			fileName = ledger != null ? ledger.textFileName() : (textBaseName != null ? textBaseName : "converted") + ".txt";
 		} else {
 			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
 		}

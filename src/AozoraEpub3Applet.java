@@ -4382,8 +4382,15 @@ public class AozoraEpub3Applet extends JPanel
 			if (!this.jConfirmDialog.jCheckConfirm2.isSelected()) jCheckConfirm.setSelected(false);
 			
 			//確認ダイアログの値をBookInfoに設定
+			String titleBefore = bookInfo.title == null ? "" : bookInfo.title;
+			String creatorBefore = bookInfo.creator == null ? "" : bookInfo.creator;
 			bookInfo.title = this.jConfirmDialog.getMetaTitle();
 			bookInfo.creator = this.jConfirmDialog.getMetaCreator();
+			//題か著者を書き換えたら、Web の作品でもこの回は書き換えた題で名前を作る（台帳の名前は使わず、記録もしない）
+			if (!titleBefore.equals(bookInfo.title) || !creatorBefore.equals(bookInfo.creator)) {
+				bookInfo.outputBaseName = null;
+				bookInfo.ledgerDir = null;
+			}
 			bookInfo.titleAs = this.jConfirmDialog.getMetaTitleAs();
 			bookInfo.creatorAs = this.jConfirmDialog.getMetaCreatorAs();
 			bookInfo.publisher = this.jConfirmDialog.getMetaPublisher();

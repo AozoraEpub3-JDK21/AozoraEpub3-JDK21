@@ -52,18 +52,22 @@ public class AozoraEpub3BookLedgerTest {
 		}
 	}
 
-	private File txt(File dir, String text) throws Exception {
-		File txt = new File(dir, "in.txt");
+	private File txt(File dir, String name, String text) throws Exception {
+		File txt = new File(dir, name);
 		Files.write(txt.toPath(), text.getBytes(StandardCharsets.UTF_8));
 		return txt;
+	}
+
+	private File txt(File dir, String text) throws Exception {
+		return txt(dir, "in.txt", text);
 	}
 
 	@Test
 	public void theLedgerDecidesIdentifierSourceAndFileName() throws Exception {
 		File dir = tempFolder.newFolder();
-		// 掲載先で題が変わった後の txt。台帳には最初の名前が残っている
+		// 掲載先で題が変わった後の txt。台帳には最初の EPUB の名前が残っている
 		File txt = txt(dir, "【書籍化】題\n著者\n\n本文\n");
-		BookLedger.create(URL, "[著者] 題").save(dir);
+		BookLedger.create(URL, "in").withOutputBaseName("[著者] 題").save(dir);
 
 		String[] r = convert(txt);
 		assertEquals("[著者] 題.epub", r[0]);
@@ -72,6 +76,43 @@ public class AozoraEpub3BookLedgerTest {
 		assertTrue("& はエスケープして dc:source に書く: " + opf,
 			opf.contains("<dc:source>https://example.com/novel?id=1&amp;p=2</dc:source>"));
 		assertTrue("題は新しいもの: " + opf, opf.contains("<dc:title id=\"title\">【書籍化】題</dc:title>"));
+	}
+
+	/**
+	 * 台帳より前に変換した本は、最初の変換で今までと同じ名前になり、その名前を記録する（ゲート2の指摘）。
+	 * Web の段の生の題・著者から名前を作ると、著者の ! やシリーズの行で名前が変わり、同じ本が 2 冊になっていた
+	 */
+	@Test
+	public void theFirstConversionKeepsTheNameBooksHadBeforeTheLedger() throws Exception {
+		File dir = tempFolder.newFolder();
+		File txt = txt(dir, "題\n作者!\n\n本文\n");
+		BookLedger.create(URL, "in").save(dir);
+
+		String before = convertWithoutLedger("題\n作者!\n\n本文\n")[0];
+		assertEquals("[作者!] 題.epub", before);
+		assertEquals("台帳より前と同じ名前", before, convert(txt)[0]);
+		assertEquals("最初の名前を記録する", "[作者!] 題", BookLedger.load(dir).outputBaseName);
+
+		// 題が変わっても、記録した名前のまま
+		txt(dir, "【書籍化】題\n作者!\n\n本文\n");
+		assertEquals("[作者!] 題.epub", convert(txt)[0]);
+	}
+
+	@Test
+	public void aStaleTxtBesideTheLedgerIsLeftAlone() throws Exception {
+		File dir = tempFolder.newFolder();
+		// 台帳が作る txt は「[著者] 新題.txt」。古い題の txt が残っている
+		BookLedger.create(URL, "[著者] 新題").withOutputBaseName("[著者] 新題").save(dir);
+		File stale = txt(dir, "[著者] 旧題.txt", "旧題\n著者\n\n本文\n");
+
+		String[] r = convert(stale);
+		assertEquals("[著者] 旧題.epub", r[0]);
+		assertTrue(r[1], r[1].contains("urn:uuid:" + UUID.nameUUIDFromBytes("旧題-著者".getBytes())));
+		assertFalse(r[1], r[1].contains("dc:source"));
+	}
+
+	private String[] convertWithoutLedger(String text) throws Exception {
+		return convert(txt(tempFolder.newFolder(), text));
 	}
 
 	@Test
@@ -91,7 +132,7 @@ public class AozoraEpub3BookLedgerTest {
 		File dir = tempFolder.newFolder();
 		File txt = txt(dir, "題\n著者\n\n本文\n");
 		Files.write(new File(dir, BookLedger.FILE_NAME).toPath(),
-			"sourceUrl=javascript:alert(1)\noutputBaseName=x\n".getBytes(StandardCharsets.UTF_8));
+			"sourceUrl=javascript:alert(1)\ntextBaseName=in\n".getBytes(StandardCharsets.UTF_8));
 
 		String opf = convert(txt)[1];
 		assertFalse(opf, opf.contains("dc:source"));

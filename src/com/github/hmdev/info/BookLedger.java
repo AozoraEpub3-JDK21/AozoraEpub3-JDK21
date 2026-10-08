@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -22,8 +21,11 @@ import org.slf4j.LoggerFactory;
  * {@value #FILE_NAME} として置く。
  *
  * <p>掲載先で題が変わっても（「【書籍化】」が付く、など）同じ本として扱えるように、
- * identifier と出力のファイル名は台帳に初めて書いたときの値を使い続ける（internal #11）。
+ * identifier と txt・EPUB の名前は台帳に初めて書いたときの値を使い続ける（internal #11）。
  * identifier は掲載元の URL だけから決めるので、台帳を消しても同じ値に戻る。</p>
+ *
+ * <p>EPUB の名前は Web から取る段では決めず、{@link com.github.hmdev.info.BookInfo} から今までどおりに作った名前を、
+ * 最初に変換したときに記録する（台帳より前に変換した本が、更新で別の名前にならないように）。</p>
  */
 public final class BookLedger
 {
@@ -34,26 +36,46 @@ public final class BookLedger
 
 	static final String KEY_SOURCE_URL = "sourceUrl";
 	static final String KEY_IDENTIFIER = "identifier";
+	static final String KEY_TEXT_BASE_NAME = "textBaseName";
 	static final String KEY_OUTPUT_BASE_NAME = "outputBaseName";
 
 	/** 掲載元の URL（最初に取ったときのもの） */
 	public final String sourceUrl;
 	/** dc:identifier に使う UUID */
 	public final String identifier;
-	/** 出力のファイル名（拡張子なし）。"[作者] 題" */
+	/** Web から取って作る txt の名前（拡張子なし）。台帳はこの名前の txt にだけ当てる。null なら converted.txt */
+	public final String textBaseName;
+	/** EPUB の名前（拡張子なし）。最初に「出力ファイル名に表題利用」で変換したときに記録する。まだなら null */
 	public final String outputBaseName;
 
-	BookLedger(String sourceUrl, String identifier, String outputBaseName)
+	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName)
 	{
 		this.sourceUrl = sourceUrl;
 		this.identifier = identifier;
+		this.textBaseName = textBaseName;
 		this.outputBaseName = outputBaseName;
 	}
 
 	/** 新しい作品の台帳。identifier は URL から決める */
-	public static BookLedger create(String sourceUrl, String outputBaseName)
+	public static BookLedger create(String sourceUrl, String textBaseName)
 	{
-		return new BookLedger(sourceUrl, identifierFor(sourceUrl), outputBaseName);
+		return new BookLedger(sourceUrl, identifierFor(sourceUrl), textBaseName, null);
+	}
+
+	public BookLedger withTextBaseName(String textBaseName)
+	{
+		return new BookLedger(this.sourceUrl, this.identifier, textBaseName, this.outputBaseName);
+	}
+
+	public BookLedger withOutputBaseName(String outputBaseName)
+	{
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, outputBaseName);
+	}
+
+	/** この台帳を当てる txt の名前 */
+	public String textFileName()
+	{
+		return (this.textBaseName != null ? this.textBaseName : "converted") + ".txt";
 	}
 
 	/**
@@ -102,15 +124,17 @@ public final class BookLedger
 		}
 		String sourceUrl = blankToNull(props.getProperty(KEY_SOURCE_URL));
 		String identifier = blankToNull(props.getProperty(KEY_IDENTIFIER));
-		//手で書き換えられていても出力先の外へ出ないよう、ファイル名に使えない文字は落とす
-		String outputBaseName = blankToNull(safeFileName(props.getProperty(KEY_OUTPUT_BASE_NAME)));
+		//手で書き換えられていても出力先の外へ出ないよう、ファイル名に使えない文字は落とす。
+		//前後の空白は落とさない（記録したときの名前のまま使う。Properties は先頭の空白も逃がして書く）
+		String textBaseName = nameOrNull(stripPathChars(props.getProperty(KEY_TEXT_BASE_NAME)));
+		String outputBaseName = nameOrNull(stripPathChars(props.getProperty(KEY_OUTPUT_BASE_NAME)));
 		if (sourceUrl == null) {
 			logger.warn("台帳に {} がありません: {}", KEY_SOURCE_URL, file);
 			return null;
 		}
 		//identifier が読めなければ URL から決め直す（同じ値になる）
 		if (identifier == null || !isUuid(identifier)) identifier = identifierFor(sourceUrl);
-		return new BookLedger(sourceUrl, identifier, outputBaseName);
+		return new BookLedger(sourceUrl, identifier, textBaseName, outputBaseName);
 	}
 
 	/** 作品のフォルダに書く。途中で止まっても前の台帳が壊れないよう、一時ファイルから置き換える */
@@ -119,6 +143,7 @@ public final class BookLedger
 		Properties props = new Properties();
 		props.setProperty(KEY_SOURCE_URL, this.sourceUrl);
 		props.setProperty(KEY_IDENTIFIER, this.identifier);
+		if (this.textBaseName != null) props.setProperty(KEY_TEXT_BASE_NAME, this.textBaseName);
 		if (this.outputBaseName != null) props.setProperty(KEY_OUTPUT_BASE_NAME, this.outputBaseName);
 		Path dir = workDir.toPath();
 		Files.createDirectories(dir);
@@ -138,15 +163,39 @@ public final class BookLedger
 		}
 	}
 
-	/** 台帳の値を書誌情報に移す。txt の隣に台帳が無ければ何もしない */
+	/**
+	 * 台帳の値を書誌情報に移す。txt の隣に台帳が無いとき、台帳が作った名前の txt でないとき
+	 * （台帳より前に残った古い題の txt など）は何もしない
+	 */
 	public static void applyTo(File srcFile, BookInfo bookInfo)
 	{
 		if (srcFile == null || bookInfo == null) return;
-		BookLedger ledger = load(srcFile.getAbsoluteFile().getParentFile());
+		File workDir = srcFile.getAbsoluteFile().getParentFile();
+		BookLedger ledger = load(workDir);
 		if (ledger == null) return;
+		if (!ledger.textFileName().equals(srcFile.getName())) return;
 		bookInfo.sourceUrl = ledger.sourceUrl;
 		bookInfo.identifier = ledger.identifier;
 		bookInfo.outputBaseName = ledger.outputBaseName;
+		bookInfo.ledgerDir = workDir;
+	}
+
+	/** 最初の変換で決まった EPUB の名前を記録する。もう記録してあれば何もしない */
+	public static void recordOutputBaseName(BookInfo bookInfo, String outputBaseName)
+	{
+		if (bookInfo == null || bookInfo.ledgerDir == null || bookInfo.outputBaseName != null) return;
+		if (nameOrNull(outputBaseName) == null) return;
+		BookLedger ledger = load(bookInfo.ledgerDir);
+		if (ledger == null) return;
+		if (ledger.outputBaseName == null) {
+			try {
+				ledger.withOutputBaseName(outputBaseName).save(bookInfo.ledgerDir);
+			} catch (IOException e) {
+				logger.warn("台帳に出力のファイル名を書けませんでした: {}", bookInfo.ledgerDir, e);
+				return;
+			}
+		}
+		bookInfo.outputBaseName = outputBaseName;
 	}
 
 	/** ファイル名に使えない文字を落とす（WebAozoraConverter が txt の名前を作るときと同じ組） */
@@ -154,6 +203,16 @@ public final class BookLedger
 	{
 		if (value == null) return null;
 		return value.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
+	}
+
+	/**
+	 * 台帳から読んだ名前から、パスやファイル名として危ない文字だけを落とす。
+	 * ! は落とさない（今までの EPUB の名前は、著者名の ! を残していたため）
+	 */
+	static String stripPathChars(String value)
+	{
+		if (value == null) return null;
+		return value.replaceAll("[\\\\/:*?<>|\"\t]", "");
 	}
 
 	static boolean isUuid(String value)
@@ -165,6 +224,13 @@ public final class BookLedger
 		}
 	}
 
+	/** 名前の欄。空白だけなら null、それ以外は空白も含めてそのまま */
+	public static String nameOrNull(String value)
+	{
+		if (value == null || value.trim().isEmpty()) return null;
+		return value;
+	}
+
 	static String blankToNull(String value)
 	{
 		if (value == null) return null;
@@ -172,15 +238,14 @@ public final class BookLedger
 		return value.isEmpty() ? null : value;
 	}
 
-	/** URI として扱えるかだけ確かめる（dc:source に書く前） */
+	/**
+	 * http・https の URL か（dc:source に書く前）。ブラウザが受け付ける | や空白の入った URL も通すよう、
+	 * URI として解析せず始まりだけを見る（書くときにエスケープする）
+	 */
 	public static boolean isHttpUrl(String value)
 	{
 		if (value == null) return false;
-		try {
-			String scheme = URI.create(value).getScheme();
-			return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
-		} catch (IllegalArgumentException e) {
-			return false;
-		}
+		String lower = value.trim().toLowerCase(Locale.ROOT);
+		return lower.startsWith("http://") || lower.startsWith("https://");
 	}
 }

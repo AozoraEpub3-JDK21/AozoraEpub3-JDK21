@@ -58,17 +58,35 @@ public class BookLedgerTest {
 	@Test
 	public void saveThenLoadKeepsEveryField() throws Exception {
 		File dir = tempFolder.newFolder();
-		BookLedger saved = BookLedger.create("https://kakuyomu.jp/works/1?a=1&b=2", "[作者 名] 題：副題");
+		BookLedger saved = BookLedger.create("https://kakuyomu.jp/works/1?a=1&b=2", "[作者 名] 題：副題")
+			.withOutputBaseName("[作者!] 題 ");
 		saved.save(dir);
 		BookLedger loaded = BookLedger.load(dir);
 		assertNotNull(loaded);
 		assertEquals(saved.sourceUrl, loaded.sourceUrl);
 		assertEquals(saved.identifier, loaded.identifier);
-		assertEquals("[作者 名] 題：副題", loaded.outputBaseName);
+		assertEquals("[作者 名] 題：副題", loaded.textBaseName);
+		assertEquals("[作者 名] 題：副題.txt", loaded.textFileName());
+		// 今までの EPUB の名前は著者名の ! を残していた。前後の空白も記録したまま
+		assertEquals("[作者!] 題 ", loaded.outputBaseName);
 		// 一時ファイルを残さない
 		String[] names = dir.list();
 		assertEquals(1, names.length);
 		assertEquals(BookLedger.FILE_NAME, names[0]);
+	}
+
+	@Test
+	public void aLeadingSpaceSurvivesTheRoundTrip() throws Exception {
+		File dir = tempFolder.newFolder();
+		BookLedger.create("https://kakuyomu.jp/works/1", " 題").withOutputBaseName(" 題").save(dir);
+		BookLedger loaded = BookLedger.load(dir);
+		assertEquals(" 題", loaded.textBaseName);
+		assertEquals(" 題", loaded.outputBaseName);
+	}
+
+	@Test
+	public void withoutATextNameTheLedgerBelongsToConvertedTxt() {
+		assertEquals("converted.txt", BookLedger.create("https://kakuyomu.jp/works/1", null).textFileName());
 	}
 
 	@Test
@@ -97,17 +115,22 @@ public class BookLedgerTest {
 	@Test
 	public void anEditedOutputNameCannotLeaveTheFolder() throws Exception {
 		File dir = tempFolder.newFolder();
-		write(dir, "sourceUrl=https://kakuyomu.jp/works/1\noutputBaseName=../../evil\n");
+		write(dir, "sourceUrl=https://kakuyomu.jp/works/1\noutputBaseName=../../evil\ntextBaseName=..\\\\..\\\\evil\n");
 		BookLedger loaded = BookLedger.load(dir);
 		assertNotNull(loaded);
-		assertFalse(loaded.outputBaseName, loaded.outputBaseName.contains("/"));
-		assertFalse(loaded.outputBaseName, loaded.outputBaseName.contains("\\"));
+		for (String name : new String[]{ loaded.outputBaseName, loaded.textBaseName }) {
+			assertFalse(name, name.contains("/"));
+			assertFalse(name, name.contains("\\"));
+		}
 	}
 
 	@Test
 	public void onlyHttpUrlsAreSources() {
 		assertTrue(BookLedger.isHttpUrl("https://kakuyomu.jp/works/1"));
 		assertTrue(BookLedger.isHttpUrl("http://127.0.0.1:8080/novel/"));
+		assertTrue(BookLedger.isHttpUrl("HTTPS://example.com/novel"));
+		// ブラウザが受け付ける | や空白の入った URL も書く（URI としては解析できない）
+		assertTrue(BookLedger.isHttpUrl("https://example.com/novel?a=1|2 3"));
 		assertFalse(BookLedger.isHttpUrl("file:///etc/passwd"));
 		assertFalse(BookLedger.isHttpUrl("javascript:alert(1)"));
 		assertFalse(BookLedger.isHttpUrl("not a url"));
