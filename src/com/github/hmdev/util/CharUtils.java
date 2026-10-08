@@ -383,15 +383,9 @@ public class CharUtils
 	/** BOMが文字列の先頭にある場合は除去 */
 	static public String removeBOM(String str)
 	{
-		if (str != null && str.length() > 0) {
-			if (str.charAt(0) == 0xFEFF) {
-				return str.substring(1);
-			} else {
-				return str;
-			}
-		} else {
-			return null;
-		}
+		if (str != null && str.length() > 0 && str.charAt(0) == 0xFEFF) return str.substring(1);
+		//空文字列は空文字列のまま返す（null を返すと、1 行目が空のテキストが表題の読み取りと本文の変換で落ちていた）
+		return str;
 	}
 	
 	////////////////////////////////////////////////////////////////
