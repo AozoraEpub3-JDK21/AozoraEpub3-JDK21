@@ -30,7 +30,7 @@ public class BookInfoBomTest
 	@Test
 	public void 先頭行のBOMは表題に入らない() throws Exception
 	{
-		BookInfo info = read("﻿タイトル\n著者\n\n本文\n");
+		BookInfo info = read("\uFEFFタイトル\n著者\n\n本文\n");
 		assertEquals("タイトル", info.title);
 		assertEquals("著者", info.creator);
 	}
@@ -39,6 +39,24 @@ public class BookInfoBomTest
 	public void BOMの無い入力は変わらない() throws Exception
 	{
 		BookInfo info = read("タイトル\n著者\n\n本文\n");
+		assertEquals("タイトル", info.title);
+		assertEquals("著者", info.creator);
+	}
+
+	/** 1 行目が空のテキスト（BOM なし）。removeBOM("") が null を返していたので落ちていた */
+	@Test
+	public void 先頭行が空でも落ちない() throws Exception
+	{
+		BookInfo info = read("\nタイトル\n著者\n\n本文\n");
+		assertEquals("タイトル", info.title);
+		assertEquals("著者", info.creator);
+	}
+
+	/** 1 行目が BOM だけ */
+	@Test
+	public void 先頭行がBOMだけでも落ちない() throws Exception
+	{
+		BookInfo info = read("\uFEFF\nタイトル\n著者\n\n本文\n");
 		assertEquals("タイトル", info.title);
 		assertEquals("著者", info.creator);
 	}
