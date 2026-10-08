@@ -857,6 +857,11 @@ public class WebAozoraConverter
 					LogAppender.println("SUB_UPDATE : 更新確認情報が取得できません");
 				}
 				// TOC ページネーション: PAGE_URL が定義されていれば最後のページリンクから総ページ数を取得して残りの目次ページを収集 (101蹰以上対応)
+				//目次の続きのページ（101 話以上）ごとの話の数と日付。1 ページ目の分につなげる
+				int firstTocPageHrefCount = hrefs.size();
+				List<String[]> tocPagePostDates = new ArrayList<>();
+				List<String[]> tocPagePublishDates = new ArrayList<>();
+				List<Integer> tocPageHrefCounts = new ArrayList<>();
 				if (this.queryMap.containsKey(ExtractId.PAGE_URL)) {
 					Element tocPageUrlElem = getExtractFirstElement(doc, this.queryMap.get(ExtractId.PAGE_URL));
 					if (tocPageUrlElem != null) {
@@ -864,6 +869,7 @@ public class WebAozoraConverter
 						int tocTotalPages = -1;
 						try { if (pm.find()) tocTotalPages = Integer.parseInt(pm.group(1)); } catch (NumberFormatException e) { /* 意図的: パース失敗時は tocTotalPages=-1 のまま続行 */ }
 						if (tocTotalPages > 1) {
+							firstTocPageHrefCount = hrefs.size();
 							ExtractInfo tocPageUrlInfo = this.queryMap.get(ExtractId.PAGE_URL)[0];
 							for (int pageIdx = 2; pageIdx <= tocTotalPages; pageIdx++) {
 								String nextTocUrl = tocPageUrlInfo.replace(tocPageUrlElem.attr("href") + "	" + pageIdx);
@@ -879,6 +885,10 @@ public class WebAozoraConverter
 									Elements nextHrefs = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.HREF));
 									if (nextHrefs != null) {
 										hrefs.addAll(nextHrefs);
+										//各話の日付も、目次のページごとに取って後でつなげる（1 ページ目の分しか取れていなかった）
+										tocPagePostDates.add(getPostDateList(tocPageDoc, this.queryMap.get(ExtractId.CONTENT_UPDATE_LIST)));
+										tocPagePublishDates.add(getPublishDateList(tocPageDoc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST)));
+										tocPageHrefCounts.add(nextHrefs.size());
 										if (updates != null) {
 											Elements nextUpdates = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.SUB_UPDATE));
 											if (nextUpdates != null) updates.addAll(nextUpdates);
@@ -918,10 +928,14 @@ public class WebAozoraConverter
 				}
 				
 				postDateList = getPostDateList(doc, this.queryMap.get(ExtractId.CONTENT_UPDATE_LIST));
+				publishDateList = getPublishDateList(doc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST));
+				if (!tocPageHrefCounts.isEmpty()) {
+					postDateList = joinTocPageLists(postDateList, firstTocPageHrefCount, tocPagePostDates, tocPageHrefCounts);
+					publishDateList = joinTocPageLists(publishDateList, firstTocPageHrefCount, tocPagePublishDates, tocPageHrefCounts);
+				}
 				if (postDateList == null && this.queryMap.containsKey(ExtractId.CONTENT_UPDATE_LIST)) {
 					LogAppender.println("CONTENT_UPDATE_LIST : 一覧ページの更新日時情報が取得できません");
 				}
-				publishDateList = getPublishDateList(doc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST));
 			}
 			
 
@@ -1442,6 +1456,29 @@ public class WebAozoraConverter
 			return postDateList;
 		}
 		return null;
+	}
+
+	/** 目次のページごとの日付の一覧を、話の順につなげる。各ページの分はそのページの話の数にそろえる
+	 * （日付の取れないページは null で埋めて、後ろのページの位置をずらさない）。どのページも取れなければ null。
+	 * テストから利用するため package-private */
+	static String[] joinTocPageLists(String[] first, int firstCount, List<String[]> rest, List<Integer> restCounts)
+	{
+		boolean any = first != null;
+		for (String[] r : rest) if (r != null) any = true;
+		if (!any) return null;
+		int total = firstCount;
+		for (int c : restCounts) total += c;
+		String[] joined = new String[total];
+		int pos = 0;
+		if (first != null) System.arraycopy(first, 0, joined, 0, Math.min(first.length, firstCount));
+		pos += firstCount;
+		for (int i = 0; i < rest.size(); i++) {
+			String[] r = rest.get(i);
+			int c = restCounts.get(i);
+			if (r != null) System.arraycopy(r, 0, joined, pos, Math.min(r.length, c));
+			pos += c;
+		}
+		return joined;
 	}
 
 	/** 一覧から初回公開日を取得 (span[title]属性から抽出) */
