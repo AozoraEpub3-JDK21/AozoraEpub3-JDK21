@@ -1,3 +1,4 @@
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -19,7 +20,7 @@ import com.github.hmdev.writer.Epub3Writer;
  * 題の長い本の EPUB の名前が、名前 1 つ 255 バイトの上限（Linux の ext4 など）に収まることのテスト（internal #16）。
  *
  * 日本語は UTF-8 で 1 文字 3 バイトなので、85 文字前後で上限を超える。
- * mac・Windows は文字数で数えるので、超えても作れてしまう。
+ * mac・Windows は文字数で数えるので作れる。そこでは名前を変えない（今までの本と 2 冊にならないように）。
  *
  * AozoraEpub3.run はテスト JVM ではテンプレートの場所を見つけられないので、
  * テンプレートの場所と専用の VelocityEngine を渡した Epub3Writer で AozoraEpub3.convertFile を呼ぶ（AozoraEpub3EmptyBodyTest と同じ）。
@@ -49,12 +50,16 @@ public class AozoraEpub3LongFileNameTest {
 	}
 
 	@Test
-	public void theNameOfALongTitleFitsIn255Bytes() throws Exception {
+	public void theNameOfALongTitleIsCutOnlyWhereItCannotBeMade() throws Exception {
 		File epub = outFile(LONG_TITLE + "\n著者\n\n本文\n");
-		int bytes = epub.getName().getBytes(StandardCharsets.UTF_8).length;
-		assertTrue("名前は 255 バイト以内: " + bytes + " バイト " + epub.getName(), bytes <= 255);
-		assertTrue(epub.getName(), epub.getName().startsWith("[著者] 【書籍化】長い題"));
-		assertTrue(epub.getName(), epub.getName().endsWith(".epub"));
+		String expected = "[著者] " + LONG_TITLE + ".epub";
+		if (com.github.hmdev.util.PathUtilsFitFileNameTest.acceptsLongNames(epub.getParentFile())) {
+			assertEquals("受け付ける場所（mac・Windows）では今までの名前のまま", expected, epub.getName());
+		} else {
+			int bytes = epub.getName().getBytes(StandardCharsets.UTF_8).length;
+			assertTrue("名前は 255 バイト以内: " + bytes + " バイト " + epub.getName(), bytes <= 255);
+			assertTrue(epub.getName(), epub.getName().matches("\\[著者\\] 【書籍化】長い題.*~[0-9a-f]{6}\\.epub"));
+		}
 	}
 
 	@Test

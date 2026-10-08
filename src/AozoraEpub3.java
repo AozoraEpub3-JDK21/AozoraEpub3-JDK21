@@ -874,9 +874,10 @@ public class AozoraEpub3
 			outFileName = dstPath.getAbsolutePath()+"/"+srcFile.getName().replaceFirst("\\.[^\\.]+$", "");
 		}
 		if (outExt.length() == 0) outExt = ".epub";
-		//名前 1 つを 255 バイトに収める（Linux は題の長い本を作れなかった。internal #16）
+		//その場所で作れない長い名前だけ、255 バイトに切る（Linux は題の長い本を作れなかった。internal #16）。
+		//Windows・mac は名前を文字数で数えるので、今までの名前のまま
 		int nameStart = outFileName.lastIndexOf('/') + 1;
-		outFileName = outFileName.substring(0, nameStart) + PathUtils.fitFileName(outFileName.substring(nameStart), outExt);
+		outFileName = outFileName.substring(0, nameStart) + PathUtils.fitFileNameIn(dstPath, outFileName.substring(nameStart), outExt);
 		// Windows MAX_PATH (260) 対策: フルパス長を拡張子込みで制限
 		int maxPath = 259; // 260 - 1 (null terminator)
 		if (outFileName.length() + outExt.length() > maxPath) {

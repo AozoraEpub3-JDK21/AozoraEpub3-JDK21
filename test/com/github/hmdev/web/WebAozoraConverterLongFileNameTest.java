@@ -21,7 +21,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * 題の長い作品の txt の名前が 255 バイトに収まり、Linux でも変換できることのテスト（internal #16）。
+ * 題の長い作品の txt を、Linux でも作れることのテスト（internal #16）。Linux では 255 バイトに切り、mac・Windows では名前を変えない。
  * 修正前は ubuntu で「File name too long」になっていた（mac・Windows は文字数で数えるので通る）。
  */
 public class WebAozoraConverterLongFileNameTest {
@@ -87,9 +87,12 @@ public class WebAozoraConverterLongFileNameTest {
 		File txt = converter.convertToAozoraText(base + "/novel/", tempFolder.newFolder("cache"), 0, 0f, false, false, false, 0);
 		assertNotNull("変換できる", txt);
 		assertTrue(txt.isFile());
-		int bytes = txt.getName().getBytes(StandardCharsets.UTF_8).length;
-		assertTrue("名前は 255 バイト以内: " + bytes, bytes <= 255);
-		assertTrue(txt.getName(), txt.getName().startsWith("[著者] 【書籍化】長い題"));
-		assertEquals(".txt", txt.getName().substring(txt.getName().length() - 4));
+		if (com.github.hmdev.util.PathUtilsFitFileNameTest.acceptsLongNames(tempFolder.getRoot())) {
+			assertEquals("受け付ける場所（mac・Windows）では今までの名前のまま", "[著者] " + LONG_TITLE + ".txt", txt.getName());
+		} else {
+			int bytes = txt.getName().getBytes(StandardCharsets.UTF_8).length;
+			assertTrue("名前は 255 バイト以内: " + bytes, bytes <= 255);
+			assertTrue(txt.getName(), txt.getName().matches("\\[著者\\] 【書籍化】長い題.*~[0-9a-f]{6}\\.txt"));
+		}
 	}
 }
