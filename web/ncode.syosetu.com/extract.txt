@@ -41,8 +41,11 @@ CONTENT_PUBLISH_LIST	.p-eplist__update,.long_update
 ################################
 ###各話の抽出設定
 
-## 各話 Chapter 先頭の章のみ大見出しで出力 (新クラス: p-eplist__chapter-title)
-CONTENT_CHAPTER	.p-eplist__chapter-title:0,.chapter_title:0
+## 各話 Chapter 先頭の章のみ大見出しで出力
+## 各話のページでは章名は .c-announce の直下の、クラスの無い span にある（章の無い作品には無い）。
+## ノクターンでは同じ所に <span class="c-announce__emphasis">＜R18＞</span> があるので、クラスつきの span は除く
+## .p-eplist__chapter-title は目次のページにしか無い（旧クラス名と並べて残す）
+CONTENT_CHAPTER	.c-announce > span:not([class]):0,.p-eplist__chapter-title:0,.chapter_title:0
 ## 各話 章タイトル 中見出しで出力 (新クラス: p-novel__title)
 CONTENT_SUBTITLE	.p-novel__title:0,.novel_subtitle:0	(（改稿版）)|(^.*</div>)
 
