@@ -1158,7 +1158,6 @@ public class WebAozoraConverter
 						if (chapterTitle != null && !preChapterTitle.equals(chapterTitle)) {
 							newChapter = true;
 							preChapterTitle = chapterTitle;
-							printChapterHeader(bw, preChapterTitle);
 						}
 							//更新日時・初回公開日を一覧から取得
 						String postDate = null;
@@ -1172,7 +1171,7 @@ public class WebAozoraConverter
 						String subTitle = null;
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
-						docToAozoraText(bw, chapterDoc, episodeSharesChapterHeaderPage(newChapter), subTitle, postDate, publishDate);
+						printEpisode(bw, chapterDoc, newChapter ? preChapterTitle : null, subTitle, postDate, publishDate);
 					}
 					chapterIdx++;
 				}
@@ -1420,7 +1419,7 @@ public class WebAozoraConverter
 	}
 
 	/** 章が変わったときの章中表紙（章題の大見出し）を出力する。
-	 * 第1話を同じページに続けるかは episodeSharesChapterHeaderPage で決める */
+	 * 第1話を同じページに続けるかは printEpisode で決める */
 	private void printChapterHeader(BufferedWriter bw, String chapterTitle) throws IOException
 	{
 		bw.append("\n［＃改ページ］\n");
@@ -1439,12 +1438,20 @@ public class WebAozoraConverter
 		bw.append('\n');
 	}
 
-	/** 章の第1話を章中表紙と同じページに続けるか。
-	 * 左右中央の章中表紙は章題だけで1ページにする（narou.rb と同じく章題の直後で改ページ）。
-	 * 改ページは第1話の側（docToAozoraText）で書くので、本文が取れない話では改ページも出ない */
-	private boolean episodeSharesChapterHeaderPage(boolean newChapter)
+	/** 1話を出力する。章が変わった話なら、先に章中表紙を出力する。
+	 * 左右中央の章中表紙は章題だけで1ページにし（narou.rb と同じく章題の直後で改ページ）、
+	 * そうでなければ章題に第1話を続ける。
+	 * 改ページは話の側（docToAozoraText）で書くので、本文が取れない話では改ページも出ない
+	 * @param newChapterTitle 章が変わった話ならその章題、章の途中の話なら null */
+	private void printEpisode(BufferedWriter bw, Document doc, String newChapterTitle,
+		String listSubTitle, String postDate, String publishDate) throws IOException
 	{
-		return newChapter && !formatSettings.isChapterUseCenterPage();
+		boolean sharesChapterHeaderPage = false;
+		if (newChapterTitle != null) {
+			printChapterHeader(bw, newChapterTitle);
+			sharesChapterHeaderPage = !formatSettings.isChapterUseCenterPage();
+		}
+		docToAozoraText(bw, doc, sharesChapterHeaderPage, listSubTitle, postDate, publishDate);
 	}
 
 	
