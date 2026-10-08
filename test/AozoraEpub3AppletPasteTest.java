@@ -93,7 +93,9 @@ public class AozoraEpub3AppletPasteTest {
 		collect("走れメロス｜小説家になろう https://ncode.syosetu.com/n1/\n　https://kakuyomu.jp/works/2　https://example.com/3 ");
 		// 語の途中のアポストロフィで引用を始めない
 		collect("Here's the link https://example.com/4");
-		assertEquals(Arrays.asList("https://ncode.syosetu.com/n1/", "https://kakuyomu.jp/works/2", "https://example.com/3", "https://example.com/4"), urls);
+		// 閉じない引用符で引用を始めない
+		collect("'Tis available at https://example.com/5");
+		assertEquals(Arrays.asList("https://ncode.syosetu.com/n1/", "https://kakuyomu.jp/works/2", "https://example.com/3", "https://example.com/4", "https://example.com/5"), urls);
 		assertEquals(Collections.emptyList(), files);
 	}
 
