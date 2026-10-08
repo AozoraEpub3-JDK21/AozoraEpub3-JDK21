@@ -40,10 +40,19 @@ public class WebAozoraConverterCloudflareTest {
 	private HttpServer server;
 	private String registeredFqdn;
 	private final AtomicInteger episodeRequests = new AtomicInteger();
+	/** 第1話だけ 200 のエラーページ（本文なし）を返す */
+	private boolean firstEpisodeIsErrorPage = false;
+	private WebAozoraConverter shared;
+	private String sharedBaseUri;
 
 	@After
 	public void tearDown() {
 		if (server != null) server.stop(0);
+		//既存の定義の変換器は static に共有されるので、印と baseUri を戻す
+		if (shared != null) {
+			shared.blockedByChallenge = false;
+			shared.baseUri = sharedBaseUri;
+		}
 		//createWebAozoraConverter が静的な表に登録した手元のサーバ用の変換器を外す
 		if (registeredFqdn != null) WebAozoraConverter.converters.remove(registeredFqdn);
 	}
@@ -67,6 +76,10 @@ public class WebAozoraConverterCloudflareTest {
 			+ "<li><a href=\"/ep/3.html\">第3話</a></li></ul></body></html>", false));
 		server.createContext("/ep/", exchange -> {
 			episodeRequests.incrementAndGet();
+			if (firstEpisodeIsErrorPage && exchange.getRequestURI().getPath().endsWith("/1.html")) {
+				respond(exchange, 200, "<html><body><p>エラーが発生しました</p></body></html>", false);
+				return;
+			}
 			respond(exchange, 403, "<html><title>Just a moment...</title></html>", challenge);
 		});
 		server.start();
@@ -74,10 +87,12 @@ public class WebAozoraConverterCloudflareTest {
 	}
 
 	/** cacheFile を呼ぶだけの升は、既存のサイト定義の変換器で足りる（どの OS でも走る） */
-	private static WebAozoraConverter anyConverter() throws IOException {
+	private WebAozoraConverter anyConverter() throws IOException {
 		WebAozoraConverter converter = WebAozoraConverter.createWebAozoraConverter(
 			"https://ncode.syosetu.com/n0000xx/", new File("web"));
 		assertNotNull(converter);
+		shared = converter;
+		sharedBaseUri = converter.baseUri;
 		return converter;
 	}
 
@@ -141,5 +156,39 @@ public class WebAozoraConverterCloudflareTest {
 		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
 		assertEquals("話のページへのリクエストは最初の 1 回だけ", 1, episodeRequests.get());
 		assertNull("1 話も取れなければ本を作らない（失敗にする）", txt);
+	}
+
+	/** 別のホスト（CDN の表紙・挿絵）で止められても、サイトへの取得は止めない。同じホストなら止める */
+	@Test
+	public void onlyASameSiteChallengeBlocksTheSite() throws Exception {
+		String base = serve(true);
+		WebAozoraConverter converter = anyConverter();
+		converter.baseUri = "https://ncode.syosetu.com";
+		failureMessage(converter, base + "/ep/1.html", new File(tempFolder.getRoot(), "a.html"));
+		assertFalse("別のホストの確認画面では止めない", converter.blockedByChallenge);
+		converter.baseUri = base;
+		failureMessage(converter, base + "/ep/2.html", new File(tempFolder.getRoot(), "b.html"));
+		assertTrue("サイトのホストの確認画面では止める", converter.blockedByChallenge);
+	}
+
+	/** 「最新 1 話」だけを変換する設定で、その話が取れなければ失敗にする（目次全体と比べない） */
+	@Test
+	public void failsWhenTheSelectedLatestEpisodeWasNotFetched() throws Exception {
+		String base = serve(true);
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 1);
+		assertNull(txt);
+	}
+
+	/** 止められた後、本文の無いキャッシュ（エラーページ）は話として数えない */
+	@Test
+	public void anErrorPageInTheCacheIsNotAnEpisode() throws Exception {
+		firstEpisodeIsErrorPage = true;
+		String base = serve(true);
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertNull(txt);
 	}
 }

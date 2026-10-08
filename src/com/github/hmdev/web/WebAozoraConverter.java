@@ -966,6 +966,9 @@ public class WebAozoraConverter
 			}
 
 			List<String> failedHrefs = new ArrayList<>();
+			//止められたときに「対象の話を 1 つも書けなかったか」を見るための数（最新 N 話などで対象は目次の一部）
+			int selectedChapters = 0;
+			int writtenChapters = 0;
 			if (chapterHrefs.size() > 0) {
 				//全話で更新や追加があるかチェック
 				updated = false;
@@ -1108,6 +1111,7 @@ public class WebAozoraConverter
 					if (this.canceled) return null;
 
 					if (modifiedChapterIdx == null || modifiedChapterIdx.contains(chapterIdx)) {
+						selectedChapters++;
 						//キャッシュファイル取得
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
 						File chapterCacheFile;
@@ -1168,6 +1172,15 @@ public class WebAozoraConverter
 								}
 							}
 						}
+						//止められた後、本文の無いキャッシュ（エラーページなど）は話として数えない
+						Elements articleCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+						boolean hasArticle = (articleCheck != null && articleCheck.size() > 0) || !this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE);
+						if (!hasArticle && this.blockedByChallenge) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 本文が無く、取得もできないためスキップします: "+chapterHref);
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
 						String chapterTitle = getExtractText(chapterDoc, this.queryMap.get(ExtractId.CONTENT_CHAPTER));
 						// nextDataEpisodeChapterMap をフォールバックとして使用 (Phase 2-1: カクヨム章構造対応)
 						if (chapterTitle == null && this.nextDataEpisodeChapterMap != null) {
@@ -1205,6 +1218,7 @@ public class WebAozoraConverter
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
 						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate, publishDate);
+						if (hasArticle) writtenChapters++;
 					}
 					chapterIdx++;
 				}
@@ -1235,7 +1249,7 @@ public class WebAozoraConverter
 				}
 			}
 			//止められて 1 話も取れなかったら、本文の無い本を作らずに失敗にする
-			if (this.blockedByChallenge && !chapterHrefs.isEmpty() && failedHrefs.size() >= chapterHrefs.size()) {
+			if (this.blockedByChallenge && selectedChapters > 0 && writtenChapters == 0) {
 				LogAppender.println("サイトに止められて、1 話も取得できませんでした");
 				return null;
 			}
@@ -3023,7 +3037,9 @@ public class WebAozoraConverter
 				//すり抜ける細工はしない（サイトの意思に反する）。止められていると伝えて断る
 				if ("challenge".equalsIgnoreCase(response.headers().firstValue("cf-mitigated").orElse(""))) {
 					CloudflareChallengeException e = new CloudflareChallengeException(responseCode, urlString);
-					challenged(e);
+					//サイトそのものに止められたときだけ、以降を止める（別のホストの表紙・挿絵では止めない）
+					if (isSiteHost(urlString)) challenged(e);
+					else LogAppender.println(e.getMessage());
 					throw e;
 				}
 				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
