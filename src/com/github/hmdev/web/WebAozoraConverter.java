@@ -630,7 +630,8 @@ public class WebAozoraConverter
 		} catch (Exception e) {
 			logger.warn("一覧ページの取得に失敗、キャッシュ利用を試みる: {}", urlString, e);
 			LogAppender.println("一覧ページの取得に失敗しました。 ");
-			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
+			//止められたときは cacheFile が理由を出している。Java のクラス名は利用者に見せない
+			if (!(e instanceof CloudflareChallengeException)) LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
 			if (!cacheFile.exists()) return null;
 
 			LogAppender.println("キャッシュファイルを利用します。");
@@ -902,8 +903,7 @@ public class WebAozoraConverter
 										}
 									}
 								} catch (CloudflareChallengeException e) {
-									//目次の途中までで本を作らない
-									LogAppender.println(e.getMessage());
+									//目次の途中までで本を作らない（理由は cacheFile が出した）
 									return null;
 								} catch (Exception e) {
 									LogAppender.println("目次ページ " + pageIdx + " 取得エラー: " + e.getMessage());
@@ -1030,9 +1030,7 @@ public class WebAozoraConverter
 								this.updated = true;
 								loaded = true;
 							} catch (CloudflareChallengeException e) {
-								//止められていると分かったら、残りの話を取りに行き続けない（キャッシュにある話で本を作る）
-								LogAppender.println("");
-								challenged(e);
+								//理由は cacheFile が出した。以降の話は取りに行かない（キャッシュにある話で本を作る）
 							} catch (Exception e) {
 								logger.warn("章 HTML の取得に失敗（後続でキャッシュ確認・再試行）: {}", chapterHref, e);
 								LogAppender.println("htmlファイルが取得できませんでした : "+chapterHref);
@@ -1065,7 +1063,9 @@ public class WebAozoraConverter
 				//更新が無くて変換もなければ終了
 				if (!this.updated) {
 					LogAppender.append("「"+title+"」");
-					LogAppender.println("の更新はありません");
+					//止められて取れなかったのを「更新なし」と言わない
+					if (this.blockedByChallenge) LogAppender.println("の更新は、サイトに止められたため確かめられませんでした");
+					else LogAppender.println("の更新はありません");
 					if (this.convertUpdated) return null;
 				}
 				
@@ -1142,7 +1142,6 @@ public class WebAozoraConverter
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 							} catch (Exception e) {
-								if (e instanceof CloudflareChallengeException) challenged((CloudflareChallengeException)e);
 								logger.warn("章の再ダウンロードに失敗、スキップ: {}", chapterHref, e);
 								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
 								failedHrefs.add(chapterHref);
@@ -1164,7 +1163,6 @@ public class WebAozoraConverter
 									cacheFile(chapterHref, chapterCacheFile, urlString);
 									chapterDoc = Jsoup.parse(chapterCacheFile, null);
 								} catch (Exception e) {
-									if (e instanceof CloudflareChallengeException) challenged((CloudflareChallengeException)e);
 									logger.warn("章本文の再取得に失敗: {}", chapterHref, e);
 									LogAppender.println("再ダウンロードできませんでした: " + chapterHref);
 								}
@@ -1236,6 +1234,11 @@ public class WebAozoraConverter
 					LogAppender.println(buf+"話を変換します");
 				}
 			}
+			//止められて 1 話も取れなかったら、本文の無い本を作らずに失敗にする
+			if (this.blockedByChallenge && !chapterHrefs.isEmpty() && failedHrefs.size() >= chapterHrefs.size()) {
+				LogAppender.println("サイトに止められて、1 話も取得できませんでした");
+				return null;
+			}
 			//ダウンロード失敗話の報告
 			if (!failedHrefs.isEmpty()) {
 				File failedFile = new File(this.dstPath, "failed_downloads.txt");
@@ -1282,6 +1285,18 @@ public class WebAozoraConverter
 		return txtFile;
 	}
 	
+	/** urlString がこのサイト（一覧の URL のホスト）か。挿絵が別のホストにあるときは止めない */
+	private boolean isSiteHost(String urlString)
+	{
+		try {
+			String host = java.net.URI.create(urlString).getHost();
+			String siteHost = java.net.URI.create(this.baseUri).getHost();
+			return host != null && host.equalsIgnoreCase(siteHost);
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
 	/** Cloudflare の確認画面で止められた。理由を 1 回だけ出し、以降はこのサイトに取りに行かない */
 	private void challenged(CloudflareChallengeException e)
 	{
@@ -1785,7 +1800,8 @@ public class WebAozoraConverter
 		} catch (Exception e) {
 			logger.error("画像のダウンロードに失敗: {}", src, e);
 			//挿絵は無くても本は作れるので止めない。止められた理由は添える
-			LogAppender.println("画像が取得できませんでした : "+src+(e instanceof CloudflareChallengeException ? " ("+e.getMessage()+")" : ""));
+			//止められたときの理由は cacheFile が 1 回だけ出す
+			LogAppender.println("画像が取得できませんでした : "+src);
 		}
 		if (bw != null) {
 			bw.append("［＃挿絵（");
@@ -2986,6 +3002,9 @@ public class WebAozoraConverter
 		}
 		cacheFile.getParentFile().mkdirs();
 
+		//同じ変換の中でこのサイトに止められていたら、送らずに断る（取りに行き続けない）
+		if (this.blockedByChallenge && isSiteHost(urlString)) throw new CloudflareChallengeException(urlString);
+
 		try {
 			HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
 				.uri(new URI(urlString))
@@ -3003,7 +3022,9 @@ public class WebAozoraConverter
 				//Cloudflare のボット確認画面（Just a moment...）。コードだけでは利用者に理由が分からない
 				//すり抜ける細工はしない（サイトの意思に反する）。止められていると伝えて断る
 				if ("challenge".equalsIgnoreCase(response.headers().firstValue("cf-mitigated").orElse(""))) {
-					throw new CloudflareChallengeException(responseCode, urlString);
+					CloudflareChallengeException e = new CloudflareChallengeException(responseCode, urlString);
+					challenged(e);
+					throw e;
 				}
 				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
 			}

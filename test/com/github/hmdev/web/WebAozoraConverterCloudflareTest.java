@@ -3,6 +3,7 @@ package com.github.hmdev.web;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -29,7 +30,7 @@ import com.sun.net.httpserver.HttpServer;
  * （ハーメルンが 2026-10 にこうなった）。
  * - 理由の分かる文言で失敗し、確認画面をキャッシュに書かない
  * - コードだけの 403 とは区別する
- * - 止められたと分かったら、残りの話を取りに行き続けない
+ * - 止められたと分かったら、残りの話を取りに行き続けない。1 話も取れなければ本を作らない
  */
 public class WebAozoraConverterCloudflareTest {
 
@@ -37,11 +38,14 @@ public class WebAozoraConverterCloudflareTest {
 	public TemporaryFolder tempFolder = new TemporaryFolder();
 
 	private HttpServer server;
+	private String registeredFqdn;
 	private final AtomicInteger episodeRequests = new AtomicInteger();
 
 	@After
 	public void tearDown() {
 		if (server != null) server.stop(0);
+		//createWebAozoraConverter が静的な表に登録した手元のサーバ用の変換器を外す
+		if (registeredFqdn != null) WebAozoraConverter.converters.remove(registeredFqdn);
 	}
 
 	private static void respond(HttpExchange exchange, int status, String html, boolean challenge) throws IOException {
@@ -53,7 +57,7 @@ public class WebAozoraConverterCloudflareTest {
 		exchange.close();
 	}
 
-	/** 一覧は 200、各話は確認画面を返すサーバ。戻り値はサーバの "http://127.0.0.1:port" */
+	/** 一覧は 200、各話は 403（challenge なら確認画面）を返すサーバ。戻り値は "http://127.0.0.1:port" */
 	private String serve(boolean challenge) throws IOException {
 		//IPv6 を優先する環境でも URL と食い違わないよう、127.0.0.1 に明示して待ち受ける
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
@@ -69,8 +73,16 @@ public class WebAozoraConverterCloudflareTest {
 		return "http://127.0.0.1:" + server.getAddress().getPort();
 	}
 
+	/** cacheFile を呼ぶだけの升は、既存のサイト定義の変換器で足りる（どの OS でも走る） */
+	private static WebAozoraConverter anyConverter() throws IOException {
+		WebAozoraConverter converter = WebAozoraConverter.createWebAozoraConverter(
+			"https://ncode.syosetu.com/n0000xx/", new File("web"));
+		assertNotNull(converter);
+		return converter;
+	}
+
 	/** 手元のサーバ用のサイト定義（web/<ホスト:ポート>/extract.txt）を作って変換器を得る */
-	private WebAozoraConverter converterFor(String base) throws IOException {
+	private WebAozoraConverter siteConverterFor(String base) throws IOException {
 		String fqdn = base.substring(base.indexOf("//") + 2);
 		File web = tempFolder.newFolder("web");
 		File siteDir = new File(web, fqdn);
@@ -85,6 +97,7 @@ public class WebAozoraConverterCloudflareTest {
 			"").getBytes(StandardCharsets.UTF_8));
 		WebAozoraConverter converter = WebAozoraConverter.createWebAozoraConverter(base + "/novel/", web);
 		assertNotNull("サイト定義を読めない", converter);
+		registeredFqdn = fqdn;
 		return converter;
 	}
 
@@ -104,7 +117,7 @@ public class WebAozoraConverterCloudflareTest {
 	public void cloudflareChallengeIsExplainedAndNotCached() throws Exception {
 		String base = serve(true);
 		File cache = new File(tempFolder.getRoot(), "page.html");
-		String message = failureMessage(converterFor(base), base + "/ep/1.html", cache);
+		String message = failureMessage(anyConverter(), base + "/ep/1.html", cache);
 		assertTrue(message, message.startsWith("[challenge] "));
 		assertTrue(message, message.contains("Cloudflare の確認画面"));
 		assertTrue(message, message.contains("HTTP 403"));
@@ -114,19 +127,19 @@ public class WebAozoraConverterCloudflareTest {
 	@Test
 	public void plain403KeepsTheOldMessage() throws Exception {
 		String base = serve(false);
-		String message = failureMessage(converterFor(base), base + "/ep/1.html", new File(tempFolder.getRoot(), "page.html"));
+		String message = failureMessage(anyConverter(), base + "/ep/1.html", new File(tempFolder.getRoot(), "page.html"));
 		assertFalse(message, message.startsWith("[challenge] "));
 		assertTrue(message, message.contains("Server returned HTTP response code: 403"));
 	}
 
-	/** 止められたと分かったら、残りの話（と再ダウンロード）を取りに行かない */
+	/** 止められたら残りの話（と再ダウンロード）を取りに行かず、1 話も取れなければ本を作らない */
 	@Test
-	public void stopsRequestingEpisodesAfterChallenge() throws Exception {
+	public void stopsRequestingEpisodesAndFailsWhenNothingWasFetched() throws Exception {
 		String base = serve(true);
-		WebAozoraConverter converter = converterFor(base);
+		WebAozoraConverter converter = siteConverterFor(base);
 		File cache = tempFolder.newFolder("cache");
-		converter.dstPath = cache.getAbsolutePath() + "/";
-		converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
 		assertEquals("話のページへのリクエストは最初の 1 回だけ", 1, episodeRequests.get());
+		assertNull("1 話も取れなければ本を作らない（失敗にする）", txt);
 	}
 }

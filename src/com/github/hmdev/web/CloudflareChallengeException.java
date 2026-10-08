@@ -9,9 +9,16 @@ import java.io.IOException;
 @SuppressWarnings("serial")
 public class CloudflareChallengeException extends IOException
 {
+	/** 応答で止められた */
 	public CloudflareChallengeException(int responseCode, String urlString)
 	{
 		super("このサイトは自動での取得を Cloudflare の確認画面で止めているため、取得できません"
 			+ " (HTTP " + responseCode + "): " + urlString);
+	}
+
+	/** 同じ変換の中ですでに止められていたので、送らなかった */
+	public CloudflareChallengeException(String urlString)
+	{
+		super("このサイトに止められているため、取得しませんでした: " + urlString);
 	}
 }
