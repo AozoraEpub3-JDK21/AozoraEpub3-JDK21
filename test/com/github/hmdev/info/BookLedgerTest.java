@@ -40,6 +40,11 @@ public class BookLedgerTest {
 		// クエリで作品を分けるサイトがある
 		assertNotEquals(BookLedger.identifierFor("https://example.com/novel?id=1"),
 			BookLedger.identifierFor("https://example.com/novel?id=2"));
+		// パスが無く、ホストの直後にクエリが来ても、クエリの大文字小文字は残す
+		assertNotEquals(BookLedger.identifierFor("https://example.com?work=A"),
+			BookLedger.identifierFor("https://example.com?work=a"));
+		assertEquals(BookLedger.identifierFor("https://EXAMPLE.com?work=A"),
+			BookLedger.identifierFor("https://example.com?work=A"));
 	}
 
 	@Test

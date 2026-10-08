@@ -72,9 +72,14 @@ public final class BookLedger
 		if (hash >= 0) url = url.substring(0, hash);
 		int scheme = url.indexOf("://");
 		if (scheme >= 0) url = url.substring(scheme+3);
-		int slash = url.indexOf('/');
-		String host = slash < 0 ? url : url.substring(0, slash);
-		String rest = slash < 0 ? "" : url.substring(slash);
+		//ホスト名はパスかクエリの手前まで（https://example.com?work=A のようにパスが無いこともある）
+		int end = url.length();
+		for (char c : new char[]{'/', '?'}) {
+			int i = url.indexOf(c);
+			if (i >= 0 && i < end) end = i;
+		}
+		String host = url.substring(0, end);
+		String rest = url.substring(end);
 		int query = rest.indexOf('?');
 		String path = query < 0 ? rest : rest.substring(0, query);
 		String q = query < 0 ? "" : rest.substring(query);
