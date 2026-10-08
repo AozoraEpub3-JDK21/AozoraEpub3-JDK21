@@ -15,7 +15,7 @@ Web 変換まわりの変更時にここを更新しながら回す
 | カクヨム (kakuyomu.jp) | `works/822139840468926025` | ✅ (同上) |
 | ハーメルン (novel.syosetu.org) | 章あり `402358` / 章なし `422019` | ✅ (同上 + HamelnE2ETest) |
 | 青空文庫 (www.aozora.gr.jp) | `cards/000035/files/1567_14913.html` | ✅ (表題二重は #80 で修正) |
-| **なろう R18 (novel18.syosetu.com)** | `n0037mn` (ノクターン) | ✅ EPUB 生成・タイトル/mimetype 正常。COOKIE over18=yes で年齢認証も通過 |
+| **なろう R18 (novel18.syosetu.com)** | `n0037mn` (ノクターン) | ✅ EPUB 生成・タイトル/mimetype 正常。COOKIE over18=yes で年齢認証も通過。**2026-10-08 訂正: 本文は空だった**（下記「2026-10-08 ノクターンの本文」） |
 | **暁 (www.akatsuki-novels.com)** | `stories/index/novel_id~8654` | ✅ EPUB 178KB 生成 |
 | **novelist.jp** | `388.html` (WHITE BOOK) | ✅ EPUB 471KB 生成 |
 | **2.novelist.jp (二次創作)** | `6027.html` (ゆらのと、373 ページ) | ✅ EPUB 687KB 生成。PAGE_URL のページネーションも 373 ページ完走 |
@@ -27,6 +27,17 @@ Web 変換まわりの変更時にここを更新しながら回す
 補足: なろう R18 の出力ファイル名が超長タイトルでフルパス 228 文字になった。
 Windows の 260 文字制限までは余裕があったが、深い出力先に変換すると超え得る
 (Git Bash の `ls` は表示に失敗した)。出力ファイル名の長さ上限は将来検討。
+
+## 2026-10-08 ノクターンの本文 — ✅ 修正
+
+**症状**: ノクターン（`novel18.syosetu.com`）の Web 変換で、各話に「CONTENT_ARTICLE : 本文が取得できません」と出て、本文の無い EPUB ができる。変換は「変換完了」・終了コード 0 になる。
+上の 08-11 の確認は「EPUB ができた」までしか見ておらず、本文の有無を見ていなかった。
+
+**原因**: ノクターンもなろう本体と同じ 2024 年の作り変え（`p-eplist__*`・`p-novel__*`）になっていたが、`web/novel18.syosetu.com/extract.txt` は旧クラス名（`#novel_honbun`・`.novel_subtitle`・`.long_update` など）のままだった。
+
+**対応**: なろう本体（`web/ncode.syosetu.com/extract.txt`）と同じセレクタにそろえた（旧クラス名は後ろに残す）。`COOKIE over18=yes` はそのまま。
+
+**確認**（mac、master の jar に枝の `web/` を当てて変換）: `n7014fx`（2 話）は本文 0 字 → 13,418 字、`n0037mn`（9 話）は 50,215 字。話の題（中見出し）・前書き・あとがきもそれぞれの位置に出る。
 
 ## 残件 1: FC2 小説の対応が現行サイトで機能しない — ✅ 修正済み (2026-08-11、v1.5.1 向け)
 
