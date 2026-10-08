@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.util.CharUtils;
+import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.web.ExtractInfo.ExtractId;
 import com.github.hmdev.web.api.NarouApiClient;
@@ -439,26 +440,8 @@ public class WebAozoraConverter
 		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
 	}
 
-	/** 実在する最も近い祖先を toRealPath() で解決し、残りのセグメントを連結して返す。
-	 * path 自身が存在しない場合でも、途中のディレクトリが symlink / junction で
-	 * 別の場所を指しているケースを解決できるようにするため。
-	 * 壊れた symlink に当たった場合は toRealPath() が IOException を投げ、
-	 * 呼び出し元では「安全でないパス」として扱われる（fail closed）。 */
-	private static Path realPath(Path path) throws IOException {
-		Path abs = path.toAbsolutePath().normalize();
-		//symlink 自体も「実在する」とみなすため NOFOLLOW_LINKS で遡る
-		Path existing = abs;
-		while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
-			existing = existing.getParent();
-		}
-		if (existing == null) return abs;
-		Path real = existing.toRealPath();
-		if (existing.getNameCount() == abs.getNameCount()) return real;
-		return real.resolve(abs.subpath(existing.getNameCount(), abs.getNameCount())).normalize();
-	}
-
 	/** base ディレクトリ配下にあることを検証して File を返す（パストラバーサル対策）。
-	 * base・candidate とも realPath() で同じ基準に正規化してから startsWith 比較する
+	 * base・candidate とも PathUtils.realPath() で同じ基準に正規化してから startsWith 比較する
 	 * (PR #22/#23 の 2 段階パターンを、実在しない葉にも効くよう拡張したもの)。
 	 * 両者を同じ基準で解決するのが要点で、
 	 *  - base 自体が junction / symlink 配下にある場合の誤検知を防ぐ（正常系の保護）
@@ -467,10 +450,10 @@ public class WebAozoraConverter
 	 * relative が絶対パスの場合は resolve がそれを返すため、startsWith 検査で弾かれる。
 	 * テストから利用するため package-private */
 	static File safeResolve(Path base, String relative) throws IOException {
-		Path canonicalBase = realPath(base);
+		Path canonicalBase = PathUtils.realPath(base);
 		Path resolved;
 		try {
-			resolved = realPath(canonicalBase.resolve(relative));
+			resolved = PathUtils.realPath(canonicalBase.resolve(relative));
 		} catch (InvalidPathException e) {
 			// OS がファイル名として受け付けない文字を含む場合 (Windows の制御文字・末尾スペース等)。
 			// InvalidPathException は RuntimeException のため、そのままだと呼び出し側の

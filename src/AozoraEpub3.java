@@ -23,6 +23,7 @@ import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
+import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
@@ -881,9 +882,12 @@ public class AozoraEpub3
 		File outFile = new File(outFileName + outExt);
 		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証 (PR #22/#23 の 2 段階パターン)
 		Path dstPathNio = dstPath.toPath();
-		Path canonicalDst = Files.exists(dstPathNio) ? dstPathNio.toRealPath() : dstPathNio.toAbsolutePath().normalize();
+		// 出力先と出力ファイルを同じ基準（実在する最も近い祖先の実パス）で解決して比べる。
+		// まだ無い出力ファイルだけ toAbsolutePath のまま比べると、symlink（macOS の /tmp → /private/tmp）・
+		// junction・8.3 形式の短い名前を通した出力先で「許可されたディレクトリ外」になっていた
+		Path canonicalDst = PathUtils.realPath(dstPathNio);
 		Path outFileNio = outFile.toPath();
-		Path canonicalOut = Files.exists(outFileNio) ? outFileNio.toRealPath() : outFileNio.toAbsolutePath().normalize();
+		Path canonicalOut = PathUtils.realPath(outFileNio);
 		if (!canonicalOut.startsWith(canonicalDst)) {
 			throw new IOException("出力パスが許可されたディレクトリ外です: " + canonicalOut);
 		}
