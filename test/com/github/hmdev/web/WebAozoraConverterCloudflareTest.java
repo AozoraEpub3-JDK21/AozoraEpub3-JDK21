@@ -200,4 +200,15 @@ public class WebAozoraConverterCloudflareTest {
 		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
 		assertNull(txt);
 	}
+
+	/** 「更新分のみ」で止められたら、更新ありの扱いのまま失敗にする（GUI が「スキップしました」と出さない） */
+	@Test
+	public void aBlockedUpdateCheckIsAFailureNotASkip() throws Exception {
+		String base = serve(true);
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 24f, true, false, false, 0);
+		assertNull(txt);
+		assertTrue("止められたのを「更新なし」にしない", converter.isUpdated());
+	}
 }

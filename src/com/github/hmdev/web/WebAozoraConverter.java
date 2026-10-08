@@ -1069,7 +1069,7 @@ public class WebAozoraConverter
 					//止められて取れなかったのを「更新なし」と言わない
 					if (this.blockedByChallenge) LogAppender.println("の更新は、サイトに止められたため確かめられませんでした");
 					else LogAppender.println("の更新はありません");
-					if (this.convertUpdated) return null;
+					if (this.convertUpdated) return blockedUpdateCheck();
 				}
 				
 				if (this.convertModifiedOnly) {
@@ -1090,6 +1090,10 @@ public class WebAozoraConverter
 						}
 					}
 					if (modifiedChapterIdx.size() == 0) {
+						if (this.blockedByChallenge) {
+							LogAppender.println("サイトに止められたため、追加更新分を確かめられませんでした");
+							return blockedUpdateCheck();
+						}
 						LogAppender.println("追加更新分はありません");
 						this.updated = false;
 						return null;
@@ -1285,6 +1289,14 @@ public class WebAozoraConverter
 		return txtFile;
 	}
 	
+	/** 更新の確かめが止められたときの戻り値。呼び出し元（GUI）は「null で更新なし」を「スキップ」と出すので、
+	 * 止められたときは更新ありの扱い（isUpdated()==true）のまま失敗（null）として返す */
+	private File blockedUpdateCheck()
+	{
+		if (this.blockedByChallenge) this.updated = true;
+		return null;
+	}
+
 	/** urlString がこのサイト（一覧の URL のホスト）か。挿絵が別のホストにあるときは止めない */
 	private boolean isSiteHost(String urlString)
 	{
