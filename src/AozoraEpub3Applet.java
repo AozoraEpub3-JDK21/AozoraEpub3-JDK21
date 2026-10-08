@@ -3543,31 +3543,75 @@ public class AozoraEpub3Applet extends JPanel
 	}
 	////////////////
 	/** 空白とみなす文字（全角スペース・ノーブレークスペースを含む） */
-	private static final String PASTE_SPACES = "[\\s\\u3000\\u00A0]+";
+	private static boolean isPasteSpace(char c)
+	{
+		return Character.isWhitespace(c) || c == '\u3000' || c == '\u00A0';
+	}
 
 	/** 前後の空白（全角を含む）と、パスを囲む引用符（"..." と '...'）を外す */
 	private static String unquotePasted(String s)
 	{
-		s = s.replaceAll("^" + PASTE_SPACES + "|" + PASTE_SPACES + "$", "");
+		s = stripPasteSpaces(s);
 		if (s.length() >= 2 && ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'")))) {
-			s = s.substring(1, s.length()-1).replaceAll("^" + PASTE_SPACES + "|" + PASTE_SPACES + "$", "");
+			s = stripPasteSpaces(s.substring(1, s.length()-1));
 		}
 		return s;
 	}
 
-	/** 貼り付けた文字列の 1 つ分を、あるファイルかフォルダの絶対パスとして読む。無ければ null。
+	private static String stripPasteSpaces(String s)
+	{
+		int start = 0, end = s.length();
+		while (start < end && isPasteSpace(s.charAt(start))) start++;
+		while (end > start && isPasteSpace(s.charAt(end-1))) end--;
+		return s.substring(start, end);
+	}
+
+	/** 1 行を語に分ける。空白（全角を含む）で区切るが、引用符（"..." と '...'）の中と、
+	 * バックスラッシュの直後の空白（ターミナルの「\ 」）では区切らない。引用符は外し、「\ 」はそのまま残す */
+	static List<String> splitPastedLine(String line)
+	{
+		List<String> tokens = new ArrayList<String>();
+		StringBuilder buf = new StringBuilder();
+		char quote = 0;
+		for (int i = 0; i < line.length(); i++) {
+			char c = line.charAt(i);
+			if (quote != 0) {
+				if (c == quote) quote = 0;
+				else buf.append(c);
+			} else if (c == '"' || c == '\'') {
+				quote = c;
+			} else if (c == '\\' && i+1 < line.length() && isPasteSpace(line.charAt(i+1))) {
+				buf.append(c).append(line.charAt(++i));
+			} else if (isPasteSpace(c)) {
+				if (buf.length() > 0) { tokens.add(buf.toString()); buf.setLength(0); }
+			} else {
+				buf.append(c);
+			}
+		}
+		if (buf.length() > 0) tokens.add(buf.toString());
+		return tokens;
+	}
+
+	/** 貼り付けた文字列の 1 つ分を、ある絶対パスとして読む。無ければ null。
 	 * 相対パスは読まない（作業フォルダの何かにたまたま当たって変換が始まるのを防ぐ）。
-	 * ターミナルの「\ 」（空白の前のバックスラッシュ）の書き方も読む */
-	private static File pastedFile(String s)
+	 * ターミナルのバックスラッシュの書き方（「\ 」「\(」など）も戻して読む */
+	private static File pastedPath(String s)
 	{
 		if (s.isEmpty()) return null;
 		File file = new File(s);
 		if (file.isAbsolute() && file.exists()) return file;
-		if (s.indexOf("\\ ") >= 0) {
-			file = new File(s.replace("\\ ", " "));
+		if (s.indexOf('\\') >= 0 && s.startsWith("/")) {
+			//mac・Linux のパスだけ（Windows のパスの区切りの \ を壊さない）
+			file = new File(s.replaceAll("\\\\(.)", "$1"));
 			if (file.isAbsolute() && file.exists()) return file;
 		}
 		return null;
+	}
+
+	/** フォルダとして受け付けてよいか。ルート（/ や C:\）はディスク全体の変換になるので断る */
+	private static boolean isAcceptableFolder(File file)
+	{
+		return file.isDirectory() && file.getAbsoluteFile().getParentFile() != null;
 	}
 
 	private static boolean isWebUrl(String s)
@@ -3576,30 +3620,48 @@ public class AozoraEpub3Applet extends JPanel
 	}
 
 	/** 貼り付け・ドロップされた文字列から、URL と、あるファイル・フォルダを拾う（順番どおり）。
-	 * 行ごとに、行全体があるファイル・フォルダならそれ（空白を含むパス）。
-	 * そうでなければ空白で区切り、http(s) の URL と、あるファイル・フォルダの絶対パスを拾う
-	 * （「題 https://…」のような行の URL、1 行に並べた複数のパス）。
+	 * 行ごとに、行全体があるファイルかフォルダならそれ（空白を含むパス・フォルダのパスのコピー）。
+	 * そうでなければ語に分け、http(s) の URL と、ある<b>ファイル</b>の絶対パスだけを拾う
+	 * （「題 https://…」の URL、1 行に並べた複数のファイル）。語ではフォルダを拾わない
+	 * （「作品 / 作者」の / や、ログ欄に出たフォルダのパスで、フォルダの中を丸ごと変換しないため）。
+	 * 語では UNC のパス（\\server\…）を見に行かない（応答の無いサーバで画面が固まるため）。
 	 * テストから利用するため package-private */
 	static void collectPasted(String text, List<File> files, List<String> urls)
 	{
 		for (String line : text.split("\\R")) {
 			line = unquotePasted(line);
 			if (line.isEmpty()) continue;
-			File whole = isWebUrl(line) ? null : pastedFile(line);
-			if (whole != null) {
-				files.add(whole);
-				continue;
+			if (!isWebUrl(line)) {
+				File whole = pastedPath(line);
+				if (whole != null && (whole.isFile() || isAcceptableFolder(whole))) {
+					files.add(whole);
+					continue;
+				}
 			}
-			for (String token : line.split(PASTE_SPACES)) {
-				token = unquotePasted(token);
+			for (String token : splitPastedLine(line)) {
 				if (isWebUrl(token)) {
 					urls.add(token);
-				} else {
-					File file = pastedFile(token);
-					if (file != null) files.add(file);
+				} else if (!token.startsWith("\\\\")) {
+					File file = pastedPath(token);
+					if (file != null && file.isFile()) files.add(file);
 				}
 			}
 		}
+	}
+
+	/** Finder でコピーしたファイルのように、文字列がファイルの一覧の名前だけか */
+	static boolean textIsFileNames(String text, List<File> files)
+	{
+		HashSet<String> names = new HashSet<String>();
+		for (File file : files) names.add(file.getName());
+		boolean any = false;
+		for (String line : text.split("\\R")) {
+			line = unquotePasted(line);
+			if (line.isEmpty()) continue;
+			if (!names.contains(line)) return false;
+			any = true;
+		}
+		return any;
 	}
 
 	/** 受け付けたファイル 1 つを変換の対象に積む（.url はショートカットとして URL を読む）。
@@ -3615,6 +3677,8 @@ public class AozoraEpub3Applet extends JPanel
 				if (urlLine != null && isWebUrl(urlLine)) {
 					vecUrlString.add(urlLine);
 					vecUrlSrcFile.add(file);
+				} else {
+					LogAppender.println(I18n.t("ui.paste.urlUnreadable") + " : " + file.getAbsolutePath());
 				}
 			} catch (IOException e) {
 				//1 つ読めなくても残りは変換する
@@ -3670,23 +3734,24 @@ public class AozoraEpub3Applet extends JPanel
 					for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 				}
 			}
-			//文字列から何も拾えなくても、ファイルの一覧があればそちらを使う
-			//（Finder でコピーしたファイルは、ファイル名だけの文字列とファイルの一覧の両方を持つ）
-			if (vecFiles.size() == 0 && vecUrlString.size() == 0 && transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+			if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+				&& (!transfer.isDataFlavorSupported(DataFlavor.stringFlavor) || vecFiles.size() == 0 && vecUrlString.size() == 0)) {
 				//ローカルファイルはFileのみ
 				@SuppressWarnings("unchecked")
 				List<File> files = (List<File>)transfer.getTransferData(DataFlavor.javaFileListFlavor);
-				for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
+				//文字列もあるときは、文字列がファイルの名前だけ（Finder でコピーしたファイル）のときに限ってファイルの一覧を使う
+				//（ブラウザからのドラッグは、文字列と一時ファイルの両方を持つことがある）
+				if (pastedText == null || textIsFileNames(pastedText, files)) {
+					for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
+					pastedText = null;
+				}
 			}
 			
 			//何も変換しなければfalse
 			if (vecFiles.size() == 0 && vecUrlString.size() == 0) {
 				//貼り付けた文字列から何も拾えなかったら黙らずに知らせる（拡張子や空白で黙って捨てていた）
-				if (pastedText != null) {
-					String pasted = pastedText.trim();
-					if (pasted.length() > 200) pasted = pasted.substring(0, 200) + "…";
-					LogAppender.println(I18n.t("ui.paste.nothing") + " : " + pasted);
-				}
+				//貼った中身は出さない（クリップボードにパスワードなどが入っていることがある）
+				if (pastedText != null) LogAppender.println(I18n.t("ui.paste.nothing"));
 				return false;
 			}
 			//変換実行
