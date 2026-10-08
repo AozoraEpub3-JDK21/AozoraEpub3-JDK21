@@ -1158,20 +1158,7 @@ public class WebAozoraConverter
 						if (chapterTitle != null && !preChapterTitle.equals(chapterTitle)) {
 							newChapter = true;
 							preChapterTitle = chapterTitle;
-							bw.append("\n［＃改ページ］\n");
-							// narou.rb互換: 章中表紙のレイアウト
-							if (formatSettings.isChapterUseCenterPage()) {
-								bw.append("［＃ページの左右中央］\n");
-							}
-							if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
-								bw.append("［＃ここから柱］");
-								printText(bw, this.bookTitle);
-								bw.append("［＃ここで柱終わり］\n");
-							}
-							bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
-							printText(bw, preChapterTitle);
-							bw.append("［＃大見出し終わり］\n");
-							bw.append('\n');
+							printChapterHeader(bw, preChapterTitle);
 						}
 							//更新日時・初回公開日を一覧から取得
 						String postDate = null;
@@ -1430,6 +1417,31 @@ public class WebAozoraConverter
 			return hasAny ? publishDateList : null;
 		}
 		return null;
+	}
+
+	/** 章が変わったときの章中表紙（章題の大見出し）を出力する。
+	 * 左右中央にするときは章題だけで1ページにし、第1話は次のページから始める */
+	private void printChapterHeader(BufferedWriter bw, String chapterTitle) throws IOException
+	{
+		bw.append("\n［＃改ページ］\n");
+		// narou.rb互換: 章中表紙のレイアウト
+		if (formatSettings.isChapterUseCenterPage()) {
+			bw.append("［＃ページの左右中央］\n");
+		}
+		if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
+			bw.append("［＃ここから柱］");
+			printText(bw, this.bookTitle);
+			bw.append("［＃ここで柱終わり］\n");
+		}
+		bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
+		printText(bw, chapterTitle);
+		bw.append("［＃大見出し終わり］\n");
+		if (formatSettings.isChapterUseCenterPage()) {
+			// narou.rb と同じく章題の直後で改ページする（無いと第1話まで左右中央の節に入る）
+			bw.append("\n［＃改ページ］\n");
+		} else {
+			bw.append('\n');
+		}
 	}
 
 	
