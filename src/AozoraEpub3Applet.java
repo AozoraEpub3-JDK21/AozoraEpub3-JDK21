@@ -3542,6 +3542,27 @@ public class AozoraEpub3Applet extends JPanel
 		//protected void exportDone(JComponent source, Transferable data, int action) {}
 	}
 	////////////////
+	/** 貼り付け・ドロップされた文字列を、URL とファイルのパスの候補に分ける。
+	 * 行ごとに分け、前後の空白と、Windows の「パスのコピー」が付ける引用符を外す。
+	 * http(s) で始まる行は空白でも区切る（URL は空白を含まない）。パスの行は空白を含んだまま 1 つ */
+	static List<String> splitPastedText(String text)
+	{
+		List<String> items = new ArrayList<String>();
+		for (String line : text.split("\r?\n")) {
+			line = line.trim();
+			if (line.length() >= 2 && line.startsWith("\"") && line.endsWith("\"")) line = line.substring(1, line.length()-1).trim();
+			if (line.isEmpty()) continue;
+			if (line.startsWith("http://") || line.startsWith("https://")) {
+				for (String url : line.split("\\s+")) {
+					if (url.startsWith("http://") || url.startsWith("https://")) items.add(url);
+				}
+			} else {
+				items.add(line);
+			}
+		}
+		return items;
+	}
+
 	/** ファイルまたはURLを取得して変換処理を実行 */
 	boolean handleTextAreaTransfer(Transferable transfer)
 	{
@@ -3585,26 +3606,38 @@ public class AozoraEpub3Applet extends JPanel
 					} catch (Exception e) { logger.warn("file:// 形式の DnD パス展開でエラー", e); }
 				}
 				else if (urlString != null) {
-					//ブラウザからのDnD
+					//ブラウザからのDnD・URL やファイルのパスの貼り付け
 					dstPath = null;
 					try {
-						String[] urlLines = urlString.split("\n| ");
-						for (String urlLine : urlLines) {
-							if (urlLine != null) {
-								if (urlLine.startsWith("http://") || urlLine.startsWith("https://")) {
-									//Webから取得で処置
-									vecUrlString.add(urlLine);
-									vecUrlSrcFile.add(null);
-								} else if (urlLine.endsWith(".txt")) {
-									File file = new File(urlLine);
-									if (file.isFile()) {
-										if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
+						for (String item : splitPastedText(urlString)) {
+							if (item.startsWith("http://") || item.startsWith("https://")) {
+								//Webから取得で処置
+								vecUrlString.add(item);
+								vecUrlSrcFile.add(null);
+							} else {
+								//ファイルのパス: ファイルの D&D と同じく、あるファイルなら拡張子を問わず変換に回す
+								File file = new File(item);
+								if (file.isFile()) {
+									if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
+									if (file.getName().toLowerCase().endsWith(".url")) {
+										String urlLine = readInternetShortCut(file);
+										if (urlLine != null && (urlLine.startsWith("http://") || urlLine.startsWith("https://"))) {
+											vecUrlString.add(urlLine);
+											vecUrlSrcFile.add(file);
+										}
+									} else {
 										vecFiles.add(file);
 									}
 								}
 							}
 						}
 					} catch (Exception e) { logger.warn("ブラウザ DnD の URL/ファイル解析でエラー", e); }
+					//何も受け付けなかったら黙らずに知らせる（拡張子や空白で黙って捨てていた）
+					if (vecFiles.size() == 0 && vecUrlString.size() == 0) {
+						String pasted = urlString.trim();
+						if (pasted.length() > 200) pasted = pasted.substring(0, 200) + "…";
+						LogAppender.println(I18n.t("ui.paste.nothing") + " : " + pasted);
+					}
 				}
 			}
 			else if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
