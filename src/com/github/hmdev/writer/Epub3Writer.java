@@ -1306,7 +1306,11 @@ public class Epub3Writer
 		
 		//本文の行が 1 つも無いと節が開かれていない（表題の後に空行が無く、短い本文が全部表題の塊として
 		//読まれたときなど）。そのまま閉じると zip の項目が無いまま書いて変換全体が落ちていたので、空の節を開く（監査 35）
-		if (this.sectionIndex == 0) this.startSection(0, PageBreakType.PAGE_NORMAL, PageBreakType.IMAGE_PAGE_NONE, null);
+		if (this.sectionIndex == 0) {
+			//空の本を黙って作らない
+			LogAppender.println("[WARN] 本文がありませんでした。表題の後に空行が無いと、先頭の数行は表題・著者として読まれます");
+			this.startSection(0, PageBreakType.PAGE_NORMAL, PageBreakType.IMAGE_PAGE_NONE, null);
+		}
 		this.endSection();
 	}
 	
