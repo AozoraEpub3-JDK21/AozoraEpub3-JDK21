@@ -3542,25 +3542,89 @@ public class AozoraEpub3Applet extends JPanel
 		//protected void exportDone(JComponent source, Transferable data, int action) {}
 	}
 	////////////////
-	/** 貼り付け・ドロップされた文字列を、URL とファイルのパスの候補に分ける。
-	 * 行ごとに分け、前後の空白と、Windows の「パスのコピー」が付ける引用符を外す。
-	 * http(s) で始まる行は空白でも区切る（URL は空白を含まない）。パスの行は空白を含んだまま 1 つ */
-	static List<String> splitPastedText(String text)
+	/** 空白とみなす文字（全角スペース・ノーブレークスペースを含む） */
+	private static final String PASTE_SPACES = "[\\s\\u3000\\u00A0]+";
+
+	/** 前後の空白（全角を含む）と、パスを囲む引用符（"..." と '...'）を外す */
+	private static String unquotePasted(String s)
 	{
-		List<String> items = new ArrayList<String>();
-		for (String line : text.split("\r?\n")) {
-			line = line.trim();
-			if (line.length() >= 2 && line.startsWith("\"") && line.endsWith("\"")) line = line.substring(1, line.length()-1).trim();
+		s = s.replaceAll("^" + PASTE_SPACES + "|" + PASTE_SPACES + "$", "");
+		if (s.length() >= 2 && ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'")))) {
+			s = s.substring(1, s.length()-1).replaceAll("^" + PASTE_SPACES + "|" + PASTE_SPACES + "$", "");
+		}
+		return s;
+	}
+
+	/** 貼り付けた文字列の 1 つ分を、あるファイルかフォルダの絶対パスとして読む。無ければ null。
+	 * 相対パスは読まない（作業フォルダの何かにたまたま当たって変換が始まるのを防ぐ）。
+	 * ターミナルの「\ 」（空白の前のバックスラッシュ）の書き方も読む */
+	private static File pastedFile(String s)
+	{
+		if (s.isEmpty()) return null;
+		File file = new File(s);
+		if (file.isAbsolute() && file.exists()) return file;
+		if (s.indexOf("\\ ") >= 0) {
+			file = new File(s.replace("\\ ", " "));
+			if (file.isAbsolute() && file.exists()) return file;
+		}
+		return null;
+	}
+
+	private static boolean isWebUrl(String s)
+	{
+		return s.startsWith("http://") || s.startsWith("https://");
+	}
+
+	/** 貼り付け・ドロップされた文字列から、URL と、あるファイル・フォルダを拾う（順番どおり）。
+	 * 行ごとに、行全体があるファイル・フォルダならそれ（空白を含むパス）。
+	 * そうでなければ空白で区切り、http(s) の URL と、あるファイル・フォルダの絶対パスを拾う
+	 * （「題 https://…」のような行の URL、1 行に並べた複数のパス）。
+	 * テストから利用するため package-private */
+	static void collectPasted(String text, List<File> files, List<String> urls)
+	{
+		for (String line : text.split("\\R")) {
+			line = unquotePasted(line);
 			if (line.isEmpty()) continue;
-			if (line.startsWith("http://") || line.startsWith("https://")) {
-				for (String url : line.split("\\s+")) {
-					if (url.startsWith("http://") || url.startsWith("https://")) items.add(url);
+			File whole = isWebUrl(line) ? null : pastedFile(line);
+			if (whole != null) {
+				files.add(whole);
+				continue;
+			}
+			for (String token : line.split(PASTE_SPACES)) {
+				token = unquotePasted(token);
+				if (isWebUrl(token)) {
+					urls.add(token);
+				} else {
+					File file = pastedFile(token);
+					if (file != null) files.add(file);
 				}
-			} else {
-				items.add(line);
 			}
 		}
-		return items;
+	}
+
+	/** 受け付けたファイル 1 つを変換の対象に積む（.url はショートカットとして URL を読む）。
+	 * 貼り付け・ドロップ・file:// の 3 つの経路で同じ扱いにする。
+	 * @return 出力先（まだ決まっていなければこのファイルのフォルダ） */
+	private File acceptFile(File file, List<File> vecFiles, List<String> vecUrlString, List<File> vecUrlSrcFile, File dstPath)
+	{
+		if (!file.exists()) return dstPath;
+		if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
+		if (file.getName().toLowerCase().endsWith(".url")) {
+			try {
+				String urlLine = readInternetShortCut(file);
+				if (urlLine != null && isWebUrl(urlLine)) {
+					vecUrlString.add(urlLine);
+					vecUrlSrcFile.add(file);
+				}
+			} catch (IOException e) {
+				//1 つ読めなくても残りは変換する
+				logger.warn("インターネットショートカットを読めません: {}", file, e);
+				LogAppender.println(I18n.t("ui.paste.urlUnreadable") + " : " + file.getAbsolutePath());
+			}
+		} else {
+			vecFiles.add(file);
+		}
+		return dstPath;
 	}
 
 	/** ファイルまたはURLを取得して変換処理を実行 */
@@ -3574,6 +3638,7 @@ public class AozoraEpub3Applet extends JPanel
 			//ショートカットファイルを格納(同名の表紙取得に利用)
 			ArrayList<File> vecUrlSrcFile = new ArrayList<File>();
 			File dstPath = null;
+			String pastedText = null;
 			
 			if (transfer.isDataFlavorSupported(DataFlavor.stringFlavor)) {
 				//ブラウザからだとStringとFileの両方が来る Linuxは file:// 文字列
@@ -3586,84 +3651,44 @@ public class AozoraEpub3Applet extends JPanel
 				if (urlString != null && urlString.startsWith("file://")) {
 					//Linux等 ファイルのパスでファイルがあれば変換
 					try {
-						String[] fileNames = urlString.split("\n");
-						vecFiles = new ArrayList<File>();
-						for (String path : fileNames) {
+						for (String path : urlString.split("\n")) {
 							File file = new File(URLDecoder.decode(path.substring(7).trim(),"UTF-8"));
-							if (file.exists()) {
-								if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-								if (file.getName().toLowerCase().endsWith(".url")) {
-									String urlLine = readInternetShortCut(file);
-									if (urlLine != null && (urlLine.startsWith("http://") || urlLine.startsWith("https://"))) {
-										vecUrlString.add(urlLine);
-										vecUrlSrcFile.add(file);
-									}
-								} else {
-									vecFiles.add(file);
-								}
-							}
+							dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 						}
 					} catch (Exception e) { logger.warn("file:// 形式の DnD パス展開でエラー", e); }
 				}
 				else if (urlString != null) {
 					//ブラウザからのDnD・URL やファイルのパスの貼り付け
-					dstPath = null;
-					try {
-						for (String item : splitPastedText(urlString)) {
-							if (item.startsWith("http://") || item.startsWith("https://")) {
-								//Webから取得で処置
-								vecUrlString.add(item);
-								vecUrlSrcFile.add(null);
-							} else {
-								//ファイルのパス: ファイルの D&D と同じく、あるファイルなら拡張子を問わず変換に回す
-								File file = new File(item);
-								if (file.isFile()) {
-									if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-									if (file.getName().toLowerCase().endsWith(".url")) {
-										String urlLine = readInternetShortCut(file);
-										if (urlLine != null && (urlLine.startsWith("http://") || urlLine.startsWith("https://"))) {
-											vecUrlString.add(urlLine);
-											vecUrlSrcFile.add(file);
-										}
-									} else {
-										vecFiles.add(file);
-									}
-								}
-							}
-						}
-					} catch (Exception e) { logger.warn("ブラウザ DnD の URL/ファイル解析でエラー", e); }
-					//何も受け付けなかったら黙らずに知らせる（拡張子や空白で黙って捨てていた）
-					if (vecFiles.size() == 0 && vecUrlString.size() == 0) {
-						String pasted = urlString.trim();
-						if (pasted.length() > 200) pasted = pasted.substring(0, 200) + "…";
-						LogAppender.println(I18n.t("ui.paste.nothing") + " : " + pasted);
+					pastedText = urlString;
+					List<File> files = new ArrayList<File>();
+					List<String> urls = new ArrayList<String>();
+					collectPasted(urlString, files, urls);
+					for (String url : urls) {
+						vecUrlString.add(url);
+						vecUrlSrcFile.add(null);
 					}
+					for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 				}
 			}
-			else if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+			//文字列から何も拾えなくても、ファイルの一覧があればそちらを使う
+			//（Finder でコピーしたファイルは、ファイル名だけの文字列とファイルの一覧の両方を持つ）
+			if (vecFiles.size() == 0 && vecUrlString.size() == 0 && transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
 				//ローカルファイルはFileのみ
 				@SuppressWarnings("unchecked")
 				List<File> files = (List<File>)transfer.getTransferData(DataFlavor.javaFileListFlavor);
-				if (files.size() > 0) {
-					for (File file : files) {
-						if (file.exists()) {
-							if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-							if (file.getName().toLowerCase().endsWith(".url")) {
-								String urlLine = readInternetShortCut(file);
-								if (urlLine != null && (urlLine.startsWith("http://") || urlLine.startsWith("https://"))) {
-									vecUrlString.add(urlLine);
-									vecUrlSrcFile.add(file);
-								}
-							} else {
-								vecFiles.add(file);
-							}
-						}
-					}
-				}
+				for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 			}
 			
 			//何も変換しなければfalse
-			if (vecFiles.size() == 0 && vecUrlString.size() == 0) return false;
+			if (vecFiles.size() == 0 && vecUrlString.size() == 0) {
+				//貼り付けた文字列から何も拾えなかったら黙らずに知らせる（拡張子や空白で黙って捨てていた）
+				if (pastedText != null) {
+					String pasted = pastedText.trim();
+					if (pasted.length() > 200) pasted = pasted.substring(0, 200) + "…";
+					LogAppender.println(I18n.t("ui.paste.nothing") + " : " + pasted);
+				}
+				return false;
+			}
 			//変換実行
 			startConvertWorker(vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 			
