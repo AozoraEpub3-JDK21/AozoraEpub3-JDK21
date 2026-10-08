@@ -679,8 +679,6 @@ public class WebAozoraConverter
 		String requestedBaseName = outFileName == null ? null
 			: BookLedger.nameOrNull(outFileName.replaceFirst("(?i)\\.txt$", ""));
 		File workDir = new File(this.dstPath);
-		//作品のフォルダの場所にフォルダ以外があったら消す（txt を書く前の同じ処理より先に、台帳を書くため）
-		if (workDir.exists() && !workDir.isDirectory()) workDir.delete();
 		BookLedger ledger = BookLedger.load(workDir);
 		BookLedger toSave = null;
 		if (ledger == null) toSave = BookLedger.create(urlString, requestedBaseName != null ? requestedBaseName : textBaseName);

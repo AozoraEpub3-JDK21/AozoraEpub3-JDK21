@@ -164,19 +164,4 @@ public class WebAozoraConverterBookLedgerTest {
 		assertEquals("指定の名前.txt", txt.getName());
 		assertEquals("台帳はその txt に当たる", txt.getName(), BookLedger.load(txt.getParentFile()).textFileName());
 	}
-
-	@Test
-	public void aFileWhereTheWorkFolderGoesDoesNotStopTheLedger() throws Exception {
-		String base = serve();
-		WebAozoraConverter converter = siteConverterFor(base);
-		File cache = tempFolder.newFolder("cache");
-		// 作品のフォルダ（cache/<host>/novel/）の場所に、フォルダでないものがある
-		File hostDir = new File(cache, base.substring(base.indexOf("//") + 2));
-		assertTrue(hostDir.mkdirs());
-		Files.write(new File(hostDir, "novel").toPath(), new byte[]{1});
-
-		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
-		assertNotNull(txt);
-		assertNotNull("台帳ができる", BookLedger.load(txt.getParentFile()));
-	}
 }
