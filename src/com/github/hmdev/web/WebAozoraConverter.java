@@ -1158,20 +1158,6 @@ public class WebAozoraConverter
 						if (chapterTitle != null && !preChapterTitle.equals(chapterTitle)) {
 							newChapter = true;
 							preChapterTitle = chapterTitle;
-							bw.append("\n［＃改ページ］\n");
-							// narou.rb互換: 章中表紙のレイアウト
-							if (formatSettings.isChapterUseCenterPage()) {
-								bw.append("［＃ページの左右中央］\n");
-							}
-							if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
-								bw.append("［＃ここから柱］");
-								printText(bw, this.bookTitle);
-								bw.append("［＃ここで柱終わり］\n");
-							}
-							bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
-							printText(bw, preChapterTitle);
-							bw.append("［＃大見出し終わり］\n");
-							bw.append('\n');
 						}
 							//更新日時・初回公開日を一覧から取得
 						String postDate = null;
@@ -1185,7 +1171,7 @@ public class WebAozoraConverter
 						String subTitle = null;
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
-						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate, publishDate);
+						printEpisode(bw, chapterDoc, newChapter ? preChapterTitle : null, subTitle, postDate, publishDate);
 					}
 					chapterIdx++;
 				}
@@ -1432,10 +1418,47 @@ public class WebAozoraConverter
 		return null;
 	}
 
+	/** 章が変わったときの章中表紙（章題の大見出し）を出力する。
+	 * 第1話を同じページに続けるかは printEpisode で決める */
+	private void printChapterHeader(BufferedWriter bw, String chapterTitle) throws IOException
+	{
+		bw.append("\n［＃改ページ］\n");
+		// narou.rb互換: 章中表紙のレイアウト
+		if (formatSettings.isChapterUseCenterPage()) {
+			bw.append("［＃ページの左右中央］\n");
+		}
+		if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
+			bw.append("［＃ここから柱］");
+			printText(bw, this.bookTitle);
+			bw.append("［＃ここで柱終わり］\n");
+		}
+		bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
+		printText(bw, chapterTitle);
+		bw.append("［＃大見出し終わり］\n");
+		bw.append('\n');
+	}
+
+	/** 1話を出力する。章が変わった話なら、先に章中表紙を出力する。
+	 * 左右中央の章中表紙は章題だけで1ページにし（narou.rb と同じく章題の直後で改ページ）、
+	 * そうでなければ章題に第1話を続ける。
+	 * 改ページは話の側（docToAozoraText）で書くので、本文が取れない話では改ページも出ない
+	 * @param newChapterTitle 章が変わった話ならその章題、章の途中の話なら null */
+	private void printEpisode(BufferedWriter bw, Document doc, String newChapterTitle,
+		String listSubTitle, String postDate, String publishDate) throws IOException
+	{
+		boolean sharesChapterHeaderPage = false;
+		if (newChapterTitle != null) {
+			printChapterHeader(bw, newChapterTitle);
+			sharesChapterHeaderPage = !formatSettings.isChapterUseCenterPage();
+		}
+		docToAozoraText(bw, doc, sharesChapterHeaderPage, listSubTitle, postDate, publishDate);
+	}
+
 	
 	/** 各話のHTMLの変換
+	 * @param sharesPreviousPage 前の出力（章中表紙）と同じページに続ける＝先頭の改ページを書かない
 	 * @param listSubTitle 一覧側で取得したタイトル */
-	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate, String publishDate) throws IOException
+	private void docToAozoraText(BufferedWriter bw, Document doc, boolean sharesPreviousPage, String listSubTitle, String postDate, String publishDate) throws IOException
 	{
 		// 英文保護リストをクリア（各話ごとに初期化）
 		englishSentences.clear();
@@ -1446,7 +1469,7 @@ public class WebAozoraConverter
 		if (contentDivs == null || contentDivs.size() == 0) {
 			LogAppender.println("CONTENT_ARTICLE : 本文が取得できません");
 		} else {
-			if (!newChapter) bw.append("\n［＃改ページ］\n");
+			if (!sharesPreviousPage) bw.append("\n［＃改ページ］\n");
 			String subTitle = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_SUBTITLE));
 			if (subTitle == null) subTitle = listSubTitle; //一覧のタイトルを設定
 			if (subTitle != null) {
