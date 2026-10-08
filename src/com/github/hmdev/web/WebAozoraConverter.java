@@ -16,7 +16,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
@@ -41,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.util.CharUtils;
+import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.web.ExtractInfo.ExtractId;
 import com.github.hmdev.web.api.NarouApiClient;
@@ -439,26 +439,8 @@ public class WebAozoraConverter
 		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
 	}
 
-	/** 実在する最も近い祖先を toRealPath() で解決し、残りのセグメントを連結して返す。
-	 * path 自身が存在しない場合でも、途中のディレクトリが symlink / junction で
-	 * 別の場所を指しているケースを解決できるようにするため。
-	 * 壊れた symlink に当たった場合は toRealPath() が IOException を投げ、
-	 * 呼び出し元では「安全でないパス」として扱われる（fail closed）。 */
-	private static Path realPath(Path path) throws IOException {
-		Path abs = path.toAbsolutePath().normalize();
-		//symlink 自体も「実在する」とみなすため NOFOLLOW_LINKS で遡る
-		Path existing = abs;
-		while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
-			existing = existing.getParent();
-		}
-		if (existing == null) return abs;
-		Path real = existing.toRealPath();
-		if (existing.getNameCount() == abs.getNameCount()) return real;
-		return real.resolve(abs.subpath(existing.getNameCount(), abs.getNameCount())).normalize();
-	}
-
 	/** base ディレクトリ配下にあることを検証して File を返す（パストラバーサル対策）。
-	 * base・candidate とも realPath() で同じ基準に正規化してから startsWith 比較する
+	 * base・candidate とも PathUtils.realPath() で同じ基準に正規化してから startsWith 比較する
 	 * (PR #22/#23 の 2 段階パターンを、実在しない葉にも効くよう拡張したもの)。
 	 * 両者を同じ基準で解決するのが要点で、
 	 *  - base 自体が junction / symlink 配下にある場合の誤検知を防ぐ（正常系の保護）
@@ -467,10 +449,10 @@ public class WebAozoraConverter
 	 * relative が絶対パスの場合は resolve がそれを返すため、startsWith 検査で弾かれる。
 	 * テストから利用するため package-private */
 	static File safeResolve(Path base, String relative) throws IOException {
-		Path canonicalBase = realPath(base);
+		Path canonicalBase = PathUtils.realPath(base);
 		Path resolved;
 		try {
-			resolved = realPath(canonicalBase.resolve(relative));
+			resolved = PathUtils.realPath(canonicalBase.resolve(relative));
 		} catch (InvalidPathException e) {
 			// OS がファイル名として受け付けない文字を含む場合 (Windows の制御文字・末尾スペース等)。
 			// InvalidPathException は RuntimeException のため、そのままだと呼び出し側の
@@ -1158,20 +1140,6 @@ public class WebAozoraConverter
 						if (chapterTitle != null && !preChapterTitle.equals(chapterTitle)) {
 							newChapter = true;
 							preChapterTitle = chapterTitle;
-							bw.append("\n［＃改ページ］\n");
-							// narou.rb互換: 章中表紙のレイアウト
-							if (formatSettings.isChapterUseCenterPage()) {
-								bw.append("［＃ページの左右中央］\n");
-							}
-							if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
-								bw.append("［＃ここから柱］");
-								printText(bw, this.bookTitle);
-								bw.append("［＃ここで柱終わり］\n");
-							}
-							bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
-							printText(bw, preChapterTitle);
-							bw.append("［＃大見出し終わり］\n");
-							bw.append('\n');
 						}
 							//更新日時・初回公開日を一覧から取得
 						String postDate = null;
@@ -1185,7 +1153,7 @@ public class WebAozoraConverter
 						String subTitle = null;
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
-						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate, publishDate);
+						printEpisode(bw, chapterDoc, newChapter ? preChapterTitle : null, subTitle, postDate, publishDate);
 					}
 					chapterIdx++;
 				}
@@ -1432,10 +1400,47 @@ public class WebAozoraConverter
 		return null;
 	}
 
+	/** 章が変わったときの章中表紙（章題の大見出し）を出力する。
+	 * 第1話を同じページに続けるかは printEpisode で決める */
+	private void printChapterHeader(BufferedWriter bw, String chapterTitle) throws IOException
+	{
+		bw.append("\n［＃改ページ］\n");
+		// narou.rb互換: 章中表紙のレイアウト
+		if (formatSettings.isChapterUseCenterPage()) {
+			bw.append("［＃ページの左右中央］\n");
+		}
+		if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
+			bw.append("［＃ここから柱］");
+			printText(bw, this.bookTitle);
+			bw.append("［＃ここで柱終わり］\n");
+		}
+		bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
+		printText(bw, chapterTitle);
+		bw.append("［＃大見出し終わり］\n");
+		bw.append('\n');
+	}
+
+	/** 1話を出力する。章が変わった話なら、先に章中表紙を出力する。
+	 * 左右中央の章中表紙は章題だけで1ページにし（narou.rb と同じく章題の直後で改ページ）、
+	 * そうでなければ章題に第1話を続ける。
+	 * 改ページは話の側（docToAozoraText）で書くので、本文が取れない話では改ページも出ない
+	 * @param newChapterTitle 章が変わった話ならその章題、章の途中の話なら null */
+	private void printEpisode(BufferedWriter bw, Document doc, String newChapterTitle,
+		String listSubTitle, String postDate, String publishDate) throws IOException
+	{
+		boolean sharesChapterHeaderPage = false;
+		if (newChapterTitle != null) {
+			printChapterHeader(bw, newChapterTitle);
+			sharesChapterHeaderPage = !formatSettings.isChapterUseCenterPage();
+		}
+		docToAozoraText(bw, doc, sharesChapterHeaderPage, listSubTitle, postDate, publishDate);
+	}
+
 	
 	/** 各話のHTMLの変換
+	 * @param sharesPreviousPage 前の出力（章中表紙）と同じページに続ける＝先頭の改ページを書かない
 	 * @param listSubTitle 一覧側で取得したタイトル */
-	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate, String publishDate) throws IOException
+	private void docToAozoraText(BufferedWriter bw, Document doc, boolean sharesPreviousPage, String listSubTitle, String postDate, String publishDate) throws IOException
 	{
 		// 英文保護リストをクリア（各話ごとに初期化）
 		englishSentences.clear();
@@ -1446,7 +1451,7 @@ public class WebAozoraConverter
 		if (contentDivs == null || contentDivs.size() == 0) {
 			LogAppender.println("CONTENT_ARTICLE : 本文が取得できません");
 		} else {
-			if (!newChapter) bw.append("\n［＃改ページ］\n");
+			if (!sharesPreviousPage) bw.append("\n［＃改ページ］\n");
 			String subTitle = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_SUBTITLE));
 			if (subTitle == null) subTitle = listSubTitle; //一覧のタイトルを設定
 			if (subTitle != null) {
