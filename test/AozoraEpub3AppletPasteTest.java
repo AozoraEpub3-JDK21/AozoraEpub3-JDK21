@@ -145,6 +145,28 @@ public class AozoraEpub3AppletPasteTest {
 		assertFalse(AozoraEpub3Applet.textIsFileNames("  \n", list));
 	}
 
+	/** ファイルの一覧（Finder のコピー・ドロップ）の経路でも、ルートへのリンクはフォルダとして受け付けない */
+	@Test
+	public void aLinkToTheRootIsNotAnAcceptableFolder() throws Exception {
+		File link = new File(tempFolder.getRoot(), "root-link");
+		try {
+			java.nio.file.Files.createSymbolicLink(link.toPath(), File.listRoots()[0].toPath());
+		} catch (java.io.IOException | UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("symlink を作成できない環境のためスキップ", e);
+		}
+		assertFalse(AozoraEpub3Applet.isAcceptableFolder(link));
+		assertTrue(AozoraEpub3Applet.isAcceptableFolder(folder));
+	}
+
+	/** 名前が .url で終わるフォルダは、ショートカットではなくフォルダ */
+	@Test
+	public void aFolderNamedDotUrlIsNotAShortcut() throws Exception {
+		File dotUrlFolder = tempFolder.newFolder("books.url");
+		File shortcut = tempFolder.newFile("site.url");
+		assertFalse(AozoraEpub3Applet.isInternetShortcut(dotUrlFolder));
+		assertTrue(AozoraEpub3Applet.isInternetShortcut(shortcut));
+	}
+
 	private static void Assume_notWindows() {
 		org.junit.Assume.assumeFalse("ターミナルの書き方は mac・Linux のもの",
 			System.getProperty("os.name").toLowerCase().startsWith("windows"));

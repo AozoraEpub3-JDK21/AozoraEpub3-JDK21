@@ -3615,7 +3615,7 @@ public class AozoraEpub3Applet extends JPanel
 
 	/** フォルダとして受け付けてよいか。ルート（/ や C:\）はディスク全体の変換になるので断る。
 	 * /tmp/.. やリンクを通してルートに行き着くものも断るよう、実パスに直してから見る */
-	private static boolean isAcceptableFolder(File file)
+	static boolean isAcceptableFolder(File file)
 	{
 		if (!file.isDirectory()) return false;
 		try {
@@ -3623,6 +3623,12 @@ public class AozoraEpub3Applet extends JPanel
 		} catch (IOException e) {
 			return false;
 		}
+	}
+
+	/** インターネットショートカットか。名前が .url で終わるフォルダは、ショートカットではなくフォルダとして扱う */
+	static boolean isInternetShortcut(File file)
+	{
+		return file.isFile() && file.getName().toLowerCase().endsWith(".url");
 	}
 
 	private static boolean isWebUrl(String s)
@@ -3681,8 +3687,13 @@ public class AozoraEpub3Applet extends JPanel
 	private File acceptFile(File file, List<File> vecFiles, List<String> vecUrlString, List<File> vecUrlSrcFile, File dstPath)
 	{
 		if (!file.exists()) return dstPath;
+		//フォルダは、どの経路（貼り付け・ドロップ・ファイルの一覧）でもルートを断る（リンクを通して行き着くものを含む）
+		if (file.isDirectory() && !isAcceptableFolder(file)) {
+			LogAppender.println(I18n.t("ui.paste.rootFolder") + " : " + file.getAbsolutePath());
+			return dstPath;
+		}
 		if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-		if (file.getName().toLowerCase().endsWith(".url")) {
+		if (isInternetShortcut(file)) {
 			try {
 				String urlLine = readInternetShortCut(file);
 				if (urlLine != null && isWebUrl(urlLine)) {
