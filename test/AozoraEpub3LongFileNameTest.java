@@ -33,12 +33,12 @@ public class AozoraEpub3LongFileNameTest {
 	/** 111 文字・315 バイトの名前になった実物（なろう n9623lp）と同じくらいの長さ */
 	private static final String LONG_TITLE = "【書籍化】" + "長い題".repeat(35);
 
+	/** EPUB の名前だけを決める（書かない） */
 	private File outFile(String text) throws Exception {
 		File dir = tempFolder.newFolder();
 		File txt = new File(dir, "in.txt");
 		Files.write(txt.toPath(), text.getBytes(StandardCharsets.UTF_8));
-		Epub3Writer writer = writer();
-		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
+		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer(), VelocityTestUtils.templateDir().getParent() + File.separator);
 		BookInfo bookInfo = AozoraEpub3.getBookInfo(txt, "txt", 0, new ImageInfoReader(true, txt), converter, "UTF-8",
 			BookInfo.TitleType.TITLE_AUTHOR, false);
 		assertNotNull(bookInfo);
@@ -64,17 +64,29 @@ public class AozoraEpub3LongFileNameTest {
 
 	@Test
 	public void aLongTitleConverts() throws Exception {
+		Converted c = convert(LONG_TITLE + "\n著者\n\n本文\n");
+		assertTrue("変換が成功する: " + c.epub.getName(), c.ok);
+		assertTrue(c.epub.isFile());
+	}
+
+	private static final class Converted {
+		File epub;
+		boolean ok;
+	}
+
+	private Converted convert(String text) throws Exception {
 		File dir = tempFolder.newFolder();
 		File txt = new File(dir, "in.txt");
-		Files.write(txt.toPath(), (LONG_TITLE + "\n著者\n\n本文\n").getBytes(StandardCharsets.UTF_8));
+		Files.write(txt.toPath(), text.getBytes(StandardCharsets.UTF_8));
 		Epub3Writer writer = writer();
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
 		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt);
 		BookInfo bookInfo = AozoraEpub3.getBookInfo(txt, "txt", 0, imageInfoReader, converter, "UTF-8",
 			BookInfo.TitleType.TITLE_AUTHOR, false);
-		File epub = AozoraEpub3.getOutFile(txt, tempFolder.newFolder(), bookInfo, true, ".epub");
-		assertTrue("変換が成功する: " + epub.getName(),
-			AozoraEpub3.convertFile(txt, "txt", epub, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0));
-		assertTrue(epub.isFile());
+		assertNotNull(bookInfo);
+		Converted c = new Converted();
+		c.epub = AozoraEpub3.getOutFile(txt, tempFolder.newFolder(), bookInfo, true, ".epub");
+		c.ok = AozoraEpub3.convertFile(txt, "txt", c.epub, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0);
+		return c;
 	}
 }

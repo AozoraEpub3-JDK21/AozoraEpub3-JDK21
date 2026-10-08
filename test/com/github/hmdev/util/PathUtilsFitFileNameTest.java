@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 
+import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -96,5 +97,36 @@ public class PathUtilsFitFileNameTest {
 		}
 		// 試したファイルを残さない
 		assertEquals(0, dir.list().length);
+	}
+
+	@Test
+	public void theProbeNameHasTheSameByteLengthAndIsHidden() {
+		for (String name : new String[]{ "[著者] 題.epub", "題名.txt", "𠮷題.txt" }) {
+			String probe = PathUtils.probeName(name);
+			assertTrue(probe, probe.startsWith("."));
+			assertEquals(name, bytes(name), bytes(probe));
+			assertNotEquals(name, probe);
+		}
+	}
+
+	@Test
+	public void aSmallerLimitCanBeApplied() {
+		// eCryptfs は名前 1 つ 143 バイトまで
+		String name = PathUtils.fitFileName("題".repeat(100), ".epub", 143);
+		assertTrue(name, bytes(name + ".epub") <= 143);
+		assertTrue(name, name.matches("題{43}~[0-9a-f]{6}"));
+	}
+
+	/** 書けない場所では、長さのせいと決めつけて名前を切らない（ゲート2の指摘。後の書き込みに理由を出させる） */
+	@Test
+	public void aFolderThatCannotBeWrittenDoesNotCutTheName() throws Exception {
+		File dir = tempFolder.newFolder();
+		Assume.assumeTrue("書けない場所を作れない環境（root など）のためスキップ", dir.setWritable(false, false) && !Files.isWritable(dir.toPath()));
+		try {
+			String base = "題".repeat(100);
+			assertEquals(base, PathUtils.fitFileNameIn(dir, base, ".epub"));
+		} finally {
+			dir.setWritable(true, false);
+		}
 	}
 }
