@@ -1,7 +1,9 @@
 ################################
-### 小説を読もう！
-### http://yomou.syosetu.com/
+### 小説を読もう！（ノクターン・ムーンライト・ミッドナイト）
+### https://novel18.syosetu.com/
 ################################
+### なろう本体（web/ncode.syosetu.com/extract.txt）と同じ作り。
+### 違うのは年齢確認の COOKIE だけ。本体の規則を直したら、ここも同じに直す
 
 ## 変換対象URLパターン
 ##PAGE_REGEX		.*/n\d+[^\/]*/$
@@ -11,47 +13,49 @@ COOKIE	over18=yes
 
 ################################
 ##一覧ページの抽出設定
-## シリーズタイトル
+## シリーズタイトル (新クラス: p-novel__series-link)
 SERIES	.p-novel__series-link:0,.series a:0
-## タイトル
+## タイトル (新クラス: p-novel__title)
 TITLE	.p-novel__title:0,.novel_title:0,.novel_subtitle:0	(^.*</div>)
-## 著者
-AUTHOR	.p-novel__author a:0,.novel_writername a:0,.novel_writername:0	作者：
+## 著者 (新クラス: p-novel__author)
+AUTHOR	.p-novel__author a:0,.p-infotop-data__value a:0,.novel_writername a:0,.novel_writername:0	作者：
 ## 説明
-DESCRIPTION	.p-novel__summary:0,#novel_ex:0
+DESCRIPTION	.p-novel__summary:0,#novel_ex:0,.p-infotop-data__value:0
 ##表紙画像
 COVER_IMG	.novel_img img:0
 
 ################
-## 各話へのリンク
+## 各話へのリンク (新クラス: p-eplist__subtitle)
 HREF	.p-eplist__subtitle,.subtitle a
 ##HREF	a	\/n\d+\w*\/\d+\/
-##一覧に記載されている各話の更新日時
-SUB_UPDATE	.long_update
+##一覧に記載されている各話の更新日時 (新クラス: p-eplist__update)
+SUB_UPDATE	.p-eplist__update,.long_update
 
 ## TOC ページネーション: 101話以上の作品で2ページ目以降の目次を取得
+## 最後のページリンク (href に ?p=N) から総ページ数を算出し各ページURLを生成
+## 例: href=/nXXXX/?p=4, pageIdx=2 → "/nXXXX/?p=2"
 PAGE_URL	a[href*="?p="]:-1	(\?p=)\d+\t(\d+)	$1$2
 
 ##本文に日付が無い場合 更新日時の文字列に利用 (初回公開日はCONTENT_PUBLISH_LISTで別取得)
-CONTENT_UPDATE_LIST	.long_update	^([^<]+)(?:<[\s\S]*)?$	$1
+CONTENT_UPDATE_LIST	.p-eplist__update,.long_update	^([^<]+)(?:<[\s\S]*)?$	$1
 ##初回公開日 (改稿済の場合 span title属性から取得)
-CONTENT_PUBLISH_LIST	.long_update
+CONTENT_PUBLISH_LIST	.p-eplist__update,.long_update
 
 ################################
 ###各話の抽出設定
 
-## 各話 Chapter 先頭の章のみ大見出しで出力
-CONTENT_CHAPTER	.chapter_title:0
-## 各話 章タイトル 中見出しで出力
-CONTENT_SUBTITLE	.novel_subtitle:0	(（改稿版）)|(^.*</div>)	
+## 各話 Chapter 先頭の章のみ大見出しで出力 (新クラス: p-eplist__chapter-title)
+CONTENT_CHAPTER	.p-eplist__chapter-title:0,.chapter_title:0
+## 各話 章タイトル 中見出しで出力 (新クラス: p-novel__title)
+CONTENT_SUBTITLE	.p-novel__title:0,.novel_subtitle:0	(（改稿版）)|(^.*</div>)
 
-## 各話 本文
-CONTENT_ARTICLE	#novel_honbun:0
+## 各話 本文 (新クラス: p-novel__text, --prefaceクラスを除外)
+CONTENT_ARTICLE	.js-novel-text.p-novel__text:not(.p-novel__text--preface):0,#novel_honbun:0
 
 ##本文タグ外に画像がある場合本文の前に出力
-#CONTENT_IMG	
+#CONTENT_IMG
 
-##前書き
-CONTENT_PREAMBLE	#novel_p:0
-## 補足
-CONTENT_APPENDIX	#novel_a:0
+##前書き (新クラス: p-novel__text--preface)
+CONTENT_PREAMBLE	.js-novel-text.p-novel__text--preface:0,#novel_p:0
+## 補足 (新クラス: p-novel__text--afterword)
+CONTENT_APPENDIX	.js-novel-text.p-novel__text--afterword:0,#novel_a:0

@@ -301,4 +301,23 @@ public class PreviewSessionTest
 			assertNull("失敗後は解析結果を残さないこと", session.getBook(bookId).getOpf());
 		}
 	}
+
+	/** 変換した本（実パス）と、リンク経由で走査した棚の本は同じ本として 1 冊にまとめる
+	 * （macOS の /tmp → /private/tmp、Windows の junction）。getOutFile が実パスを返すため */
+	@Test
+	public void sameBookThroughALinkIsOneBook() throws IOException
+	{
+		Path real = temp.newFolder("real").toPath();
+		Path epub = EpubFixture.standard().writeTo(real.resolve("book.epub"));
+		Path link = temp.getRoot().toPath().resolve("link");
+		try {
+			java.nio.file.Files.createSymbolicLink(link, real);
+		} catch (IOException | UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("symlink を作成できない環境のためスキップ", e);
+		}
+		try (PreviewSession session = new PreviewSession()) {
+			String id = session.addBook(epub.toRealPath());
+			assertEquals(id, session.addBook(link.resolve("book.epub")));
+		}
+	}
 }
