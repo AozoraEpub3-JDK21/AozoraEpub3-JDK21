@@ -167,6 +167,24 @@ public class AozoraEpub3AppletPasteTest {
 		assertTrue(AozoraEpub3Applet.isInternetShortcut(shortcut));
 	}
 
+	/** 受け付けたフォルダの中を辿るとき、リンクで外へ出るフォルダ・輪になるフォルダは辿らない */
+	@Test
+	public void linkedFoldersInsideAreNotFollowed() throws Exception {
+		File sub = new File(folder, "sub");
+		assertTrue(sub.mkdir());
+		File toRoot = new File(folder, "to-root");
+		File loop = new File(folder, "loop");
+		try {
+			java.nio.file.Files.createSymbolicLink(toRoot.toPath(), File.listRoots()[0].toPath());
+			java.nio.file.Files.createSymbolicLink(loop.toPath(), folder.toPath());
+		} catch (java.io.IOException | UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("symlink を作成できない環境のためスキップ", e);
+		}
+		assertTrue(AozoraEpub3Applet.isInsideFolder(sub, folder));
+		assertFalse(AozoraEpub3Applet.isInsideFolder(toRoot, folder));
+		assertFalse(AozoraEpub3Applet.isInsideFolder(loop, folder));
+	}
+
 	private static void Assume_notWindows() {
 		org.junit.Assume.assumeFalse("ターミナルの書き方は mac・Linux のもの",
 			System.getProperty("os.name").toLowerCase().startsWith("windows"));

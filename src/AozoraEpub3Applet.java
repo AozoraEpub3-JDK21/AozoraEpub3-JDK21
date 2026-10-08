@@ -3625,6 +3625,18 @@ public class AozoraEpub3Applet extends JPanel
 		}
 	}
 
+	/** child の実パスが parent の実パスの中にあるか（リンクで外へ出る・輪になるフォルダを見分ける） */
+	static boolean isInsideFolder(File child, File parent)
+	{
+		try {
+			java.nio.file.Path c = child.getCanonicalFile().toPath();
+			java.nio.file.Path p = parent.getCanonicalFile().toPath();
+			return !c.equals(p) && c.startsWith(p);
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
 	/** インターネットショートカットか。名前が .url で終わるフォルダは、ショートカットではなくフォルダとして扱う */
 	static boolean isInternetShortcut(File file)
 	{
@@ -4018,10 +4030,23 @@ public class AozoraEpub3Applet extends JPanel
 	/** サブディレクトリ再帰用 */
 	private void _convertFiles(File[] srcFiles, File dstPath)
 	{
+		_convertFiles(srcFiles, dstPath, null);
+	}
+
+	/** @param parent 辿っているフォルダ（最初の呼び出しでは null） */
+	private void _convertFiles(File[] srcFiles, File dstPath, File parent)
+	{
+		if (srcFiles == null) return;
 		for (File srcFile : srcFiles) {
 			if (srcFile.isDirectory()) {
+				//中のフォルダは、実パスが親のフォルダの中にあるときだけ辿る
+				//（リンク・ジャンクションでルートなど外へ出るもの、輪になるものを辿ってディスク全体を回らない）
+				if (parent != null && !isInsideFolder(srcFile, parent)) {
+					LogAppender.println(I18n.t("ui.convert.skipLinkedFolder") + " : " + srcFile.getAbsolutePath());
+					continue;
+				}
 				//サブディレクトリ 再帰
-				_convertFiles(srcFile.listFiles(), dstPath);
+				_convertFiles(srcFile.listFiles(), dstPath, srcFile);
 			} else if (srcFile.isFile()) {
 				convertFile(srcFile, dstPath);
 			}
