@@ -885,13 +885,22 @@ public class AozoraEpub3
 		// 出力先と出力ファイルを同じ基準（実在する最も近い祖先の実パス）で解決して比べる。
 		// まだ無い出力ファイルだけ toAbsolutePath のまま比べると、symlink（macOS の /tmp → /private/tmp）・
 		// junction・8.3 形式の短い名前を通した出力先で「許可されたディレクトリ外」になっていた
-		Path canonicalDst = PathUtils.realPath(dstPathNio);
 		Path outFileNio = outFile.toPath();
-		Path canonicalOut = PathUtils.realPath(outFileNio);
+		Path canonicalDst;
+		Path canonicalOut;
+		try {
+			canonicalDst = PathUtils.realPath(dstPathNio);
+			canonicalOut = PathUtils.realPath(outFileNio);
+		} catch (IOException e) {
+			//出力ファイルの名前が壊れたリンクなど。理由の分からない NoSuchFileException のまま出さない
+			throw new IOException("出力パスを解決できません（壊れたリンクなど）: " + outFile.getAbsolutePath(), e);
+		}
 		if (!canonicalOut.startsWith(canonicalDst)) {
 			throw new IOException("出力パスが許可されたディレクトリ外です: " + canonicalOut);
 		}
-		outFile = canonicalOut.toFile();
+		//検証は実パスで行い、返すのは渡された出力先の形のまま
+		//（完了のログ・プレビューの本棚の照合・上のパス長の上限は、渡された形を前提にしている）
+		outFile = outFileNio.toAbsolutePath().normalize().toFile();
 		outFile.setWritable(true);
 
 		return outFile;

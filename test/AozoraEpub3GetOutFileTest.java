@@ -1,5 +1,6 @@
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,7 +42,10 @@ public class AozoraEpub3GetOutFileTest {
 
 		File out = AozoraEpub3.getOutFile(src, linkDst.toFile(), book(src), true, ".epub");
 
-		assertEquals(realDst.toRealPath(), out.toPath().getParent());
+		//返すのは渡された出力先の形（ログ・プレビューの照合がこの形を前提にしている）
+		assertEquals(linkDst.toAbsolutePath().normalize(), out.toPath().getParent());
+		//実体は実パスの出力先
+		assertEquals(realDst.toRealPath(), out.toPath().getParent().toRealPath());
 		assertEquals("[著者] 表題.epub", out.getName());
 	}
 
@@ -52,7 +56,24 @@ public class AozoraEpub3GetOutFileTest {
 
 		File out = AozoraEpub3.getOutFile(src, realDst.toFile(), book(src), true, ".epub");
 
-		assertEquals(realDst.toRealPath(), out.toPath().getParent());
+		assertEquals(realDst.toAbsolutePath().normalize(), out.toPath().getParent());
+	}
+
+	/** 出力ファイルの名前が壊れたリンクなら、理由の分かる文言で断る */
+	@Test
+	public void danglingOutputLinkIsRejectedWithReason() throws Exception {
+		Path realDst = tempFolder.newFolder("real").toPath();
+		File src = tempFolder.newFile("in.txt");
+		Path link = realDst.resolve("[著者] 表題.epub");
+		try {
+			Files.createSymbolicLink(link, realDst.resolve("old").resolve("gone.epub"));
+		} catch (IOException | UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("symlink を作成できない環境のためスキップ", e);
+		}
+
+		IOException e = assertThrows(IOException.class,
+			() -> AozoraEpub3.getOutFile(src, realDst.toFile(), book(src), true, ".epub"));
+		assertTrue(e.getMessage(), e.getMessage().contains("出力パスを解決できません"));
 	}
 
 	/** 出力ファイルの名前のリンクが出力先の外を指していれば、従来どおり断る */

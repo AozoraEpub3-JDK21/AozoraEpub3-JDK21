@@ -1815,6 +1815,24 @@ hotentry は左右中央＋題＋地付きの著者＋本文全体を 1 節に�
 縦書きのブロックの高さを両方のリーダーで揃えられれば、1 列に収まらない節と下寄せも扱える（後で調べる）。
 Kobo・Kindle の実機（Send to Kindle で送った EPUB を含む）は未確認。
 
+## 出力パスの検証（2026-10-08 追加）
+
+### 39. 実パスと字面のパスを混ぜる比較が残っている — 🔶 一部対応（2026-10-08）
+
+**対応済み**: `AozoraEpub3#getOutFile` は、出力先を `toRealPath()` で解決する一方、まだ無い出力ファイルを `toAbsolutePath()` のまま比べていて、
+symlink（macOS の `/tmp` → `/private/tmp`）・junction・8.3 形式の短い名前を通した出力先で、初めて変換する本が「出力パスが許可されたディレクトリ外です」で止まっていた
+（narou.rs から 2026-09-23 に報告。mac で `AozoraEpub3ArchiveUrlTest` が落ちていたのも同じ）。
+`WebAozoraConverter#safeResolve` の `realPath` を `com.github.hmdev.util.PathUtils` に移し、出力先と出力ファイルの両方をそれで解決して比べる。
+返す出力パスは渡された出力先の形のまま（完了のログ・プレビューの本棚の照合・MAX_PATH の切り詰めがその形を前提にしているため）。
+Windows 11 の実機で、junction・8.3 の短い名前・親が junction の出力先が通ること、UNC・subst は新旧とも通ることを確かめた（win2）。
+
+**残り**:
+- 同じ形（`Files.exists ? toRealPath : toAbsolutePath().normalize()`）の比較が `AozoraTextFinalizer#finalize` に、近い形が `ImageInfoReader#getImageFileSafe` に残る。
+  `finalize` は対象の中間テキストがいつも存在するので今回の症状は出ないはず（未確認）。`PathUtils.realPath` に寄せると 1 か所で済む
+- `PathUtils.realPath` は `..` を字面で畳んでからリンクを辿る。`-d /a/link/../out`（link → /b/c）は OS の解釈（/b/out）ではなく /a/out として検証し、/a/out に書く（以前は断っていた）
+- 出力先の外を指すリンクを断る升（`AozoraEpub3GetOutFileTest#existingOutputLinkPointingOutsideIsRejected`）は、ファイルの symlink を作れない Windows（開発者モード無し）では飛ばされる
+- `assumeSymlinkSupported`（symlink が作れなければ junction）が `WebAozoraConverterSafeResolveTest` と `AozoraEpub3GetOutFileTest` に 2 つある
+
 ---
 
 ## 進め方
