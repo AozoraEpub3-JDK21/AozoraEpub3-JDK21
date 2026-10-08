@@ -863,6 +863,9 @@ public class AozoraEpub3Converter
 		//最後まで回す
 		while ((line = src.readLine()) != null) {
 			this.lineNum++;
+			//BOM除去 本文の経路 (convertTextToEpub3) と揃える
+			//除かないと表題の頭に U+FEFF が付き、dc:title と出力ファイル名に入る (本家 #5)
+			if (this.lineNum == 0) line = CharUtils.removeBOM(line);
 			
 			//見出し等の取得のため前方参照注記は変換 外字文字は置換
 			String spacedLine = this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false));
