@@ -681,7 +681,17 @@ public class WebAozoraConverter
 		File workDir = new File(this.dstPath);
 		BookLedger ledger = BookLedger.load(workDir);
 		BookLedger toSave = null;
-		if (ledger == null) toSave = BookLedger.create(urlString, requestedBaseName != null ? requestedBaseName : textBaseName);
+		if (ledger == null) {
+			//台帳より前に取った作品で、そのあと掲載先で題が変わっていたら、前の名前を引き継ぐ。
+			//前の EPUB の名前も（著者名の ! やシリーズの行が無ければ）txt と同じ名前なので、両方に使う
+			String legacy = requestedBaseName == null ? BookLedger.legacyTextBaseName(workDir) : null;
+			if (legacy != null && !legacy.equals(textBaseName)) {
+				LogAppender.println("前に取ったときの名前を引き継ぎます : " + legacy);
+				toSave = BookLedger.create(urlString, legacy).withOutputBaseName(legacy);
+			} else {
+				toSave = BookLedger.create(urlString, requestedBaseName != null ? requestedBaseName : textBaseName);
+			}
+		}
 		else if (requestedBaseName != null && !requestedBaseName.equals(ledger.textBaseName)) toSave = ledger.withTextBaseName(requestedBaseName);
 		//名前が取れなかった回に作った台帳は、取れた回に埋める
 		else if (requestedBaseName == null && ledger.textBaseName == null && textBaseName != null) toSave = ledger.withTextBaseName(textBaseName);

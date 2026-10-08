@@ -180,6 +180,22 @@ public final class BookLedger
 		bookInfo.ledgerDir = workDir;
 	}
 
+	/**
+	 * 台帳より前に作った txt の名前（拡張子なし）。作品のフォルダに台帳の無い txt が 1 つだけあればその名前、
+	 * 無いか 2 つ以上なら null。converted.txt（題の取れなかったとき）は数えない
+	 */
+	public static String legacyTextBaseName(File workDir)
+	{
+		File[] txts = workDir.listFiles((dir, name) -> {
+			String lower = name.toLowerCase(Locale.ROOT);
+			return lower.endsWith(".txt") && !lower.equals("update.txt") && !lower.equals("failed_downloads.txt")
+				&& !lower.equals("converted.txt");
+		});
+		if (txts == null || txts.length != 1 || !txts[0].isFile()) return null;
+		String name = txts[0].getName();
+		return nameOrNull(name.substring(0, name.length() - 4));
+	}
+
 	/** 最初の変換で決まった EPUB の名前を記録する。もう記録してあれば何もしない */
 	public static void recordOutputBaseName(BookInfo bookInfo, String outputBaseName)
 	{

@@ -164,4 +164,42 @@ public class WebAozoraConverterBookLedgerTest {
 		assertEquals("指定の名前.txt", txt.getName());
 		assertEquals("台帳はその txt に当たる", txt.getName(), BookLedger.load(txt.getParentFile()).textFileName());
 	}
+
+	/**
+	 * 台帳より前に取った作品が、そのあと掲載先で改題されていた（ゲート2・PR の codex の指摘）。
+	 * 前の txt の名前を、txt と EPUB の名前として引き継ぐ。引き継がないと、新しい題の txt と EPUB が増えて 2 冊になる
+	 */
+	@Test
+	public void aWorkRenamedBeforeTheLedgerKeepsItsOldName() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+
+		File first = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		// 台帳の無い版で取った状態にする
+		assertTrue(new File(first.getParentFile(), BookLedger.FILE_NAME).delete());
+
+		title = "【書籍化】題";
+		File second = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertEquals("前の名前の txt に書く", first.getAbsolutePath(), second.getAbsolutePath());
+		BookLedger ledger = BookLedger.load(second.getParentFile());
+		assertEquals("[著者] 題", ledger.textBaseName);
+		assertEquals("EPUB も前の名前", "[著者] 題", ledger.outputBaseName);
+		File[] txts = second.getParentFile().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"));
+		assertEquals(1, txts.length);
+	}
+
+	@Test
+	public void anUnrenamedWorkBeforeTheLedgerRecordsItsNameAtTheEpubStep() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+
+		File first = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertTrue(new File(first.getParentFile(), BookLedger.FILE_NAME).delete());
+
+		// 題は変わっていない。EPUB の名前は、今までどおり EPUB にする段で決めて記録する
+		File second = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertNull(BookLedger.load(second.getParentFile()).outputBaseName);
+	}
 }
