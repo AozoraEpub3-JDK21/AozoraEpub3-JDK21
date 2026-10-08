@@ -16,7 +16,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
@@ -41,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.util.CharUtils;
+import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.web.ExtractInfo.ExtractId;
 import com.github.hmdev.web.api.NarouApiClient;
@@ -113,6 +113,8 @@ public class WebAozoraConverter
 	float modifiedExpire = 24;
 	/** 本文内挿絵のダウンロードをスキップする（表紙は除く） */
 	public boolean skipImages = false;
+	/** Cloudflare の確認画面で止められた。以降はこのサイトに取りに行かない（変換ごとに戻す） */
+	boolean blockedByChallenge = false;
 	
 	////////////////////////////////
 	//キャンセルリクエストされたらtrue
@@ -436,26 +438,8 @@ public class WebAozoraConverter
 		return convertToAozoraText(urlString, cachePath, interval, modifiedExpire, convertUpdated, convertModifiedOnly, convertModifiedTail, beforeChapter, null);
 	}
 
-	/** 実在する最も近い祖先を toRealPath() で解決し、残りのセグメントを連結して返す。
-	 * path 自身が存在しない場合でも、途中のディレクトリが symlink / junction で
-	 * 別の場所を指しているケースを解決できるようにするため。
-	 * 壊れた symlink に当たった場合は toRealPath() が IOException を投げ、
-	 * 呼び出し元では「安全でないパス」として扱われる（fail closed）。 */
-	private static Path realPath(Path path) throws IOException {
-		Path abs = path.toAbsolutePath().normalize();
-		//symlink 自体も「実在する」とみなすため NOFOLLOW_LINKS で遡る
-		Path existing = abs;
-		while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
-			existing = existing.getParent();
-		}
-		if (existing == null) return abs;
-		Path real = existing.toRealPath();
-		if (existing.getNameCount() == abs.getNameCount()) return real;
-		return real.resolve(abs.subpath(existing.getNameCount(), abs.getNameCount())).normalize();
-	}
-
 	/** base ディレクトリ配下にあることを検証して File を返す（パストラバーサル対策）。
-	 * base・candidate とも realPath() で同じ基準に正規化してから startsWith 比較する
+	 * base・candidate とも PathUtils.realPath() で同じ基準に正規化してから startsWith 比較する
 	 * (PR #22/#23 の 2 段階パターンを、実在しない葉にも効くよう拡張したもの)。
 	 * 両者を同じ基準で解決するのが要点で、
 	 *  - base 自体が junction / symlink 配下にある場合の誤検知を防ぐ（正常系の保護）
@@ -464,10 +448,10 @@ public class WebAozoraConverter
 	 * relative が絶対パスの場合は resolve がそれを返すため、startsWith 検査で弾かれる。
 	 * テストから利用するため package-private */
 	static File safeResolve(Path base, String relative) throws IOException {
-		Path canonicalBase = realPath(base);
+		Path canonicalBase = PathUtils.realPath(base);
 		Path resolved;
 		try {
-			resolved = realPath(canonicalBase.resolve(relative));
+			resolved = PathUtils.realPath(canonicalBase.resolve(relative));
 		} catch (InvalidPathException e) {
 			// OS がファイル名として受け付けない文字を含む場合 (Windows の制御文字・末尾スペース等)。
 			// InvalidPathException は RuntimeException のため、そのままだと呼び出し側の
@@ -544,6 +528,7 @@ public class WebAozoraConverter
 		this.convertModifiedOnly = convertModifiedOnly;
 		this.convertModifiedTail = convertModifiedTail;
 		this.beforeChapter = beforeChapter;
+		this.blockedByChallenge = false;
 		
 		//末尾の / をリダイレクトで取得
 		urlString = urlString.trim();
@@ -623,7 +608,8 @@ public class WebAozoraConverter
 		} catch (Exception e) {
 			logger.warn("一覧ページの取得に失敗、キャッシュ利用を試みる: {}", urlString, e);
 			LogAppender.println("一覧ページの取得に失敗しました。 ");
-			LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
+			//止められたときは cacheFile が理由を出している。Java のクラス名は利用者に見せない
+			if (!(e instanceof CloudflareChallengeException)) LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
 			if (!cacheFile.exists()) return null;
 
 			LogAppender.println("キャッシュファイルを利用します。");
@@ -895,6 +881,9 @@ public class WebAozoraConverter
 											else updates = null; // サイズ不一致防止
 										}
 									}
+								} catch (CloudflareChallengeException e) {
+									//目次の途中までで本を作らない（理由は cacheFile が出した）
+									return null;
 								} catch (Exception e) {
 									LogAppender.println("目次ページ " + pageIdx + " 取得エラー: " + e.getMessage());
 								} finally {
@@ -956,6 +945,9 @@ public class WebAozoraConverter
 			}
 
 			List<String> failedHrefs = new ArrayList<>();
+			//止められたときに「対象の話を 1 つも書けなかったか」を見るための数（最新 N 話などで対象は目次の一部）
+			int selectedChapters = 0;
+			int writtenChapters = 0;
 			if (chapterHrefs.size() > 0) {
 				//全話で更新や追加があるかチェック
 				updated = false;
@@ -997,7 +989,7 @@ public class WebAozoraConverter
 						//nullでなく更新無しに含まれなければ再読込
 						if (noUpdateUrls != null && !noUpdateUrls.contains(chapterHref)) reload = true;
 						
-						if (reload || !chapterCacheFile.exists()) {
+						if ((reload || !chapterCacheFile.exists()) && !this.blockedByChallenge) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
 							try {
 								try {
@@ -1012,6 +1004,8 @@ public class WebAozoraConverter
 								//ファイルがロードされたら更新有り
 								this.updated = true;
 								loaded = true;
+							} catch (CloudflareChallengeException e) {
+								//理由は cacheFile が出した。以降の話は取りに行かない（キャッシュにある話で本を作る）
 							} catch (Exception e) {
 								logger.warn("章 HTML の取得に失敗（後続でキャッシュ確認・再試行）: {}", chapterHref, e);
 								LogAppender.println("htmlファイルが取得できませんでした : "+chapterHref);
@@ -1044,8 +1038,10 @@ public class WebAozoraConverter
 				//更新が無くて変換もなければ終了
 				if (!this.updated) {
 					LogAppender.append("「"+title+"」");
-					LogAppender.println("の更新はありません");
-					if (this.convertUpdated) return null;
+					//止められて取れなかったのを「更新なし」と言わない
+					if (this.blockedByChallenge) LogAppender.println("の更新は、サイトに止められたため確かめられませんでした");
+					else LogAppender.println("の更新はありません");
+					if (this.convertUpdated) return blockedUpdateCheck();
 				}
 				
 				if (this.convertModifiedOnly) {
@@ -1066,6 +1062,10 @@ public class WebAozoraConverter
 						}
 					}
 					if (modifiedChapterIdx.size() == 0) {
+						if (this.blockedByChallenge) {
+							LogAppender.println("サイトに止められたため、追加更新分を確かめられませんでした");
+							return blockedUpdateCheck();
+						}
 						LogAppender.println("追加更新分はありません");
 						this.updated = false;
 						return null;
@@ -1087,6 +1087,7 @@ public class WebAozoraConverter
 					if (this.canceled) return null;
 
 					if (modifiedChapterIdx == null || modifiedChapterIdx.contains(chapterIdx)) {
+						selectedChapters++;
 						//キャッシュファイル取得
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
 						File chapterCacheFile;
@@ -1096,6 +1097,13 @@ public class WebAozoraConverter
 						} catch (IOException e) {
 							logger.error("章キャッシュパスを扱えないためスキップ: {}", chapterHref, e);
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 扱えないパスのためスキップします: "+chapterHref+" ("+e.getMessage()+")");
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
+						//止められた後はキャッシュの無い話を取りに行かない（取れなかった話として記録する）
+						if (!chapterCacheFile.exists() && this.blockedByChallenge) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、取得できないためスキップします: "+chapterHref);
 							failedHrefs.add(chapterHref);
 							chapterIdx++;
 							continue;
@@ -1126,7 +1134,8 @@ public class WebAozoraConverter
 						// キャッシュファイルに本文が無い場合（ダウンロード失敗・エラーページ等）は再ダウンロード
 						{
 							Elements contentCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
-							if ((contentCheck == null || contentCheck.size() == 0) && this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) {
+							if ((contentCheck == null || contentCheck.size() == 0) && this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)
+								&& !this.blockedByChallenge) {
 								LogAppender.println("本文が取得できないためキャッシュを削除して再ダウンロードします: " + chapterHref);
 								chapterCacheFile.delete();
 								try {
@@ -1139,6 +1148,15 @@ public class WebAozoraConverter
 								}
 							}
 						}
+						//止められた後、本文の無いキャッシュ（エラーページなど）は話として数えない
+						Elements articleCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+						boolean hasArticle = (articleCheck != null && articleCheck.size() > 0) || !this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE);
+						if (!hasArticle && this.blockedByChallenge) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 本文が無く、取得もできないためスキップします: "+chapterHref);
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
 						String chapterTitle = getExtractText(chapterDoc, this.queryMap.get(ExtractId.CONTENT_CHAPTER));
 						// nextDataEpisodeChapterMap をフォールバックとして使用 (Phase 2-1: カクヨム章構造対応)
 						if (chapterTitle == null && this.nextDataEpisodeChapterMap != null) {
@@ -1148,20 +1166,6 @@ public class WebAozoraConverter
 						if (chapterTitle != null && !preChapterTitle.equals(chapterTitle)) {
 							newChapter = true;
 							preChapterTitle = chapterTitle;
-							bw.append("\n［＃改ページ］\n");
-							// narou.rb互換: 章中表紙のレイアウト
-							if (formatSettings.isChapterUseCenterPage()) {
-								bw.append("［＃ページの左右中央］\n");
-							}
-							if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
-								bw.append("［＃ここから柱］");
-								printText(bw, this.bookTitle);
-								bw.append("［＃ここで柱終わり］\n");
-							}
-							bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
-							printText(bw, preChapterTitle);
-							bw.append("［＃大見出し終わり］\n");
-							bw.append('\n');
 						}
 							//更新日時・初回公開日を一覧から取得
 						String postDate = null;
@@ -1175,7 +1179,8 @@ public class WebAozoraConverter
 						String subTitle = null;
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
-						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate, publishDate);
+						printEpisode(bw, chapterDoc, newChapter ? preChapterTitle : null, subTitle, postDate, publishDate);
+						if (hasArticle) writtenChapters++;
 					}
 					chapterIdx++;
 				}
@@ -1204,6 +1209,11 @@ public class WebAozoraConverter
 					if (idxConnected) buf.append("-"+(preIdx+1));
 					LogAppender.println(buf+"話を変換します");
 				}
+			}
+			//止められて 1 話も取れなかったら、本文の無い本を作らずに失敗にする
+			if (this.blockedByChallenge && selectedChapters > 0 && writtenChapters == 0) {
+				LogAppender.println("サイトに止められて、1 話も取得できませんでした");
+				return null;
 			}
 			//ダウンロード失敗話の報告
 			if (!failedHrefs.isEmpty()) {
@@ -1251,6 +1261,35 @@ public class WebAozoraConverter
 		return txtFile;
 	}
 	
+	/** 更新の確かめが止められたときの戻り値。呼び出し元（GUI）は「null で更新なし」を「スキップ」と出すので、
+	 * 止められたときは更新ありの扱い（isUpdated()==true）のまま失敗（null）として返す */
+	private File blockedUpdateCheck()
+	{
+		if (this.blockedByChallenge) this.updated = true;
+		return null;
+	}
+
+	/** urlString がこのサイト（一覧の URL のホスト）か。挿絵が別のホストにあるときは止めない */
+	private boolean isSiteHost(String urlString)
+	{
+		try {
+			String host = java.net.URI.create(urlString).getHost();
+			String siteHost = java.net.URI.create(this.baseUri).getHost();
+			return host != null && host.equalsIgnoreCase(siteHost);
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/** Cloudflare の確認画面で止められた。理由を 1 回だけ出し、以降はこのサイトに取りに行かない */
+	private void challenged(CloudflareChallengeException e)
+	{
+		if (this.blockedByChallenge) return;
+		this.blockedByChallenge = true;
+		LogAppender.println(e.getMessage());
+		LogAppender.println("以降の話は取りに行かず、キャッシュにある話だけで変換します");
+	}
+
 	/** 更新情報の生成と保存 */
 	private HashSet<String> createNoUpdateUrls(File updateInfoFile, String urlString, String listBaseUrl, String contentsUpdate, Elements hrefs, Elements updates) throws IOException
 	{
@@ -1422,10 +1461,47 @@ public class WebAozoraConverter
 		return null;
 	}
 
+	/** 章が変わったときの章中表紙（章題の大見出し）を出力する。
+	 * 第1話を同じページに続けるかは printEpisode で決める */
+	private void printChapterHeader(BufferedWriter bw, String chapterTitle) throws IOException
+	{
+		bw.append("\n［＃改ページ］\n");
+		// narou.rb互換: 章中表紙のレイアウト
+		if (formatSettings.isChapterUseCenterPage()) {
+			bw.append("［＃ページの左右中央］\n");
+		}
+		if (formatSettings.isChapterUseHashira() && this.bookTitle != null) {
+			bw.append("［＃ここから柱］");
+			printText(bw, this.bookTitle);
+			bw.append("［＃ここで柱終わり］\n");
+		}
+		bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
+		printText(bw, chapterTitle);
+		bw.append("［＃大見出し終わり］\n");
+		bw.append('\n');
+	}
+
+	/** 1話を出力する。章が変わった話なら、先に章中表紙を出力する。
+	 * 左右中央の章中表紙は章題だけで1ページにし（narou.rb と同じく章題の直後で改ページ）、
+	 * そうでなければ章題に第1話を続ける。
+	 * 改ページは話の側（docToAozoraText）で書くので、本文が取れない話では改ページも出ない
+	 * @param newChapterTitle 章が変わった話ならその章題、章の途中の話なら null */
+	private void printEpisode(BufferedWriter bw, Document doc, String newChapterTitle,
+		String listSubTitle, String postDate, String publishDate) throws IOException
+	{
+		boolean sharesChapterHeaderPage = false;
+		if (newChapterTitle != null) {
+			printChapterHeader(bw, newChapterTitle);
+			sharesChapterHeaderPage = !formatSettings.isChapterUseCenterPage();
+		}
+		docToAozoraText(bw, doc, sharesChapterHeaderPage, listSubTitle, postDate, publishDate);
+	}
+
 	
 	/** 各話のHTMLの変換
+	 * @param sharesPreviousPage 前の出力（章中表紙）と同じページに続ける＝先頭の改ページを書かない
 	 * @param listSubTitle 一覧側で取得したタイトル */
-	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate, String publishDate) throws IOException
+	private void docToAozoraText(BufferedWriter bw, Document doc, boolean sharesPreviousPage, String listSubTitle, String postDate, String publishDate) throws IOException
 	{
 		// 英文保護リストをクリア（各話ごとに初期化）
 		englishSentences.clear();
@@ -1436,7 +1512,7 @@ public class WebAozoraConverter
 		if (contentDivs == null || contentDivs.size() == 0) {
 			LogAppender.println("CONTENT_ARTICLE : 本文が取得できません");
 		} else {
-			if (!newChapter) bw.append("\n［＃改ページ］\n");
+			if (!sharesPreviousPage) bw.append("\n［＃改ページ］\n");
 			String subTitle = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_SUBTITLE));
 			if (subTitle == null) subTitle = listSubTitle; //一覧のタイトルを設定
 			if (subTitle != null) {
@@ -1744,6 +1820,8 @@ public class WebAozoraConverter
 			}
 		} catch (Exception e) {
 			logger.error("画像のダウンロードに失敗: {}", src, e);
+			//挿絵は無くても本は作れるので止めない。止められた理由は添える
+			//止められたときの理由は cacheFile が 1 回だけ出す
 			LogAppender.println("画像が取得できませんでした : "+src);
 		}
 		if (bw != null) {
@@ -2945,6 +3023,9 @@ public class WebAozoraConverter
 		}
 		cacheFile.getParentFile().mkdirs();
 
+		//同じ変換の中でこのサイトに止められていたら、送らずに断る（取りに行き続けない）
+		if (this.blockedByChallenge && isSiteHost(urlString)) throw new CloudflareChallengeException(urlString);
+
 		try {
 			HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
 				.uri(new URI(urlString))
@@ -2959,6 +3040,16 @@ public class WebAozoraConverter
 			int responseCode = response.statusCode();
 			LogAppender.println("HTTP Response Code: " + responseCode);
 			if (responseCode >= 400) {
+				//Cloudflare のボット確認画面（Just a moment...）。コードだけでは利用者に理由が分からない
+				//すり抜ける細工はしない（サイトの意思に反する）。止められていると伝えて断る
+				if ("challenge".equalsIgnoreCase(response.headers().firstValue("cf-mitigated").orElse(""))) {
+					CloudflareChallengeException e = new CloudflareChallengeException(responseCode, urlString);
+					//サイトそのものに止められたときだけ、以降を止める（別のホストの表紙・挿絵では止めない）。
+					//転送（リダイレクト）された先で止められたこともあるので、応答の最終的な URL で見る
+					if (isSiteHost(response.uri().toString())) challenged(e);
+					else LogAppender.println(e.getMessage());
+					throw e;
+				}
 				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
 			}
 

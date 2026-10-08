@@ -3542,6 +3542,190 @@ public class AozoraEpub3Applet extends JPanel
 		//protected void exportDone(JComponent source, Transferable data, int action) {}
 	}
 	////////////////
+	/** 空白とみなす文字（全角スペース・ノーブレークスペースを含む） */
+	private static boolean isPasteSpace(char c)
+	{
+		return Character.isWhitespace(c) || c == '\u3000' || c == '\u00A0';
+	}
+
+	/** 前後の空白（全角を含む）と、全体を 1 つだけ囲む引用符（"..." と '...'）を外す。
+	 * 中に同じ引用符があるとき（"/a b" "/c d" のように 1 行に 2 つ）は外さない（語の区切りに任せる） */
+	private static String unquotePasted(String s)
+	{
+		s = stripPasteSpaces(s);
+		if (s.length() >= 2) {
+			char q = s.charAt(0);
+			if ((q == '"' || q == '\'') && s.charAt(s.length()-1) == q && s.indexOf(q, 1) == s.length()-1) {
+				s = stripPasteSpaces(s.substring(1, s.length()-1));
+			}
+		}
+		return s;
+	}
+
+	private static String stripPasteSpaces(String s)
+	{
+		int start = 0, end = s.length();
+		while (start < end && isPasteSpace(s.charAt(start))) start++;
+		while (end > start && isPasteSpace(s.charAt(end-1))) end--;
+		return s.substring(start, end);
+	}
+
+	/** 1 行を語に分ける。空白（全角を含む）で区切るが、引用符（"..." と '...'）の中と、
+	 * バックスラッシュの直後の空白（ターミナルの「\ 」）では区切らない。引用符は外し、「\ 」はそのまま残す */
+	static List<String> splitPastedLine(String line)
+	{
+		List<String> tokens = new ArrayList<String>();
+		StringBuilder buf = new StringBuilder();
+		char quote = 0;
+		for (int i = 0; i < line.length(); i++) {
+			char c = line.charAt(i);
+			if (quote != 0) {
+				if (c == quote) quote = 0;
+				else buf.append(c);
+			} else if ((c == '"' || c == '\'') && buf.length() == 0 && line.indexOf(c, i+1) >= 0) {
+				//引用は、語の頭にあって閉じる引用符が後ろにあるときだけ
+				//（Here's の語の途中や、'Tis のような閉じない引用符で、続く URL を飲み込まない）
+				quote = c;
+			} else if (c == '\\' && i+1 < line.length() && isPasteSpace(line.charAt(i+1))) {
+				buf.append(c).append(line.charAt(++i));
+			} else if (isPasteSpace(c)) {
+				if (buf.length() > 0) { tokens.add(buf.toString()); buf.setLength(0); }
+			} else {
+				buf.append(c);
+			}
+		}
+		if (buf.length() > 0) tokens.add(buf.toString());
+		return tokens;
+	}
+
+	/** 貼り付けた文字列の 1 つ分を、ある絶対パスとして読む。無ければ null。
+	 * 相対パスは読まない（作業フォルダの何かにたまたま当たって変換が始まるのを防ぐ）。
+	 * ターミナルのバックスラッシュの書き方（「\ 」「\(」など）も戻して読む */
+	private static File pastedPath(String s)
+	{
+		if (s.isEmpty()) return null;
+		File file = new File(s);
+		if (file.isAbsolute() && file.exists()) return file;
+		if (s.indexOf('\\') >= 0 && s.startsWith("/")) {
+			//mac・Linux のパスだけ（Windows のパスの区切りの \ を壊さない）
+			file = new File(s.replaceAll("\\\\(.)", "$1"));
+			if (file.isAbsolute() && file.exists()) return file;
+		}
+		return null;
+	}
+
+	/** フォルダとして受け付けてよいか。ルート（/ や C:\）はディスク全体の変換になるので断る。
+	 * /tmp/.. やリンクを通してルートに行き着くものも断るよう、実パスに直してから見る */
+	static boolean isAcceptableFolder(File file)
+	{
+		if (!file.isDirectory()) return false;
+		try {
+			return file.getCanonicalFile().getParentFile() != null;
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
+	/** child の実パスが parent の実パスの中にあるか（リンクで外へ出る・輪になるフォルダを見分ける） */
+	static boolean isInsideFolder(File child, File parent)
+	{
+		try {
+			java.nio.file.Path c = child.getCanonicalFile().toPath();
+			java.nio.file.Path p = parent.getCanonicalFile().toPath();
+			return !c.equals(p) && c.startsWith(p);
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
+	/** インターネットショートカットか。名前が .url で終わるフォルダは、ショートカットではなくフォルダとして扱う */
+	static boolean isInternetShortcut(File file)
+	{
+		return file.isFile() && file.getName().toLowerCase().endsWith(".url");
+	}
+
+	private static boolean isWebUrl(String s)
+	{
+		return s.startsWith("http://") || s.startsWith("https://");
+	}
+
+	/** 貼り付け・ドロップされた文字列から、URL と、あるファイル・フォルダを拾う（順番どおり）。
+	 * 行ごとに、行全体があるファイルかフォルダならそれ（空白を含むパス・フォルダのパスのコピー）。
+	 * そうでなければ語に分け、http(s) の URL と、ある<b>ファイル</b>の絶対パスだけを拾う
+	 * （「題 https://…」の URL、1 行に並べた複数のファイル）。語ではフォルダを拾わない
+	 * （「作品 / 作者」の / や、ログ欄に出たフォルダのパスで、フォルダの中を丸ごと変換しないため）。
+	 * 語では UNC のパス（\\server\…）を見に行かない（応答の無いサーバで画面が固まるため）。
+	 * テストから利用するため package-private */
+	static void collectPasted(String text, List<File> files, List<String> urls)
+	{
+		for (String line : text.split("\\R")) {
+			line = unquotePasted(line);
+			if (line.isEmpty()) continue;
+			if (!isWebUrl(line)) {
+				File whole = pastedPath(line);
+				if (whole != null && (whole.isFile() || isAcceptableFolder(whole))) {
+					files.add(whole);
+					continue;
+				}
+			}
+			for (String token : splitPastedLine(line)) {
+				if (isWebUrl(token)) {
+					urls.add(token);
+				} else if (!token.startsWith("\\\\")) {
+					File file = pastedPath(token);
+					if (file != null && file.isFile()) files.add(file);
+				}
+			}
+		}
+	}
+
+	/** Finder でコピーしたファイルのように、文字列がファイルの一覧の名前だけか */
+	static boolean textIsFileNames(String text, List<File> files)
+	{
+		HashSet<String> names = new HashSet<String>();
+		for (File file : files) names.add(file.getName());
+		boolean any = false;
+		for (String line : text.split("\\R")) {
+			line = unquotePasted(line);
+			if (line.isEmpty()) continue;
+			if (!names.contains(line)) return false;
+			any = true;
+		}
+		return any;
+	}
+
+	/** 受け付けたファイル 1 つを変換の対象に積む（.url はショートカットとして URL を読む）。
+	 * 貼り付け・ドロップ・file:// の 3 つの経路で同じ扱いにする。
+	 * @return 出力先（まだ決まっていなければこのファイルのフォルダ） */
+	private File acceptFile(File file, List<File> vecFiles, List<String> vecUrlString, List<File> vecUrlSrcFile, File dstPath)
+	{
+		if (!file.exists()) return dstPath;
+		//フォルダは、どの経路（貼り付け・ドロップ・ファイルの一覧）でもルートを断る（リンクを通して行き着くものを含む）
+		if (file.isDirectory() && !isAcceptableFolder(file)) {
+			LogAppender.println(I18n.t("ui.paste.rootFolder") + " : " + file.getAbsolutePath());
+			return dstPath;
+		}
+		if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
+		if (isInternetShortcut(file)) {
+			try {
+				String urlLine = readInternetShortCut(file);
+				if (urlLine != null && isWebUrl(urlLine)) {
+					vecUrlString.add(urlLine);
+					vecUrlSrcFile.add(file);
+				} else {
+					LogAppender.println(I18n.t("ui.paste.urlUnreadable") + " : " + file.getAbsolutePath());
+				}
+			} catch (IOException e) {
+				//1 つ読めなくても残りは変換する
+				logger.warn("インターネットショートカットを読めません: {}", file, e);
+				LogAppender.println(I18n.t("ui.paste.urlUnreadable") + " : " + file.getAbsolutePath());
+			}
+		} else {
+			vecFiles.add(file);
+		}
+		return dstPath;
+	}
+
 	/** ファイルまたはURLを取得して変換処理を実行 */
 	boolean handleTextAreaTransfer(Transferable transfer)
 	{
@@ -3553,6 +3737,7 @@ public class AozoraEpub3Applet extends JPanel
 			//ショートカットファイルを格納(同名の表紙取得に利用)
 			ArrayList<File> vecUrlSrcFile = new ArrayList<File>();
 			File dstPath = null;
+			String pastedText = null;
 			
 			if (transfer.isDataFlavorSupported(DataFlavor.stringFlavor)) {
 				//ブラウザからだとStringとFileの両方が来る Linuxは file:// 文字列
@@ -3565,72 +3750,45 @@ public class AozoraEpub3Applet extends JPanel
 				if (urlString != null && urlString.startsWith("file://")) {
 					//Linux等 ファイルのパスでファイルがあれば変換
 					try {
-						String[] fileNames = urlString.split("\n");
-						vecFiles = new ArrayList<File>();
-						for (String path : fileNames) {
+						for (String path : urlString.split("\n")) {
 							File file = new File(URLDecoder.decode(path.substring(7).trim(),"UTF-8"));
-							if (file.exists()) {
-								if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-								if (file.getName().toLowerCase().endsWith(".url")) {
-									String urlLine = readInternetShortCut(file);
-									if (urlLine != null && (urlLine.startsWith("http://") || urlLine.startsWith("https://"))) {
-										vecUrlString.add(urlLine);
-										vecUrlSrcFile.add(file);
-									}
-								} else {
-									vecFiles.add(file);
-								}
-							}
+							dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 						}
 					} catch (Exception e) { logger.warn("file:// 形式の DnD パス展開でエラー", e); }
 				}
 				else if (urlString != null) {
-					//ブラウザからのDnD
-					dstPath = null;
-					try {
-						String[] urlLines = urlString.split("\n| ");
-						for (String urlLine : urlLines) {
-							if (urlLine != null) {
-								if (urlLine.startsWith("http://") || urlLine.startsWith("https://")) {
-									//Webから取得で処置
-									vecUrlString.add(urlLine);
-									vecUrlSrcFile.add(null);
-								} else if (urlLine.endsWith(".txt")) {
-									File file = new File(urlLine);
-									if (file.isFile()) {
-										if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-										vecFiles.add(file);
-									}
-								}
-							}
-						}
-					} catch (Exception e) { logger.warn("ブラウザ DnD の URL/ファイル解析でエラー", e); }
+					//ブラウザからのDnD・URL やファイルのパスの貼り付け
+					pastedText = urlString;
+					List<File> files = new ArrayList<File>();
+					List<String> urls = new ArrayList<String>();
+					collectPasted(urlString, files, urls);
+					for (String url : urls) {
+						vecUrlString.add(url);
+						vecUrlSrcFile.add(null);
+					}
+					for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 				}
 			}
-			else if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+			if (transfer.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+				&& (!transfer.isDataFlavorSupported(DataFlavor.stringFlavor) || vecFiles.size() == 0 && vecUrlString.size() == 0)) {
 				//ローカルファイルはFileのみ
 				@SuppressWarnings("unchecked")
 				List<File> files = (List<File>)transfer.getTransferData(DataFlavor.javaFileListFlavor);
-				if (files.size() > 0) {
-					for (File file : files) {
-						if (file.exists()) {
-							if (dstPath == null && !isCacheFile(file)) dstPath = file.getParentFile();
-							if (file.getName().toLowerCase().endsWith(".url")) {
-								String urlLine = readInternetShortCut(file);
-								if (urlLine != null && (urlLine.startsWith("http://") || urlLine.startsWith("https://"))) {
-									vecUrlString.add(urlLine);
-									vecUrlSrcFile.add(file);
-								}
-							} else {
-								vecFiles.add(file);
-							}
-						}
-					}
+				//文字列もあるときは、文字列がファイルの名前だけ（Finder でコピーしたファイル）のときに限ってファイルの一覧を使う
+				//（ブラウザからのドラッグは、文字列と一時ファイルの両方を持つことがある）
+				if (pastedText == null || textIsFileNames(pastedText, files)) {
+					for (File file : files) dstPath = acceptFile(file, vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
+					pastedText = null;
 				}
 			}
 			
 			//何も変換しなければfalse
-			if (vecFiles.size() == 0 && vecUrlString.size() == 0) return false;
+			if (vecFiles.size() == 0 && vecUrlString.size() == 0) {
+				//貼り付けた文字列から何も拾えなかったら黙らずに知らせる（拡張子や空白で黙って捨てていた）
+				//貼った中身は出さない（クリップボードにパスワードなどが入っていることがある）
+				if (pastedText != null) LogAppender.println(I18n.t("ui.paste.nothing"));
+				return false;
+			}
 			//変換実行
 			startConvertWorker(vecFiles, vecUrlString, vecUrlSrcFile, dstPath);
 			
@@ -3873,10 +4031,23 @@ public class AozoraEpub3Applet extends JPanel
 	/** サブディレクトリ再帰用 */
 	private void _convertFiles(File[] srcFiles, File dstPath)
 	{
+		_convertFiles(srcFiles, dstPath, null);
+	}
+
+	/** @param parent 辿っているフォルダ（最初の呼び出しでは null） */
+	private void _convertFiles(File[] srcFiles, File dstPath, File parent)
+	{
+		if (srcFiles == null) return;
 		for (File srcFile : srcFiles) {
 			if (srcFile.isDirectory()) {
+				//中のフォルダは、実パスが親のフォルダの中にあるときだけ辿る
+				//（リンク・ジャンクションでルートなど外へ出るもの、輪になるものを辿ってディスク全体を回らない）
+				if (parent != null && !isInsideFolder(srcFile, parent)) {
+					LogAppender.println(I18n.t("ui.convert.skipLinkedFolder") + " : " + srcFile.getAbsolutePath());
+					continue;
+				}
 				//サブディレクトリ 再帰
-				_convertFiles(srcFile.listFiles(), dstPath);
+				_convertFiles(srcFile.listFiles(), dstPath, srcFile);
 			} else if (srcFile.isFile()) {
 				convertFile(srcFile, dstPath);
 			}

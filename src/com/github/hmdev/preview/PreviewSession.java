@@ -176,7 +176,10 @@ public class PreviewSession implements AutoCloseable
 		Path absolute = epubFile.toAbsolutePath().normalize();
 		// 同じ EPUB を繰り返しプレビューしても展開先が増えないようにする
 		// (GUI のボタンを押すたびに dakuten フォント 222 本が複製されるのを避ける)
-		String existing = this.bookIdByPath.get(absolute);
+		// 鍵は実パス。変換した本（実パス）と、リンク経由で走査した棚の本（/tmp → /private/tmp、
+		// junction など）が同じ本なら 1 冊にまとめる
+		Path key = sameBookKey(absolute);
+		String existing = this.bookIdByPath.get(key);
 		if (existing != null) {
 			// 既に本棚として登録済みの本を、改めて「開く本」として渡された場合。
 			// 出力先フォルダを棚にしていれば必ずこの経路を通るので、
@@ -186,9 +189,19 @@ public class PreviewSession implements AutoCloseable
 		}
 		String id = "b" + (this.nextBookNumber++);
 		this.books.put(id, new Book(id, absolute));
-		this.bookIdByPath.put(absolute, id);
+		this.bookIdByPath.put(key, id);
 		if (mayBecomeDefault && this.defaultBookId == null) this.defaultBookId = id;
 		return id;
+	}
+
+	/** 同じ本かを見分ける鍵（実パス）。解決できなければ絶対パスのまま */
+	private static Path sameBookKey(Path absolute)
+	{
+		try {
+			return com.github.hmdev.util.PathUtils.realPath(absolute);
+		} catch (IOException e) {
+			return absolute;
+		}
 	}
 
 	/**
@@ -253,7 +266,8 @@ public class PreviewSession implements AutoCloseable
 			Book book = this.books.get(id);
 			if (book == null || book.dir != null) continue;
 			this.books.remove(id);
-			this.bookIdByPath.remove(book.epubFile);
+			//鍵は実パス（sameBookKey）なので、ファイルが消えていても外せるよう本の ID で消す
+			this.bookIdByPath.values().removeIf(id::equals);
 		}
 	}
 
