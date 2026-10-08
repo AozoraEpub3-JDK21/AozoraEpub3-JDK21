@@ -34,25 +34,20 @@ public class WebAozoraConverterDefunctTest {
 	}
 
 	@Test
-	public void testMaiNetIsDefunct() throws Exception {
-		assertNull("閉鎖済みサイトは変換せず null を返すこと",
-			convert("http://www.mai-net.net/bbs/sst/sst.php?act=dump&cate=all&all=4600"));
-	}
-
-	@Test
 	public void testNewvelIsDefunct() throws Exception {
 		assertNull("閉鎖済みサイトは変換せず null を返すこと",
 			convert("http://www.newvel.jp/library/12345/"));
 	}
 
 	/**
-	 * web/ 全サイトを列挙し、DEFUNCT が定義されているのは既知の消滅 3 サイトだけであること。
-	 * サイトを追加したときも自動でこのチェックの対象になる
+	 * web/ 全サイトを列挙し、DEFUNCT が定義されているのは既知の消滅サイトだけであること。
+	 * サイトを追加したときも自動でこのチェックの対象になる。
+	 * mai-net（Arcadia）は http で閲覧・変換できることを 2026-10-08 に確かめて DEFUNCT を外した
 	 */
 	@Test
 	public void testOnlyKnownDefunctSitesHaveMarker() throws Exception {
 		java.util.Set<String> knownDefunct = java.util.Set.of(
-			"www.dnovels.net", "www.mai-net.net", "www.newvel.jp");
+			"www.dnovels.net", "www.newvel.jp");
 		File[] siteDirs = WEB_CONFIG.listFiles(File::isDirectory);
 		assertNotNull("web/ 配下にサイトディレクトリがあること", siteDirs);
 		assertTrue("サイト数が想定以上あること", siteDirs.length >= 12);
