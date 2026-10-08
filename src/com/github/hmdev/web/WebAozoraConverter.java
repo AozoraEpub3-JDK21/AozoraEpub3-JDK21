@@ -2969,6 +2969,12 @@ public class WebAozoraConverter
 			int responseCode = response.statusCode();
 			LogAppender.println("HTTP Response Code: " + responseCode);
 			if (responseCode >= 400) {
+				//Cloudflare のボット確認画面（Just a moment...）。コードだけでは利用者に理由が分からない
+				//すり抜ける細工はしない（サイトの意思に反する）。止められていると伝えて断る
+				if ("challenge".equalsIgnoreCase(response.headers().firstValue("cf-mitigated").orElse(""))) {
+					throw new IOException("このサイトは自動での取得を Cloudflare の確認画面で止めているため、取得できません"
+						+ " (HTTP " + responseCode + "): " + urlString);
+				}
 				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
 			}
 
