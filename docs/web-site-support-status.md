@@ -25,7 +25,11 @@ Web 変換まわりの変更時にここを更新しながら回す
 | FC2 小説 | `nid=600`（443 ページ） | ✅ | 445 | 515,337 | 0/336 | 表紙の画像はサイトの側でエラーページへ転送され 404（作品の表紙が無い） |
 | FC2 小説 | `nid=218411`（2 ページ） | ⚠️ | 4 | 565 | 0/3 | 本文は全部取れる（短い作品）。挿絵 2 枚が `https:/nimg/...`（スラッシュ 1 つ）になって取れない |
 
-消滅扱いのサイト: `www.newvel.jp` は今も DNS を引けない。`www.dnovels.net` は DNS が引けるようになり http は 403。`www.mai-net.net` は http が 200 を返す（https は証明書のエラー）。3 つとも DEFUNCT のまま（変換はしていない）。
+消滅扱いのサイト: `www.newvel.jp` は今も DNS を引けない。`www.dnovels.net` は DNS が引けるようになり http は 403。`www.mai-net.net` は http が 200 を返す（https は証明書のエラー）。dnovels・newvel は DEFUNCT のまま。
+mai-net は、DEFUNCT を外した規則で SS 投稿掲示板の作品（`act=dump&cate=original&all=44366`）を http で変換し、本文 625 字が原文と一致したので、DEFUNCT を外した（SS 投稿掲示板には 2026-10 にも新しい投稿がある）。4 話の作品（`all=44347`）も 4 話そろって変換できた（ゲート2が確認）。
+残り: https は自己署名で期限切れ（2025-09-17）の証明書なので、https の URL は失敗する（http:// で試すよう案内を出す。読み替えはしない）。章のある作品・長い作品・挿絵のある作品は試していない。
+作者名の規則 `^Name: (.+?)(◆.+)?$` は、トリップの無い投稿だと「 ID:xxxx」まで作者名に入るはず（未確認。確かめた 5 作品はすべてトリップ付き）。
+保存した HTML で mai-net の規則を当てる升は無い（サイトの HTML が変わっても試験は緑のまま）。
 
 ## 2026-08-11 全サイト dogfood (CLI、v1.5.1 実装後の master)
 
@@ -43,7 +47,7 @@ Web 変換まわりの変更時にここを更新しながら回す
 | **2.novelist.jp (二次創作)** | `6027.html` (ゆらのと、373 ページ) | ✅ EPUB 687KB 生成。PAGE_URL のページネーションも 373 ページ完走 |
 | **FC2小説 (novel.fc2.com)** | `novel.php?mode=tc&nid=600` | ❌→✅ **v1.5.1 で修正済み** (残件 1 参照。挿絵のルート相対 src は既知問題として残る) |
 | www.dnovels.net | — | ⚠️ **サイト消滅** (DNS 解決不可) |
-| www.mai-net.net | — | ⚠️ **サイト消滅** (DNS 解決不可) |
+| www.mai-net.net | — | ⚠️ **サイト消滅** (DNS 解決不可) → **2026-10-08 訂正: http で閲覧・変換できる**（上の 10-08 の節） |
 | www.newvel.jp | — | ⚠️ **サイト消滅** (DNS 解決不可) |
 
 補足: なろう R18 の出力ファイル名が超長タイトルでフルパス 228 文字になった。
@@ -101,8 +105,9 @@ converter が解決できず「画像ファイルなし images/__/nimg/...」で
   チェックし、「このサイトはサービスを終了しているため変換できません : <説明文>」を
   表示して変換中断 (exit 1)。ネットワークに出ないため消滅済みドメインでも即応答
 - dnovels.net / mai-net.net / newvel.jp の 3 サイトに DEFUNCT を定義
-- テスト: `test/WebAozoraConverterDefunctTest.java` (3 サイトの中断 + 稼働中 9 サイトに
-  DEFUNCT が誤定義されていないことの網羅チェック)
+  （**2026-10-08: mai-net は閲覧・変換できると分かったので外した。DEFUNCT は dnovels・newvel の 2 サイト**）
+- テスト: `test/WebAozoraConverterDefunctTest.java` (DEFUNCT のサイトの中断 + 稼働中のサイトに
+  DEFUNCT が誤定義されていないことの網羅チェック。2026-10-08 から DEFUNCT は 2 サイト)
 
 **`.NET` ポートへの移植残**: FC2 の extract.txt 修正 (web/ のコピーを持つ場合) と
 DEFUNCT マーカーの解釈 (`WebAozoraConverter.cs` の ExtractId 相当 + 変換前チェック) は

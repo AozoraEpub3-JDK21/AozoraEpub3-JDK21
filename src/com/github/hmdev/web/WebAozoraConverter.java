@@ -614,6 +614,10 @@ public class WebAozoraConverter
 			LogAppender.println("一覧ページの取得に失敗しました。 ");
 			//止められたときは cacheFile が理由を出している。Java のクラス名は利用者に見せない
 			if (!(e instanceof CloudflareChallengeException)) LogAppender.println("エラー詳細: " + e.getClass().getName() + " - " + e.getMessage());
+			//https の証明書を確かめられない（自己署名・期限切れなど）。http で読めるサイトもあるので、そう伝える
+			if (e instanceof javax.net.ssl.SSLException && urlString.startsWith("https://")) {
+				LogAppender.println("サイトの https の証明書を確かめられませんでした。http:// で始まる URL で読めるか試してください");
+			}
 			if (!cacheFile.exists()) return null;
 
 			LogAppender.println("キャッシュファイルを利用します。");
