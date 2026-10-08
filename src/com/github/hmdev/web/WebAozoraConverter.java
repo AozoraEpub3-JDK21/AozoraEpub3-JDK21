@@ -3060,8 +3060,9 @@ public class WebAozoraConverter
 				//すり抜ける細工はしない（サイトの意思に反する）。止められていると伝えて断る
 				if ("challenge".equalsIgnoreCase(response.headers().firstValue("cf-mitigated").orElse(""))) {
 					CloudflareChallengeException e = new CloudflareChallengeException(responseCode, urlString);
-					//サイトそのものに止められたときだけ、以降を止める（別のホストの表紙・挿絵では止めない）
-					if (isSiteHost(urlString)) challenged(e);
+					//サイトそのものに止められたときだけ、以降を止める（別のホストの表紙・挿絵では止めない）。
+					//転送（リダイレクト）された先で止められたこともあるので、応答の最終的な URL で見る
+					if (isSiteHost(response.uri().toString())) challenged(e);
 					else LogAppender.println(e.getMessage());
 					throw e;
 				}

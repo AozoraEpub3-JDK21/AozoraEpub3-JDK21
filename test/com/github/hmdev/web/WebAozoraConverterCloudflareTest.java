@@ -74,6 +74,12 @@ public class WebAozoraConverterCloudflareTest {
 			"<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">"
 			+ "<li><a href=\"/ep/1.html\">第1話</a></li><li><a href=\"/ep/2.html\">第2話</a></li>"
 			+ "<li><a href=\"/ep/3.html\">第3話</a></li></ul></body></html>", false));
+		//サイトのホスト（127.0.0.1）から別のホスト（localhost）の確認画面へ転送する
+		server.createContext("/redirect/", exchange -> {
+			exchange.getResponseHeaders().add("Location", "http://localhost:" + server.getAddress().getPort() + "/ep/9.html");
+			exchange.sendResponseHeaders(302, -1);
+			exchange.close();
+		});
 		server.createContext("/ep/", exchange -> {
 			episodeRequests.incrementAndGet();
 			if (firstEpisodeIsErrorPage && exchange.getRequestURI().getPath().endsWith("/1.html")) {
@@ -167,6 +173,9 @@ public class WebAozoraConverterCloudflareTest {
 		failureMessage(converter, base + "/ep/1.html", new File(tempFolder.getRoot(), "a.html"));
 		assertFalse("別のホストの確認画面では止めない", converter.blockedByChallenge);
 		converter.baseUri = base;
+		// サイトのホストの URL でも、転送された先（別のホスト）で止められたなら止めない
+		failureMessage(converter, base + "/redirect/x", new File(tempFolder.getRoot(), "r.html"));
+		assertFalse("転送先の別のホストの確認画面では止めない", converter.blockedByChallenge);
 		failureMessage(converter, base + "/ep/2.html", new File(tempFolder.getRoot(), "b.html"));
 		assertTrue("サイトのホストの確認画面では止める", converter.blockedByChallenge);
 	}
