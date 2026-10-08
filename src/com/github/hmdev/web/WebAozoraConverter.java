@@ -533,6 +533,7 @@ public class WebAozoraConverter
 		this.beforeChapter = beforeChapter;
 		this.blockedByChallenge = false;
 		this.pendingUpdateInfo = null;
+		this.confirmedHrefs.clear();
 		
 		//末尾の / をリダイレクトで取得
 		urlString = urlString.trim();
@@ -1043,7 +1044,9 @@ public class WebAozoraConverter
 								LogAppender.println("htmlファイルが取得できませんでした : "+chapterHref);
 							}
 						}
-						//取り直すはずだった（改稿・追加された）のに取れなかった話は、更新情報に新しい日付を書かない
+						//取れた話・取り直す必要の無かった話は、更新情報に新しい日付を書いてよい
+						if (loaded || !reload) this.confirmedHrefs.add(chapterHref);
+						//取り直すはずだった（改稿・追加された）のに取れなかった話
 						if (reload && !loaded) failedReloads.add(chapterHref);
 						//キャッシュされているファイルが指定時間内なら更新扱い
 						if (!loaded) {
@@ -1069,15 +1072,18 @@ public class WebAozoraConverter
 					}
 					chapterIdx++;
 				}
-				//話を取り終えてから更新情報を書く（取り直せなかった話は前の日付のまま）
-				writePendingUpdateInfo(failedReloads);
+				if (!failedReloads.isEmpty()) {
+					//改稿・追加された話を取り損ねた。前のキャッシュがあればそれで本を作る。次の変換でもう一度取りに行く
+					LogAppender.println("改稿・追加された " + failedReloads.size() + " 話を取得できませんでした（次の変換でもう一度取りに行きます）: " + String.join(" ", failedReloads));
+				}
 				//更新が無くて変換もなければ終了
 				if (!this.updated) {
 					LogAppender.append("「"+title+"」");
-					//止められて取れなかったのを「更新なし」と言わない
+					//止められた・取り損ねたのを「更新なし」と言わない
 					if (this.blockedByChallenge) LogAppender.println("の更新は、サイトに止められたため確かめられませんでした");
+					else if (!failedReloads.isEmpty()) LogAppender.println("の更新を取得できませんでした");
 					else LogAppender.println("の更新はありません");
-					if (this.convertUpdated) return blockedUpdateCheck();
+					if (this.convertUpdated) return blockedUpdateCheck(!failedReloads.isEmpty());
 				}
 				
 				if (this.convertModifiedOnly) {
@@ -1098,9 +1104,9 @@ public class WebAozoraConverter
 						}
 					}
 					if (modifiedChapterIdx.size() == 0) {
-						if (this.blockedByChallenge) {
-							LogAppender.println("サイトに止められたため、追加更新分を確かめられませんでした");
-							return blockedUpdateCheck();
+						if (this.blockedByChallenge || !failedReloads.isEmpty()) {
+							LogAppender.println(this.blockedByChallenge ? "サイトに止められたため、追加更新分を確かめられませんでした" : "追加更新分を取得できませんでした");
+							return blockedUpdateCheck(!failedReloads.isEmpty());
 						}
 						LogAppender.println("追加更新分はありません");
 						this.updated = false;
@@ -1157,6 +1163,8 @@ public class WebAozoraConverter
 								}
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
+								//再試行で取れた話は、更新情報に新しい日付を書いてよい
+								this.confirmedHrefs.add(chapterHref);
 							} catch (Exception e) {
 								logger.warn("章の再ダウンロードに失敗、スキップ: {}", chapterHref, e);
 								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
@@ -1178,6 +1186,7 @@ public class WebAozoraConverter
 									sleepForDownload();
 									cacheFile(chapterHref, chapterCacheFile, urlString);
 									chapterDoc = Jsoup.parse(chapterCacheFile, null, chapterHref);
+									this.confirmedHrefs.add(chapterHref);
 								} catch (Exception e) {
 									logger.warn("章本文の再取得に失敗: {}", chapterHref, e);
 									LogAppender.println("再ダウンロードできませんでした: " + chapterHref);
@@ -1280,6 +1289,8 @@ public class WebAozoraConverter
 
 		} finally {
 			bw.close();
+			//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
+			writePendingUpdateInfo();
 		}
 
 		// ファイナライズ処理: 文章全体の後処理
@@ -1297,11 +1308,11 @@ public class WebAozoraConverter
 		return txtFile;
 	}
 	
-	/** 更新の確かめが止められたときの戻り値。呼び出し元（GUI）は「null で更新なし」を「スキップ」と出すので、
-	 * 止められたときは更新ありの扱い（isUpdated()==true）のまま失敗（null）として返す */
-	private File blockedUpdateCheck()
+	/** 更新の確かめが止められた・更新を取り損ねたときの戻り値。呼び出し元（GUI）は「null で更新なし」を「スキップ」と出すので、
+	 * そのときは更新ありの扱い（isUpdated()==true）のまま失敗（null）として返す */
+	private File blockedUpdateCheck(boolean fetchFailed)
 	{
-		if (this.blockedByChallenge) this.updated = true;
+		if (this.blockedByChallenge || fetchFailed) this.updated = true;
 		return null;
 	}
 
@@ -1326,8 +1337,10 @@ public class WebAozoraConverter
 		LogAppender.println("以降の話は取りに行かず、キャッシュにある話だけで変換します");
 	}
 
-	/** 書く前の更新情報（update.txt）。話を取り終えてから writePendingUpdateInfo で書く */
+	/** 書く前の更新情報（update.txt）。変換の終わり（途中で止まったときも）に writePendingUpdateInfo で書く */
 	private PendingUpdateInfo pendingUpdateInfo = null;
+	/** この変換で、取れた話・取り直す必要の無かった話。update.txt に新しい日付を書いてよい話 */
+	private final HashSet<String> confirmedHrefs = new HashSet<>();
 
 	/** 書く前の更新情報。鍵は update.txt の鍵（一覧の href の生の値、または絶対 URL）、値は新しい日付と話の URL */
 	static class PendingUpdateInfo
@@ -1351,15 +1364,16 @@ public class WebAozoraConverter
 			this.entries.put(key, new String[] { value, chapterHref });
 		}
 
-		/** 書く行。取り直すはずで取れなかった話（failedReloads）は、前の値を残す（前の値が無ければ書かない）。
-		 * 次の変換で「更新あり」と判定され、取り直される */
-		List<String> lines(Set<String> failedReloads)
+		/** 書く行。取れた話（confirmed）だけ新しい値、それ以外は前の値を残す（前の値が無ければ書かない）。
+		 * 取り損ねた話・途中で止まって取らなかった話は、次の変換で「更新あり」と判定され、取りに行く */
+		List<String> lines(Set<String> confirmed)
 		{
 			List<String> lines = new ArrayList<>();
 			if (this.contentsUpdate != null) lines.add(this.urlString + "\t" + this.contentsUpdate);
 			for (Map.Entry<String, String[]> e : this.entries.entrySet()) {
 				String value = e.getValue()[0];
-				if (failedReloads.contains(e.getValue()[1])) {
+				String chapterHref = e.getValue()[1];
+				if (chapterHref != null && !confirmed.contains(chapterHref)) {
 					value = this.previous.get(e.getKey());
 					if (value == null) continue;
 				}
@@ -1369,17 +1383,14 @@ public class WebAozoraConverter
 		}
 	}
 
-	/** 控えておいた更新情報を書く */
-	private void writePendingUpdateInfo(Set<String> failedReloads)
+	/** 控えておいた更新情報を書く（変換の終わりに。途中で止まったときも、取れた話までは記録に残す） */
+	private void writePendingUpdateInfo()
 	{
 		PendingUpdateInfo info = this.pendingUpdateInfo;
 		this.pendingUpdateInfo = null;
 		if (info == null) return;
-		if (!failedReloads.isEmpty()) {
-			LogAppender.println("取り直せなかった " + failedReloads.size() + " 話は、次の変換でもう一度取りに行きます");
-		}
 		try (BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(info.file.toPath()), "UTF-8"))) {
-			for (String line : info.lines(failedReloads)) {
+			for (String line : info.lines(this.confirmedHrefs)) {
 				updateBw.append(line);
 				updateBw.append('\n');
 			}
@@ -1418,38 +1429,18 @@ public class WebAozoraConverter
 			}
 		}
 		
-		//新しい更新情報は控えておき、話を取り終えてから書く（writePendingUpdateInfo）。
+		//新しい更新情報は控えておき、変換の終わりに書く（writePendingUpdateInfo）。
 		//先に書くと、改稿された話を取り損ねたとき、次の変換で「更新なし」と判定されて取り直されない
 		this.pendingUpdateInfo = new PendingUpdateInfo(updateInfoFile, urlString, contentsUpdate, updateStringMap);
-		{
-			int k = 0;
-			for (Element update : updates) {
-				String hrefString = hrefs.get(k++).attr("href");
-				String chapterHref = hrefString;
-				if (hrefString != null && hrefString.length() > 0 && !hrefString.startsWith("http")) {
-					if (hrefString.charAt(0) == '/') chapterHref = baseUri+hrefString;
-					else chapterHref = listBaseUrl+hrefString;
-				}
-				this.pendingUpdateInfo.put(hrefString, update.html().replaceAll("\n", " "), chapterHref);
-			}
-		}
-		
 		HashSet<String> noUpdateUrls = new HashSet<String>();
-		int i = -1;
-		for (Element href : hrefs) {
-			i++;
-			String hrefString = href.attr("href");
-			if (hrefString == null || hrefString.length() == 0) continue;
+		for (int i = 0; i < hrefs.size(); i++) {
+			String hrefString = hrefs.get(i).attr("href");
+			String html = updates.get(i).html().replaceAll("\n", " ");
+			String chapterHref = toFullUrl(hrefString, listBaseUrl);
+			this.pendingUpdateInfo.put(hrefString, html, chapterHref);
+			if (chapterHref == null) continue;
 			String updateString = updateStringMap.get(hrefString);
-			String html  = updates.get(i).html().replaceAll("\n", " ");
-			if (updateString != null && updateString.equals(html)) {
-				String chapterHref = hrefString;
-				if (!hrefString.startsWith("http")) {
-					if (hrefString.charAt(0) == '/') chapterHref = baseUri+hrefString;
-					else chapterHref = listBaseUrl+hrefString;
-				}
-				noUpdateUrls.add(chapterHref);
-			}
+			if (updateString != null && updateString.equals(html)) noUpdateUrls.add(chapterHref);
 		}
 		
 		

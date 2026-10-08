@@ -41,6 +41,10 @@ public class WebAozoraConverterUpdateInfoTest {
 	private volatile String ep2Date = "2026/01/02";
 	private volatile String ep2Body = "二話目の旧版";
 	private volatile boolean ep2Fails = false;
+	/** 2 話目の取得を、最初の 1 回だけ失敗させる */
+	private volatile boolean ep2FailsOnce = false;
+	/** 2 話目を取りに来たら、変換をキャンセルする */
+	private volatile WebAozoraConverter cancelOnEp2 = null;
 
 	@After
 	public void tearDown() {
@@ -69,6 +73,8 @@ public class WebAozoraConverterUpdateInfoTest {
 			} else if (path.equals("/ep/1/")) {
 				respond(exchange, 200, "<html><body><h2>第1話</h2><div class=\"body\"><p>一話目</p></div></body></html>");
 			} else if (path.equals("/ep/2/")) {
+				if (cancelOnEp2 != null) cancelOnEp2.canceled = true;
+				if (ep2FailsOnce) { ep2FailsOnce = false; respond(exchange, 500, "error"); return; }
 				if (ep2Fails) respond(exchange, 500, "error");
 				else respond(exchange, 200, "<html><body><h2>第2話</h2><div class=\"body\"><p>" + ep2Body + "</p></div></body></html>");
 			} else {
@@ -131,5 +137,56 @@ public class WebAozoraConverterUpdateInfoTest {
 		assertTrue("改稿した本文が入る: " + text, text.contains("二話目の改稿版"));
 		// 改稿していない 1 話目は取り直さない
 		assertEquals(1, count("/ep/1/"));
+	}
+
+	/** 途中で止まっても（キャンセル・例外）、取れた話までは更新情報に残し、次の変換で取り直さない */
+	@Test
+	public void episodesFetchedBeforeACancelAreNotFetchedAgain() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+
+		// 初めての変換で、1 話目を取ったあと 2 話目でキャンセルされる
+		cancelOnEp2 = converter;
+		converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		cancelOnEp2 = null;
+		assertEquals(1, count("/ep/1/"));
+
+		// 次の変換: 1 話目は取り直さない（取れた話は記録に残っている）
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertNotNull(txt);
+		assertEquals("止まる前に取れた 1 話目は取り直さない", 1, count("/ep/1/"));
+	}
+
+	/** 最初の取得で失敗して、後の再試行で取れた話は、次の変換で取り直さない */
+	@Test
+	public void anEpisodeFetchedOnRetryIsNotFetchedAgain() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+
+		ep2FailsOnce = true;
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertNotNull(txt);
+		assertEquals("最初の取得で失敗し、変換の再試行で取れる", 2, count("/ep/2/"));
+
+		converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		assertEquals("再試行で取れた話は、次の変換で取り直さない", 2, count("/ep/2/"));
+	}
+
+	/** 「更新分のみ変換」で改稿を取り損ねたら、「更新なし」（スキップ）ではなく失敗として返す */
+	@Test
+	public void aFailedRevisionIsNotReportedAsNoUpdate() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+		assertNotNull(converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0));
+
+		ep2Date = "2026/02/02";
+		ep2Fails = true;
+		// 取ったばかりのキャッシュを「指定時間内に取った＝更新あり」と数えないよう、時間の窓は 0 にする
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, true, false, false, 0);
+		assertEquals(null, txt);
+		assertTrue("取り損ねたのを「更新なし」にしない（GUI がスキップと出さない）", converter.isUpdated());
 	}
 }
