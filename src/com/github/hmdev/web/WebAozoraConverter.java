@@ -1172,7 +1172,7 @@ public class WebAozoraConverter
 						String subTitle = null;
 						if (subtitles != null && subtitles.size() > chapterIdx) subTitle = subtitles.get(chapterIdx);
 						
-						docToAozoraText(bw, chapterDoc, newChapter, subTitle, postDate, publishDate);
+						docToAozoraText(bw, chapterDoc, episodeSharesChapterHeaderPage(newChapter), subTitle, postDate, publishDate);
 					}
 					chapterIdx++;
 				}
@@ -1420,7 +1420,7 @@ public class WebAozoraConverter
 	}
 
 	/** 章が変わったときの章中表紙（章題の大見出し）を出力する。
-	 * 左右中央にするときは章題だけで1ページにし、第1話は次のページから始める */
+	 * 第1話を同じページに続けるかは episodeSharesChapterHeaderPage で決める */
 	private void printChapterHeader(BufferedWriter bw, String chapterTitle) throws IOException
 	{
 		bw.append("\n［＃改ページ］\n");
@@ -1436,18 +1436,22 @@ public class WebAozoraConverter
 		bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
 		printText(bw, chapterTitle);
 		bw.append("［＃大見出し終わり］\n");
-		if (formatSettings.isChapterUseCenterPage()) {
-			// narou.rb と同じく章題の直後で改ページする（無いと第1話まで左右中央の節に入る）
-			bw.append("\n［＃改ページ］\n");
-		} else {
-			bw.append('\n');
-		}
+		bw.append('\n');
+	}
+
+	/** 章の第1話を章中表紙と同じページに続けるか。
+	 * 左右中央の章中表紙は章題だけで1ページにする（narou.rb と同じく章題の直後で改ページ）。
+	 * 改ページは第1話の側（docToAozoraText）で書くので、本文が取れない話では改ページも出ない */
+	private boolean episodeSharesChapterHeaderPage(boolean newChapter)
+	{
+		return newChapter && !formatSettings.isChapterUseCenterPage();
 	}
 
 	
 	/** 各話のHTMLの変換
+	 * @param sharesPreviousPage 前の出力（章中表紙）と同じページに続ける＝先頭の改ページを書かない
 	 * @param listSubTitle 一覧側で取得したタイトル */
-	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate, String publishDate) throws IOException
+	private void docToAozoraText(BufferedWriter bw, Document doc, boolean sharesPreviousPage, String listSubTitle, String postDate, String publishDate) throws IOException
 	{
 		// 英文保護リストをクリア（各話ごとに初期化）
 		englishSentences.clear();
@@ -1458,7 +1462,7 @@ public class WebAozoraConverter
 		if (contentDivs == null || contentDivs.size() == 0) {
 			LogAppender.println("CONTENT_ARTICLE : 本文が取得できません");
 		} else {
-			if (!newChapter) bw.append("\n［＃改ページ］\n");
+			if (!sharesPreviousPage) bw.append("\n［＃改ページ］\n");
 			String subTitle = getExtractText(doc, this.queryMap.get(ExtractId.CONTENT_SUBTITLE));
 			if (subTitle == null) subTitle = listSubTitle; //一覧のタイトルを設定
 			if (subTitle != null) {
