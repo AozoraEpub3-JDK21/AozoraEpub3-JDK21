@@ -979,11 +979,7 @@ public class WebAozoraConverter
 					
 					if (chapterHref != null && chapterHref.length() > 0) {
 						//画像srcをフルパスにするときに使うページのパス
-						this.pageBaseUri = chapterHref;
-						if (!chapterHref.endsWith("/")) {
-							int idx = chapterHref.indexOf('/', 7);
-							if (idx > -1) this.pageBaseUri = chapterHref.substring(0, idx);
-						}
+						this.pageBaseUri = pageBaseUriOf(chapterHref);
 						
 						//キャッシュ取得 ロードされたらWait 500ms
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
@@ -1433,6 +1429,20 @@ public class WebAozoraConverter
 	}
 
 	
+	/** ページからの相対 src（"nimg/a.jpg" など）を解決するための基準 URL。
+	 * ページのディレクトリ（クエリ・フラグメントを除いた最後の / まで）を返す。
+	 * 例: https://novel.fc2.com/novel.php?mode=rd&nid=1&pg=2 → https://novel.fc2.com/
+	 *     https://ncode.syosetu.com/n1234ab/1/ → そのまま */
+	static String pageBaseUriOf(String pageUrl)
+	{
+		String path = pageUrl.replaceFirst("[?#].*$", "");
+		int hostStart = path.indexOf("//");
+		int slash = path.lastIndexOf('/');
+		//スキームとホストだけ (https://example.com) ならルート
+		if (hostStart >= 0 && slash <= hostStart + 1) return path + "/";
+		return path.substring(0, slash + 1);
+	}
+
 	/** 各話のHTMLの変換
 	 * @param listSubTitle 一覧側で取得したタイトル */
 	private void docToAozoraText(BufferedWriter bw, Document doc, boolean newChapter, String listSubTitle, String postDate, String publishDate) throws IOException
