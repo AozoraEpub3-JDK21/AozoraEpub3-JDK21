@@ -1837,6 +1837,21 @@ Windows 11 の実機で、junction・8.3 の短い名前・親が junction の�
 - 出力先の外を指すリンクを断る升（`AozoraEpub3GetOutFileTest#existingOutputLinkPointingOutsideIsRejected`）は、ファイルの symlink を作れない Windows（開発者モード無し）では飛ばされる
 - `assumeSymlinkSupported`（symlink が作れなければ junction）が `WebAozoraConverterSafeResolveTest` と `AozoraEpub3GetOutFileTest` に 2 つある
 
+## 濁点・半濁点の合成（2026-10-08 追加）
+
+### 40. 濁音・半濁音・促音に濁点を重ねると別の字に化ける（本家 #17） — 🔶 一部対応（2026-10-08）
+
+**対応済み（PR #104）**: `AozoraEpub3Converter#composedDakuten` が文字の番号に +1/+2 するだけだったので、縦書きで `が゛→き`・`ぱ゜→び`・`っ゛→つ` などに化けていた。
+基底字がもう濁音・半濁音（NFD で 2 文字）のときと、`っ`・`ッ` のときは合成しない。出力が変わるのは縦書きの 61 組だけ。
+
+**残り**:
+- **.NET 版との比較が未実施**。61 組が 5 件の入力に出るかを数えるスクリプトは internal #10 にある（win の台で数える）
+- `ヰ゛→ヸ`・`ヱ゛→ヹ` は今も合成しない（Unicode の NFC では合成できる）。`gaiji/dakuten/` にもこの組のフォントは無いので、DakutenType=2 では並べて出る
+- 合成しなくなった 61 組は、DakutenType=2 で濁点フォントが無いと、重ね（`<span class="dakuten">`）ではなく並べて出る（`ッ゛` と同じ道）。narou.rb の既定は DakutenType=2
+- 目次（`convertTcyText(String)` の経路）は U+3099 を ゛（U+309B）に変えないので、結合文字で書かれた `が\u3099` は、DakutenType=0 で目次だけ結合文字のまま出る
+- 範囲と +1/+2 の手書きの表を、NFC の合成（`Normalizer.normalize(base + mark, NFC)` が 1 文字になるか）に置き換えれば、上の ヰ・ヱ も含めて一度で揃う。全仮名 × ゛゜ を NFC と突き合わせる升も足すとよい
+- `DakutenComposeTest` の DakutenType=2 の期待は、作業ディレクトリからの相対パス `gaiji/` に頼る（プロジェクトの root 以外から走らせると赤になる）
+
 ---
 
 ## 進め方
