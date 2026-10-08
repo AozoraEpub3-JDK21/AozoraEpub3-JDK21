@@ -91,7 +91,9 @@ public class AozoraEpub3AppletPasteTest {
 	public void urlsAnywhereInTheLine() {
 		// 共有ボタンの文字列のように、題の後に URL が続く
 		collect("走れメロス｜小説家になろう https://ncode.syosetu.com/n1/\n　https://kakuyomu.jp/works/2　https://example.com/3 ");
-		assertEquals(Arrays.asList("https://ncode.syosetu.com/n1/", "https://kakuyomu.jp/works/2", "https://example.com/3"), urls);
+		// 語の途中のアポストロフィで引用を始めない
+		collect("Here's the link https://example.com/4");
+		assertEquals(Arrays.asList("https://ncode.syosetu.com/n1/", "https://kakuyomu.jp/works/2", "https://example.com/3", "https://example.com/4"), urls);
 		assertEquals(Collections.emptyList(), files);
 	}
 

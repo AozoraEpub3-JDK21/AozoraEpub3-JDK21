@@ -3582,7 +3582,8 @@ public class AozoraEpub3Applet extends JPanel
 			if (quote != 0) {
 				if (c == quote) quote = 0;
 				else buf.append(c);
-			} else if (c == '"' || c == '\'') {
+			} else if ((c == '"' || c == '\'') && buf.length() == 0) {
+				//引用は語の頭の引用符だけ（Here's のような語の途中のアポストロフィで引用を始めない）
 				quote = c;
 			} else if (c == '\\' && i+1 < line.length() && isPasteSpace(line.charAt(i+1))) {
 				buf.append(c).append(line.charAt(++i));
