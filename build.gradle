@@ -25,6 +25,9 @@ tasks.withType(Test) {
     ['web', 'template', 'gaiji'].each { dir ->
         inputs.dir(dir).withPropertyName("testDir_" + dir).withPathSensitivity(PathSensitivity.RELATIVE)
     }
+    // 変換器がプロジェクトの root から読む注記の表・設定（chuki_*.txt・*.ini など）も同じ
+    inputs.files(fileTree('.') { include 'chuki_*.txt', '*.ini', 'replace_*.txt' })
+        .withPropertyName("testRootFiles").withPathSensitivity(PathSensitivity.RELATIVE)
 
     // JUnit 4.13.2 が JDK 26 のリフレクション挙動変化により
     // 非テストクラスにも InvalidTestClassError を発生させるため、
