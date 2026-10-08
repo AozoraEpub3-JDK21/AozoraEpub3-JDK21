@@ -23,6 +23,7 @@ import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
+import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
@@ -859,7 +860,11 @@ public class AozoraEpub3
 		//出力ファイル
 		if (dstPath == null) dstPath = srcFile.getAbsoluteFile().getParentFile();
 		String outFileName = "";
-		if (autoFileName && (bookInfo.creator != null || bookInfo.title != null)) {
+		if (autoFileName && bookInfo.outputBaseName != null) {
+			//Web から取った作品は、題が変わっても台帳の名前のまま（同じ本が別の名前で増えないように）
+			outFileName = dstPath.getAbsolutePath()+"/"+bookInfo.outputBaseName;
+			if (outFileName.length() > 250) outFileName = outFileName.substring(0, 250);
+		} else if (autoFileName && (bookInfo.creator != null || bookInfo.title != null)) {
 			outFileName = dstPath.getAbsolutePath()+"/";
 			if (bookInfo.creator != null && bookInfo.creator.length() > 0) {
 				String str = bookInfo.creator.replaceAll("[\\\\|\\/|\\:|\\*|\\?|\\<|\\>|\\||\\\"|\t]", "");
@@ -921,6 +926,8 @@ public class AozoraEpub3
 			BookInfo bookInfo = aozoraConverter.getBookInfo(srcFile, src, imageInfoReader, titleType, pubFirst);
 			is.close();
 			bookInfo.textEntryName = textEntryName[0];
+			//Web から取った作品は、txt の隣の台帳から identifier と出力のファイル名を決める
+			if ("txt".equals(ext)) BookLedger.applyTo(srcFile, bookInfo);
 			return bookInfo;
 			
 		} catch (Exception e) {

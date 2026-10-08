@@ -46,6 +46,7 @@ import com.github.hmdev.converter.PageBreakType;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.image.ImageUtils;
 import com.github.hmdev.info.BookInfo;
+import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.info.ChapterInfo;
 import com.github.hmdev.info.ChapterLineInfo;
 import com.github.hmdev.info.GaijiInfo;
@@ -567,8 +568,11 @@ public class Epub3Writer
 		String creator = bookInfo.creator==null?"":bookInfo.creator;
 		if ("".equals(bookInfo.creator)) bookInfo.creator = null;
 		
-		//固有ID
-		velocityContext.put("identifier", UUID.nameUUIDFromBytes((title+"-"+creator).getBytes()));
+		//固有ID。Web から取った作品は台帳の値（題が変わっても同じ本として扱われるように）
+		if (bookInfo.identifier != null) velocityContext.put("identifier", bookInfo.identifier);
+		else velocityContext.put("identifier", UUID.nameUUIDFromBytes((title+"-"+creator).getBytes()));
+		//掲載元の URL
+		if (BookLedger.isHttpUrl(bookInfo.sourceUrl)) velocityContext.put("source", CharUtils.escapeHtml(bookInfo.sourceUrl));
 		//表紙の目次表示名
 		velocityContext.put("cover_name", "表紙");
 		

@@ -104,6 +104,13 @@ public class BookInfo
 	/** 刊行者文字列 */
 	public String publisher;
 	
+	/** 掲載元の URL。Web から取った作品だけ（台帳 {@link BookLedger} から入る）。OPF の dc:source に書く */
+	public String sourceUrl;
+	/** dc:identifier に使う UUID。null なら題と作者から作る */
+	public String identifier;
+	/** 自動のファイル名の代わりに使う名前（拡張子なし）。null なら題と作者から作る */
+	public String outputBaseName;
+	
 	////////////////////////////////
 	
 	/** タイトル行の最後 */

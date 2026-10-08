@@ -42,6 +42,7 @@ import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.util.CharUtils;
 import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.LogAppender;
@@ -666,18 +667,27 @@ public class WebAozoraConverter
 			author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
 		}
 		
+		//作品の台帳。初めて取ったときの名前と、URL から決めた identifier を使い続ける（internal #11）
+		BookLedger ledger = BookLedger.load(new File(this.dstPath));
+		if (ledger == null) {
+			String baseName = null;
+			if (title != null && !title.isEmpty()) {
+				String safeTitle = BookLedger.safeFileName(title);
+				if (author != null && !author.isEmpty()) baseName = "[" + BookLedger.safeFileName(author) + "] " + safeTitle;
+				else baseName = safeTitle;
+			}
+			ledger = BookLedger.create(urlString, baseName);
+			try {
+				ledger.save(new File(this.dstPath));
+			} catch (IOException e) {
+				//台帳が無くても変換はできる（題が変わったときに別の本として増えるだけ）
+				logger.warn("台帳を書けませんでした: {}", this.dstPath, e);
+				LogAppender.println("作品の台帳を書けませんでした : " + e.getMessage());
+			}
+		}
 		String fileName = outFileName;
 		if (fileName == null) {
-			fileName = "converted.txt";
-			if (title != null && !title.isEmpty()) {
-				String safeTitle = title.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
-				if (author != null && !author.isEmpty()) {
-					String safeAuthor = author.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
-					fileName = "[" + safeAuthor + "] " + safeTitle + ".txt";
-				} else {
-					fileName = safeTitle + ".txt";
-				}
-			}
+			fileName = ledger.outputBaseName != null ? ledger.outputBaseName + ".txt" : "converted.txt";
 		} else {
 			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
 		}
