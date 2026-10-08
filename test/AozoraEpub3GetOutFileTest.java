@@ -42,10 +42,8 @@ public class AozoraEpub3GetOutFileTest {
 
 		File out = AozoraEpub3.getOutFile(src, linkDst.toFile(), book(src), true, ".epub");
 
-		//返すのは渡された出力先の形（ログ・プレビューの照合がこの形を前提にしている）
-		assertEquals(linkDst.toAbsolutePath().normalize(), out.toPath().getParent());
-		//実体は実パスの出力先
-		assertEquals(realDst.toRealPath(), out.toPath().getParent().toRealPath());
+		//検証した実パスを返す（渡された形を返すと、検証の後のリンクの差し替えで外へ書けてしまう）
+		assertEquals(realDst.toRealPath(), out.toPath().getParent());
 		assertEquals("[著者] 表題.epub", out.getName());
 	}
 
@@ -56,7 +54,7 @@ public class AozoraEpub3GetOutFileTest {
 
 		File out = AozoraEpub3.getOutFile(src, realDst.toFile(), book(src), true, ".epub");
 
-		assertEquals(realDst.toAbsolutePath().normalize(), out.toPath().getParent());
+		assertEquals(realDst.toRealPath(), out.toPath().getParent());
 	}
 
 	/** 出力ファイルの名前が壊れたリンクなら、理由の分かる文言で断る */

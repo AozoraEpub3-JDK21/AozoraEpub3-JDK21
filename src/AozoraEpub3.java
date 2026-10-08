@@ -898,9 +898,10 @@ public class AozoraEpub3
 		if (!canonicalOut.startsWith(canonicalDst)) {
 			throw new IOException("出力パスが許可されたディレクトリ外です: " + canonicalOut);
 		}
-		//検証は実パスで行い、返すのは渡された出力先の形のまま
-		//（完了のログ・プレビューの本棚の照合・上のパス長の上限は、渡された形を前提にしている）
-		outFile = outFileNio.toAbsolutePath().normalize().toFile();
+		//検証した実パスに書く。渡された形（リンクを含む）を返すと、検証の後で
+		//リンクが差し替えられたときに出力先の外へ書けてしまう（time-of-check/time-of-use）。
+		//プレビューの本棚は実パスで同じ本を見分けるので、二重には並ばない
+		outFile = canonicalOut.toFile();
 		outFile.setWritable(true);
 
 		return outFile;
