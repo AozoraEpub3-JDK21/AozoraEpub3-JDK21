@@ -152,4 +152,16 @@ public class WebAozoraConverterBookLedgerTest {
 		assertEquals("題.txt", second.getName());
 		assertEquals("題", BookLedger.load(second.getParentFile()).textBaseName);
 	}
+
+	@Test
+	public void anExplicitTextNameCarriesTheLedger() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+
+		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0, "指定の名前");
+		assertNotNull(txt);
+		assertEquals("指定の名前.txt", txt.getName());
+		assertEquals("台帳はその txt に当たる", txt.getName(), BookLedger.load(txt.getParentFile()).textFileName());
+	}
 }

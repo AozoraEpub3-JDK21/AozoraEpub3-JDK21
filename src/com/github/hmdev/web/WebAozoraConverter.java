@@ -675,12 +675,16 @@ public class WebAozoraConverter
 			else textBaseName = safeTitle;
 		}
 		textBaseName = BookLedger.nameOrNull(textBaseName);
+		//名前を指定されたときは、その txt に台帳を当てる
+		String requestedBaseName = outFileName == null ? null
+			: BookLedger.nameOrNull(outFileName.replaceFirst("(?i)\\.txt$", ""));
 		File workDir = new File(this.dstPath);
 		BookLedger ledger = BookLedger.load(workDir);
 		BookLedger toSave = null;
-		if (ledger == null) toSave = BookLedger.create(urlString, textBaseName);
+		if (ledger == null) toSave = BookLedger.create(urlString, requestedBaseName != null ? requestedBaseName : textBaseName);
+		else if (requestedBaseName != null && !requestedBaseName.equals(ledger.textBaseName)) toSave = ledger.withTextBaseName(requestedBaseName);
 		//名前が取れなかった回に作った台帳は、取れた回に埋める
-		else if (ledger.textBaseName == null && textBaseName != null) toSave = ledger.withTextBaseName(textBaseName);
+		else if (requestedBaseName == null && ledger.textBaseName == null && textBaseName != null) toSave = ledger.withTextBaseName(textBaseName);
 		if (toSave != null) {
 			try {
 				toSave.save(workDir);
