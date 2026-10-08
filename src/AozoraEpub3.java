@@ -23,6 +23,7 @@ import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
+import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
@@ -881,12 +882,25 @@ public class AozoraEpub3
 		File outFile = new File(outFileName + outExt);
 		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証 (PR #22/#23 の 2 段階パターン)
 		Path dstPathNio = dstPath.toPath();
-		Path canonicalDst = Files.exists(dstPathNio) ? dstPathNio.toRealPath() : dstPathNio.toAbsolutePath().normalize();
+		// 出力先と出力ファイルを同じ基準（実在する最も近い祖先の実パス）で解決して比べる。
+		// まだ無い出力ファイルだけ toAbsolutePath のまま比べると、symlink（macOS の /tmp → /private/tmp）・
+		// junction・8.3 形式の短い名前を通した出力先で「許可されたディレクトリ外」になっていた
 		Path outFileNio = outFile.toPath();
-		Path canonicalOut = Files.exists(outFileNio) ? outFileNio.toRealPath() : outFileNio.toAbsolutePath().normalize();
+		Path canonicalDst;
+		Path canonicalOut;
+		try {
+			canonicalDst = PathUtils.realPath(dstPathNio);
+			canonicalOut = PathUtils.realPath(outFileNio);
+		} catch (IOException e) {
+			//出力ファイルの名前が壊れたリンクなど。理由の分からない NoSuchFileException のまま出さない
+			throw new IOException("出力パスを解決できません（壊れたリンクなど）: " + outFile.getAbsolutePath(), e);
+		}
 		if (!canonicalOut.startsWith(canonicalDst)) {
 			throw new IOException("出力パスが許可されたディレクトリ外です: " + canonicalOut);
 		}
+		//検証した実パスに書く。渡された形（リンクを含む）を返すと、検証の後で
+		//リンクが差し替えられたときに出力先の外へ書けてしまう（time-of-check/time-of-use）。
+		//プレビューの本棚は実パスで同じ本を見分けるので、二重には並ばない
 		outFile = canonicalOut.toFile();
 		outFile.setWritable(true);
 
