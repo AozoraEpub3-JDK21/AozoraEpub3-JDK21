@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1750,12 +1751,18 @@ public class AozoraEpub3Converter
 	 * <p>convertTcyText の濁点分岐と同じ組み合わせにすること。
 	 * が・ぱ のように合成済みの文字がある組み合わせはその文字で出力されるため、
 	 * 水準判定も合成後の文字に対して行う必要がある。</p>
+	 * <p>基底字がもう濁音・半濁音 (が・ぱ 等) のときと、促音 (っ・ッ) のときは合成しない。
+	 * 下の範囲判定は文字の番号に +1/+2 するだけなので、が゛→き・ぱ゜→び・っ゛→つ のように
+	 * 別の字になってしまう (本家 hmdev/AozoraEpub3 #17)。
+	 * 濁音・半濁音かどうかは、NFD に分解して 2 文字になるかで見る。</p>
 	 * @return 合成できなければ 0 */
 	static char composedDakuten(char base, char mark)
 	{
+		if (base == 'っ' || base == 'ッ') return 0;
+		if (Normalizer.normalize(String.valueOf(base), Normalizer.Form.NFD).length() != 1) return 0;
 		boolean dakuten = isDakuten(mark);
 		if (dakuten) {
-			if ('ッ' != base && ('か' <= base && base <= 'と' || 'カ' <= base && base <= 'ト')) return (char)(base+1);
+			if ('か' <= base && base <= 'と' || 'カ' <= base && base <= 'ト') return (char)(base+1);
 			switch (base) {
 			case 'ウ': return 'ヴ';
 			case 'ワ': return 'ヷ';
