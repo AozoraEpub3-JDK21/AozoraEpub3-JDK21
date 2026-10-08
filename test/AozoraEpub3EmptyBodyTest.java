@@ -26,7 +26,7 @@ import com.github.hmdev.writer.Epub3Writer;
  * （空行なしで本文 0〜4 行。5 行以上なら通っていた）。
  *
  * AozoraEpub3.run はテスト JVM ではテンプレートの場所（jarPath）を見つけられないので、
- * テンプレートの場所を渡した Epub3Writer で AozoraEpub3.convertFile を呼ぶ。
+ * テンプレートの場所と専用の VelocityEngine を渡した Epub3Writer で AozoraEpub3.convertFile を呼ぶ。
  */
 public class AozoraEpub3EmptyBodyTest {
 
@@ -47,7 +47,17 @@ public class AozoraEpub3EmptyBodyTest {
 		Files.write(txt.toPath(), text.getBytes(StandardCharsets.UTF_8));
 		File epub = new File(tempFolder.newFolder("out"), "in.epub");
 
-		Epub3Writer writer = new Epub3Writer(root.resolve("template") + File.separator);
+		//テンプレートの仕組み（Velocity）は JVM で共有の静的な初期化が先に走った試験の設定のまま残るので、
+		//この升専用のエンジンをテンプレートのフォルダに向けて渡す（試験の順番に左右されない）
+		String templatePath = root.resolve("template") + File.separator;
+		java.util.Properties p = new java.util.Properties();
+		p.setProperty("resource.loaders", "file");
+		p.setProperty("resource.loader.file.class", "org.apache.velocity.runtime.resource.loader.FileResourceLoader");
+		p.setProperty("resource.loader.file.path", templatePath);
+		p.setProperty("resource.loader.file.cache", "false");
+		org.apache.velocity.app.VelocityEngine engine = new org.apache.velocity.app.VelocityEngine(p);
+		engine.init();
+		Epub3Writer writer = new Epub3Writer(templatePath, engine);
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, root + File.separator);
 		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt);
 		BookInfo bookInfo = AozoraEpub3.getBookInfo(txt, "txt", 0, imageInfoReader, converter, "UTF-8",
