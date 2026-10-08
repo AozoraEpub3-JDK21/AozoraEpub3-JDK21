@@ -245,6 +245,11 @@ public final class BookLedger
 	public static boolean isHttpUrl(String value)
 	{
 		if (value == null) return false;
+		//XML に書けない制御文字の入った値は書かない（台帳は手で書き換えられる）
+		for (int i = 0; i < value.length(); i++) {
+			char c = value.charAt(i);
+			if (c < 0x20 || c == 0x7f) return false;
+		}
 		String lower = value.trim().toLowerCase(Locale.ROOT);
 		return lower.startsWith("http://") || lower.startsWith("https://");
 	}

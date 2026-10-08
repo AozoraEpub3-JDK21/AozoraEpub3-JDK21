@@ -134,6 +134,9 @@ public class BookLedgerTest {
 		assertFalse(BookLedger.isHttpUrl("file:///etc/passwd"));
 		assertFalse(BookLedger.isHttpUrl("javascript:alert(1)"));
 		assertFalse(BookLedger.isHttpUrl("not a url"));
+		// XML に書けない制御文字（台帳の \\u0001 は Properties が文字に戻す）
+		assertFalse(BookLedger.isHttpUrl("https://example.com/\u0001x"));
+		assertFalse(BookLedger.isHttpUrl("https://example.com/\u007fx"));
 		assertFalse(BookLedger.isHttpUrl(null));
 	}
 

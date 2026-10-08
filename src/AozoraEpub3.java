@@ -871,7 +871,7 @@ public class AozoraEpub3
 					baseName += "["+str+"] ";
 				}
 				if (bookInfo.title != null) {
-					baseName += bookInfo.title.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
+					baseName += BookLedger.safeFileName(bookInfo.title);
 				}
 				//台帳より前に変換した本と同じ名前になるよう、今までと同じ作り方の名前を最初の変換で記録する
 				BookLedger.recordOutputBaseName(bookInfo, baseName);
