@@ -1770,8 +1770,10 @@ public class WebAozoraConverter
 	static String imageUrl(Element img)
 	{
 		String abs = img.absUrl("src");
-		if (abs.startsWith("http://") || abs.startsWith("https://")) return abs;
-		return null;
+		if (!(abs.startsWith("http://") || abs.startsWith("https://"))) return null;
+		//#… はページの中の位置で、画像の取得にもキャッシュの置き場所にも使わない（fig.jpg#1 と fig.jpg#2 は同じ画像）
+		int hash = abs.indexOf('#');
+		return hash < 0 ? abs : abs.substring(0, hash);
 	}
 
 	/** 画像をキャッシュして相対パスの注記にする
@@ -1789,7 +1791,8 @@ public class WebAozoraConverter
 		//（相対・ルート相対・プロトコル相対・?・../ のどれでも、その画像のあるページを基準に解決される）
 		String absSrc = imageUrl(img);
 		if (absSrc == null) {
-			LogAppender.println("画像の URL を解決できないためスキップします : "+src);
+			//data: URI などは長いので先頭だけ出す
+			LogAppender.println("画像の URL を解決できないためスキップします : "+(src.length() > 80 ? src.substring(0, 80)+"…" : src));
 			return;
 		}
 		src = absSrc;

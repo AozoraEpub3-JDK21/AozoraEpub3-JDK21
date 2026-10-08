@@ -59,6 +59,12 @@ public class WebAozoraConverterImageUrlTest {
 	}
 
 	@Test
+	public void fragmentIsDropped() {
+		// #… はページの中の位置。画像の取得にもキャッシュの置き場所にも使わない
+		assertEquals("https://host/dir/fig.jpg", resolve("https://host/dir/page.html", "fig.jpg#1"));
+	}
+
+	@Test
 	public void absoluteSrcIsKept() {
 		assertEquals("https://cdn.example.com/a.jpg", resolve("https://host/dir/", "https://cdn.example.com/a.jpg"));
 	}
