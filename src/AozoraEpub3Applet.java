@@ -3548,12 +3548,16 @@ public class AozoraEpub3Applet extends JPanel
 		return Character.isWhitespace(c) || c == '\u3000' || c == '\u00A0';
 	}
 
-	/** 前後の空白（全角を含む）と、パスを囲む引用符（"..." と '...'）を外す */
+	/** 前後の空白（全角を含む）と、全体を 1 つだけ囲む引用符（"..." と '...'）を外す。
+	 * 中に同じ引用符があるとき（"/a b" "/c d" のように 1 行に 2 つ）は外さない（語の区切りに任せる） */
 	private static String unquotePasted(String s)
 	{
 		s = stripPasteSpaces(s);
-		if (s.length() >= 2 && ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'")))) {
-			s = stripPasteSpaces(s.substring(1, s.length()-1));
+		if (s.length() >= 2) {
+			char q = s.charAt(0);
+			if ((q == '"' || q == '\'') && s.charAt(s.length()-1) == q && s.indexOf(q, 1) == s.length()-1) {
+				s = stripPasteSpaces(s.substring(1, s.length()-1));
+			}
 		}
 		return s;
 	}
@@ -3608,10 +3612,16 @@ public class AozoraEpub3Applet extends JPanel
 		return null;
 	}
 
-	/** フォルダとして受け付けてよいか。ルート（/ や C:\）はディスク全体の変換になるので断る */
+	/** フォルダとして受け付けてよいか。ルート（/ や C:\）はディスク全体の変換になるので断る。
+	 * /tmp/.. やリンクを通してルートに行き着くものも断るよう、実パスに直してから見る */
 	private static boolean isAcceptableFolder(File file)
 	{
-		return file.isDirectory() && file.getAbsoluteFile().getParentFile() != null;
+		if (!file.isDirectory()) return false;
+		try {
+			return file.getCanonicalFile().getParentFile() != null;
+		} catch (IOException e) {
+			return false;
+		}
 	}
 
 	private static boolean isWebUrl(String s)

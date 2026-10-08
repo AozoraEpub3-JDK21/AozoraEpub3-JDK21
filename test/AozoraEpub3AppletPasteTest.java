@@ -82,7 +82,9 @@ public class AozoraEpub3AppletPasteTest {
 		// 2 つのファイルをターミナルに落としてコピー／引用符つきで並べる
 		collect(escaped(spaced) + " " + plain.getAbsolutePath());
 		collect("\"" + parens.getAbsolutePath() + "\" " + plain.getAbsolutePath());
-		assertEquals(Arrays.asList(spaced, plain, parens, plain), files);
+		// 引用符つきのパスが 1 行に 2 つ（行の頭と終わりの引用符を 1 組と取り違えない）
+		collect("\"" + spaced.getAbsolutePath() + "\" \"" + parens.getAbsolutePath() + "\"");
+		assertEquals(Arrays.asList(spaced, plain, parens, plain, spaced, parens), files);
 	}
 
 	@Test
@@ -110,6 +112,10 @@ public class AozoraEpub3AppletPasteTest {
 		// ディスク全体の変換になる
 		for (File root : File.listRoots()) collect(root.getAbsolutePath());
 		collect("/");
+		// .. でルートに行き着くフォルダ
+		StringBuilder dots = new StringBuilder(tempFolder.getRoot().getAbsolutePath());
+		for (File f = tempFolder.getRoot(); f != null; f = f.getParentFile()) dots.append(File.separator).append("..");
+		collect(dots.toString());
 		assertEquals(Collections.emptyList(), files);
 	}
 
