@@ -20,6 +20,12 @@ wrapper {
 tasks.withType(Test) {
     systemProperties System.properties
 
+    // 試験が作業ディレクトリから直接読むフォルダを入力に入れる。入れないと、サイトの規則（web/*/extract.txt）・
+    // テンプレート・外字を直しても、試験の段が「変わっていない」として飛ばされ、走らずに緑に見える
+    ['web', 'template', 'gaiji'].each { dir ->
+        inputs.dir(dir).withPropertyName("testDir_" + dir).withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+
     // JUnit 4.13.2 が JDK 26 のリフレクション挙動変化により
     // 非テストクラスにも InvalidTestClassError を発生させるため、
     // テスト検出対象から「テストでないクラス」を明示的に除外する。
