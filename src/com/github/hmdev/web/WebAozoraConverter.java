@@ -26,6 +26,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -529,6 +532,8 @@ public class WebAozoraConverter
 		this.convertModifiedTail = convertModifiedTail;
 		this.beforeChapter = beforeChapter;
 		this.blockedByChallenge = false;
+		this.pendingUpdateInfo = null;
+		this.confirmedHrefs.clear();
 		
 		//末尾の / をリダイレクトで取得
 		urlString = urlString.trim();
@@ -971,6 +976,8 @@ public class WebAozoraConverter
 			}
 
 			List<String> failedHrefs = new ArrayList<>();
+			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
+			HashSet<String> failedReloads = new HashSet<>();
 			//止められたときに「対象の話を 1 つも書けなかったか」を見るための数（最新 N 話などで対象は目次の一部）
 			int selectedChapters = 0;
 			int writtenChapters = 0;
@@ -1037,6 +1044,10 @@ public class WebAozoraConverter
 								LogAppender.println("htmlファイルが取得できませんでした : "+chapterHref);
 							}
 						}
+						//取れた話・取り直す必要の無かった話は、更新情報に新しい日付を書いてよい
+						if (loaded || !reload) this.confirmedHrefs.add(chapterHref);
+						//取り直すはずだった（改稿・追加された）のに取れなかった話
+						if (reload && !loaded) failedReloads.add(chapterHref);
 						//キャッシュされているファイルが指定時間内なら更新扱い
 						if (!loaded) {
 							if (this.modifiedExpire > 0 && (this.convertModifiedOnly || this.convertUpdated) && chapterCacheFile.lastModified() >= expire) {
@@ -1061,13 +1072,18 @@ public class WebAozoraConverter
 					}
 					chapterIdx++;
 				}
+				if (!failedReloads.isEmpty()) {
+					//改稿・追加された話を取り損ねた。前のキャッシュがあればそれで本を作る。次の変換でもう一度取りに行く
+					LogAppender.println("改稿・追加された " + failedReloads.size() + " 話を取得できませんでした（次の変換でもう一度取りに行きます）: " + String.join(" ", failedReloads));
+				}
 				//更新が無くて変換もなければ終了
 				if (!this.updated) {
 					LogAppender.append("「"+title+"」");
-					//止められて取れなかったのを「更新なし」と言わない
+					//止められた・取り損ねたのを「更新なし」と言わない
 					if (this.blockedByChallenge) LogAppender.println("の更新は、サイトに止められたため確かめられませんでした");
+					else if (!failedReloads.isEmpty()) LogAppender.println("の更新を取得できませんでした");
 					else LogAppender.println("の更新はありません");
-					if (this.convertUpdated) return blockedUpdateCheck();
+					if (this.convertUpdated) return blockedUpdateCheck(!failedReloads.isEmpty());
 				}
 				
 				if (this.convertModifiedOnly) {
@@ -1088,9 +1104,9 @@ public class WebAozoraConverter
 						}
 					}
 					if (modifiedChapterIdx.size() == 0) {
-						if (this.blockedByChallenge) {
-							LogAppender.println("サイトに止められたため、追加更新分を確かめられませんでした");
-							return blockedUpdateCheck();
+						if (this.blockedByChallenge || !failedReloads.isEmpty()) {
+							LogAppender.println(this.blockedByChallenge ? "サイトに止められたため、追加更新分を確かめられませんでした" : "追加更新分を取得できませんでした");
+							return blockedUpdateCheck(!failedReloads.isEmpty());
 						}
 						LogAppender.println("追加更新分はありません");
 						this.updated = false;
@@ -1147,6 +1163,8 @@ public class WebAozoraConverter
 								}
 								cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
+								//再試行で取れた話は、更新情報に新しい日付を書いてよい
+								this.confirmedHrefs.add(chapterHref);
 							} catch (Exception e) {
 								logger.warn("章の再ダウンロードに失敗、スキップ: {}", chapterHref, e);
 								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
@@ -1168,6 +1186,7 @@ public class WebAozoraConverter
 									sleepForDownload();
 									cacheFile(chapterHref, chapterCacheFile, urlString);
 									chapterDoc = Jsoup.parse(chapterCacheFile, null, chapterHref);
+									this.confirmedHrefs.add(chapterHref);
 								} catch (Exception e) {
 									logger.warn("章本文の再取得に失敗: {}", chapterHref, e);
 									LogAppender.println("再ダウンロードできませんでした: " + chapterHref);
@@ -1270,6 +1289,8 @@ public class WebAozoraConverter
 
 		} finally {
 			bw.close();
+			//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
+			writePendingUpdateInfo();
 		}
 
 		// ファイナライズ処理: 文章全体の後処理
@@ -1287,11 +1308,11 @@ public class WebAozoraConverter
 		return txtFile;
 	}
 	
-	/** 更新の確かめが止められたときの戻り値。呼び出し元（GUI）は「null で更新なし」を「スキップ」と出すので、
-	 * 止められたときは更新ありの扱い（isUpdated()==true）のまま失敗（null）として返す */
-	private File blockedUpdateCheck()
+	/** 更新の確かめが止められた・更新を取り損ねたときの戻り値。呼び出し元（GUI）は「null で更新なし」を「スキップ」と出すので、
+	 * そのときは更新ありの扱い（isUpdated()==true）のまま失敗（null）として返す */
+	private File blockedUpdateCheck(boolean fetchFailed)
 	{
-		if (this.blockedByChallenge) this.updated = true;
+		if (this.blockedByChallenge || fetchFailed) this.updated = true;
 		return null;
 	}
 
@@ -1314,6 +1335,68 @@ public class WebAozoraConverter
 		this.blockedByChallenge = true;
 		LogAppender.println(e.getMessage());
 		LogAppender.println("以降の話は取りに行かず、キャッシュにある話だけで変換します");
+	}
+
+	/** 書く前の更新情報（update.txt）。変換の終わり（途中で止まったときも）に writePendingUpdateInfo で書く */
+	private PendingUpdateInfo pendingUpdateInfo = null;
+	/** この変換で、取れた話・取り直す必要の無かった話。update.txt に新しい日付を書いてよい話 */
+	private final HashSet<String> confirmedHrefs = new HashSet<>();
+
+	/** 書く前の更新情報。鍵は update.txt の鍵（一覧の href の生の値、または絶対 URL）、値は新しい日付と話の URL */
+	static class PendingUpdateInfo
+	{
+		final File file;
+		final String urlString;
+		final String contentsUpdate;
+		final Map<String, String> previous;
+		final LinkedHashMap<String, String[]> entries = new LinkedHashMap<>();
+
+		PendingUpdateInfo(File file, String urlString, String contentsUpdate, Map<String, String> previous)
+		{
+			this.file = file;
+			this.urlString = urlString;
+			this.contentsUpdate = contentsUpdate;
+			this.previous = previous;
+		}
+
+		void put(String key, String value, String chapterHref)
+		{
+			this.entries.put(key, new String[] { value, chapterHref });
+		}
+
+		/** 書く行。取れた話（confirmed）だけ新しい値、それ以外は前の値を残す（前の値が無ければ書かない）。
+		 * 取り損ねた話・途中で止まって取らなかった話は、次の変換で「更新あり」と判定され、取りに行く */
+		List<String> lines(Set<String> confirmed)
+		{
+			List<String> lines = new ArrayList<>();
+			if (this.contentsUpdate != null) lines.add(this.urlString + "\t" + this.contentsUpdate);
+			for (Map.Entry<String, String[]> e : this.entries.entrySet()) {
+				String value = e.getValue()[0];
+				String chapterHref = e.getValue()[1];
+				if (chapterHref != null && !confirmed.contains(chapterHref)) {
+					value = this.previous.get(e.getKey());
+					if (value == null) continue;
+				}
+				lines.add(e.getKey() + "\t" + value);
+			}
+			return lines;
+		}
+	}
+
+	/** 控えておいた更新情報を書く（変換の終わりに。途中で止まったときも、取れた話までは記録に残す） */
+	private void writePendingUpdateInfo()
+	{
+		PendingUpdateInfo info = this.pendingUpdateInfo;
+		this.pendingUpdateInfo = null;
+		if (info == null) return;
+		try (BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(info.file.toPath()), "UTF-8"))) {
+			for (String line : info.lines(this.confirmedHrefs)) {
+				updateBw.append(line);
+				updateBw.append('\n');
+			}
+		} catch (Exception e) {
+			logger.warn("更新情報ファイルの書き込みに失敗: {}", info.file, e);
+		}
 	}
 
 	/** 更新情報の生成と保存 */
@@ -1346,48 +1429,18 @@ public class WebAozoraConverter
 			}
 		}
 		
-		if (contentsUpdate != null || updates != null) {
-			//ファイルに出力
-			BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(updateInfoFile.toPath()), "UTF-8"));
-			try {
-				if (contentsUpdate != null) {
-					updateBw.append(urlString);
-					updateBw.append('\t');
-					updateBw.append(contentsUpdate);
-					updateBw.append('\n');
-				}
-				if (updates != null) {
-					int i = 0;
-					for (Element update : updates) {
-						updateBw.append(hrefs.get(i++).attr("href"));
-						updateBw.append('\t');
-						updateBw.append(update.html().replaceAll("\n", " "));
-						updateBw.append('\n');
-					}
-				}
-			} catch (Exception e) {
-				logger.warn("更新情報ファイルの書き込みに失敗: {}", updateInfoFile, e);
-			} finally {
-				updateBw.close();
-			}
-		}
-		
+		//新しい更新情報は控えておき、変換の終わりに書く（writePendingUpdateInfo）。
+		//先に書くと、改稿された話を取り損ねたとき、次の変換で「更新なし」と判定されて取り直されない
+		this.pendingUpdateInfo = new PendingUpdateInfo(updateInfoFile, urlString, contentsUpdate, updateStringMap);
 		HashSet<String> noUpdateUrls = new HashSet<String>();
-		int i = -1;
-		for (Element href : hrefs) {
-			i++;
-			String hrefString = href.attr("href");
-			if (hrefString == null || hrefString.length() == 0) continue;
+		for (int i = 0; i < hrefs.size(); i++) {
+			String hrefString = hrefs.get(i).attr("href");
+			String html = updates.get(i).html().replaceAll("\n", " ");
+			String chapterHref = toFullUrl(hrefString, listBaseUrl);
+			this.pendingUpdateInfo.put(hrefString, html, chapterHref);
+			if (chapterHref == null) continue;
 			String updateString = updateStringMap.get(hrefString);
-			String html  = updates.get(i).html().replaceAll("\n", " ");
-			if (updateString != null && updateString.equals(html)) {
-				String chapterHref = hrefString;
-				if (!hrefString.startsWith("http")) {
-					if (hrefString.charAt(0) == '/') chapterHref = baseUri+hrefString;
-					else chapterHref = listBaseUrl+hrefString;
-				}
-				noUpdateUrls.add(chapterHref);
-			}
+			if (updateString != null && updateString.equals(html)) noUpdateUrls.add(chapterHref);
 		}
 		
 		
@@ -1417,25 +1470,10 @@ public class WebAozoraConverter
 				br.close();
 			}
 		}
-		// 現在の更新情報を書き出す
-		BufferedWriter updateBw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(updateInfoFile.toPath()), "UTF-8"));
-		try {
-			if (contentsUpdate != null) {
-				updateBw.append(urlString);
-				updateBw.append('\t');
-				updateBw.append(contentsUpdate);
-				updateBw.append('\n');
-			}
-			for (HashMap.Entry<String, String> e : this.nextDataEpisodeDateMap.entrySet()) {
-				updateBw.append(e.getKey());
-				updateBw.append('\t');
-				updateBw.append(e.getValue());
-				updateBw.append('\n');
-			}
-		} catch (Exception e) {
-			logger.warn("更新情報ファイル(NextData)の書き込みに失敗: {}", updateInfoFile, e);
-		} finally {
-			updateBw.close();
+		// 現在の更新情報は控えておき、話を取り終えてから書く（writePendingUpdateInfo）
+		this.pendingUpdateInfo = new PendingUpdateInfo(updateInfoFile, urlString, contentsUpdate, savedUpdateMap);
+		for (HashMap.Entry<String, String> e : this.nextDataEpisodeDateMap.entrySet()) {
+			this.pendingUpdateInfo.put(e.getKey(), e.getValue(), e.getKey());
 		}
 		// publishedAt が前回と同じURLは更新不要
 		HashSet<String> noUpdateUrls = new HashSet<String>();
