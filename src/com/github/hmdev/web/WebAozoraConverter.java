@@ -857,6 +857,16 @@ public class WebAozoraConverter
 					LogAppender.println("SUB_UPDATE : 更新確認情報が取得できません");
 				}
 				// TOC ページネーション: PAGE_URL が定義されていれば最後のページリンクから総ページ数を取得して残りの目次ページを収集 (101蹰以上対応)
+				//各話の日付を、目次の要素（hrefs）と同じ並びで持つ（1 ページ目＋目次の続きのページ）。
+				//話の URL の一覧を作るときに、残した要素の分だけ残す（リンクの空の要素などを飛ばしても位置がずれない）
+				String[] firstPostDates = getPostDateList(doc, this.queryMap.get(ExtractId.CONTENT_UPDATE_LIST));
+				String[] firstPublishDates = getPublishDateList(doc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST));
+				List<String> elementPostDates = alignedToElements(firstPostDates, hrefs.size());
+				List<String> elementPublishDates = alignedToElements(firstPublishDates, hrefs.size());
+				boolean anyPostDate = firstPostDates != null;
+				boolean anyPublishDate = firstPublishDates != null;
+				//目次の続きのページの日付は、日付を表示するときだけ取る（既定はどちらも表示しない）
+				boolean wantTocPageDates = formatSettings.isShowPostDate() || formatSettings.isShowPublishDate();
 				if (this.queryMap.containsKey(ExtractId.PAGE_URL)) {
 					Element tocPageUrlElem = getExtractFirstElement(doc, this.queryMap.get(ExtractId.PAGE_URL));
 					if (tocPageUrlElem != null) {
@@ -878,9 +888,17 @@ public class WebAozoraConverter
 									Document tocPageDoc = Jsoup.parse(tocPageFile, null, nextTocUrl);
 									Elements nextHrefs = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.HREF));
 									if (nextHrefs != null) {
+										//このページの日付・更新の印を先に全部取ってから、話のリンクと一緒に足す
+										//（途中で例外が出ても、hrefs と日付の並びがずれない。日付は 1 ページ目の分しか取れていなかった）
+										String[] pagePostDates = wantTocPageDates ? getPostDateList(tocPageDoc, this.queryMap.get(ExtractId.CONTENT_UPDATE_LIST)) : null;
+										String[] pagePublishDates = wantTocPageDates ? getPublishDateList(tocPageDoc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST)) : null;
+										Elements nextUpdates = updates != null ? getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.SUB_UPDATE)) : null;
 										hrefs.addAll(nextHrefs);
+										elementPostDates.addAll(alignedToElements(pagePostDates, nextHrefs.size()));
+										elementPublishDates.addAll(alignedToElements(pagePublishDates, nextHrefs.size()));
+										if (pagePostDates != null) anyPostDate = true;
+										if (pagePublishDates != null) anyPublishDate = true;
 										if (updates != null) {
-											Elements nextUpdates = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.SUB_UPDATE));
 											if (nextUpdates != null) updates.addAll(nextUpdates);
 											else updates = null; // サイズ不一致防止
 										}
@@ -901,8 +919,11 @@ public class WebAozoraConverter
 					//更新しないURLのチェック用
 					noUpdateUrls = createNoUpdateUrls(updateInfoFile, urlString, listBaseUrl, contentsUpdate, hrefs, updates);
 				}
-				//一覧のhrefをすべて取得
-				for (Element href : hrefs) {
+				//一覧のhrefをすべて取得（残した要素の日付だけを、話の URL と同じ並びで残す）
+				List<String> chapterPostDates = new ArrayList<>();
+				List<String> chapterPublishDates = new ArrayList<>();
+				for (int hrefIdx = 0; hrefIdx < hrefs.size(); hrefIdx++) {
+					Element href = hrefs.get(hrefIdx);
 					String hrefString = href.attr("href");
 					if (hrefString == null || hrefString.length() == 0) continue;
 					//パターンがあればマッチング
@@ -914,14 +935,15 @@ public class WebAozoraConverter
 							else chapterHref = listBaseUrl+hrefString;
 						}
 						chapterHrefs.add(chapterHref);
+						chapterPostDates.add(elementPostDates.get(hrefIdx));
+						chapterPublishDates.add(elementPublishDates.get(hrefIdx));
 					}
 				}
-				
-				postDateList = getPostDateList(doc, this.queryMap.get(ExtractId.CONTENT_UPDATE_LIST));
+				postDateList = anyPostDate ? chapterPostDates.toArray(new String[0]) : null;
+				publishDateList = anyPublishDate ? chapterPublishDates.toArray(new String[0]) : null;
 				if (postDateList == null && this.queryMap.containsKey(ExtractId.CONTENT_UPDATE_LIST)) {
 					LogAppender.println("CONTENT_UPDATE_LIST : 一覧ページの更新日時情報が取得できません");
 				}
-				publishDateList = getPublishDateList(doc, this.queryMap.get(ExtractId.CONTENT_PUBLISH_LIST));
 			}
 			
 
@@ -1442,6 +1464,15 @@ public class WebAozoraConverter
 			return postDateList;
 		}
 		return null;
+	}
+
+	/** 目次の 1 ページ分の日付の一覧を、そのページの要素（話のリンク）の数にそろえる（足りなければ null、多ければ切る）。
+	 * テストから利用するため package-private */
+	static List<String> alignedToElements(String[] dates, int elementCount)
+	{
+		List<String> aligned = new ArrayList<>(elementCount);
+		for (int i = 0; i < elementCount; i++) aligned.add(dates != null && i < dates.length ? dates[i] : null);
+		return aligned;
 	}
 
 	/** 一覧から初回公開日を取得 (span[title]属性から抽出) */
