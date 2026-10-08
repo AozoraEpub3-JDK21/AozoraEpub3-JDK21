@@ -95,9 +95,6 @@ public class WebAozoraConverter
 	/** http?://fqdn/ の文字列 */
 	String baseUri;
 	
-	/** 変換中のHTMLファイルのあるパス 末尾は/ */
-	String pageBaseUri;
-	
 	////////////////////////////////
 	//変換設定
 	/** 取得間隔 ミリ秒（なろう等のレート制限対策: 最低1秒推奨） */
@@ -560,7 +557,6 @@ public class WebAozoraConverter
 		this.baseUri = urlString.substring(0, urlString.indexOf('/', urlString.indexOf("//")+2));
 		//String fqdn = baseUri.substring(baseUri.indexOf("//")+2);
 		String listBaseUrl = urlString.substring(0, urlString.lastIndexOf('/')+1);
-		this.pageBaseUri = listBaseUrl;
 		//http://を除外
 		String urlFilePath = CharUtils.escapeUrlToFile(urlString.substring(urlString.indexOf("//")+2));
 		//http://を除外した文字列で比較
@@ -627,7 +623,8 @@ public class WebAozoraConverter
 		//パスならlist.txtの情報を元にキャッシュ後に青空txt変換して改ページで繋げて出力
 		// キャッシュパスがディレクトリ化されていた場合は index.html を参照
 		File parseFile = cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
-		Document doc = Jsoup.parse(parseFile, null);
+		//相対の src・href を一覧ページの URL で解決できるよう、基準の URL を渡す
+		Document doc = Jsoup.parse(parseFile, null, urlString);
 		
 		//タイトル
 		boolean hasTitle = false;
@@ -878,7 +875,7 @@ public class WebAozoraConverter
 								File tocPageFile = Files.createTempFile(cachePath.toPath(), "tocpage", ".html").toFile();
 								try {
 									cacheFile(nextTocUrl, tocPageFile, urlString);
-									Document tocPageDoc = Jsoup.parse(tocPageFile, null);
+									Document tocPageDoc = Jsoup.parse(tocPageFile, null, nextTocUrl);
 									Elements nextHrefs = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.HREF));
 									if (nextHrefs != null) {
 										hrefs.addAll(nextHrefs);
@@ -974,13 +971,6 @@ public class WebAozoraConverter
 					if (this.canceled) return null;
 					
 					if (chapterHref != null && chapterHref.length() > 0) {
-						//画像srcをフルパスにするときに使うページのパス
-						this.pageBaseUri = chapterHref;
-						if (!chapterHref.endsWith("/")) {
-							int idx = chapterHref.indexOf('/', 7);
-							if (idx > -1) this.pageBaseUri = chapterHref.substring(0, idx);
-						}
-						
 						//キャッシュ取得 ロードされたらWait 500ms
 						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
 						File chapterCacheFile;
@@ -1144,7 +1134,7 @@ public class WebAozoraConverter
 							}
 						}
 						//シリーズタイトルを出力
-						Document chapterDoc = Jsoup.parse(chapterCacheFile, null);
+						Document chapterDoc = Jsoup.parse(chapterCacheFile, null, chapterHref);
 						// キャッシュファイルに本文が無い場合（ダウンロード失敗・エラーページ等）は再ダウンロード
 						{
 							Elements contentCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
@@ -1155,7 +1145,7 @@ public class WebAozoraConverter
 								try {
 									sleepForDownload();
 									cacheFile(chapterHref, chapterCacheFile, urlString);
-									chapterDoc = Jsoup.parse(chapterCacheFile, null);
+									chapterDoc = Jsoup.parse(chapterCacheFile, null, chapterHref);
 								} catch (Exception e) {
 									logger.warn("章本文の再取得に失敗: {}", chapterHref, e);
 									LogAppender.println("再ダウンロードできませんでした: " + chapterHref);
@@ -1779,6 +1769,17 @@ public class WebAozoraConverter
 	{
 		this.printImage(bw, img, null);
 	}
+	/** img の src を、そのページの URL を基準に絶対 URL にする。http(s) でなければ null。
+	 * テストから利用するため package-private */
+	static String imageUrl(Element img)
+	{
+		String abs = img.absUrl("src");
+		if (!(abs.startsWith("http://") || abs.startsWith("https://"))) return null;
+		//#… はページの中の位置で、画像の取得にもキャッシュの置き場所にも使わない（fig.jpg#1 と fig.jpg#2 は同じ画像）
+		int hash = abs.indexOf('#');
+		return hash < 0 ? abs : abs.substring(0, hash);
+	}
+
 	/** 画像をキャッシュして相対パスの注記にする
 	 * @param bw nullなら注記文字列は出力しない
 	 * @param img imgタグ
@@ -1790,25 +1791,17 @@ public class WebAozoraConverter
 		// 挿絵スキップ設定: 本文内画像(imageOutFile==null)のみスキップ、表紙は除く
 		if (this.skipImages && imageOutFile == null) return;
 		
-		String imagePath = null;
-		int idx = src.indexOf("//");
-		if (idx > 0) {
-			// 絶対URL (http:// or https://)
-			imagePath = CharUtils.escapeUrlToFile(src.substring(idx+2));
-		} else if (idx == 0) {
-			// プロトコル相対URL (//domain/path) → baseUri のプロトコルを補完
-			imagePath = CharUtils.escapeUrlToFile(src.substring(2));
-			src = this.baseUri.substring(0, this.baseUri.indexOf("//")) + src;
-		} else if (src.charAt(0) == '/') {
-			// 同ホスト絶対パス (/path)
-			imagePath = "_"+CharUtils.escapeUrlToFile(src);
-			src = this.baseUri+src;
+		//ページの URL（Jsoup.parse に渡した基準）から、ブラウザと同じ規則で絶対 URL にする
+		//（相対・ルート相対・プロトコル相対・?・../ のどれでも、その画像のあるページを基準に解決される）
+		String absSrc = imageUrl(img);
+		if (absSrc == null) {
+			//data: URI などは長いので先頭だけ出す
+			LogAppender.println("画像の URL を解決できないためスキップします : "+(src.length() > 80 ? src.substring(0, 80)+"…" : src));
+			return;
 		}
-		else {
-			imagePath = "__/"+CharUtils.escapeUrlToFile(src);
-			if (this.pageBaseUri.endsWith("/")) src = this.pageBaseUri+src;
-			else src = this.pageBaseUri+"/"+src;
-		}
+		src = absSrc;
+		//キャッシュの置き場所は解決した URL から作る（別のページの同じ相対 src がぶつからない）
+		String imagePath = CharUtils.escapeUrlToFile(src.substring(src.indexOf("//")+2));
 		
 		if (imagePath.endsWith("/")) imagePath += "image.png";
 

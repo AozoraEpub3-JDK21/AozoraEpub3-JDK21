@@ -512,17 +512,14 @@ public class WebAozoraConverterNarouCompatTest {
 		fDst.setAccessible(true);
 		fDst.set(converter, tmp.getAbsolutePath()+"/");
 
-		java.io.File imagesDir = new java.io.File(tmp, "images/__");
+		// 挿絵の置き場所は、ページの URL を基準に解決した URL から作る（http://example/sample.png → images/example/sample.png）
+		java.io.File imagesDir = new java.io.File(tmp, "images/example");
 		imagesDir.mkdirs();
 		java.io.File imgFile = new java.io.File(imagesDir, "sample.png");
 		try (java.io.FileOutputStream fos = new java.io.FileOutputStream(imgFile)) { fos.write(new byte[]{0}); }
 
-		// pageBaseUri を設定して printImage の相対パス処理を回避
-		java.lang.reflect.Field fPageBase = WebAozoraConverter.class.getDeclaredField("pageBaseUri");
-		fPageBase.setAccessible(true);
-		fPageBase.set(converter, "http://example/");
-
-		org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parseBodyFragment("<div><img src=\"sample.png\" /></div>");
+		// 相対の src は、そのページの URL を基準に解決する（変換の本体は Jsoup.parse に話の URL を渡す）
+		org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parseBodyFragment("<div><img src=\"sample.png\" /></div>", "http://example/");
 		org.jsoup.nodes.Element wrapper = doc.selectFirst("div");
 
 		Method m = getPrivateMethod("_printNode", java.io.BufferedWriter.class, org.jsoup.nodes.Node.class);
@@ -532,7 +529,7 @@ public class WebAozoraConverterNarouCompatTest {
 			bw.flush();
 		}
 		String out = sw.toString();
-		assertTrue("挿絵注記が含まれていない", out.contains("［＃挿絵（images/__/sample.png）入る］"));
+		assertTrue("挿絵注記が含まれていない: " + out, out.contains("［＃挿絵（images/example/sample.png）入る］"));
 	}
 
 	/**
