@@ -681,6 +681,9 @@ public class WebAozoraConverter
 		} else {
 			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
 		}
+		//名前 1 つを 255 バイトに収める（Linux は題の長い作品の txt を作れなかった。internal #16）
+		String txtExt = fileName.substring(fileName.length() - 4);
+		fileName = PathUtils.fitFileName(fileName.substring(0, fileName.length() - 4), txtExt) + txtExt;
 		File txtFile = safeDstFile(fileName);
 		//表紙画像（narou.rb互換: cover.jpg で保存）
 		File coverImageFile = new File(this.dstPath+"cover.jpg");
