@@ -887,6 +887,10 @@ public class AozoraEpub3
 		if (outFileName.length() + outExt.length() > maxPath) {
 			outFileName = outFileName.substring(0, maxPath - outExt.length());
 		}
+		//その場所で作れない長い名前だけ、255 バイトに切る（Linux は題の長い本を作れなかった。internal #16）。
+		//Windows・mac は名前を文字数で数えるので、今までの名前のまま。切ったときに付ける印が削られないよう、パスの切り詰めの後に行う
+		int nameStart = outFileName.lastIndexOf('/') + 1;
+		outFileName = outFileName.substring(0, nameStart) + PathUtils.fitFileNameIn(dstPath, outFileName.substring(nameStart), outExt);
 		File outFile = new File(outFileName + outExt);
 		// パストラバーサル対策: 出力パスが dstPath 配下にあることを検証 (PR #22/#23 の 2 段階パターン)
 		Path dstPathNio = dstPath.toPath();

@@ -13,6 +13,8 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.UUID;
 
+import com.github.hmdev.util.PathUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +72,21 @@ public final class BookLedger
 	public BookLedger withOutputBaseName(String outputBaseName)
 	{
 		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, outputBaseName);
+	}
+
+	/**
+	 * この台帳の txt か。長い名前を作れない場所（Linux など）では txt は切った名前で作られるので、それも同じ txt とみなす
+	 * （{@link PathUtils#fitFileNameIn} は同じ名前から毎回同じ名前を作る）
+	 */
+	public boolean isTextFile(String fileName)
+	{
+		if (textFileName().equals(fileName)) return true;
+		String base = this.textBaseName != null ? this.textBaseName : "converted";
+		if ((PathUtils.fitFileName(base, ".txt") + ".txt").equals(fileName)) return true;
+		for (int limit : PathUtils.SMALLER_NAME_LIMITS) {
+			if ((PathUtils.fitFileName(base, ".txt", limit) + ".txt").equals(fileName)) return true;
+		}
+		return false;
 	}
 
 	/** この台帳を当てる txt の名前 */
@@ -173,7 +190,7 @@ public final class BookLedger
 		File workDir = srcFile.getAbsoluteFile().getParentFile();
 		BookLedger ledger = load(workDir);
 		if (ledger == null) return;
-		if (!ledger.textFileName().equals(srcFile.getName())) return;
+		if (!ledger.isTextFile(srcFile.getName())) return;
 		bookInfo.sourceUrl = ledger.sourceUrl;
 		bookInfo.identifier = ledger.identifier;
 		bookInfo.outputBaseName = ledger.outputBaseName;
