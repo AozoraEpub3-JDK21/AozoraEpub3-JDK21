@@ -115,6 +115,47 @@ public class PreviewServer implements AutoCloseable
 	 * それだけで「生きているのに終了する」ことになる。タブ単位で持つ必要がある。</p>
 	 */
 	private final Map<String, Long> clients = new ConcurrentHashMap<>();
+
+	/** 本棚の「続きを取る」を行うもの。本棚を開く側（GUI・CLI）が渡す。null なら更新できない */
+	private volatile BookUpdater bookUpdater;
+	/** 更新は 1 冊ずつ（サイトへの負担と、変換の静的な状態を共有しないため） */
+	private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor(runnable -> {
+		Thread t = new Thread(runnable, "aozora-preview-update");
+		t.setDaemon(true);
+		return t;
+	});
+	/** 更新の仕事。鍵は仕事の ID（推測されにくい乱数） */
+	private final Map<String, UpdateJob> jobs = new ConcurrentHashMap<>();
+	/** 覚えておく仕事の数の上限（終わったものから忘れる） */
+	static final int MAX_JOBS = 64;
+	private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+
+	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed */
+	static final class UpdateJob
+	{
+		final String id;
+		final String bookId;
+		final long createdNanos = System.nanoTime();
+		volatile String state = "queued";
+		volatile String message = "";
+
+		UpdateJob(String id, String bookId)
+		{
+			this.id = id;
+			this.bookId = bookId;
+		}
+
+		boolean active()
+		{
+			return "queued".equals(this.state) || "running".equals(this.state);
+		}
+	}
+
+	/** 本棚の「続きを取る」を行うものを渡す（null で外す） */
+	public void setBookUpdater(BookUpdater bookUpdater)
+	{
+		this.bookUpdater = bookUpdater;
+	}
 	/**
 	 * POST を受け付ける {@code Origin} (小文字)。
 	 * ビューアーに渡す URL のオリジンに加え、ログを見てユーザーが手で開く可能性のある
@@ -327,6 +368,7 @@ public class PreviewServer implements AutoCloseable
 	{
 		this.server.stop(0);
 		this.executor.shutdownNow();
+		this.updateExecutor.shutdownNow();
 	}
 
 	// ------------------------------------------------------------------
@@ -409,6 +451,13 @@ public class PreviewServer implements AutoCloseable
 					rest.substring("api/book/".length(), rest.length() - "/reveal".length()));
 				return;
 			}
+			if (rest.startsWith("api/book/") && rest.endsWith("/update")
+				&& rest.length() > "api/book/".length() + "/update".length()) {
+				//POST なので、下の read 判定より前に処理する（reveal と同じ）
+				serveUpdate(exchange, method,
+					rest.substring("api/book/".length(), rest.length() - "/update".length()));
+				return;
+			}
 			if (!read) {
 				respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
 				return;
@@ -423,6 +472,8 @@ public class PreviewServer implements AutoCloseable
 				respondJson(exchange, this.session.libraryJson());
 			} else if (rest.startsWith("api/library/cover/")) {
 				serveCover(exchange, rest.substring("api/library/cover/".length()));
+			} else if (rest.startsWith("api/jobs/")) {
+				serveJob(exchange, rest.substring("api/jobs/".length()));
 			} else if (rest.startsWith("api/book/")) {
 				serveBookApi(exchange, rest.substring("api/book/".length()));
 			} else if (rest.startsWith("book/")) {
@@ -486,6 +537,122 @@ public class PreviewServer implements AutoCloseable
 	 * 登録済みの EPUB パスを使う。生パスを受け取ると、ローカルサーバとはいえ
 	 * 任意のフォルダを開かせる踏み台になる。</p>
 	 */
+	/**
+	 * 本棚の 1 冊を、掲載元から取り直して上書きする仕事を列に積む（internal #11）。202 と仕事の ID を返す。
+	 * 同じ本の仕事がまだ終わっていなければ、その仕事を返す
+	 */
+	private void serveUpdate(HttpExchange exchange, String method, String bookId) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		BookUpdater updater = this.bookUpdater;
+		if (updater == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚からは更新できません（アプリから本棚を開いてください）"));
+			return;
+		}
+		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		if (entry == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		if (entry.source() == null) {
+			respondJsonStatus(exchange, 400, errorJson("Web から取った本ではないので、続きを取れません"));
+			return;
+		}
+		UpdateJob job;
+		synchronized (this.jobs) {
+			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
+			if (job == null) {
+				forgetOldJobs();
+				//まだ終わっていない仕事でいっぱいなら断る（列が際限なく伸びないように。PR #118 の codex）
+				if (this.jobs.values().stream().filter(UpdateJob::active).count() >= MAX_JOBS) {
+					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
+					return;
+				}
+				job = new UpdateJob(newJobId(), bookId);
+				this.jobs.put(job.id, job);
+				UpdateJob submitted = job;
+				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry));
+			}
+		}
+		respondJsonStatus(exchange, 202, jobJson(job));
+	}
+
+	private void runUpdate(UpdateJob job, BookUpdater updater, LibraryEntry entry)
+	{
+		job.state = "running";
+		try {
+			BookUpdater.Result result = updater.update(entry.source(), entry.file());
+			job.message = result.message() == null ? "" : result.message();
+			if (result.ok()) {
+				//上書きした本の題・表紙は、本棚の一覧（api/library）が読むたびに読み直すので、ここでは何もしない
+				job.state = "done";
+			} else {
+				job.state = result.noUpdate() ? "noUpdate" : "failed";
+			}
+		} catch (Throwable e) {
+			//Error（メモリ不足など）でも「実行中」のまま残さない。残ると、同じ本の仕事として返し続けて二度と更新できない（PR #118 のゲート2）
+			logger.warn("本棚の更新に失敗しました: {}", entry.file(), e);
+			job.message = String.valueOf(e.getMessage());
+			job.state = "failed";
+			if (e instanceof Error) throw (Error)e;
+		}
+	}
+
+	/** 仕事の状態（GET api/jobs/{id}） */
+	private void serveJob(HttpExchange exchange, String jobId) throws IOException
+	{
+		UpdateJob job = this.jobs.get(jobId);
+		if (job == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown job".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		respondJson(exchange, jobJson(job));
+	}
+
+	private static String jobJson(UpdateJob job)
+	{
+		StringBuilder buf = new StringBuilder(128);
+		buf.append('{');
+		Json.prop(buf, "job", job.id);
+		Json.prop(buf, "bookId", job.bookId);
+		Json.prop(buf, "state", job.state);
+		Json.prop(buf, "message", job.message);
+		buf.append('}');
+		return buf.toString();
+	}
+
+	private static String errorJson(String message)
+	{
+		StringBuilder buf = new StringBuilder(64);
+		buf.append('{');
+		Json.prop(buf, "error", message);
+		buf.append('}');
+		return buf.toString();
+	}
+
+	/** 上限を超える分は、終わった仕事を古いものから忘れる（呼ぶのは jobs のロックの中） */
+	private void forgetOldJobs()
+	{
+		if (this.jobs.size() < MAX_JOBS) return;
+		this.jobs.values().stream().filter(j -> !j.active())
+			.sorted(java.util.Comparator.comparingLong(j -> j.createdNanos))
+			.limit(this.jobs.size() - MAX_JOBS + 1)
+			.map(j -> j.id).toList()
+			.forEach(this.jobs::remove);
+	}
+
+	private static String newJobId()
+	{
+		byte[] bytes = new byte[12];
+		RANDOM.nextBytes(bytes);
+		StringBuilder buf = new StringBuilder(24);
+		for (byte b : bytes) buf.append(String.format("%02x", b));
+		return buf.toString();
+	}
+
 	private void serveReveal(HttpExchange exchange, String method, String bookId) throws IOException
 	{
 		if (!"POST".equals(method)) {
@@ -673,6 +840,11 @@ public class PreviewServer implements AutoCloseable
 	private void respondJson(HttpExchange exchange, String json) throws IOException
 	{
 		respond(exchange, 200, "application/json; charset=utf-8", json.getBytes(StandardCharsets.UTF_8));
+	}
+
+	private void respondJsonStatus(HttpExchange exchange, int status, String json) throws IOException
+	{
+		respond(exchange, status, "application/json; charset=utf-8", json.getBytes(StandardCharsets.UTF_8));
 	}
 
 	private void respond(HttpExchange exchange, int status, String contentType, byte[] body) throws IOException

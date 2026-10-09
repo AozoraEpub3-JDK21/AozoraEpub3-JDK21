@@ -147,7 +147,7 @@ public class AozoraEpub3
 			String[] libraryDirs = commandLine.getOptionValues("library");
 			if (fileNames.length == 0 && !commandLine.hasOption("url")) {
 				//入力ファイルが無くても、本棚が指定されていれば棚だけを開く
-				if (libraryDirs != null && libraryDirs.length > 0) return previewLibrary(libraryDirs);
+				if (libraryDirs != null && libraryDirs.length > 0) return previewLibrary(libraryDirs, jarPath, commandLine.getOptionValue("i"));
 				HelpFormatter.builder().get().printHelp(syntax, header, options, null, false);
 				return 1;
 			}
@@ -155,6 +155,8 @@ public class AozoraEpub3
 			//(棚だけ読み込んで何も表示しないのでは意味がない)。
 			//-preview と同じくブラウザを閉じるまで待機することはヘルプに明記してある
 			boolean preview = commandLine.hasOption("preview") || (libraryDirs != null && libraryDirs.length > 0);
+			//プレビュー（本棚）を開く道のどれからでも「続きを取る」が使えるよう、先に渡しておく
+			if (preview) registerBookUpdater(jarPath, commandLine.getOptionValue("i"));
 			//入力が EPUB だけなら変換せずそのままプレビューする。
 			//-url が併用されている場合は変換対象があるので通常の変換フローに進める
 			if (preview && fileNames.length > 0 && !commandLine.hasOption("url") && isAllEpub(fileNames)) {
@@ -487,7 +489,7 @@ public class AozoraEpub3
 					//変換に失敗しても、棚が指定されていれば本棚だけは開く。
 					//ただし変換の失敗は終了コードに残す (棚が開けたことで成功にしない)
 					if (libraryDirs != null && libraryDirs.length > 0) {
-						if (previewLibrary(libraryDirs) != 0) errorCount++;
+						if (previewLibrary(libraryDirs, jarPath, commandLine.getOptionValue("i")) != 0) errorCount++;
 					}
 				} else if (openPreview(lastOutputFile, libraryDirs)) {
 					awaitTermination();
@@ -616,8 +618,29 @@ public class AozoraEpub3
 	 * 本棚だけをプレビューし、ブラウザが閉じられるか Ctrl-C まで待機する。
 	 * 入力ファイルを伴わない {@code --library} の経路。
 	 */
-	static int previewLibrary(String[] libraryDirs)
+	/**
+	 * CLI で開いた本棚の「続きを取る」は、ini の設定（GUI が保存したもの）で、画面を使わずに変換する（internal #11）。
+	 * ini は更新のたびに読み直す（本棚を開いたまま GUI で設定を変えて閉じても効くように）。
+	 * 本棚を開く CLI の道（-library だけ・本と一緒・変換の後）のすべてで呼ぶ（PR #118 の codex）
+	 */
+	static void registerBookUpdater(String jarPath, String iniFileName)
 	{
+		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(() -> {
+			Properties props = new Properties();
+			//-i で ini を指定されたら、それを使う（PR #118 のゲート2）
+			File ini = iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
+			try (java.io.InputStream in = Files.newInputStream(ini.toPath())) {
+				props.load(in);
+			} catch (Exception e) {
+				logger.info("設定ファイルが無いか読めないため既定値で更新します: {}", ini.getAbsolutePath());
+			}
+			return props;
+		}, jarPath));
+	}
+
+	static int previewLibrary(String[] libraryDirs, String jarPath, String iniFileName)
+	{
+		registerBookUpdater(jarPath, iniFileName);
 		java.util.List<java.nio.file.Path> folders = new ArrayList<>();
 		for (String dir : libraryDirs) {
 			File file = new File(dir);

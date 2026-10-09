@@ -174,4 +174,73 @@ public class HeadlessWebConversionTest {
 		assertEquals("今の形はそのまま", HeadlessWebConversion.COVER_NONE, HeadlessWebConversion.normalizeCover(HeadlessWebConversion.COVER_NONE));
 		assertEquals("直接の指定はそのまま", "/x/cover.jpg", HeadlessWebConversion.normalizeCover("/x/cover.jpg"));
 	}
+
+	/**
+	 * EPUB を書いている間も Web 変換の鍵を持つ（PR #118 の codex）。手放すと、同じ作品を GUI が変換したときに、
+	 * 読んでいる途中の txt（キャッシュ）が書き直される
+	 */
+	@Test
+	public void theWebLockIsHeldUntilTheEpubIsWritten() throws Exception {
+		String basePath = serveAndBase();
+		java.util.concurrent.atomic.AtomicBoolean heldWhileWriting = new java.util.concurrent.atomic.AtomicBoolean(false);
+		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath("")) {
+			@Override
+			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
+					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
+				heldWhileWriting.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
+				super.write(converter, src, srcFile, srcExt, epubFile, bookInfo, imageInfoReader);
+			}
+		};
+		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		HeadlessWebConversion.Result r = new HeadlessWebConversion(guiDefaults(), basePath, tempFolder.newFolder("cache2"), writer, imageWriter)
+			.convert("http://" + fqdn + "/novel/", tempFolder.newFolder("out"), null, true);
+		assertTrue(r.message(), r.ok());
+		assertTrue("EPUB を書いている間、鍵を持っている", heldWhileWriting.get());
+	}
+
+	/**
+	 * 変換が途中で失敗しても、本棚の本は消えずに元のまま（PR #118 のゲート2）。書き出しは失敗すると出力を消すので、
+	 * 一時ファイルに書いてから置き換える。一時ファイルも残さない
+	 */
+	@Test
+	public void aFailedConversionLeavesTheShelfBookAlone() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		File book = new File(dst, "[著者] 題.epub");
+		Files.write(book.toPath(), "元の本".getBytes(StandardCharsets.UTF_8));
+		Epub3Writer failing = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath("")) {
+			@Override
+			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
+					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
+				Files.write(epubFile.toPath(), new byte[]{ 1, 2, 3 });
+				throw new IOException("書いている途中で失敗");
+			}
+		};
+		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		HeadlessWebConversion.Result r = new HeadlessWebConversion(guiDefaults(), basePath, tempFolder.newFolder("cache3"), failing, imageWriter)
+			.convert("http://" + fqdn + "/novel/", dst, book, true);
+		assertFalse(r.ok());
+		assertEquals("本棚の本は元のまま", "元の本", new String(Files.readAllBytes(book.toPath()), StandardCharsets.UTF_8));
+		assertEquals("一時ファイルを残さない", java.util.List.of("[著者] 題.epub"), java.util.Arrays.asList(dst.list()));
+	}
+
+	/** 置き換えた本は、前の本の権限を引き継ぐ（PR #118 の codex） */
+	@Test
+	public void theReplacedBookKeepsItsPermissions() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		File book = new File(dst, "[著者] 題.epub");
+		Files.write(book.toPath(), "元の本".getBytes(StandardCharsets.UTF_8));
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> perms;
+		try {
+			perms = java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----");
+			Files.setPosixFilePermissions(book.toPath(), perms);
+		} catch (UnsupportedOperationException e) {
+			Assume.assumeNoException("POSIX の権限が無い環境", e);
+			return;
+		}
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).convert("http://" + fqdn + "/novel/", dst, book, true);
+		assertTrue(r.message(), r.ok());
+		assertEquals(perms, Files.getPosixFilePermissions(book.toPath()));
+	}
 }

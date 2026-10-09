@@ -2860,6 +2860,10 @@ public class AozoraEpub3Applet extends JPanel
 		
 		//変換前確認の設定
 		setPropsSelected(this.jCheckConfirm, props, "ChkConfirm");
+
+		//本棚の「続きを取る」は、画面の今の設定で、画面を使わずに変換する（internal #11）。
+		//設定は更新のたびに画面から写す（ini は終了するまで書かれないので、ini を読むと古い）
+		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(this::snapshotSettings, this.jarPath));
 		
 		////////////////////////////////////////////////////////////////
 		//ログ出力先を設定
@@ -4601,107 +4605,112 @@ public class AozoraEpub3Applet extends JPanel
 				LogAppender.append(urlString);
 				LogAppender.println(" を読み込みます");
 				
-				webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
-				if (webConverter == null) {
-					LogAppender.append(urlString);
-					LogAppender.println(" は変換できませんでした");
-					continue;
-				}
-				
-				// なろうAPI設定を反映
-				webConverter.setUseApi(jCheckUseNarouApi.isSelected());
-				webConverter.setApiFallbackEnabled(jCheckApiFallback.isSelected());
-
-				// narou.rb互換フォーマット設定を読み込み
-				File settingFile = new File("setting_narourb.ini");
-				File replaceFile = new File("replace_narourb.txt");
-				try {
-					com.github.hmdev.web.NarouFormatSettings.generateDefaultIfMissing(settingFile);
-					webConverter.loadFormatSettings(settingFile);
-					webConverter.getFormatSettings().loadReplacePatterns(replaceFile);
-					// GUI選択を設定に反映
-					String styleIndex = (String)jComboAuthorCommentStyle.getSelectedItem();
-					if (styleIndex != null) {
-						if (styleIndex.startsWith("css")) {
-							webConverter.getFormatSettings().setAuthorCommentStyle("css");
-						} else if (styleIndex.startsWith("simple")) {
-							webConverter.getFormatSettings().setAuthorCommentStyle("simple");
-						} else if (styleIndex.startsWith("plain")) {
-							webConverter.getFormatSettings().setAuthorCommentStyle("plain");
-						}
-					}
-				} catch (Exception e) {
-					LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
-				}
-
-				int interval = 500;
-				try { interval = (int)(Float.parseFloat(jTextWebInterval.getText())*1000); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-				int beforeChapter = 0;
-				if (this.jCheckWebBeforeChapter.isSelected()) {
-					try { beforeChapter = Integer.parseInt(jTextWebBeforeChapterCount.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-				}
-				float modifiedExpire = 0;
-				try { modifiedExpire = Float.parseFloat(jTextWebModifiedExpire.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-				//キャッシュパス
-				if (!this.cachePath.isDirectory()) {
-					Files.createDirectories(this.cachePath.toPath());
-					LogAppender.println("キャッシュパスを作成します : "+this.cachePath.getCanonicalPath());
-				}
-				if (!this.cachePath.isDirectory()) {
-					LogAppender.println("キャッシュパスが作成できませんでした");
-					return;
-				}
-				
-				webConverter.skipImages = this.jCheckWebSkipImages.isSelected();
-				File srcFile = webConverter.convertToAozoraText(urlString, this.cachePath, interval, modifiedExpire,
-					this.jCheckWebConvertUpdated.isSelected(), this.jCheckWebModifiedOnly.isSelected(), jCheckWebModifiedTail.isSelected(),
-					beforeChapter);
-				
-				if (srcFile == null) {
-					LogAppender.append(urlString);
-					if (jCheckWebConvertUpdated.isSelected() && !webConverter.isUpdated()
-						|| jCheckWebModifiedOnly.isSelected() && !webConverter.isUpdated())
-						LogAppender.println(" の変換をスキップしました");
-					else if (webConverter.isCanceled())
-						LogAppender.println(" の変換をキャンセルしました");
-					else
+				//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、本棚の更新（画面なしの変換）とは、
+				//変換器を取ってから EPUB を作り終わるまでを 1 つずつにする（internal #11。PR #118 の codex）
+				File srcFile;
+				synchronized (WebAozoraConverter.WEB_LOCK) {
+					webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
+					if (webConverter == null) {
+						LogAppender.append(urlString);
 						LogAppender.println(" は変換できませんでした");
-					continue;
+						continue;
+					}
+				
+					// なろうAPI設定を反映
+					webConverter.setUseApi(jCheckUseNarouApi.isSelected());
+					webConverter.setApiFallbackEnabled(jCheckApiFallback.isSelected());
+
+					// narou.rb互換フォーマット設定を読み込み
+					File settingFile = new File("setting_narourb.ini");
+					File replaceFile = new File("replace_narourb.txt");
+					try {
+						com.github.hmdev.web.NarouFormatSettings.generateDefaultIfMissing(settingFile);
+						webConverter.loadFormatSettings(settingFile);
+						webConverter.getFormatSettings().loadReplacePatterns(replaceFile);
+						// GUI選択を設定に反映
+						String styleIndex = (String)jComboAuthorCommentStyle.getSelectedItem();
+						if (styleIndex != null) {
+							if (styleIndex.startsWith("css")) {
+								webConverter.getFormatSettings().setAuthorCommentStyle("css");
+							} else if (styleIndex.startsWith("simple")) {
+								webConverter.getFormatSettings().setAuthorCommentStyle("simple");
+							} else if (styleIndex.startsWith("plain")) {
+								webConverter.getFormatSettings().setAuthorCommentStyle("plain");
+							}
+						}
+					} catch (Exception e) {
+						LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
+					}
+
+					int interval = 500;
+					try { interval = (int)(Float.parseFloat(jTextWebInterval.getText())*1000); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+					int beforeChapter = 0;
+					if (this.jCheckWebBeforeChapter.isSelected()) {
+						try { beforeChapter = Integer.parseInt(jTextWebBeforeChapterCount.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+					}
+					float modifiedExpire = 0;
+					try { modifiedExpire = Float.parseFloat(jTextWebModifiedExpire.getText()); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
+					//キャッシュパス
+					if (!this.cachePath.isDirectory()) {
+						Files.createDirectories(this.cachePath.toPath());
+						LogAppender.println("キャッシュパスを作成します : "+this.cachePath.getCanonicalPath());
+					}
+					if (!this.cachePath.isDirectory()) {
+						LogAppender.println("キャッシュパスが作成できませんでした");
+						return;
+					}
+				
+					webConverter.skipImages = this.jCheckWebSkipImages.isSelected();
+					srcFile = webConverter.convertToAozoraText(urlString, this.cachePath, interval, modifiedExpire,
+						this.jCheckWebConvertUpdated.isSelected(), this.jCheckWebModifiedOnly.isSelected(), jCheckWebModifiedTail.isSelected(),
+						beforeChapter);
+				
+					if (srcFile == null) {
+						LogAppender.append(urlString);
+						if (jCheckWebConvertUpdated.isSelected() && !webConverter.isUpdated()
+							|| jCheckWebModifiedOnly.isSelected() && !webConverter.isUpdated())
+							LogAppender.println(" の変換をスキップしました");
+						else if (webConverter.isCanceled())
+							LogAppender.println(" の変換をキャンセルしました");
+						else
+							LogAppender.println(" は変換できませんでした");
+						continue;
+					}
+				
+					//エンコードを変換時のみUTF-8にする
+					String encType = (String)jComboEncType.getSelectedItem();
+					jComboEncType.setSelectedItem("UTF-8");
+					int titleTypeIdx = jComboTitle.getSelectedIndex();
+					jComboTitle.setSelectedIndex(0);
+					boolean checkUseFileName = jCheckUseFileName.isSelected();
+					jCheckUseFileName.setSelected(false);
+					//コメント出力
+					boolean commentPrint = jCheckCommentPrint.isSelected();
+					jCheckCommentPrint.setSelected(true);
+					boolean commentConvert = jCheckCommentConvert.isSelected();
+					jCheckCommentConvert.setSelected(true);
+				
+					//表紙画像はconverted.pngで保存される 指定がない場合はそれを利用する
+					Object coverItem = jComboCover.getSelectedItem();
+					//入力ファイルと同じ表紙の指定の場合 ショートカットファイルのパスにファイルがあればファイルパスを指定に変更
+					if (jComboCover.getSelectedIndex() == 1 && urSrcFile != null) {
+						String coverFileName = AozoraEpub3.getSameCoverFileName(urSrcFile);
+						jComboCover.setSelectedItem(coverFileName);
+					}
+					//同名のファイルが無い場合はconverted.pngを利用する設定に変更
+					if (jComboCover.getSelectedIndex() == 0 || jComboCover.getSelectedIndex() == 1) jComboCover.setSelectedIndex(1);
+				
+					//変換処理実行
+					convertFiles(new File[]{srcFile}, dstPath);
+				
+					//設定を戻す
+					jComboEncType.setSelectedItem(encType);
+					jComboTitle.setSelectedIndex(titleTypeIdx);
+					jCheckUseFileName.setSelected(checkUseFileName);
+					jCheckCommentPrint.setSelected(commentPrint);
+					jCheckCommentConvert.setSelected(commentConvert);
+					jComboCover.setSelectedItem(coverItem);
 				}
-				
-				//エンコードを変換時のみUTF-8にする
-				String encType = (String)jComboEncType.getSelectedItem();
-				jComboEncType.setSelectedItem("UTF-8");
-				int titleTypeIdx = jComboTitle.getSelectedIndex();
-				jComboTitle.setSelectedIndex(0);
-				boolean checkUseFileName = jCheckUseFileName.isSelected();
-				jCheckUseFileName.setSelected(false);
-				//コメント出力
-				boolean commentPrint = jCheckCommentPrint.isSelected();
-				jCheckCommentPrint.setSelected(true);
-				boolean commentConvert = jCheckCommentConvert.isSelected();
-				jCheckCommentConvert.setSelected(true);
-				
-				//表紙画像はconverted.pngで保存される 指定がない場合はそれを利用する
-				Object coverItem = jComboCover.getSelectedItem();
-				//入力ファイルと同じ表紙の指定の場合 ショートカットファイルのパスにファイルがあればファイルパスを指定に変更
-				if (jComboCover.getSelectedIndex() == 1 && urSrcFile != null) {
-					String coverFileName = AozoraEpub3.getSameCoverFileName(urSrcFile);
-					jComboCover.setSelectedItem(coverFileName);
-				}
-				//同名のファイルが無い場合はconverted.pngを利用する設定に変更
-				if (jComboCover.getSelectedIndex() == 0 || jComboCover.getSelectedIndex() == 1) jComboCover.setSelectedIndex(1);
-				
-				//変換処理実行
-				convertFiles(new File[]{srcFile}, dstPath);
-				
-				//設定を戻す
-				jComboEncType.setSelectedItem(encType);
-				jComboTitle.setSelectedIndex(titleTypeIdx);
-				jCheckUseFileName.setSelected(checkUseFileName);
-				jCheckCommentPrint.setSelected(commentPrint);
-				jCheckCommentConvert.setSelected(commentConvert);
-				jComboCover.setSelectedItem(coverItem);
 				
 			} catch (Exception e) {
 				logger.error("ファイル変換ワーカーでエラー", e);
@@ -5720,6 +5729,21 @@ public class AozoraEpub3Applet extends JPanel
 		}
 	}
 	
+	/** 画面の今の設定を、ini と同じ形で写す（本棚の更新から呼ばれる。部品は EDT で読む） */
+	private Properties snapshotSettings()
+	{
+		Properties snapshot = new Properties();
+		try {
+			if (SwingUtilities.isEventDispatchThread()) setProperties(snapshot);
+			else SwingUtilities.invokeAndWait(() -> setProperties(snapshot));
+		} catch (Exception e) {
+			//写せなければ、起動時に読んだ ini の値で更新する
+			logger.warn("画面の設定を写せませんでした。起動時の設定で更新します", e);
+			snapshot.putAll(this.props);
+		}
+		return snapshot;
+	}
+
 	/** アプレットの設定状態をpropsに保存 */
 	private void setProperties(Properties props)
 	{
