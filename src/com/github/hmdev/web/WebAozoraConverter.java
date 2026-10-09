@@ -42,6 +42,7 @@ import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.util.CharUtils;
 import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.LogAppender;
@@ -666,18 +667,48 @@ public class WebAozoraConverter
 			author = getExtractText(doc, this.queryMap.get(ExtractId.AUTHOR));
 		}
 		
+		//作品の台帳。txt の名前は初めて取ったときのもの、identifier は URL から決めたものを使い続ける（internal #11）
+		String textBaseName = null;
+		if (title != null && !title.isEmpty()) {
+			String safeTitle = BookLedger.safeFileName(title);
+			if (author != null && !author.isEmpty()) textBaseName = "[" + BookLedger.safeFileName(author) + "] " + safeTitle;
+			else textBaseName = safeTitle;
+		}
+		textBaseName = BookLedger.nameOrNull(textBaseName);
+		//名前を指定されたときは、その txt に台帳を当てる
+		String requestedBaseName = outFileName == null ? null
+			: BookLedger.nameOrNull(outFileName.replaceFirst("(?i)\\.txt$", ""));
+		File workDir = new File(this.dstPath);
+		BookLedger ledger = BookLedger.load(workDir);
+		BookLedger toSave = null;
+		if (ledger == null) {
+			//台帳より前に取った作品で、そのあと掲載先で題が変わっていたら、前の名前を引き継ぐ。
+			//前の EPUB の名前も（著者名の ! やシリーズの行が無ければ）txt と同じ名前なので、両方に使う
+			String legacy = requestedBaseName == null ? BookLedger.legacyTextBaseName(workDir) : null;
+			if (legacy != null && !legacy.equals(textBaseName)) {
+				LogAppender.println("前に取ったときの名前を引き継ぎます : " + legacy);
+				toSave = BookLedger.create(urlString, legacy).withOutputBaseName(legacy);
+			} else {
+				toSave = BookLedger.create(urlString, requestedBaseName != null ? requestedBaseName : textBaseName);
+			}
+		}
+		else if (requestedBaseName != null && !requestedBaseName.equals(ledger.textBaseName)) toSave = ledger.withTextBaseName(requestedBaseName);
+		//名前が取れなかった回に作った台帳は、取れた回に埋める
+		else if (requestedBaseName == null && ledger.textBaseName == null && textBaseName != null) toSave = ledger.withTextBaseName(textBaseName);
+		if (toSave != null) {
+			try {
+				toSave.save(workDir);
+				ledger = toSave;
+			} catch (IOException e) {
+				//台帳が無くても変換はできる（題が変わったときに別の本として増えるだけ）
+				logger.warn("台帳を書けませんでした: {}", this.dstPath, e);
+				LogAppender.println("作品の台帳を書けませんでした : " + e.getMessage());
+			}
+		}
 		String fileName = outFileName;
 		if (fileName == null) {
-			fileName = "converted.txt";
-			if (title != null && !title.isEmpty()) {
-				String safeTitle = title.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
-				if (author != null && !author.isEmpty()) {
-					String safeAuthor = author.replaceAll("[\\\\|\\/|\\:|\\*|\\!|\\?|\\<|\\>|\\||\\\"|\t]", "");
-					fileName = "[" + safeAuthor + "] " + safeTitle + ".txt";
-				} else {
-					fileName = safeTitle + ".txt";
-				}
-			}
+			//台帳を書けなかったときも、今回の名前で書く
+			fileName = ledger != null ? ledger.textFileName() : (textBaseName != null ? textBaseName : "converted") + ".txt";
 		} else {
 			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
 		}
