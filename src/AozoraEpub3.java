@@ -198,7 +198,7 @@ public class AozoraEpub3
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			
 			//コマンドラインオプション以外
-			//ini から読む変換の設定は ConversionSettings にまとめてある（本棚の画面なしの変換と同じ読み方）。
+			//ini から読む変換の設定は ConversionSettings にまとめてある（本棚の画面なしの変換でも使う予定。internal #11 の H2）。
 			//キーが無いときは GUI と同じ既定値を使う (docs/code-audit-followups.md 項目 22 / 24)
 			ConversionSettings settings = ConversionSettings.fromProps(props);
 			boolean coverPage = settings.coverPage;//表紙追加

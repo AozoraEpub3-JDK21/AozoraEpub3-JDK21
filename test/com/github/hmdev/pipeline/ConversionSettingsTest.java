@@ -14,8 +14,9 @@ import com.github.hmdev.info.BookInfo;
  * ini から変換の設定を読むテスト（internal #11 の H1）。
  *
  * CLI が {@code AozoraEpub3.run} の中で読んでいたものを移したので、読み方（キーが無いときの既定値・旧名・
- * 改ページの大きさの計算）が変わっていないことを固定する。CLI の出力が master と同じことは、
- * 3 つの ini × 19 の入力で EPUB を項目ごとに比べて確かめた（PR に記録）。
+ * 改ページの大きさの計算）と、変換器に入れる順番・引数の位置を固定する。
+ * CLI の出力が master と同じことは、PR #115 で 3 つの ini × 19 の入力の EPUB を項目ごとに比べて確かめた
+ * （その比べ方は試験には入っていない。ここの升が固定するのは、読み方と入れ方）。
  */
 public class ConversionSettingsTest {
 
@@ -89,5 +90,67 @@ public class ConversionSettingsTest {
 		assertFalse(s.printIvsSSP);
 		assertTrue(s.withMarkId);
 		assertTrue(s.tocVertical);
+	}
+
+	/** 変換器が受け取った呼び出しを、名前と引数で順に記録する */
+	static final class RecordingConverter extends com.github.hmdev.converter.AozoraEpub3Converter {
+		final java.util.List<String> calls = new java.util.ArrayList<>();
+		RecordingConverter() throws Exception {
+			super(new com.github.hmdev.writer.Epub3Writer(com.github.hmdev.util.VelocityTestUtils.templateDir() + java.io.File.separator,
+				com.github.hmdev.util.VelocityTestUtils.engineForTemplateSubpath("")),
+				com.github.hmdev.util.VelocityTestUtils.templateDir().getParent() + java.io.File.separator);
+			this.calls.clear();
+		}
+		@Override public void setNoIllust(boolean v) { calls.add("noIllust " + v); }
+		@Override public void setWithMarkId(boolean v) { calls.add("markId " + v); }
+		@Override public void setAutoYoko(boolean a, boolean b, boolean c, boolean d) { calls.add("autoYoko " + a + " " + b + " " + c + " " + d); }
+		@Override public void setCharOutput(int a, boolean b, boolean c) { calls.add("charOutput " + a + " " + b + " " + c); }
+		@Override public void setGaijiFallback(int a, boolean b) { calls.add("gaiji " + a + " " + b); }
+		@Override public void setSpaceHyphenation(int a) { calls.add("spaceHyp " + a); }
+		@Override public void setCommentPrint(boolean a, boolean b) { calls.add("comment " + a + " " + b); }
+		@Override public void setRemoveEmptyLine(int a, int b) { calls.add("emptyLine " + a + " " + b); }
+		@Override public void setForcePageBreak(int a, int b, int c, int d, int e) { calls.add("pageBreak " + a + " " + b + " " + c + " " + d + " " + e); }
+		@Override public void setChapterLevel(int maxLength, boolean exclude, boolean nextLine, boolean section, boolean h, boolean h1, boolean h2, boolean h3,
+				boolean sameLine, boolean name, boolean numOnly, boolean numTitle, boolean numParen, boolean numParenTitle, String pattern) {
+			calls.add("chapter " + maxLength + " " + exclude + nextLine + section + h + h1 + h2 + h3 + sameLine + name
+				+ numOnly + numTitle + numParen + numParenTitle + " " + pattern);
+		}
+	}
+
+	/**
+	 * 変換器に入れる順番と引数の位置（CLI が入れていた形）を固定する。値は位置ごとに変えてあるので、
+	 * 同じ型の引数（改ページの 5 つ・目次の 13 の真偽値など）を入れ違えると赤になる（#115 のゲート2）
+	 */
+	@Test
+	public void theConverterGetsEveryValueInItsOwnPositionAndOrder() throws Exception {
+		RecordingConverter c = new RecordingConverter();
+		ConversionSettings.fromProps(props(
+			"NoIllust", "1", "MarkId", "",
+			"AutoYoko", "1", "AutoYokoNum1", "", "AutoYokoNum3", "1", "AutoYokoEQ1", "",
+			"DakutenType", "2", "IvsBMP", "1", "IvsSSP", "",
+			"GaijiFallback", "1", "GaijiFallbackLevel", "3", "GaijiFallbackCode", "",
+			"SpaceHyphenation", "4",
+			"CommentPrint", "1", "CommentConvert", "",
+			"RemoveEmptyLine", "5", "MaxEmptyLine", "6",
+			"PageBreak", "1", "PageBreakSize", "7", "PageBreakEmpty", "1", "PageBreakEmptyLine", "8", "PageBreakEmptySize", "9",
+			"PageBreakChapter", "1", "PageBreakChapterSize", "11",
+			"MaxChapterNameLength", "12",
+			"ChapterExclude", "1", "ChapterUseNextLine", "", "ChapterSection", "1", "ChapterH", "",
+			"ChapterH1", "1", "ChapterH2", "", "ChapterH3", "1", "SameLineChapter", "",
+			"ChapterName", "1", "ChapterNumOnly", "", "ChapterNumTitle", "1", "ChapterNumParen", "", "ChapterNumParenTitle", "1",
+			"ChapterPattern", "1", "ChapterPatternText", "^X"
+		)).applyTo(c);
+		assertEquals(java.util.List.of(
+			"noIllust true",
+			"markId false",
+			"autoYoko true false true false",
+			"charOutput 2 true false",
+			"gaiji 3 false",
+			"spaceHyp 4",
+			"comment true false",
+			"emptyLine 5 6",
+			"pageBreak " + (7 * 1024) + " 8 " + (9 * 1024) + " 1 " + (11 * 1024),
+			"chapter 12 truefalsetruefalsetruefalsetruefalsetruefalsetruefalsetrue ^X"
+		), c.calls);
 	}
 }
