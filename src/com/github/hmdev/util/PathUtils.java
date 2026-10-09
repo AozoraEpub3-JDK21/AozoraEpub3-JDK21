@@ -35,7 +35,7 @@ public class PathUtils
 	public static final int MAX_NAME_BYTES = 255;
 
 	/** 255 バイトで切っても作れないときに試す上限（Linux の eCryptfs で暗号化したフォルダは 143 バイトまで） */
-	static final int[] SMALLER_NAME_LIMITS = { 143 };
+	public static final int[] SMALLER_NAME_LIMITS = { 143 };
 
 	/**
 	 * dir に、名前（拡張子なし）＋拡張子の名前で書けるようにする（internal #16）。
@@ -118,7 +118,7 @@ public class PathUtils
 		return fitFileName(baseName, ext, MAX_NAME_BYTES);
 	}
 
-	static String fitFileName(String baseName, String ext, int maxBytes)
+	public static String fitFileName(String baseName, String ext, int maxBytes)
 	{
 		int budget = maxBytes - utf8Length(ext);
 		if (utf8Length(baseName) <= budget) return baseName;

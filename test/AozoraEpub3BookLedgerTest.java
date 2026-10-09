@@ -137,4 +137,26 @@ public class AozoraEpub3BookLedgerTest {
 		String opf = convert(txt)[1];
 		assertFalse(opf, opf.contains("dc:source"));
 	}
+
+	/**
+	 * 長い題の作品の txt は、長い名前を作れない場所（Linux）では切った名前で作られる（internal #16）。
+	 * 台帳はその txt にも当たる。当たらないと、Linux では長い題の作品の identifier と名前が固定されない
+	 */
+	@Test
+	public void theLedgerFindsATxtWhoseLongNameWasCut() throws Exception {
+		File dir = tempFolder.newFolder();
+		String longName = "[著者] " + "長い題".repeat(40);
+		String cutName = com.github.hmdev.util.PathUtils.fitFileName(longName, ".txt") + ".txt";
+		File txt = txt(dir, cutName, "長い題\n著者\n\n本文\n");
+		BookLedger.create(URL, longName).save(dir);
+
+		String opf = convert(txt)[1];
+		assertTrue(opf, opf.contains("urn:uuid:" + BookLedger.identifierFor(URL)));
+
+		// 143 バイト（eCryptfs）で切った名前も
+		File dir2 = tempFolder.newFolder();
+		File txt2 = txt(dir2, com.github.hmdev.util.PathUtils.fitFileName(longName, ".txt", 143) + ".txt", "長い題\n著者\n\n本文\n");
+		BookLedger.create(URL, longName).save(dir2);
+		assertTrue(convert(txt2)[1].contains("urn:uuid:" + BookLedger.identifierFor(URL)));
+	}
 }
