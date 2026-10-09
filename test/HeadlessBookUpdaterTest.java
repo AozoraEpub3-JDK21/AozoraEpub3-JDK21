@@ -113,6 +113,7 @@ public class HeadlessBookUpdaterTest {
 		byte[] before = Files.readAllBytes(first.epub().toPath());
 
 		//2 話目が出たので続きを取る
+		String oneEpisode = episodes;
 		episodes += "<li><a href=\"/ep/2/\">第2話</a></li>";
 		BookUpdater.Result r = updater.update(base + "/novel/", first.epub().toPath());
 		assertTrue(r.message(), r.ok());
@@ -121,6 +122,17 @@ public class HeadlessBookUpdaterTest {
 		assertTrue("1 つ前の版が残る: " + previous, previous.isFile());
 		assertArrayEquals(before, Files.readAllBytes(previous.toPath()));
 		assertTrue("ほかの名前の本が増えない", shelf.list().length == 1);
+
+		//掲載先で 2 話目が消えた: 本棚の更新は守りを付けて変換するので、書かずに止める（internal #11）
+		episodes = oneEpisode;
+		byte[] twoEpisodes = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result shrunk = updater.update(base + "/novel/", first.epub().toPath());
+		assertFalse(shrunk.ok());
+		org.junit.Assert.assertEquals("shrunk", shrunk.stop());
+		assertArrayEquals(twoEpisodes, Files.readAllBytes(first.epub().toPath()));
+		//利用者が「減ったまま更新する」を選んだら取り直す
+		BookUpdater.Result accepted = updater.update(base + "/novel/", first.epub().toPath(), true);
+		assertTrue(accepted.message(), accepted.ok());
 	}
 
 	private static HeadlessWebConversion conversion(Properties props, String basePath, File cache) {

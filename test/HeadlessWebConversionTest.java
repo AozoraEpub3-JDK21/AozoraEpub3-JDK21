@@ -357,6 +357,16 @@ public class HeadlessWebConversionTest {
 		shelfBook(basePath, tempFolder.newFolder("out2"));
 	}
 
+	/** 変換器は GUI と使い回すので、本棚の更新の後に守りを残さない（残ると GUI の変換までキャッシュの目次を使わなくなる） */
+	@Test
+	public void theGuardIsOffAgainAfterAnUpdate() throws Exception {
+		String basePath = serveAndBase();
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		assertTrue(guardedUpdate(basePath, book, false).ok());
+		listStatus = 404;
+		shelfBook(basePath, tempFolder.newFolder("out2"));
+	}
+
 	private File ledgerDir() {
 		return new File(lastCache, fqdn.replace(':', '_') + "/novel");
 	}
