@@ -33,6 +33,8 @@ public class OpfPackage
 	private String identifier;
 	/** dc:source の並び（Web から取った本は掲載元の URL を 1 つ持つ。ほかの出どころの本は ISBN なども持ちうる） */
 	private java.util.List<String> sources = java.util.List.of();
+	/** dc:identifier の並び（Calibre などが後から足すことがあり、このアプリの値が先頭とは限らない） */
+	private java.util.List<String> identifiers = java.util.List.of();
 	private String modified;
 	/** meta[property=rendition:layout] */
 	private String renditionLayout;
@@ -72,6 +74,7 @@ public class OpfPackage
 	public String getTitle() { return this.title; }
 	public String getCreator() { return this.creator; }
 	public java.util.List<String> getSources() { return this.sources; }
+	public java.util.List<String> getIdentifiers() { return this.identifiers; }
 	public String getPublisher() { return this.publisher; }
 	public String getLanguage() { return this.language; }
 	public String getIdentifier() { return this.identifier; }
@@ -168,6 +171,7 @@ public class OpfPackage
 	void setLanguage(String value) { this.language = value; }
 	void setIdentifier(String value) { this.identifier = value; }
 	void setSources(java.util.List<String> values) { this.sources = java.util.List.copyOf(values); }
+	void setIdentifiers(java.util.List<String> values) { this.identifiers = java.util.List.copyOf(values); }
 	void setModified(String value) { this.modified = value; }
 	void setRenditionLayout(String value) { this.renditionLayout = value; }
 	void setPrimaryWritingMode(String value) { this.primaryWritingMode = value; }

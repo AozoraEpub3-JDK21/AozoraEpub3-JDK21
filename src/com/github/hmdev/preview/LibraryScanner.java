@@ -194,16 +194,20 @@ public class LibraryScanner
 	 * <p>{@code dc:source} はほかの出どころの本（Project Gutenberg など）も持つので、それだけでは決めない。
 	 * このアプリは identifier を掲載元の URL から作る（{@link BookLedger#identifierFor}）ので、
 	 * identifier がその URL から作った値と同じ {@code dc:source} だけを採る。
-	 * {@code dc:source} が複数あるときは（ISBN と URL など）、条件を満たす最初のもの</p>
+	 * {@code dc:source} が複数あるときは（ISBN と URL など）、条件を満たす最初のもの。
+	 * {@code dc:identifier} も複数ありうる（Calibre などが先頭に足す）ので、どれか 1 つが合えばよい</p>
 	 */
 	static String webSourceOf(OpfPackage opf)
 	{
-		String identifier = opf.getIdentifier();
-		if (identifier == null) return null;
+		java.util.Set<String> identifiers = new java.util.HashSet<>();
+		for (String identifier : opf.getIdentifiers()) {
+			if (identifier != null) identifiers.add(identifier.trim().toLowerCase(java.util.Locale.ROOT));
+		}
+		if (identifiers.isEmpty()) return null;
 		for (String raw : opf.getSources()) {
 			String source = sanitizeSource(raw);
 			if (source == null) continue;
-			if (identifier.trim().equalsIgnoreCase("urn:uuid:" + BookLedger.identifierFor(source))) return source;
+			if (identifiers.contains(("urn:uuid:" + BookLedger.identifierFor(source)).toLowerCase(java.util.Locale.ROOT))) return source;
 		}
 		return null;
 	}
@@ -218,9 +222,12 @@ public class LibraryScanner
 	{
 		if (source == null) return null;
 		//前後の空白を落とす前に見る（trim は制御文字も落とすので、落とした後では見えない）
-		for (int i = 0; i < source.length(); i++) {
-			int type = Character.getType(source.charAt(i));
+		//サロゲートペアの書式文字（U+E0001 など）も見るよう、コードポイントで数える
+		for (int i = 0; i < source.length(); ) {
+			int cp = source.codePointAt(i);
+			int type = Character.getType(cp);
 			if (type == Character.CONTROL || type == Character.FORMAT) return null;
+			i += Character.charCount(cp);
 		}
 		source = source.trim();
 		if (source.isEmpty() || source.length() > MAX_FIELD_CHARS) return null;
@@ -233,6 +240,27 @@ public class LibraryScanner
 		}
 		String authority = rest.substring(0, end);
 		if (authority.isEmpty() || authority.indexOf('@') >= 0 || authority.indexOf(' ') >= 0) return null;
+		//ホスト名があり、ポートは数字だけ（https://:443/ や https://example.com:bad/ を捨てる）
+		String host = authority;
+		String port = null;
+		if (authority.startsWith("[")) {
+			int close = authority.indexOf(']');
+			if (close < 0) return null;
+			host = authority.substring(0, close + 1);
+			String after = authority.substring(close + 1);
+			if (!after.isEmpty()) {
+				if (!after.startsWith(":")) return null;
+				port = after.substring(1);
+			}
+		} else {
+			int colon = authority.lastIndexOf(':');
+			if (colon >= 0) {
+				host = authority.substring(0, colon);
+				port = authority.substring(colon + 1);
+			}
+		}
+		if (host.isEmpty() || host.equals("[]") || host.indexOf(':') >= 0 && !host.startsWith("[")) return null;
+		if (port != null && (port.isEmpty() || !port.chars().allMatch(c -> c >= '0' && c <= '9') || port.length() > 5)) return null;
 		return source;
 	}
 
