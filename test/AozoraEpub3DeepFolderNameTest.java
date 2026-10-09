@@ -103,7 +103,8 @@ public class AozoraEpub3DeepFolderNameTest {
 	public void aFolderTooDeepForTheMarkIsRefusedOnlyOnWindows() throws Exception {
 		for (int length : new int[] { 243, 249 }) {
 			File dst = folderOfLength(length);
-			if (AozoraEpub3.isWindows()) {
+			//OS は升の側で見る（製品の isWindows() を使うと、それが壊れたときに期待も一緒に動いて升が黙る）
+			if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows")) {
 				try {
 					outFile(dst, BODY + "（上）");
 					fail("出力先が " + length + " 文字なら断る");
