@@ -381,6 +381,19 @@ public class PreviewServerTest
 		assertTrue(json, json.contains("\"hasCover\":false"));
 	}
 
+	@Test
+	public void theLibraryListsTheSourceOfBooksFromTheWeb() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("web");
+		EpubFixture.withSource("https://ncode.syosetu.com/n1234ab/").writeTo(shelf.resolve("web.epub"));
+		EpubFixture.standard().writeTo(shelf.resolve("local.epub"));
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null))));
+
+		String json = get(base() + "api/library").body();
+		assertTrue(json, json.contains("\"source\":\"https://ncode.syosetu.com/n1234ab/\""));
+		assertTrue("掲載元の無い本は null: " + json, json.contains("\"source\":null"));
+	}
+
 	/** 名前を指定して棚を作り、走査結果を返す (セッションには取り込まない) */
 	private LibraryShelf makeShelf(String folderName, String... names) throws Exception
 	{

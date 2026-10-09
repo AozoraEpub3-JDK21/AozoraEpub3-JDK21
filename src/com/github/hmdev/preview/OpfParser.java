@@ -102,6 +102,9 @@ public class OpfParser
 		opf.setPublisher(XmlUtils.text(XmlUtils.findFirst(metadata, "publisher")));
 		opf.setLanguage(XmlUtils.text(XmlUtils.findFirst(metadata, "language")));
 		opf.setIdentifier(XmlUtils.text(XmlUtils.findFirst(metadata, "identifier")));
+		java.util.List<String> sources = new java.util.ArrayList<>();
+		for (Element source : XmlUtils.findAll(metadata, "source")) sources.add(XmlUtils.text(source));
+		opf.setSources(sources);
 
 		for (Element meta : XmlUtils.findAll(metadata, "meta")) {
 			// EPUB3 形式: <meta property="...">value</meta>

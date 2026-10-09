@@ -28,7 +28,7 @@ public class LibraryIndexCacheTest
 
 	private static LibraryEntry entry(Path file, String title, String creator, String cover)
 	{
-		return new LibraryEntry(file, 123L, 456L, title, creator, cover);
+		return new LibraryEntry(file, 123L, 456L, title, creator, cover, null);
 	}
 
 	@Test
@@ -102,7 +102,7 @@ public class LibraryIndexCacheTest
 			LibraryIndexCache.HEADER + "\n"
 			+ "列が足りない行\n"
 			+ LibraryIndexCache.formatLine(entry(book, "生き残る", "著者", null)) + "\n"
-			+ "a\tb\tc\td\te\tf\n",   // サイズが数値でない
+			+ "a\tb\tc\td\te\tf\tg\n",   // サイズが数値でない
 			StandardCharsets.UTF_8);
 
 		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
@@ -115,11 +115,12 @@ public class LibraryIndexCacheTest
 	{
 		// String.split は既定で末尾の空文字列を落とす。-1 を忘れると
 		// 最後の列が空の行だけが「列数不足」として捨てられる
-		LibraryEntry parsed = LibraryIndexCache.parseLine("C:\\x\\a.epub\t1\t2\t書名\t著者\t");
+		LibraryEntry parsed = LibraryIndexCache.parseLine("C:\\x\\a.epub\t1\t2\t書名\t著者\t\t");
 		assertNotNull("列数不足として捨てられている", parsed);
 		assertEquals("書名", parsed.title());
-		// 空の表紙は「表紙なし」に正規化される
+		// 空の表紙は「表紙なし」に、空の掲載元は「掲載元なし」に正規化される
 		assertNull(parsed.coverEntry());
+		assertNull(parsed.source());
 	}
 
 	@Test
@@ -132,10 +133,63 @@ public class LibraryIndexCacheTest
 			"C:\\x\\a.epub", "1", "2",
 			"あ".repeat(LibraryScanner.MAX_FIELD_CHARS + 50),
 			"著者",
-			"../../../etc/passwd"));
+			"../../../etc/passwd",
+			"javascript:alert(1)"));
 		assertNotNull(tampered);
 		assertEquals(LibraryScanner.MAX_FIELD_CHARS, tampered.title().length());
 		assertNull("展開先の外を指す表紙は捨てる", tampered.coverEntry());
+		// 掲載元は「続きを取る」で取りに行く先。http・https 以外は捨てる
+		assertNull("http・https でない掲載元は捨てる", tampered.source());
+		LibraryEntry longSource = LibraryIndexCache.parseLine(String.join("\t",
+			"C:\\x\\a.epub", "1", "2", "書名", "著者", "",
+			"https://example.com/" + "a".repeat(LibraryScanner.MAX_FIELD_CHARS)));
+		assertNull("切ると別の URL になるので、長すぎる掲載元は捨てる", longSource.source());
+	}
+
+	@Test
+	public void theSourceSurvivesSaveAndLoad() throws Exception
+	{
+		Path book = temp.getRoot().toPath().resolve("a.epub");
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.update(List.of(new LibraryEntry(book, 1L, 2L, "書名", "著者", null, "https://ncode.syosetu.com/n1234ab/")));
+		cache.save();
+
+		LibraryIndexCache reloaded = new LibraryIndexCache(cacheFile());
+		reloaded.load();
+		assertEquals("https://ncode.syosetu.com/n1234ab/", reloaded.get(book).source());
+	}
+
+	/**
+	 * 1 世代目（掲載元の列が無い）の記録は使わない。使えば、掲載元のある本も「掲載元なし」のまま残ってしまう。
+	 * 世代（HEADER）と列数の両方で落ちるので、どちらか片方を外してもこの升は通る（世代を上げたのは念のため）
+	 */
+	@Test
+	public void aFirstGenerationFileWithoutTheSourceColumnIsDiscarded() throws Exception
+	{
+		Path book = temp.getRoot().toPath().resolve("a.epub");
+		Files.writeString(cacheFile(),
+			"#aozoraepub3-preview-library\t1\n"
+			+ String.join("\t", book.toAbsolutePath().normalize().toString(), "1", "2", "旧形式", "著者", "\\0") + "\n",
+			StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.load();
+		assertNull(cache.get(book));
+	}
+
+	/** 列数が合っていても、世代 1 の見出しなら読まない（世代を上げたことだけで落ちる形） */
+	@Test
+	public void aFirstGenerationHeaderAloneDiscardsTheFile() throws Exception
+	{
+		Path book = temp.getRoot().toPath().resolve("a.epub");
+		Files.writeString(cacheFile(),
+			"#aozoraepub3-preview-library\t1\n"
+			+ LibraryIndexCache.formatLine(new LibraryEntry(book, 1L, 2L, "書名", "著者", null, null)) + "\n",
+			StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.load();
+		assertNull(cache.get(book));
 	}
 
 	@Test

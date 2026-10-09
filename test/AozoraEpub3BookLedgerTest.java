@@ -159,4 +159,22 @@ public class AozoraEpub3BookLedgerTest {
 		BookLedger.create(URL, longName).save(dir2);
 		assertTrue(convert(txt2)[1].contains("urn:uuid:" + BookLedger.identifierFor(URL)));
 	}
+
+	/** 変換した本を本棚が「Web から取った本」と読める（書く側の identifier の形と、本棚の見分け方が合っている） */
+	@Test
+	public void theBookshelfRecognisesABookThisAppBuiltFromTheWeb() throws Exception
+	{
+		File dir = tempFolder.newFolder();
+		File txt = txt(dir, "題\n著者\n\n本文\n");
+		BookLedger.create(URL, "in").save(dir);
+		String epubName = convert(txt)[0];
+
+		java.util.List<com.github.hmdev.preview.LibraryEntry> entries = new java.util.ArrayList<>();
+		for (File out : tempFolder.getRoot().listFiles(File::isDirectory)) {
+			entries.addAll(com.github.hmdev.preview.LibraryScanner.scan(out.toPath(), 1, null));
+		}
+		com.github.hmdev.preview.LibraryEntry book = entries.stream()
+			.filter(e -> e.file().getFileName().toString().equals(epubName)).findFirst().orElseThrow();
+		assertEquals(URL, book.source());
+	}
 }

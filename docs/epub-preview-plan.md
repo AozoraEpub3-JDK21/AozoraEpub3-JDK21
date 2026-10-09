@@ -241,8 +241,9 @@ UI は「推奨リスト (実在するものだけ表示)」+「インストー�
     外しても「表紙なし」になるだけなので許容する
   - **manifest にあっても ZIP に実在しない**表紙があるため、スキャン時に存在を確認して落とす
     (持たせたままだとサムネイル要求のたびに 404 になる)
-- **インデックスキャッシュ**: `path / size / mtime / title / creator / coverEntry` を保存し、
-  `size` + `mtime` 一致で再パースを省く。
+- **インデックスキャッシュ**: `path / size / mtime / title / creator / coverEntry / source` を保存し、
+  `size` + `mtime` 一致で再パースを省く。`source` は `dc:source`（Web から取った本の掲載元の URL。http・https だけ）で、
+  2026-10-09 に足した（世代 2。世代 1 のファイルは読み捨てて 1 回だけ走査し直す）。
 
   > **形式は JSON ではなく行指向のテキスト** (`~/.aozoraepub3/preview-library.tsv`) に変更した。
   > このプロジェクトには **JSON パーサが無い**。`Json` は「追加依存ゼロ」方針のもとで書かれた
@@ -433,7 +434,7 @@ package version は何か、フォントが埋まっているか) をその場�
 | `POST /p/{token}/api/settings` | 表示設定を保存 |
 | `POST /p/{token}/api/heartbeat?tab={id}` | タブが生きていることの通知 (204) |
 | `POST /p/{token}/api/bye?tab={id}` | タブを閉じた通知 (204、`sendBeacon`) |
-| `GET /p/{token}/api/library` | 本棚一覧 (JSON)。絶対パスは載せない |
+| `GET /p/{token}/api/library` | 本棚一覧 (JSON)。絶対パスは載せない。Web から取った本は `source`（掲載元の URL）を持つ |
 | `GET /p/{token}/api/library/cover/{bookId}` | 表紙サムネイル (JPEG)。`no-cache` + ETag で 304 を返す |
 
 `/p/{token}` (末尾スラッシュ無し) は `308` でクエリごと `/p/{token}/` へ送る。
