@@ -36,6 +36,24 @@ let libraryFilterTimer = 0;
 /** 本を切り替えている最中か。連打で 2 冊が同時に読み込まれるのを防ぐ */
 let libraryOpening = false;
 
+/**
+ * 「続きを取る」の状態。鍵は本の ID。本棚を描き直しても状態が消えないよう、カードの外に持つ
+ * (internal #11。サーバの api/book/{id}/update と api/jobs/{id})
+ */
+const libraryUpdates = new Map();
+
+/** 仕事の状態を問い合わせる間隔 (ミリ秒) */
+const LIBRARY_UPDATE_POLL = 2000;
+
+/** 仕事の状態の表示 */
+const LIBRARY_UPDATE_LABELS = {
+	queued: '順番待ち…',
+	running: '続きを取っています…',
+	done: '更新しました',
+	noUpdate: '更新はありません',
+	failed: '更新できませんでした',
+};
+
 function bindLibraryEvents()
 {
 	el.libraryToggle.addEventListener('click', () => toggleLibrary());
@@ -301,7 +319,38 @@ function showLibraryStatus(message, remaining)
 	el.libraryStatus.append(' ', more);
 }
 
+/**
+ * 本 1 冊の枠。カードはボタンなので、中にボタンを入れられない。Web から取った本 (掲載元のある本) には、
+ * 枠の上に「続きを取る」のボタンを重ね、カードの下に進み具合を出す
+ */
 function libraryCard(book)
+{
+	const card = libraryBookButton(book);
+	const slot = document.createElement('div');
+	slot.className = 'book-slot';
+	slot.dataset.bookId = book.id;
+	slot.appendChild(card);
+	if (book.source) {
+		const update = document.createElement('button');
+		update.type = 'button';
+		update.className = 'book-update';
+		update.textContent = '⟳';
+		update.title = '続きを取る (' + book.source + ')';
+		update.setAttribute('aria-label', '続きを取る: ' + (book.title || book.fileName));
+		update.addEventListener('click', event => {
+			event.stopPropagation();
+			startLibraryUpdate(book).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
+		});
+		const status = document.createElement('div');
+		status.className = 'book-update-status';
+		status.setAttribute('aria-live', 'polite');
+		slot.append(update, status);
+		paintLibraryUpdate(slot, libraryUpdates.get(book.id));
+	}
+	return slot;
+}
+
+function libraryBookButton(book)
 {
 	const card = document.createElement('button');
 	card.type = 'button';
@@ -357,6 +406,59 @@ function libraryCard(book)
 	card.title = [book.title || book.fileName, book.creator,
 		(book.subFolder ? book.subFolder + '/' : '') + book.fileName].filter(Boolean).join('\n');
 	return card;
+}
+
+/** 「続きを取る」を頼み、終わるまで状態を問い合わせる */
+async function startLibraryUpdate(book)
+{
+	const current = libraryUpdates.get(book.id);
+	if (current && (current.state === 'queued' || current.state === 'running')) return;
+	setLibraryUpdate(book.id, {state: 'queued', message: ''});
+	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/update', {method: 'POST', cache: 'no-store'});
+	let body = null;
+	try { body = await response.json(); } catch (e) { /* 本文の無い応答 */ }
+	if (!response.ok || !body || !body.job) {
+		throw new Error((body && body.error) ? body.error : 'HTTP ' + response.status);
+	}
+	setLibraryUpdate(book.id, {state: body.state, message: body.message || ''});
+	for (;;) {
+		await new Promise(resolve => setTimeout(resolve, LIBRARY_UPDATE_POLL));
+		const job = await getJson('api/jobs/' + encodeURIComponent(body.job));
+		setLibraryUpdate(book.id, {state: job.state, message: job.message || ''});
+		if (job.state !== 'queued' && job.state !== 'running') {
+			//上書きした本の題・表紙を出し直す。開いている本は、開き直すまで前の版のまま
+			if (job.state === 'done') await loadLibrary();
+			return;
+		}
+	}
+}
+
+/** 状態を覚えて、見えているカードに出す */
+function setLibraryUpdate(bookId, update)
+{
+	libraryUpdates.set(bookId, update);
+	const slot = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(bookId) + '"]');
+	if (slot) paintLibraryUpdate(slot, update);
+}
+
+function paintLibraryUpdate(slot, update)
+{
+	const status = slot.querySelector('.book-update-status');
+	const button = slot.querySelector('.book-update');
+	if (!status || !button) return;
+	const busy = update && (update.state === 'queued' || update.state === 'running');
+	button.disabled = !!busy;
+	slot.classList.toggle('updating', !!busy);
+	if (!update) {
+		status.textContent = '';
+		return;
+	}
+	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
+	if (update.state === 'failed' && update.message) text += ': ' + update.message;
+	if (update.state === 'done' && slot.dataset.bookId === state.bookId) text += ' (開き直すと新しい版になります)';
+	status.textContent = text;
+	status.title = update.message || '';
+	status.dataset.state = update.state;
 }
 
 /** 表紙が無い本の代わりに置く箱。書名の 1 文字目を出す */

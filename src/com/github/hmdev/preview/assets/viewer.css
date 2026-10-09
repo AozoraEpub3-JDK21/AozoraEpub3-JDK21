@@ -519,6 +519,50 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	cursor: pointer;
 }
 
+/* 本 1 冊の枠。カードの上に「続きを取る」のボタンを重ね、下に進み具合を出す */
+.book-slot {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.book-slot > .book-card { flex: 1 1 auto; }
+
+.book-update {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	color: var(--accent);
+	font: inherit;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: 0 1px 4px var(--shadow);
+	opacity: 0.85;
+}
+.book-update:hover, .book-update:focus-visible { opacity: 1; border-color: var(--accent); }
+.book-update:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.book-update:disabled { cursor: progress; opacity: 0.6; }
+.book-slot.updating .book-update { animation: book-update-spin 1.2s linear infinite; }
+@keyframes book-update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .book-slot.updating .book-update { animation: none; } }
+
+.book-update-status {
+	min-height: 1em;
+	font-size: 11px;
+	color: var(--text-sub);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.book-update-status[data-state="failed"] { color: #b3412f; }
+
 .book-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--shadow); }
 .book-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .book-card.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
