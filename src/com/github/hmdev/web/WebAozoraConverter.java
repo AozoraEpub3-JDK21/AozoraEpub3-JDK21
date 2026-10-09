@@ -938,6 +938,15 @@ public class WebAozoraConverter
 						docToAozoraText(bw, doc, false, null, null, null);
 					} else {
 						LogAppender.println("一覧のURLが取得できませんでした");
+						//本棚の更新で、前は話があった作品の一覧が空になった（全部消された、など）。話数が減ったとして止め、txt を戻す（PR の手元の codex）
+						if (this.updateGuard) {
+							this.guardStopped = true;
+							int previous = ledger != null ? ledger.episodes : -1;
+							if (previous > 0) {
+								this.shrunkFrom = previous;
+								this.shrunkTo = 0;
+							}
+						}
 						return null;
 					}
 				}

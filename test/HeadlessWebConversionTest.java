@@ -45,6 +45,8 @@ public class HeadlessWebConversionTest {
 	private volatile String upDate = "2026/01/01";
 	/** 作品の更新日（null なら一覧に出さない。update.txt の 1 行目になる） */
 	private volatile String workUpdate = null;
+	/** 0 話のとき、一覧のページに本文（告知）を置くか */
+	private volatile boolean noticeWhenEmpty = true;
 
 	@After
 	public void tearDown() {
@@ -86,7 +88,7 @@ public class HeadlessWebConversionTest {
 					list.append("<li><a href=\"/ep/").append(i).append("/\">第").append(i).append("話</a><span class=\"up\">").append(upDate).append("</span></li>");
 				}
 				//0 話のときは、一覧のページに本文だけがある（告知だけ残して話を消した、など。変換器は 1 ページの作品として読む）
-				String notice = episodes == 0 ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
+				String notice = episodes == 0 && noticeWhenEmpty ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
 				String work = workUpdate != null ? "<p class=\"workup\">" + workUpdate + "</p>" : "";
 				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
@@ -521,6 +523,22 @@ public class HeadlessWebConversionTest {
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, r.stop());
 		assertTrue(r.message(), r.message().contains("3 → 0 話"));
 		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
+	}
+
+	/** 一覧のページが話も本文も無い空のページになったときも、話数が減ったとして止め、txt を戻す（PR の手元の codex） */
+	@Test
+	public void anEmptyPageStopsTheUpdateAsFewerEpisodes() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		File txt = java.util.Arrays.stream(ledgerDir().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"))).findFirst().orElseThrow();
+		byte[] before = Files.readAllBytes(txt.toPath());
+		episodes = 0;
+		noticeWhenEmpty = false;
+		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
+		assertEquals(HeadlessWebConversion.STOP_SHRUNK, r.stop());
+		assertTrue(r.message(), r.message().contains("3 → 0 話"));
+		org.junit.Assert.assertArrayEquals("txt は前のまま", before, Files.readAllBytes(txt.toPath()));
 	}
 
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */
