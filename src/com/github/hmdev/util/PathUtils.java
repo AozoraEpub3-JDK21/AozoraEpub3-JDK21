@@ -131,9 +131,7 @@ public class PathUtils
 	{
 		int budget = maxBytes - utf8Length(ext);
 		if (utf8Length(baseName) <= budget) return baseName;
-		CRC32 crc = new CRC32();
-		crc.update(baseName.getBytes(StandardCharsets.UTF_8));
-		String mark = String.format("~%06x", crc.getValue() & 0xffffff);
+		String mark = cutMark(baseName);
 		budget -= mark.length();
 		StringBuilder sb = new StringBuilder();
 		int bytes = 0;
@@ -145,9 +143,49 @@ public class PathUtils
 			bytes += len;
 			i += Character.charCount(cp);
 		}
+		return trimCutEnd(sb) + mark;
+	}
+
+	/** 切った名前に付ける印の長さ（"~" と 16 進 6 桁） */
+	public static final int CUT_MARK_LENGTH = 7;
+
+	/**
+	 * 名前（拡張子なし）が maxChars <b>文字</b>（UTF-16 の char の数。Windows の MAX_PATH の数え方）に収まるよう後ろを切り、
+	 * {@link #fitFileName(String, String, int)} と同じ印を付ける。文字の途中（サロゲートペアの間）では切らず、
+	 * 切った後の末尾の空白とドットは落とす。収まっていれば、そのまま返す。
+	 * <p>パス全体の長さで切ると、末尾だけ違う題（上・下など）が同じ名前になり、あとの本が前の本を上書きする（internal #16）。</p>
+	 * @param maxChars 印を含めた上限。{@link #CUT_MARK_LENGTH} より大きいこと
+	 */
+	public static String fitFileNameChars(String baseName, int maxChars)
+	{
+		if (baseName.length() <= maxChars) return baseName;
+		String mark = cutMark(baseName);
+		int budget = maxChars - mark.length();
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < baseName.length(); ) {
+			int cp = baseName.codePointAt(i);
+			int len = Character.charCount(cp);
+			if (sb.length() + len > budget) break;
+			sb.appendCodePoint(cp);
+			i += len;
+		}
+		return trimCutEnd(sb) + mark;
+	}
+
+	/** 元の名前から作る印。同じ名前からは毎回同じ印になる */
+	static String cutMark(String baseName)
+	{
+		CRC32 crc = new CRC32();
+		crc.update(baseName.getBytes(StandardCharsets.UTF_8));
+		return String.format("~%06x", crc.getValue() & 0xffffff);
+	}
+
+	/** 切った後の末尾の空白とドットを落とす（Windows は末尾のドット・空白を落として別の名前にするため） */
+	static String trimCutEnd(StringBuilder sb)
+	{
 		int end = sb.length();
 		while (end > 0 && (sb.charAt(end-1) == ' ' || sb.charAt(end-1) == '.' || sb.charAt(end-1) == '\u3000')) end--;
-		return sb.substring(0, end) + mark;
+		return sb.substring(0, end);
 	}
 
 	static int utf8Length(String s)
