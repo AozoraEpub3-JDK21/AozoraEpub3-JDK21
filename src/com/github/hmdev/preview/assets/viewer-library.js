@@ -42,6 +42,12 @@ let libraryOpening = false;
  */
 const libraryUpdates = new Map();
 
+/**
+ * 開いている間に「続きを取る」で上書きされた本の ID。開いている本のカードは普段は本棚を閉じるだけだが、
+ * ここにある本は読み込み直す (サーバは EPUB の大きさ・更新日時が変わると展開し直す)
+ */
+const libraryStale = new Set();
+
 /** 仕事の状態を問い合わせる間隔 (ミリ秒) */
 const LIBRARY_UPDATE_POLL = 2000;
 
@@ -426,8 +432,11 @@ async function startLibraryUpdate(book)
 		const job = await getJson('api/jobs/' + encodeURIComponent(body.job));
 		setLibraryUpdate(book.id, {state: job.state, message: job.message || ''});
 		if (job.state !== 'queued' && job.state !== 'running') {
-			//上書きした本の題・表紙を出し直す。開いている本は、開き直すまで前の版のまま
-			if (job.state === 'done') await loadLibrary();
+			//上書きした本の題・表紙を出し直す。開いている本は、カードを押すまで前の版のまま
+			if (job.state === 'done') {
+				if (book.id === state.bookId) libraryStale.add(book.id);
+				await loadLibrary();
+			}
 			return;
 		}
 	}
@@ -455,7 +464,7 @@ function paintLibraryUpdate(slot, update)
 	}
 	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
 	if (update.state === 'failed' && update.message) text += ': ' + update.message;
-	if (update.state === 'done' && slot.dataset.bookId === state.bookId) text += ' (開き直すと新しい版になります)';
+	if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
 	status.title = update.message || '';
 	status.dataset.state = update.state;
@@ -486,13 +495,14 @@ function coverPlaceholder(book)
 async function openLibraryBook(bookId)
 {
 	if (!bookId || libraryOpening) return;
-	if (bookId === state.bookId) {
+	if (bookId === state.bookId && !libraryStale.has(bookId)) {
 		closeLibrary();
 		return;
 	}
 	libraryOpening = true;
 	try {
 		await switchBook(bookId);
+		libraryStale.delete(bookId);
 	} finally {
 		libraryOpening = false;
 	}
