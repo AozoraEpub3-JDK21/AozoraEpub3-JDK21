@@ -33,6 +33,7 @@ public class WebAozoraConverterLongFileNameTest {
 	private String registeredFqdn;
 
 	private static final String LONG_TITLE = "【書籍化】" + "長い題".repeat(35);
+	private volatile String title = LONG_TITLE;
 
 	@After
 	public void tearDown() {
@@ -53,7 +54,7 @@ public class WebAozoraConverterLongFileNameTest {
 		server.createContext("/", exchange -> {
 			String path = exchange.getRequestURI().getPath();
 			if (path.equals("/novel/")) {
-				respond(exchange, 200, "<html><body><h1>" + LONG_TITLE + "</h1><p class=\"author\">著者</p><ul class=\"list\">"
+				respond(exchange, 200, "<html><body><h1>" + title + "</h1><p class=\"author\">著者</p><ul class=\"list\">"
 					+ "<li><a href=\"/ep/1/\">第1話</a></li></ul></body></html>");
 			} else if (path.equals("/ep/1/")) {
 				respond(exchange, 200, "<html><body><h2>第1話</h2><div class=\"body\"><p>一話目</p></div></body></html>");
@@ -65,9 +66,7 @@ public class WebAozoraConverterLongFileNameTest {
 		return "http://127.0.0.1:" + server.getAddress().getPort();
 	}
 
-	@Test
-	public void aLongTitleMakesATxtWithin255Bytes() throws Exception {
-		String base = serve();
+	private WebAozoraConverter converterFor(String base) throws Exception {
 		String fqdn = base.substring(base.indexOf("//") + 2);
 		File web = tempFolder.newFolder("web");
 		File siteDir = new File(web, fqdn);
@@ -83,6 +82,13 @@ public class WebAozoraConverterLongFileNameTest {
 		WebAozoraConverter converter = WebAozoraConverter.createWebAozoraConverter(base + "/novel/", web);
 		assertNotNull(converter);
 		registeredFqdn = fqdn;
+		return converter;
+	}
+
+	@Test
+	public void aLongTitleMakesATxtWithin255Bytes() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = converterFor(base);
 
 		File txt = converter.convertToAozoraText(base + "/novel/", tempFolder.newFolder("cache"), 0, 0f, false, false, false, 0);
 		assertNotNull("変換できる", txt);
@@ -94,5 +100,37 @@ public class WebAozoraConverterLongFileNameTest {
 			assertTrue("名前は 255 バイト以内: " + bytes, bytes <= 255);
 			assertTrue(txt.getName(), txt.getName().matches("\\[著者\\] 【書籍化】長い題.*~[0-9a-f]{6}\\.txt"));
 		}
+	}
+
+	/**
+	 * 切った名前の場所に、出力先の外を指すリンクがあっても、外のファイルを書き潰さない（PR の codex の指摘）。
+	 * ASCII 300 文字の名前は mac・Linux のどちらでも作れないので、どちらでも切られる
+	 */
+	@Test
+	public void aCutNameThatIsALinkOutsideIsNotFollowed() throws Exception {
+		title = "a".repeat(300);
+		String base = serve();
+		WebAozoraConverter converter = converterFor(base);
+		File cache = tempFolder.newFolder("cache");
+		File outside = tempFolder.newFile("outside.txt");
+		Files.write(outside.toPath(), "外のファイル".getBytes(StandardCharsets.UTF_8));
+
+		// 作品のフォルダに、切った名前の txt として外を指すリンクを置く
+		File workDir = new File(cache, base.substring(base.indexOf("//") + 2).replace(':', '_') + "/novel");
+		assertTrue(workDir.mkdirs());
+		String cutName = com.github.hmdev.util.PathUtils.fitFileName("[著者] " + title, ".txt") + ".txt";
+		try {
+			Files.createSymbolicLink(new File(workDir, cutName).toPath(), outside.toPath());
+		} catch (UnsupportedOperationException | IOException e) {
+			Assume.assumeNoException("リンクを作れない環境のためスキップ", e);
+		}
+
+		try {
+			converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		} catch (IOException e) {
+			// 出力先の外として断られる
+		}
+		assertEquals("外のファイルは書き換わらない", "外のファイル",
+			new String(Files.readAllBytes(outside.toPath()), StandardCharsets.UTF_8));
 	}
 }

@@ -74,14 +74,22 @@ public class PathUtils
 	}
 
 	/**
-	 * name と同じ UTF-8 のバイト数で、先頭の 1 文字を "." と "_" に替えた名前。
-	 * name が "." で始まるときは "_" に替える（"." のままだと本物の名前と同じになる）
+	 * name と UTF-8 のバイト数も文字数（UTF-16）も同じで、先頭の 1 文字だけ違う名前。
+	 * バイトで数える場所（Linux）でも文字で数える場所（Windows・mac）でも、本物の名前と同じ長さで試せる。
+	 * 先頭が ASCII なら "."（隠しファイル）にする
 	 */
 	static String probeName(String name)
 	{
 		int first = name.codePointAt(0);
-		String head = first == '.' ? "_" : "." + "_".repeat(utf8Length(first) - 1);
-		return head + name.substring(Character.charCount(first));
+		int[] candidates;
+		switch (utf8Length(first)) {
+			case 1: candidates = new int[]{ '.', '_' }; break;
+			case 2: candidates = new int[]{ 0xDF, 0xF0 }; break;          //ß ð
+			case 3: candidates = new int[]{ 0x3007, 0x3006 }; break;      //〇 〆
+			default: candidates = new int[]{ 0x20000, 0x20001 }; break;  //𠀀 𠀁
+		}
+		int head = candidates[0] != first ? candidates[0] : candidates[1];
+		return new String(Character.toChars(head)) + name.substring(Character.charCount(first));
 	}
 
 	/** 作れたら消す（消せなくても作れたことに変わりはない） */

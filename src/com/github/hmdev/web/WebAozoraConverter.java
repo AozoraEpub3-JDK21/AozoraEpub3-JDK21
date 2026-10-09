@@ -717,8 +717,11 @@ public class WebAozoraConverter
 		File checkedFile = safeDstFile(fileName);
 		String leaf = checkedFile.getName();
 		String txtExt = leaf.substring(leaf.length() - 4);
-		File txtFile = new File(checkedFile.getParentFile(),
+		File fittedFile = new File(checkedFile.getParentFile(),
 			PathUtils.fitFileNameIn(checkedFile.getParentFile(), leaf.substring(0, leaf.length() - 4), txtExt) + txtExt);
+		//切った名前も出力先の中かを確かめ直す（その名前の場所に、外を指すリンクが置かれているかもしれない）
+		File txtFile = fittedFile.equals(checkedFile) ? checkedFile
+			: safeDstFile(Path.of(this.dstPath).relativize(fittedFile.toPath()).toString());
 		//表紙画像（narou.rb互換: cover.jpg で保存）
 		File coverImageFile = new File(this.dstPath+"cover.jpg");
 		//更新情報格納先

@@ -100,17 +100,16 @@ public class PathUtilsFitFileNameTest {
 	}
 
 	@Test
-	public void theProbeNameHasTheSameByteLengthAndIsHidden() {
-		for (String name : new String[]{ "[著者] 題.epub", "題名.txt", "𠮷題.txt" }) {
+	public void theProbeNameHasTheSameLengthInBytesAndCharacters() {
+		// 先頭が ASCII・日本語・2 バイトの字・サロゲートペア・"." のそれぞれ（"." で始まる名前は PR の codex の指摘）
+		for (String name : new String[]{ "[著者] 題.epub", "題名.txt", "é題.txt", "𠮷題.txt", ".題名.txt", "〇題.txt" }) {
 			String probe = PathUtils.probeName(name);
-			assertTrue(probe, probe.startsWith("."));
-			assertEquals(name, bytes(name), bytes(probe));
 			assertNotEquals(name, probe);
+			assertEquals("バイト数: " + name, bytes(name), bytes(probe));
+			assertEquals("文字数（Windows・mac の数え方）: " + name, name.length(), probe.length());
+			assertEquals("先頭の 1 文字だけ違う: " + name, name.substring(name.offsetByCodePoints(0, 1)), probe.substring(probe.offsetByCodePoints(0, 1)));
 		}
-		// "." で始まる名前でも、本物の名前とは別の名前で試す（PR の codex の指摘）
-		String dotted = ".題名.txt";
-		assertNotEquals(dotted, PathUtils.probeName(dotted));
-		assertEquals(bytes(dotted), bytes(PathUtils.probeName(dotted)));
+		assertTrue("先頭が ASCII なら隠しファイル", PathUtils.probeName("[著者] 題.epub").startsWith("."));
 	}
 
 	@Test
