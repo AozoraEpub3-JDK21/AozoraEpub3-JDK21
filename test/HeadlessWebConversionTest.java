@@ -43,6 +43,8 @@ public class HeadlessWebConversionTest {
 	private volatile int page2Status = 200;
 	/** 目次に出す各話の更新日（改稿を作るときに変える） */
 	private volatile String upDate = "2026/01/01";
+	/** 作品の更新日（null なら一覧に出さない。update.txt の 1 行目になる） */
+	private volatile String workUpdate = null;
 
 	@After
 	public void tearDown() {
@@ -85,7 +87,8 @@ public class HeadlessWebConversionTest {
 				}
 				//0 話のときは、一覧のページに本文だけがある（告知だけ残して話を消した、など。変換器は 1 ページの作品として読む）
 				String notice = episodes == 0 ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
-				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
+				String work = workUpdate != null ? "<p class=\"workup\">" + workUpdate + "</p>" : "";
+				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
 				String n = path.replaceAll("\\D", "");
 				respond(exchange, "<html><body><h2>第" + n + "話</h2><div class=\"body\"><p>" + n + "話目</p></div></body></html>");
@@ -99,7 +102,7 @@ public class HeadlessWebConversionTest {
 		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
 		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
 			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a:not(.pager)", "SUB_UPDATE\t.list .up",
-			"PAGE_URL\ta.pager:-1\t(\\?p=)\\d+\\t(\\d+)\t$1$2", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
+			"UPDATE\t.workup:0", "PAGE_URL\ta.pager:-1\t(\\?p=)\\d+\\t(\\d+)\t$1$2", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
 			.getBytes(StandardCharsets.UTF_8));
 		//変換器は基のフォルダの注記の辞書（chuki_*.txt）を読む
 		File repo = VelocityTestUtils.templateDir().getParent().toFile();
@@ -348,6 +351,7 @@ public class HeadlessWebConversionTest {
 	public void aStoppedUpdateLeavesTheCachedTextAlone() throws Exception {
 		String basePath = serveAndBase();
 		episodes = 3;
+		workUpdate = "2026/01/01 更新";
 		File book = shelfBook(basePath, tempFolder.newFolder("out"));
 		File txt = java.util.Arrays.stream(ledgerDir().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"))).findFirst().orElseThrow();
 		byte[] before = Files.readAllBytes(txt.toPath());
@@ -355,8 +359,9 @@ public class HeadlessWebConversionTest {
 		assertTrue("この治具は update.txt を作る", update.isFile());
 		byte[] updateBefore = Files.readAllBytes(update.toPath());
 		episodes = 2;
-		//残った話は改稿された（止めずに進めば、update.txt に新しい日付が書かれる）
+		//作品も残った話も更新された（止めずに進めば、update.txt に新しい日付が書かれる）
 		upDate = "2026/02/02";
+		workUpdate = "2026/02/02 更新";
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
 		org.junit.Assert.assertArrayEquals("txt は前のまま", before, Files.readAllBytes(txt.toPath()));
 		org.junit.Assert.assertArrayEquals("update.txt も前のまま", updateBefore, Files.readAllBytes(update.toPath()));
