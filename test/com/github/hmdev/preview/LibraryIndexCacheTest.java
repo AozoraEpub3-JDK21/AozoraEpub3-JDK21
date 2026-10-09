@@ -400,4 +400,39 @@ public class LibraryIndexCacheTest
 		assertFalse("古いものは消す", Files.exists(stale));
 		assertTrue("書いている最中かもしれない新しいものは残す", Files.exists(fresh));
 	}
+
+	/** 前のファイルが無ければ権限を広げない（一時ファイルの 0600 のまま。PR #117 の codex） */
+	@Test
+	public void aNewIndexIsNotMadeWiderThanTheTemporary() throws Exception
+	{
+		Path file = cacheFile();
+		LibraryIndexCache cache = new LibraryIndexCache(file);
+		cache.update(List.of(new LibraryEntry(temp.getRoot().toPath().resolve("a.epub"), 1L, 2L, "書名", "著者", null, null)));
+		cache.save();
+		try {
+			assertEquals(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(file));
+		} catch (UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("POSIX の権限が無い環境", e);
+		}
+	}
+
+	/** symlink の索引の一時ファイルは、たどった先の隣にできるので、そこを掃除する（PR #117 の codex） */
+	@Test
+	public void staleTemporariesBesideALinkTargetAreSwept() throws Exception
+	{
+		Path realDir = temp.newFolder("realdir").toPath();
+		Path real = realDir.resolve("real.tsv");
+		Files.writeString(real, LibraryIndexCache.HEADER + "\n", StandardCharsets.UTF_8);
+		Path link = temp.getRoot().toPath().resolve("link.tsv");
+		try {
+			Files.createSymbolicLink(link, real);
+		} catch (UnsupportedOperationException | java.io.IOException e) {
+			org.junit.Assume.assumeNoException("リンクを作れない環境", e);
+		}
+		Path stale = realDir.resolve("real.tsv.123" + LibraryIndexCache.TMP_SUFFIX);
+		Files.writeString(stale, "x", StandardCharsets.UTF_8);
+		Files.setLastModifiedTime(stale, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 2L * 60 * 60 * 1000));
+		new LibraryIndexCache(link).load();
+		assertFalse(Files.exists(stale));
+	}
 }

@@ -134,6 +134,11 @@ public class LibraryScannerTest
 		assertNull("ありえないポート", LibraryScanner.sanitizeSource("https://host:99999/"));
 		assertEquals("https://host:65535/", LibraryScanner.sanitizeSource("https://host:65535/"));
 		assertNull("対になっていないサロゲート", LibraryScanner.sanitizeSource("https://example.com/\uD800x"));
+		// PR #117 の codex
+		assertNull("%2e のホスト", LibraryScanner.sanitizeSource("https://%2e/x"));
+		assertNull("% を含むホスト", LibraryScanner.sanitizeSource("https://exa%EF%BC%8Emple.com/"));
+		assertEquals("前の 0 のあるポート", "https://example.com:000080/", LibraryScanner.sanitizeSource("https://example.com:000080/"));
+		assertNull("前の 0 を除いても大きすぎるポート", LibraryScanner.sanitizeSource("https://example.com:0070000/"));
 	}
 
 	@Test

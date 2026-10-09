@@ -217,25 +217,30 @@ public class LibraryIndexCache
 	/** 一時ファイルの末尾 */
 	static final String TMP_SUFFIX = ".tmp";
 
-	/** 前のファイルの POSIX の権限を写す。前のファイルが無ければ、普通に作ったときと同じ rw-r--r-- にする */
+	/**
+	 * 前のファイルの POSIX の権限を写す。前のファイルが無ければ触らない（一時ファイルの 0600 のまま。
+	 * 決め打ちで広げると、厳しい umask を飛び越える。PR #117 の codex）
+	 */
 	private static void copyPermissions(Path from, Path to)
 	{
 		try {
-			java.util.Set<java.nio.file.attribute.PosixFilePermission> perms = Files.exists(from)
-				? Files.getPosixFilePermissions(from)
-				: java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--");
-			Files.setPosixFilePermissions(to, perms);
+			if (!Files.exists(from)) return;
+			Files.setPosixFilePermissions(to, Files.getPosixFilePermissions(from));
 		} catch (UnsupportedOperationException | IOException e) {
 			/* 意図的: POSIX でない（Windows）なら何もしない */
 		}
 	}
 
-	/** 前に落ちたプロセスが残した一時ファイル（1 時間より古いもの）を消す */
+	/** 前に落ちたプロセスが残した一時ファイル（1 時間より古いもの）を消す。symlink なら、たどった先の隣（一時ファイルを作る所） */
 	private void sweepStaleTemporaries()
 	{
-		Path dir = this.file.toAbsolutePath().getParent();
+		Path target = this.file;
+		if (Files.isSymbolicLink(target)) {
+			try { target = target.toRealPath(); } catch (IOException e) { /* 意図的: 切れたリンクはリンクの隣 */ }
+		}
+		Path dir = target.toAbsolutePath().getParent();
 		if (dir == null || !Files.isDirectory(dir)) return;
-		String prefix = this.file.getFileName() + ".";
+		String prefix = target.getFileName() + ".";
 		long limit = System.currentTimeMillis() - 60L * 60 * 1000;
 		try (java.util.stream.Stream<Path> files = Files.list(dir)) {
 			files.filter(p -> {

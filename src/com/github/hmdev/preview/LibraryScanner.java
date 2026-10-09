@@ -270,10 +270,14 @@ public class LibraryScanner
 			}
 		}
 		if (host.isEmpty() || host.equals("[]") || host.indexOf(':') >= 0 && !host.startsWith("[")) return null;
-		//点だけのホスト（https://./x）も捨てる
-		if (host.replace(".", "").isEmpty()) return null;
-		if (port != null && (port.isEmpty() || !port.chars().allMatch(c -> c >= '0' && c <= '9') || port.length() > 5
-			|| Integer.parseInt(port) > 65535)) return null;
+		//点だけのホスト（https://./x）も捨てる。% を含むホストも（%2e は WHATWG の URL で . になる。PR #117 の codex）
+		if (host.replace(".", "").isEmpty() || host.indexOf('%') >= 0) return null;
+		//ポートは数字だけで 65535 以下。前の 0 は許す（:000080 は 80。PR #117 の codex）
+		if (port != null) {
+			if (port.isEmpty() || !port.chars().allMatch(c -> c >= '0' && c <= '9')) return null;
+			String digits = port.replaceFirst("^0+(?=.)", "");
+			if (digits.length() > 5 || Integer.parseInt(digits) > 65535) return null;
+		}
 		return source;
 	}
 
