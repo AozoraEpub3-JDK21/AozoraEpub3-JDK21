@@ -896,7 +896,8 @@ public class AozoraEpub3
 		if (fromTitle) maxChars = Math.min(maxChars, 250);
 		//書くのは実パス（symlink・junction・8.3 形式の短い名前を解いた先）なので、長さもそちらで数える。
 		//見かけのパスで数えると、macOS の /var → /private/var のような出力先で上限を超えていた（#114 のゲート2）
-		int prefixLen = PathUtils.realPath(dstPath.toPath()).toString().length() + 1;
+		String realDst = PathUtils.realPath(dstPath.toPath()).toString();
+		int prefixLen = realDst.length() + 1;
 		String nameOnly = outFileName.substring(dstPath.getAbsolutePath().length() + 1);
 		if (prefixLen + nameOnly.length() > maxChars) {
 			//名前の側だけを切って印を付ける（末尾だけ違う題が同じ名前になって上書きしないように。internal #16）
@@ -906,8 +907,11 @@ public class AozoraEpub3
 			} else if (isWindows()) {
 				//出力先が深すぎて、印（7 文字）の入る余地が無い。黙って切ると、先頭の数文字が同じ題どうしが
 				//上書きし合うので、変換を断る（2026-10-09 利用者決定。internal #16）
+				//長さは実パスで数えるので、リンク越しに渡されたときは実際の場所も出す（何が長いのか分かるように。#114 の win2）
+				String where = dstPath.getAbsolutePath();
+				if (!where.equals(realDst)) where += "（実際の場所: " + realDst + "、" + realDst.length() + " 文字）";
 				throw new IOException("出力先のフォルダが深すぎて、ファイル名を付けられません（フォルダのパスは "
-					+ (maxChars - PathUtils.CUT_MARK_LENGTH - 1) + " 文字以内にしてください）: " + dstPath.getAbsolutePath());
+					+ (maxChars - PathUtils.CUT_MARK_LENGTH - 1) + " 文字以内にしてください）: " + where);
 			}
 			//mac・Linux は MAX_PATH が無く長いパスを作れるので、印の入る余地が無いときは切らずにそのまま書く
 			//（断ると、前は変換できていた深いフォルダへの変換が止まる。2026-10-09 利用者決定で、断るのは Windows だけ）
