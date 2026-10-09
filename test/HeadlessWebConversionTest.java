@@ -560,6 +560,21 @@ public class HeadlessWebConversionTest {
 		assertTrue("3 話にした本は 4 話で更新できる", guardedUpdate(basePath, a, false).ok());
 	}
 
+	/** 違う時期に作った本は、それぞれ作ったときの話数と比べる（作品の最大と比べると、少ない本が誤って止まる。PR #120 の codex） */
+	@Test
+	public void eachBookIsComparedWithItsOwnCountFromWhenItWasMade() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File a = shelfBook(basePath, tempFolder.newFolder("a"));
+		episodes = 5;
+		File b = shelfBook(basePath, tempFolder.newFolder("b"));
+		episodes = 4;
+		assertTrue("3 話の本は 4 話で更新できる", guardedUpdate(basePath, a, false).ok());
+		assertEquals("5 話の本は 4 話で上書きしない", HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, b, false).stop());
+		assertEquals(4, ledgerOf().episodesFor(a));
+		assertEquals(5, ledgerOf().episodesFor(b));
+	}
+
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */
 	@Test
 	public void aFailedUpdateKeepsThePreviousEpisodeCount() throws Exception {

@@ -150,9 +150,9 @@ public class WebAozoraConverter
 	/** 結果: 台帳に今の話数を書いたか、と書く前の台帳（本棚の更新で EPUB を作れなかったとき、話数を元に戻すため） */
 	public boolean episodesRecorded = false;
 	public BookLedger ledgerBeforeEpisodes = null;
-	/** txt を作り終えたら台帳に書く、作品の話数と本の話数。書かないなら -1 */
+	/** txt を作り終えたら台帳に書く、作品の話数（上げるだけ）と今の目次の話数。書かないなら -1 */
 	private int pendingEpisodes = -1;
-	private int pendingBookEpisodes = -1;
+	private int pendingLastEpisodes = -1;
 	/** 本棚の更新の守りで止めた。止めたら txt と update.txt を変換の前に戻す */
 	private boolean guardStopped = false;
 	//更新有りフラグ
@@ -548,7 +548,7 @@ public class WebAozoraConverter
 		this.episodesRecorded = false;
 		this.ledgerBeforeEpisodes = null;
 		this.pendingEpisodes = -1;
-		this.pendingBookEpisodes = -1;
+		this.pendingLastEpisodes = -1;
 		this.guardStopped = false;
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
@@ -1104,11 +1104,11 @@ public class WebAozoraConverter
 			//1 ページの作品（話の一覧が無い）は数えない
 			//守りの無い変換（GUI・CLI）は話数を上げるだけで下げない。下げると、本棚の本の守りが外れる
 			//（同じ作品を GUI で別のフォルダに変換しただけで、本棚の本が減った話数で上書きされる。PR のゲート2）
-			//本棚の更新は、その本の話数を書く（減ったまま更新も）。作品の話数は、どの変換でも上げるだけ
+			//作品の話数は、どの変換でも上げるだけ。今の話数は、本を書き終えたときにその本の話数になる（BookLedger.recordBookEpisodes）
 			int now = chapterHrefs.size();
 			if (ledger != null && (now > 0 || previous > 0)) {
-				if (bookGuard && previous != now) this.pendingBookEpisodes = now;
 				if (now > ledger.episodes) this.pendingEpisodes = now;
+				if (now != ledger.lastEpisodes) this.pendingLastEpisodes = now;
 			}
 			boolean acceptedFewer = this.updateGuard && this.allowFewerEpisodes && previous > now;
 
@@ -1450,13 +1450,13 @@ public class WebAozoraConverter
 			// エラーが発生してもファイルは返す（ファイナライズ処理は付加的な処理のため）
 		}
 
-		if (this.pendingEpisodes >= 0 || this.pendingBookEpisodes >= 0) {
+		if (this.pendingEpisodes >= 0 || this.pendingLastEpisodes >= 0) {
 			//台帳は読み直す（変換の途中で名前などが書き足されていることがある）
 			BookLedger current = BookLedger.load(workDir);
 			if (current != null) {
 				BookLedger next = current;
 				if (this.pendingEpisodes >= 0) next = next.withEpisodes(this.pendingEpisodes);
-				if (this.pendingBookEpisodes >= 0) next = next.withBookEpisodes(this.guardBook, this.pendingBookEpisodes);
+				if (this.pendingLastEpisodes >= 0) next = next.withLastEpisodes(this.pendingLastEpisodes);
 				try {
 					next.save(workDir);
 					this.ledgerBeforeEpisodes = current;

@@ -274,6 +274,8 @@ public class HeadlessWebConversion
 			} catch (java.nio.file.AtomicMoveNotSupportedException e) {
 				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
+			//置き換えた本の話数を記録する（書き出しは一時ファイルなので convertFile は記録しない）
+			com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
 			return new Result(true, false, outFile, "変換しました");
 		} finally {
 			java.nio.file.Files.deleteIfExists(tmp.toPath());
