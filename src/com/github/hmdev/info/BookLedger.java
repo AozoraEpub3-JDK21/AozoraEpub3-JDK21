@@ -41,6 +41,8 @@ public final class BookLedger
 	static final String KEY_TEXT_BASE_NAME = "textBaseName";
 	static final String KEY_OUTPUT_BASE_NAME = "outputBaseName";
 	static final String KEY_EPISODES = "episodes";
+	/** 本ごとの話数の鍵の頭（後ろは本のパスから作る印） */
+	static final String KEY_BOOK_EPISODES = "episodes.";
 
 	/** 掲載元の URL（最初に取ったときのもの） */
 	public final String sourceUrl;
@@ -50,21 +52,31 @@ public final class BookLedger
 	public final String textBaseName;
 	/** EPUB の名前（拡張子なし）。最初に「出力ファイル名に表題利用」で変換したときに記録する。まだなら null */
 	public final String outputBaseName;
-	/** 前に取ったときの目次の話数。本棚の更新で話数が減ったのを見つけるのに使う（internal #11）。まだなら -1 */
+	/**
+	 * 作品の目次でこれまでに見た話数（どの変換も上げるだけ）。本棚の本ごとの記録が無いとき、本棚の更新はこれと比べる
+	 * （internal #11）。まだなら -1
+	 */
 	public final int episodes;
+	/**
+	 * 本棚の本ごとの話数（鍵は本のパスの印）。同じ作品の本が本棚に 2 冊あっても、片方で「減ったまま更新」したのが
+	 * もう片方の守りを外さないように（PR #120 の codex）
+	 */
+	final java.util.Map<String, Integer> bookEpisodes;
 
 	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName)
 	{
-		this(sourceUrl, identifier, textBaseName, outputBaseName, -1);
+		this(sourceUrl, identifier, textBaseName, outputBaseName, -1, java.util.Map.of());
 	}
 
-	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName, int episodes)
+	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName, int episodes,
+		java.util.Map<String, Integer> bookEpisodes)
 	{
 		this.sourceUrl = sourceUrl;
 		this.identifier = identifier;
 		this.textBaseName = textBaseName;
 		this.outputBaseName = outputBaseName;
 		this.episodes = episodes;
+		this.bookEpisodes = java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(bookEpisodes));
 	}
 
 	/** 新しい作品の台帳。identifier は URL から決める */
@@ -75,17 +87,51 @@ public final class BookLedger
 
 	public BookLedger withTextBaseName(String textBaseName)
 	{
-		return new BookLedger(this.sourceUrl, this.identifier, textBaseName, this.outputBaseName, this.episodes);
+		return new BookLedger(this.sourceUrl, this.identifier, textBaseName, this.outputBaseName, this.episodes, this.bookEpisodes);
 	}
 
 	public BookLedger withOutputBaseName(String outputBaseName)
 	{
-		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, outputBaseName, this.episodes);
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, outputBaseName, this.episodes, this.bookEpisodes);
 	}
 
 	public BookLedger withEpisodes(int episodes)
 	{
-		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, episodes);
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, episodes, this.bookEpisodes);
+	}
+
+	/** 本棚の本の話数を記録する（-1 なら記録を消す） */
+	public BookLedger withBookEpisodes(File epub, int episodes)
+	{
+		java.util.Map<String, Integer> map = new java.util.TreeMap<>(this.bookEpisodes);
+		if (episodes < 0) map.remove(bookKey(epub));
+		else map.put(bookKey(epub), episodes);
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, this.episodes, map);
+	}
+
+	/** 話数の記録（作品の話数と本ごとの話数）だけを other のものにする（本棚の更新に失敗したとき、前に戻すため） */
+	public BookLedger withEpisodeCountsOf(BookLedger other)
+	{
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, other.episodes, other.bookEpisodes);
+	}
+
+	/** 本棚の本の話数。その本の記録が無ければ作品の話数 */
+	public int episodesFor(File epub)
+	{
+		Integer n = this.bookEpisodes.get(bookKey(epub));
+		return n != null ? n : this.episodes;
+	}
+
+	/** 本のパスの印（パスそのものは台帳に書かない） */
+	static String bookKey(File epub)
+	{
+		String path;
+		try {
+			path = epub.getCanonicalPath();
+		} catch (IOException e) {
+			path = epub.getAbsolutePath();
+		}
+		return UUID.nameUUIDFromBytes(("AozoraEpub3:book:"+path).getBytes(StandardCharsets.UTF_8)).toString();
 	}
 
 	/**
@@ -170,14 +216,25 @@ public final class BookLedger
 		}
 		//identifier が読めなければ URL から決め直す（同じ値になる）
 		if (identifier == null || !isUuid(identifier)) identifier = identifierFor(sourceUrl);
-		int episodes = -1;
-		try {
-			String value = props.getProperty(KEY_EPISODES);
-			if (value != null) episodes = Math.max(-1, Integer.parseInt(value.trim()));
-		} catch (NumberFormatException e) {
-			/* 意図的: 読めなければ記録が無いのと同じ（話数の守りが 1 回効かないだけ） */
+		//読めない話数は記録が無いのと同じ（話数の守りが 1 回効かないだけ）
+		int episodes = countOf(props.getProperty(KEY_EPISODES));
+		java.util.Map<String, Integer> bookEpisodes = new java.util.TreeMap<>();
+		for (String key : props.stringPropertyNames()) {
+			if (!key.startsWith(KEY_BOOK_EPISODES)) continue;
+			int n = countOf(props.getProperty(key));
+			if (n >= 0) bookEpisodes.put(key.substring(KEY_BOOK_EPISODES.length()), n);
 		}
-		return new BookLedger(sourceUrl, identifier, textBaseName, outputBaseName, episodes);
+		return new BookLedger(sourceUrl, identifier, textBaseName, outputBaseName, episodes, bookEpisodes);
+	}
+
+	private static int countOf(String value)
+	{
+		if (value == null) return -1;
+		try {
+			return Math.max(-1, Integer.parseInt(value.trim()));
+		} catch (NumberFormatException e) {
+			return -1;
+		}
 	}
 
 	/** 作品のフォルダに書く。途中で止まっても前の台帳が壊れないよう、一時ファイルから置き換える */
@@ -189,6 +246,9 @@ public final class BookLedger
 		if (this.textBaseName != null) props.setProperty(KEY_TEXT_BASE_NAME, this.textBaseName);
 		if (this.outputBaseName != null) props.setProperty(KEY_OUTPUT_BASE_NAME, this.outputBaseName);
 		if (this.episodes >= 0) props.setProperty(KEY_EPISODES, String.valueOf(this.episodes));
+		for (java.util.Map.Entry<String, Integer> e : this.bookEpisodes.entrySet()) {
+			props.setProperty(KEY_BOOK_EPISODES + e.getKey(), String.valueOf(e.getValue()));
+		}
 		Path dir = workDir.toPath();
 		Files.createDirectories(dir);
 		Path tmp = Files.createTempFile(dir, FILE_NAME, ".tmp");

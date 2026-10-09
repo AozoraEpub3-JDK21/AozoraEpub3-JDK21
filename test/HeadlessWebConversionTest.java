@@ -317,7 +317,7 @@ public class HeadlessWebConversionTest {
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, r.stop());
 		assertTrue(r.message(), r.message().contains("3 → 2 話"));
 		org.junit.Assert.assertArrayEquals("本棚の本はそのまま", before, Files.readAllBytes(book.toPath()));
-		assertEquals("台帳の話数を下げない（下げると、もう一度押すだけで通ってしまう）", 3, ledgerOf().episodes);
+		assertEquals("台帳の話数を下げない（下げると、もう一度押すだけで通ってしまう）", 3, ledgerOf().episodesFor(book));
 		assertFalse("前の版も作らない", new File(ledgerDir(), HeadlessWebConversion.PREVIOUS_EPUB).exists());
 	}
 
@@ -330,7 +330,8 @@ public class HeadlessWebConversionTest {
 		episodes = 2;
 		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, true);
 		assertTrue(r.message(), r.ok());
-		assertEquals(2, ledgerOf().episodes);
+		assertEquals("その本の話数", 2, ledgerOf().episodesFor(book));
+		assertEquals("作品の話数は下げない", 3, ledgerOf().episodes);
 		assertTrue("前の版を残す", new File(ledgerDir(), HeadlessWebConversion.PREVIOUS_EPUB).exists());
 	}
 
@@ -365,7 +366,8 @@ public class HeadlessWebConversionTest {
 			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, true);
 		assertTrue(r.message(), r.ok());
 		assertFalse("本が作り直される", java.util.Arrays.equals(before, Files.readAllBytes(book.toPath())));
-		assertEquals(2, ledgerOf().episodes);
+		assertEquals("その本の話数", 2, ledgerOf().episodesFor(book));
+		assertEquals("作品の話数は下げない", 3, ledgerOf().episodes);
 		//減っていなければ、今までどおり「更新はありません」
 		HeadlessWebConversion.Result again = conversion(props, basePath)
 			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, false);
@@ -399,7 +401,8 @@ public class HeadlessWebConversionTest {
 		String after = epubText(book);
 		assertTrue(after.contains(marker("1")) && after.contains(marker("2")));
 		assertFalse(after.contains(marker("3")));
-		assertEquals(2, ledgerOf().episodes);
+		assertEquals("その本の話数", 2, ledgerOf().episodesFor(book));
+		assertEquals("作品の話数は下げない", 4, ledgerOf().episodes);
 	}
 
 	/** n 話目の本文の印 */
@@ -541,6 +544,22 @@ public class HeadlessWebConversionTest {
 		org.junit.Assert.assertArrayEquals("txt は前のまま", before, Files.readAllBytes(txt.toPath()));
 	}
 
+	/** 同じ作品の本が 2 冊あっても、片方で減ったまま更新したのが、もう片方の守りを外さない（PR #120 の codex） */
+	@Test
+	public void acceptingFewerEpisodesOnOneBookKeepsTheOtherProtected() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 5;
+		File a = shelfBook(basePath, tempFolder.newFolder("a"));
+		File b = shelfBook(basePath, tempFolder.newFolder("b"));
+		episodes = 3;
+		assertTrue(guardedUpdate(basePath, a, true).ok());
+		episodes = 4;
+		HeadlessWebConversion.Result other = guardedUpdate(basePath, b, false);
+		assertEquals("5 話の本は 4 話で上書きしない", HeadlessWebConversion.STOP_SHRUNK, other.stop());
+		assertTrue(other.message(), other.message().contains("5 → 4 話"));
+		assertTrue("3 話にした本は 4 話で更新できる", guardedUpdate(basePath, a, false).ok());
+	}
+
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */
 	@Test
 	public void aFailedUpdateKeepsThePreviousEpisodeCount() throws Exception {
@@ -559,7 +578,7 @@ public class HeadlessWebConversionTest {
 		HeadlessWebConversion.Result r = new HeadlessWebConversion(guiDefaults(), basePath, lastCache, failing, imageWriter)
 			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, true);
 		assertFalse(r.ok());
-		assertEquals(3, ledgerOf().episodes);
+		assertEquals(3, ledgerOf().episodesFor(book));
 		//次のふつうの更新は、前の話数（3）と比べて止まる
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
 	}

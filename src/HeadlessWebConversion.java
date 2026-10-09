@@ -101,6 +101,7 @@ public class HeadlessWebConversion
 				//WebAozoraConverter は FQDN ごとに使い回されるので、毎回すべて入れ直す（GUI と同じ）
 				web.updateGuard = updateGuard;
 				web.allowFewerEpisodes = allowFewerEpisodes;
+				web.guardBook = updateGuard ? expectedOutFile : null;
 				try {
 					web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
 					web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
@@ -157,12 +158,13 @@ public class HeadlessWebConversion
 						written = r.ok();
 						return r;
 					} finally {
-						if (!written && web.episodesRecorded) restoreEpisodes(srcFile, web.previousEpisodes);
+						if (!written && web.episodesRecorded) restoreEpisodes(srcFile, web.ledgerBeforeEpisodes);
 					}
 				} finally {
 					//変換器は GUI と使い回すので、守りは必ず倒す
 					web.updateGuard = false;
 					web.allowFewerEpisodes = false;
+					web.guardBook = null;
 				}
 			}
 		} catch (Exception e) {
@@ -171,14 +173,15 @@ public class HeadlessWebConversion
 		}
 	}
 
-	/** 台帳の話数を戻す（-1 なら記録を消す） */
-	static void restoreEpisodes(File srcFile, int episodes)
+	/** 台帳の話数（作品の話数と本ごとの話数）を before のものに戻す */
+	static void restoreEpisodes(File srcFile, com.github.hmdev.info.BookLedger before)
 	{
+		if (before == null) return;
 		File workDir = srcFile.getAbsoluteFile().getParentFile();
 		com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(workDir);
 		if (ledger == null) return;
 		try {
-			ledger.withEpisodes(episodes).save(workDir);
+			ledger.withEpisodeCountsOf(before).save(workDir);
 		} catch (IOException e) {
 			logger.warn("台帳の話数を戻せませんでした: {}", workDir, e);
 		}

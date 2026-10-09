@@ -138,6 +138,8 @@ public class WebAozoraConverter
 	public boolean updateGuard = false;
 	/** 本棚の更新の守りで、話数が減っていても続ける（利用者が「減ったまま更新」を選んだ） */
 	public boolean allowFewerEpisodes = false;
+	/** 本棚の更新で上書きする本。話数はこの本の記録と比べ、この本の記録に書く（PR #120 の codex） */
+	public File guardBook = null;
 	/** 結果: 目次を取れなかったときの HTTP の状態。取れたら 0、HTTP の応答が無かったら -1 */
 	public int listFailure = 0;
 	/** 結果: 取れなかったのは目次の 2 ページ目以降（作品が消えたのではない） */
@@ -145,11 +147,12 @@ public class WebAozoraConverter
 	/** 結果: 守りで止めたときの、台帳の話数と今の目次の話数。止めていなければ -1 */
 	public int shrunkFrom = -1;
 	public int shrunkTo = -1;
-	/** 結果: 台帳に今の話数を書いたか、と書く前の話数（本棚の更新で EPUB を作れなかったとき、元に戻すため） */
+	/** 結果: 台帳に今の話数を書いたか、と書く前の台帳（本棚の更新で EPUB を作れなかったとき、話数を元に戻すため） */
 	public boolean episodesRecorded = false;
-	public int previousEpisodes = -1;
-	/** txt を作り終えたら台帳に書く話数。書かないなら -1 */
+	public BookLedger ledgerBeforeEpisodes = null;
+	/** txt を作り終えたら台帳に書く、作品の話数と本の話数。書かないなら -1 */
 	private int pendingEpisodes = -1;
+	private int pendingBookEpisodes = -1;
 	/** 本棚の更新の守りで止めた。止めたら txt と update.txt を変換の前に戻す */
 	private boolean guardStopped = false;
 	//更新有りフラグ
@@ -543,8 +546,9 @@ public class WebAozoraConverter
 		this.shrunkFrom = -1;
 		this.shrunkTo = -1;
 		this.episodesRecorded = false;
-		this.previousEpisodes = -1;
+		this.ledgerBeforeEpisodes = null;
 		this.pendingEpisodes = -1;
+		this.pendingBookEpisodes = -1;
 		this.guardStopped = false;
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
@@ -941,7 +945,8 @@ public class WebAozoraConverter
 						//本棚の更新で、前は話があった作品の一覧が空になった（全部消された、など）。話数が減ったとして止め、txt を戻す（PR の手元の codex）
 						if (this.updateGuard) {
 							this.guardStopped = true;
-							int previous = ledger != null ? ledger.episodes : -1;
+							int previous = ledger == null ? -1
+								: this.guardBook != null ? ledger.episodesFor(this.guardBook) : ledger.episodes;
 							if (previous > 0) {
 								this.shrunkFrom = previous;
 								this.shrunkTo = 0;
@@ -1004,7 +1009,12 @@ public class WebAozoraConverter
 										}
 									}
 								} catch (CloudflareChallengeException e) {
-									//目次の途中までで本を作らない（理由は cacheFile が出した）
+									//目次の途中までで本を作らない（理由は cacheFile が出した）。本棚の更新なら txt も戻す（PR #120 の codex）
+									if (this.updateGuard) {
+										this.listFailure = 403;
+										this.listFailureOnLaterPage = true;
+										this.guardStopped = true;
+									}
 									return null;
 								} catch (Exception e) {
 									LogAppender.println("目次ページ " + pageIdx + " 取得エラー: " + e.getMessage());
@@ -1080,8 +1090,9 @@ public class WebAozoraConverter
 			//目次の話数を台帳と比べる。減っていたら（掲載先で消された・要約版にされた・目次の 2 ページ目が取れなかった）、
 			//本棚の更新では書かずに止める（1 冊を上書きする方式で一番大きい事故＝読んだ話が消える、を防ぐ。internal #11）
 			//0 話になったとき（全部消された・目次の書き方が変わった）も比べる（PR の手元の codex）
-			int previous = ledger != null ? ledger.episodes : -1;
-			this.previousEpisodes = previous;
+			//本棚の更新は、上書きする本の記録と比べる（無ければ作品の話数）
+			boolean bookGuard = this.updateGuard && this.guardBook != null;
+			int previous = ledger == null ? -1 : bookGuard ? ledger.episodesFor(this.guardBook) : ledger.episodes;
 			if (this.updateGuard && !this.allowFewerEpisodes && previous > chapterHrefs.size()) {
 				this.shrunkFrom = previous;
 				this.shrunkTo = chapterHrefs.size();
@@ -1093,11 +1104,13 @@ public class WebAozoraConverter
 			//1 ページの作品（話の一覧が無い）は数えない
 			//守りの無い変換（GUI・CLI）は話数を上げるだけで下げない。下げると、本棚の本の守りが外れる
 			//（同じ作品を GUI で別のフォルダに変換しただけで、本棚の本が減った話数で上書きされる。PR のゲート2）
-			boolean lower = previous > chapterHrefs.size();
-			if (ledger != null && (chapterHrefs.size() > 0 || previous > 0) && previous != chapterHrefs.size()
-				&& (!lower || (this.updateGuard && this.allowFewerEpisodes))) {
-				this.pendingEpisodes = chapterHrefs.size();
+			//本棚の更新は、その本の話数を書く（減ったまま更新も）。作品の話数は、どの変換でも上げるだけ
+			int now = chapterHrefs.size();
+			if (ledger != null && (now > 0 || previous > 0)) {
+				if (bookGuard && previous != now) this.pendingBookEpisodes = now;
+				if (now > ledger.episodes) this.pendingEpisodes = now;
 			}
+			boolean acceptedFewer = this.updateGuard && this.allowFewerEpisodes && previous > now;
 
 			List<String> failedHrefs = new ArrayList<>();
 			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
@@ -1108,7 +1121,7 @@ public class WebAozoraConverter
 			if (chapterHrefs.size() > 0) {
 				//全話で更新や追加があるかチェック。
 				//減ったまま更新すると選ばれたら、話が消えたこと自体が更新（残った話が変わっていなくても本を作り直す。PR の手元の codex）
-				updated = this.pendingEpisodes >= 0 && previous > chapterHrefs.size();
+				updated = acceptedFewer;
 				
 				//追加更新対象の期限 これより大きければ追加更新
 				long expire = System.currentTimeMillis()-(long)(this.modifiedExpire*3600000);
@@ -1437,12 +1450,16 @@ public class WebAozoraConverter
 			// エラーが発生してもファイルは返す（ファイナライズ処理は付加的な処理のため）
 		}
 
-		if (this.pendingEpisodes >= 0) {
+		if (this.pendingEpisodes >= 0 || this.pendingBookEpisodes >= 0) {
 			//台帳は読み直す（変換の途中で名前などが書き足されていることがある）
 			BookLedger current = BookLedger.load(workDir);
 			if (current != null) {
+				BookLedger next = current;
+				if (this.pendingEpisodes >= 0) next = next.withEpisodes(this.pendingEpisodes);
+				if (this.pendingBookEpisodes >= 0) next = next.withBookEpisodes(this.guardBook, this.pendingBookEpisodes);
 				try {
-					current.withEpisodes(this.pendingEpisodes).save(workDir);
+					next.save(workDir);
+					this.ledgerBeforeEpisodes = current;
 					this.episodesRecorded = true;
 				} catch (IOException e) {
 					logger.warn("台帳に話数を書けませんでした: {}", this.dstPath, e);

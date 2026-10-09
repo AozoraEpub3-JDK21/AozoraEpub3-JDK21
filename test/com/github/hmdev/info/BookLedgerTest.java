@@ -171,4 +171,22 @@ public class BookLedgerTest {
 		assertEquals(-1, broken.episodes);
 		assertEquals("[著者] 題", broken.textBaseName);
 	}
+
+	/** 本ごとの話数は、その本だけに効く。記録の無い本は作品の話数。パスそのものは台帳に書かない */
+	@Test
+	public void bookEpisodeCountsArePerBook() throws Exception {
+		java.io.File dir = java.nio.file.Files.createTempDirectory("ledger").toFile();
+		java.io.File a = new java.io.File(dir, "a.epub");
+		java.io.File b = new java.io.File(dir, "b.epub");
+		BookLedger.create("https://kakuyomu.jp/works/1", "[著者] 題").withEpisodes(5).withBookEpisodes(a, 3).save(dir);
+		BookLedger loaded = BookLedger.load(dir);
+		assertEquals(3, loaded.episodesFor(a));
+		assertEquals(5, loaded.episodesFor(b));
+		assertEquals("名前を変えても残る", 3, loaded.withTextBaseName("x").episodesFor(a));
+		assertFalse(java.nio.file.Files.readString(dir.toPath().resolve(BookLedger.FILE_NAME)).contains("a.epub"));
+		assertEquals("消せる", 5, loaded.withBookEpisodes(a, -1).episodesFor(a));
+		BookLedger restored = loaded.withEpisodes(9).withBookEpisodes(a, 1).withEpisodeCountsOf(loaded);
+		assertEquals(5, restored.episodes);
+		assertEquals(3, restored.episodesFor(a));
+	}
 }
