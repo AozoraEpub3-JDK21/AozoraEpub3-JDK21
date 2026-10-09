@@ -896,8 +896,10 @@ public class AozoraEpub3
 				outFileName = outFileName.substring(0, prefixLen)
 					+ PathUtils.fitFileNameChars(outFileName.substring(prefixLen), maxChars - prefixLen);
 			} else {
-				//出力先そのものが長すぎて名前の入る余地が無い。今までどおり切る（出力先の外になれば下の検証で止まる）
-				outFileName = outFileName.substring(0, maxChars);
+				//出力先が深すぎて、印（7 文字）の入る余地が無い。黙って切ると、先頭の数文字が同じ題どうしが
+				//上書きし合うので、変換を断る（2026-10-09 利用者決定。internal #16）
+				throw new IOException("出力先のフォルダが深すぎて、ファイル名を付けられません（フォルダのパスは "
+					+ (maxChars - PathUtils.CUT_MARK_LENGTH - 1) + " 文字以内にしてください）: " + dstPath.getAbsolutePath());
 			}
 		}
 		//その場所で作れない長い名前だけ、255 バイトに切る（Linux は題の長い本を作れなかった。internal #16）。

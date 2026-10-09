@@ -1,8 +1,10 @@
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -83,6 +85,24 @@ public class AozoraEpub3DeepFolderNameTest {
 		assertNotEquals("上と下が同じ名前になって上書きしない", upper.getName(), lower.getName());
 		assertTrue(upper.getName(), upper.getName().matches("~[0-9a-f]{6}\\.epub"));
 		assertTrue(lower.getName(), lower.getName().matches("~[0-9a-f]{6}\\.epub"));
+	}
+
+	/**
+	 * 名前に使える文字が印の長さ（7 文字）より少ないときは、変換を断る（2026-10-09 利用者決定）。
+	 * 修正前は印を付けずに切っていたので、出力先が 243 文字だと上・下が同じ「[著者] と.epub」になり、上書きしていた。
+	 */
+	@Test
+	public void aFolderTooDeepForTheMarkIsRefused() throws Exception {
+		for (int length : new int[] { 243, 249 }) {
+			File dst = folderOfLength(length);
+			try {
+				outFile(dst, BODY + "（上）");
+				fail("出力先が " + length + " 文字なら断る");
+			} catch (IOException e) {
+				assertTrue(e.getMessage(), e.getMessage().startsWith("出力先のフォルダが深すぎて"));
+				assertTrue("どこまで浅くすればよいかを言う: " + e.getMessage(), e.getMessage().contains("242 文字以内"));
+			}
+		}
 	}
 
 	@Test
