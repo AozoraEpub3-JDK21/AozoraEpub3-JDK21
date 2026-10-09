@@ -24,6 +24,19 @@ public class PreviewLauncher
 	/** 起動中のプレビュー。GUI から繰り返し開いてもサーバは 1 つに保つ */
 	private static PreviewLauncher current;
 
+	/** 本棚の「続きを取る」を行うもの。本棚を開く側（GUI・CLI）が渡す。後から起動するサーバにも渡す */
+	private static volatile BookUpdater bookUpdater;
+
+	/**
+	 * 本棚の「続きを取る」を行うものを渡す（internal #11）。起動中のサーバにも、後で起動するサーバにも効く。
+	 * 渡されていなければ、本棚から更新できない
+	 */
+	public static synchronized void setBookUpdater(BookUpdater updater)
+	{
+		bookUpdater = updater;
+		if (current != null) current.server.setBookUpdater(updater);
+	}
+
 	private final PreviewSession session;
 	private final PreviewServer server;
 	/** JVM 終了時の後始末。shutdown() で解除できるよう参照を保持する */
@@ -60,6 +73,7 @@ public class PreviewLauncher
 		PreviewServer server;
 		try {
 			server = new PreviewServer(session);
+			server.setBookUpdater(bookUpdater);
 			// 本を伴わない起動 (本棚だけを開く) を許す。既定の本が無い場合、
 			// ビューアーは本棚を開いた状態で始まる
 			if (epubFile != null) session.addBook(epubFile);

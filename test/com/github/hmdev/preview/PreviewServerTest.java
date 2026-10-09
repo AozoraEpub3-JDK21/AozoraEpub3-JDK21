@@ -1112,4 +1112,133 @@ public class PreviewServerTest
 		assertEquals("font/otf", PreviewServer.contentType("a/b.otf"));
 		assertEquals("application/octet-stream", PreviewServer.contentType("mimetype"));
 	}
+
+	// ---- 本棚の「続きを取る」（internal #11） ----
+
+	/** 掲載元のある本と無い本の棚を作り、掲載元のある本の ID を返す */
+	private String[] shelfForUpdate() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("upd");
+		EpubFixture.withSource("https://ncode.syosetu.com/n1234ab/").writeTo(shelf.resolve("web.epub"));
+		EpubFixture.standard().writeTo(shelf.resolve("local.epub"));
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null))));
+		String json = get(base() + "api/library").body();
+		java.util.regex.Matcher web = java.util.regex.Pattern.compile("\"id\":\"([^\"]+)\"[^}]*\"fileName\":\"web.epub\"").matcher(json);
+		java.util.regex.Matcher local = java.util.regex.Pattern.compile("\"id\":\"([^\"]+)\"[^}]*\"fileName\":\"local.epub\"").matcher(json);
+		assertTrue(json, web.find());
+		assertTrue(json, local.find());
+		return new String[]{ web.group(1), local.group(1) };
+	}
+
+	/** 仕事が終わるまで待って、最後の状態の JSON を返す */
+	private String waitForJob(String jobJson) throws Exception
+	{
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"job\":\"([0-9a-f]+)\"").matcher(jobJson);
+		assertTrue(jobJson, m.find());
+		String body = jobJson;
+		for (int i = 0; i < 200; i++) {
+			body = get(base() + "api/jobs/" + m.group(1)).body();
+			if (!body.contains("\"state\":\"queued\"") && !body.contains("\"state\":\"running\"")) return body;
+			Thread.sleep(20);
+		}
+		return body;
+	}
+
+	@Test
+	public void updatingWithoutAnUpdaterIsUnavailable() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		HttpResponse<String> response = post(base() + "api/book/" + ids[0] + "/update");
+		assertEquals(503, response.statusCode());
+		assertTrue(response.body(), response.body().contains("\"error\""));
+	}
+
+	@Test
+	public void aBookWithoutASourceCannotBeUpdated() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+		this.server.setBookUpdater((url, file) -> { calls.incrementAndGet(); return new BookUpdater.Result(true, false, "ok"); });
+		assertEquals(400, post(base() + "api/book/" + ids[1] + "/update").statusCode());
+		assertEquals(404, post(base() + "api/book/nosuchbook/update").statusCode());
+		assertEquals("GET では更新しない", 405, get(base() + "api/book/" + ids[0] + "/update").statusCode());
+		assertEquals(403, postFrom(base() + "api/book/" + ids[0] + "/update", "", "Origin", "https://evil.example").statusCode());
+		assertEquals(0, calls.get());
+	}
+
+	@Test
+	public void anUpdateRunsInTheBackgroundAndReportsItsState() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setBookUpdater((url, file) -> {
+			calls.add(url + " " + file.getFileName());
+			return new BookUpdater.Result(true, false, "変換しました");
+		});
+		HttpResponse<String> response = post(base() + "api/book/" + ids[0] + "/update");
+		assertEquals(202, response.statusCode());
+		String done = waitForJob(response.body());
+		assertTrue(done, done.contains("\"state\":\"done\""));
+		assertTrue(done, done.contains("\"message\":\"変換しました\""));
+		assertEquals(List.of("https://ncode.syosetu.com/n1234ab/ web.epub"), calls);
+	}
+
+	@Test
+	public void noUpdateAndFailuresAreReported() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(false, true, "更新はありません"));
+		String noUpdate = waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
+		assertTrue(noUpdate, noUpdate.contains("\"state\":\"noUpdate\""));
+
+		this.server.setBookUpdater((url, file) -> { throw new IllegalStateException("落ちた"); });
+		String failed = waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
+		assertTrue(failed, failed.contains("\"state\":\"failed\""));
+		assertTrue(failed, failed.contains("落ちた"));
+		assertEquals(404, get(base() + "api/jobs/0123456789abcdef01234567").statusCode());
+	}
+
+	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */
+	@Test
+	public void theSameBookIsNotQueuedTwice() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+		this.server.setBookUpdater((url, file) -> {
+			calls.incrementAndGet();
+			release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+			return new BookUpdater.Result(true, false, "ok");
+		});
+		String first = post(base() + "api/book/" + ids[0] + "/update").body();
+		String second = post(base() + "api/book/" + ids[0] + "/update").body();
+		java.util.regex.Pattern job = java.util.regex.Pattern.compile("\"job\":\"([0-9a-f]+)\"");
+		java.util.regex.Matcher a = job.matcher(first);
+		java.util.regex.Matcher b = job.matcher(second);
+		assertTrue(a.find());
+		assertTrue(b.find());
+		assertEquals(a.group(1), b.group(1));
+		release.countDown();
+		waitForJob(first);
+		assertEquals(1, calls.get());
+	}
+
+	/** 更新が済んだら、本棚の本を読み直す（上書きした本の題・表紙が古いまま出ない） */
+	@Test
+	public void theShelfEntryIsReadAgainAfterAnUpdate() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		this.server.setBookUpdater((url, file) -> {
+			EpubFixture renamed = EpubFixture.withSource(url);
+			renamed.put("OPS/package.opf", EpubFixture.withSourcesOpf("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(url), url)
+				.replace("テスト書籍", "続きの入った書籍"));
+			java.nio.file.Files.delete(file);
+			renamed.writeTo(file);
+			java.nio.file.Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 5000));
+			return new BookUpdater.Result(true, false, "ok");
+		});
+		waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
+		String json = get(base() + "api/library").body();
+		assertTrue(json, json.contains("\"title\":\"続きの入った書籍\""));
+	}
 }

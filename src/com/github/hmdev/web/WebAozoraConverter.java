@@ -68,6 +68,13 @@ public class WebAozoraConverter
 	/** Singletonインスタンス格納 keyはFQDN */
 	static HashMap<String, WebAozoraConverter> converters = new HashMap<String, WebAozoraConverter>();
 
+	/**
+	 * Web 変換（変換器を {@link #createWebAozoraConverter} で取ってから {@code convertToAozoraText} が終わるまで）を
+	 * 1 つずつにする鍵。変換器は FQDN ごとに使い回され、設定と途中の状態を持つので、GUI の変換と本棚の更新が
+	 * 同時に動くと互いの設定で取ってしまう（internal #11。PR #116 のゲート2）
+	 */
+	public static final Object WEB_LOCK = new Object();
+
 	/** 共有 HttpClient (HTTP/2, Cookie自動管理, リダイレクト自動追跡) */
 	private static final HttpClient httpClient;
 	private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";

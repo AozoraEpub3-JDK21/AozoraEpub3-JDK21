@@ -32,6 +32,9 @@ public class HeadlessWebConversion
 	static final String COVER_SAME_FILE = "#samefile";
 	static final String COVER_NONE = "#none";
 
+	/** 上書きの前の本を残す名前（作品のフォルダの中） */
+	static final String PREVIOUS_EPUB = "previous.epub";
+
 	/** 変換の結果 */
 	public record Result(boolean ok, boolean noUpdate, File epub, String message) {}
 
@@ -69,39 +72,43 @@ public class HeadlessWebConversion
 		String outExt = outExt();
 		if (outExt.startsWith(".mobi")) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
 		try {
-			WebAozoraConverter web = WebAozoraConverter.createWebAozoraConverter(url, new File(this.basePath + "web"));
-			if (web == null) return new Result(false, false, null, "このサイトには対応していません: " + url);
-			//WebAozoraConverter は FQDN ごとに使い回されるので、毎回すべて入れ直す（GUI と同じ）
-			web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
-			web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
-			//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
-			try {
-				File settingFile = new File(this.basePath + "setting_narourb.ini");
-				NarouFormatSettings.generateDefaultIfMissing(settingFile);
-				web.loadFormatSettings(settingFile);
-				web.getFormatSettings().loadReplacePatterns(new File(this.basePath + "replace_narourb.txt"));
-				String[] styles = { "css", "simple", "plain" };
-				int style = intOf("AuthorCommentStyle", 0);
-				if (style >= 0 && style < styles.length) web.getFormatSettings().setAuthorCommentStyle(styles[style]);
-			} catch (Exception e) {
-				logger.warn("フォーマット設定を読み込めませんでした", e);
-				LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
-			}
-			web.skipImages = GuiConversionSettings.flag(this.props, "WebSkipImages");
+			//変換器は FQDN ごとに使い回されるので、GUI の Web 変換と同時に触らない（WebAozoraConverter.WEB_LOCK）
+			File srcFile;
+			synchronized (WebAozoraConverter.WEB_LOCK) {
+				WebAozoraConverter web = WebAozoraConverter.createWebAozoraConverter(url, new File(this.basePath + "web"));
+				if (web == null) return new Result(false, false, null, "このサイトには対応していません: " + url);
+				//WebAozoraConverter は FQDN ごとに使い回されるので、毎回すべて入れ直す（GUI と同じ）
+				web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
+				web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
+				//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
+				try {
+					File settingFile = new File(this.basePath + "setting_narourb.ini");
+					NarouFormatSettings.generateDefaultIfMissing(settingFile);
+					web.loadFormatSettings(settingFile);
+					web.getFormatSettings().loadReplacePatterns(new File(this.basePath + "replace_narourb.txt"));
+					String[] styles = { "css", "simple", "plain" };
+					int style = intOf("AuthorCommentStyle", 0);
+					if (style >= 0 && style < styles.length) web.getFormatSettings().setAuthorCommentStyle(styles[style]);
+				} catch (Exception e) {
+					logger.warn("フォーマット設定を読み込めませんでした", e);
+					LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
+				}
+				web.skipImages = GuiConversionSettings.flag(this.props, "WebSkipImages");
 
-			int interval = 500;
-			try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
-			int beforeChapter = GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
-			float modifiedExpire = 0;
-			try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
-			boolean convertUpdated = GuiConversionSettings.flag(this.props, "WebConvertUpdated");
-			boolean modifiedOnly = GuiConversionSettings.flag(this.props, "WebModifiedOnly");
+				int interval = 500;
+				try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
+				int beforeChapter = GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
+				float modifiedExpire = 0;
+				try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
+				boolean convertUpdated = GuiConversionSettings.flag(this.props, "WebConvertUpdated");
+				boolean modifiedOnly = GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
-			File srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
-				convertUpdated, modifiedOnly, GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
-			if (srcFile == null) {
-				if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");
-				return new Result(false, false, null, "取得できませんでした: " + url);
+				srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
+					convertUpdated, modifiedOnly, GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
+				if (srcFile == null) {
+					if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");
+					return new Result(false, false, null, "取得できませんでした: " + url);
+				}
 			}
 			return convertText(srcFile, dstPath, expectedOutFile, overwrite);
 		} catch (Exception e) {
@@ -170,6 +177,11 @@ public class HeadlessWebConversion
 		}
 		if (outFile.exists() && !overwrite) return new Result(false, false, outFile, "ファイルが存在します: " + outFile.getName());
 
+		//上書きの前に、今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）
+		if (outFile.exists()) {
+			java.nio.file.Files.copy(outFile.toPath(), new File(srcFile.getAbsoluteFile().getParentFile(), PREVIOUS_EPUB).toPath(),
+				java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+		}
 		LogAppender.println("画面なしで変換します : " + srcFile.getPath());
 		boolean ok = AozoraEpub3.convertFile(srcFile, "txt", outFile, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
 		return new Result(ok, false, outFile, ok ? "変換しました" : "変換に失敗しました");
