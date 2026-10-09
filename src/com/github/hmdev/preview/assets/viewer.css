@@ -17,6 +17,7 @@
 	--stage: #e7e3dc;
 	--shadow: rgba(0, 0, 0, .16);
 	--mark: #fff3b0;
+	--danger: #a8392a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +33,7 @@
 		--stage: #111010;
 		--shadow: rgba(0, 0, 0, .5);
 		--mark: #4d4322;
+		--danger: #e8907c;
 	}
 }
 
@@ -47,6 +49,7 @@ body[data-theme="dark"] {
 	--stage: #111010;
 	--shadow: rgba(0, 0, 0, .5);
 	--mark: #4d4322;
+	--danger: #e8907c;
 }
 
 * { box-sizing: border-box; }
@@ -548,7 +551,7 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 }
 .book-update:hover, .book-update:focus-visible { opacity: 1; border-color: var(--accent); }
 .book-update:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.book-update:disabled { cursor: progress; opacity: 0.6; }
+.book-update[aria-disabled="true"] { cursor: progress; opacity: 0.6; }
 .book-slot.updating .book-update { animation: book-update-spin 1.2s linear infinite; }
 @keyframes book-update-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .book-slot.updating .book-update { animation: none; } }
@@ -561,7 +564,7 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.book-update-status[data-state="failed"] { color: #b3412f; }
+.book-update-status[data-state="failed"] { color: var(--danger); }
 
 .book-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--shadow); }
 .book-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -206,7 +206,11 @@ function setBookControlsEnabled(enabled)
 	}
 }
 
-async function loadBook()
+/**
+ * 本を読み込む。keepPath を渡すと、新しい本にも同じパスのセクションがあればそこを開く
+ * (本棚の「続きを取る」で開いている本が上書きされたとき、読んでいた所に留まる)
+ */
+async function loadBook(keepPath)
 {
 	const book = await getJson('api/book/' + encodeURIComponent(state.bookId));
 	// 本文が 1 つも無い本を黙って受け入れると、書名だけ新しくなって
@@ -222,7 +226,8 @@ async function loadBook()
 
 	buildSectionSelect();
 	buildToc();
-	gotoSection(0, null);
+	const kept = keepPath ? book.spine.findIndex(item => item.path === keepPath) : -1;
+	gotoSection(kept >= 0 ? kept : 0, null);
 }
 
 /** フォルダを開くボタンの既定 title。失敗時に書き換えるので復元用に持つ */

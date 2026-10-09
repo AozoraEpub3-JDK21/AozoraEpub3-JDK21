@@ -43,10 +43,16 @@ let libraryOpening = false;
 const libraryUpdates = new Map();
 
 /**
- * 開いている間に「続きを取る」で上書きされた本の ID。開いている本のカードは普段は本棚を閉じるだけだが、
- * ここにある本は読み込み直す (サーバは EPUB の大きさ・更新日時が変わると展開し直す)
+ * 「続きを取る」で上書きされたのに、読み込み直せなかった開いている本の ID。開いている本のカードは普段は
+ * 本棚を閉じるだけだが、ここにある本は読み込み直す
  */
 const libraryStale = new Set();
+
+/** 仕事の状態を続けて取れなかったら諦める回数 (一時的な失敗では「失敗」にしない) */
+const LIBRARY_UPDATE_MISSES = 5;
+
+/** 本棚の読み込みの通し番号。遅れて返った古い一覧で新しい一覧を上書きしない */
+let libraryLoadSeq = 0;
 
 /** 仕事の状態を問い合わせる間隔 (ミリ秒) */
 const LIBRARY_UPDATE_POLL = 2000;
@@ -195,26 +201,56 @@ function closeLibrary()
 	el.libraryToggle.setAttribute('aria-pressed', 'false');
 }
 
-async function loadLibrary()
+/**
+ * 本棚を読み込む。keepView なら、描いた枚数・スクロール位置・フォーカスを保つ
+ * (「続きを取る」が終わるたびに先頭へ戻らないように)
+ */
+async function loadLibrary(keepView)
 {
-	showLibraryStatus('読み込み中…');
+	const seq = ++libraryLoadSeq;
+	if (!keepView) showLibraryStatus('読み込み中…');
 	let library;
 	try {
 		library = await getJson('api/library');
 	} catch (e) {
+		if (seq !== libraryLoadSeq) return;
 		// 古い一覧を残さない。残すと、消された本のカードを押せてしまう
 		state.library = null;
 		clearLibraryGrid();
 		showLibraryStatus('本棚を読み込めませんでした: ' + e.message);
 		return;
 	}
+	if (seq !== libraryLoadSeq) return;
 	state.library = library;
 	state.libraryFolder = library.folderName || null;
 	state.libraryShelfCount = library.shelves ? library.shelves.length : state.libraryShelfCount;
 	state.libraryCount = library.count;
 	updateLibraryAvailability();
 	buildShelfSelect();
-	renderLibrary();
+	if (keepView) renderLibraryKeepingView();
+	else renderLibrary();
+}
+
+/** 描き直しても、描いた枚数・スクロール位置・フォーカスを保つ */
+function renderLibraryKeepingView()
+{
+	const shown = libraryShown;
+	const top = el.libraryGrid.scrollTop;
+	const active = document.activeElement;
+	const slot = (active && active.closest) ? active.closest('.book-slot') : null;
+	const focusId = slot ? slot.dataset.bookId : null;
+	const focusUpdate = !!(active && active.classList && active.classList.contains('book-update'));
+
+	libraryVisible = visibleLibraryBooks();
+	libraryShown = 0;
+	el.libraryGrid.textContent = '';
+	appendLibraryCards(Math.max(shown, LIBRARY_PAGE_SIZE));
+	el.libraryGrid.scrollTop = top;
+	if (focusId) {
+		const again = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(focusId) + '"]');
+		const target = again ? again.querySelector(focusUpdate ? '.book-update' : '.book-card') : null;
+		if (target) target.focus({preventScroll: true});
+	}
 }
 
 function clearLibraryGrid()
@@ -278,11 +314,11 @@ function renderLibrary()
 	appendLibraryCards();
 }
 
-/** 続きのカードを描き足す。全部描き切るまで「さらに表示」を出す */
-function appendLibraryCards()
+/** 続きのカードを描き足す (既定は 1 ページぶん)。全部描き切るまで「さらに表示」を出す */
+function appendLibraryCards(count)
 {
 	const books = libraryVisible;
-	const upto = Math.min(books.length, libraryShown + LIBRARY_PAGE_SIZE);
+	const upto = Math.min(books.length, libraryShown + (count || LIBRARY_PAGE_SIZE));
 	const fragment = document.createDocumentFragment();
 	for (let i = libraryShown; i < upto; i++) fragment.appendChild(libraryCard(books[i]));
 	el.libraryGrid.appendChild(fragment);
@@ -336,6 +372,9 @@ function libraryCard(book)
 	slot.className = 'book-slot';
 	slot.dataset.bookId = book.id;
 	slot.appendChild(card);
+	// 進み具合の行は、掲載元の無い本にも空で置く (同じ列のカードの高さを揃える)
+	const status = document.createElement('div');
+	status.className = 'book-update-status';
 	if (book.source) {
 		const update = document.createElement('button');
 		update.type = 'button';
@@ -347,11 +386,11 @@ function libraryCard(book)
 			event.stopPropagation();
 			startLibraryUpdate(book).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
 		});
-		const status = document.createElement('div');
-		status.className = 'book-update-status';
 		status.setAttribute('aria-live', 'polite');
 		slot.append(update, status);
 		paintLibraryUpdate(slot, libraryUpdates.get(book.id));
+	} else {
+		slot.appendChild(status);
 	}
 	return slot;
 }
@@ -374,9 +413,9 @@ function libraryBookButton(book)
 		image.loading = 'lazy';
 		image.decoding = 'async';
 		image.alt = '';
-		// キャッシュ避けを付けない。no-cache + ETag で毎回再検証しており、
-		// パラメータを足すと 304 が使えず毎回作り直しになる
-		image.src = 'api/library/cover/' + encodeURIComponent(book.id);
+		// 版の印に更新日時を付ける。no-cache + ETag で再検証しているが、同じ URL の絵はページの中で
+		// 使い回され、「続きを取る」で表紙が変わっても前の絵のままになる。毎回変わる値は付けないこと (304 が効かなくなる)
+		image.src = 'api/library/cover/' + encodeURIComponent(book.id) + '?v=' + encodeURIComponent(book.modified || 0);
 		// 壊れた画像・未対応形式では 404 が返る。1 冊ぶん絵が出ないだけで棚は使える
 		image.addEventListener('error', () => {
 			image.remove();
@@ -427,18 +466,55 @@ async function startLibraryUpdate(book)
 		throw new Error((body && body.error) ? body.error : 'HTTP ' + response.status);
 	}
 	setLibraryUpdate(book.id, {state: body.state, message: body.message || ''});
+	let misses = 0;
 	for (;;) {
 		await new Promise(resolve => setTimeout(resolve, LIBRARY_UPDATE_POLL));
-		const job = await getJson('api/jobs/' + encodeURIComponent(body.job));
-		setLibraryUpdate(book.id, {state: job.state, message: job.message || ''});
-		if (job.state !== 'queued' && job.state !== 'running') {
-			//上書きした本の題・表紙を出し直す。開いている本は、カードを押すまで前の版のまま
-			if (job.state === 'done') {
-				if (book.id === state.bookId) libraryStale.add(book.id);
-				await loadLibrary();
-			}
+		let job;
+		try {
+			job = await getJson('api/jobs/' + encodeURIComponent(body.job));
+			misses = 0;
+		} catch (e) {
+			// 一時的な失敗で「失敗」にしない。サーバでは更新が続いている
+			if (++misses < LIBRARY_UPDATE_MISSES) continue;
+			setLibraryUpdate(book.id, {state: 'failed',
+				message: '進み具合を確かめられません (更新は続いているかもしれません。⟳ 一覧を更新で確かめてください): ' + e.message});
 			return;
 		}
+		if (job.state === 'done' && book.id === state.bookId) {
+			// 開いている本は、サーバが次の読み込みで新しい版を展開する。目次を古いままにしない
+			job.reloaded = await reloadOpenBook(book.id);
+		}
+		setLibraryUpdate(book.id, {state: job.state, message: job.message || '', reloaded: job.reloaded});
+		if (job.state !== 'queued' && job.state !== 'running') {
+			//上書きした本の題・表紙を出し直す
+			if (job.state === 'done') await loadLibrary(true);
+			return;
+		}
+	}
+}
+
+/**
+ * 開いている本を新しい版で読み込み直す。読んでいたセクションが新しい版にもあれば、そこに留まる。
+ * 読み込み直せなければ、カードを押したときに読み込み直す
+ * @return {boolean} 読み込み直したか
+ */
+async function reloadOpenBook(bookId)
+{
+	if (libraryOpening || state.bookId !== bookId) return false;
+	const item = state.book && state.book.spine ? state.book.spine[state.spineIndex] : null;
+	libraryOpening = true;
+	try {
+		state.inspection = null;
+		el.frame.removeAttribute('data-path');
+		await loadBook(item ? item.path : null);
+		if (!el.inspectPanel.hidden) renderInspector();
+		libraryStale.delete(bookId);
+		return true;
+	} catch (e) {
+		libraryStale.add(bookId);
+		return false;
+	} finally {
+		libraryOpening = false;
 	}
 }
 
@@ -456,7 +532,8 @@ function paintLibraryUpdate(slot, update)
 	const button = slot.querySelector('.book-update');
 	if (!status || !button) return;
 	const busy = update && (update.state === 'queued' || update.state === 'running');
-	button.disabled = !!busy;
+	// disabled にするとフォーカスが外れる (キーボードで押した人が先頭へ戻される)。連打は startLibraryUpdate が断る
+	button.setAttribute('aria-disabled', busy ? 'true' : 'false');
 	slot.classList.toggle('updating', !!busy);
 	if (!update) {
 		status.textContent = '';
@@ -464,7 +541,8 @@ function paintLibraryUpdate(slot, update)
 	}
 	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
 	if (update.state === 'failed' && update.message) text += ': ' + update.message;
-	if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
+	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
+	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
 	status.title = update.message || '';
 	status.dataset.state = update.state;
