@@ -681,10 +681,13 @@ public class WebAozoraConverter
 		} else {
 			if (!fileName.toLowerCase().endsWith(".txt")) fileName += ".txt";
 		}
-		//その場所で作れない長い名前だけ、255 バイトに切る（Linux は題の長い作品の txt を作れなかった。internal #16）
-		String txtExt = fileName.substring(fileName.length() - 4);
-		fileName = PathUtils.fitFileNameIn(new File(this.dstPath), fileName.substring(0, fileName.length() - 4), txtExt) + txtExt;
-		File txtFile = safeDstFile(fileName);
+		//その場所で作れない長い名前だけ、255 バイトに切る（Linux は題の長い作品の txt を作れなかった。internal #16）。
+		//名前を指定されたときは .. などを含みうるので、先に出力先の中かを確かめ、そのフォルダの中の名前だけを切る
+		File checkedFile = safeDstFile(fileName);
+		String leaf = checkedFile.getName();
+		String txtExt = leaf.substring(leaf.length() - 4);
+		File txtFile = new File(checkedFile.getParentFile(),
+			PathUtils.fitFileNameIn(checkedFile.getParentFile(), leaf.substring(0, leaf.length() - 4), txtExt) + txtExt);
 		//表紙画像（narou.rb互換: cover.jpg で保存）
 		File coverImageFile = new File(this.dstPath+"cover.jpg");
 		//更新情報格納先

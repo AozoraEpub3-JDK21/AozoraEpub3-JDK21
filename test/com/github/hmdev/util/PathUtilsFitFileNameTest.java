@@ -129,4 +129,14 @@ public class PathUtilsFitFileNameTest {
 			dir.setWritable(true, false);
 		}
 	}
+
+	/** フォルダを含む名前は試さない（PR の codex の指摘。名前を指定する道で ../ を渡すと、出力先の外にファイルを作って消せた） */
+	@Test
+	public void aNameWithAFolderIsNeverProbed() throws Exception {
+		File missing = new File(tempFolder.getRoot(), "work");
+		for (String base : new String[]{ "../" + "題".repeat(100), "..\\" + "題".repeat(100) }) {
+			assertEquals(base, PathUtils.fitFileNameIn(missing, base, ".txt"));
+			assertFalse("試すとフォルダを作る", missing.exists());
+		}
+	}
 }

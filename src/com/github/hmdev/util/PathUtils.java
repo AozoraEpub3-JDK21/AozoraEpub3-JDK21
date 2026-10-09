@@ -45,6 +45,8 @@ public class PathUtils
 	public static String fitFileNameIn(File dir, String baseName, String ext)
 	{
 		if (utf8Length(baseName + ext) <= MAX_NAME_BYTES) return baseName;
+		//フォルダを含む名前は試さない（dir の外にファイルを作らないように。呼び出し元は名前 1 つだけを渡す）
+		if (baseName.indexOf('/') >= 0 || baseName.indexOf('\\') >= 0) return baseName;
 		if (nameAccepted(dir, baseName + ext)) return baseName;
 		String fitted = fitFileName(baseName, ext, MAX_NAME_BYTES);
 		for (int limit : SMALLER_NAME_LIMITS) {
