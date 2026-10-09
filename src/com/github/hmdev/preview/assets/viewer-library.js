@@ -500,7 +500,13 @@ async function startLibraryUpdate(book)
  */
 async function reloadOpenBook(bookId)
 {
-	if (libraryOpening || state.bookId !== bookId) return false;
+	// 本を開いている最中なら、開き終わるのを待つ (開いた本が古い版を読んだ直後に更新が終わることがある。PR の codex)
+	for (let i = 0; libraryOpening && i < 300; i++) await new Promise(resolve => setTimeout(resolve, 100));
+	if (state.bookId !== bookId) return false;
+	if (libraryOpening) {
+		libraryStale.add(bookId);
+		return false;
+	}
 	const item = state.book && state.book.spine ? state.book.spine[state.spineIndex] : null;
 	libraryOpening = true;
 	try {
