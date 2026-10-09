@@ -579,7 +579,11 @@ function coverPlaceholder(book)
 async function openLibraryBook(bookId)
 {
 	if (!bookId || libraryOpening) return;
-	if (bookId === state.bookId && !libraryStale.has(bookId)) {
+	if (bookId === state.bookId) {
+		// 更新の後に読み込み直せなかった本は、読んでいたセクションを保って読み込み直す (PR #119 の codex)
+		if (libraryStale.has(bookId)) {
+			if (!await reloadOpenBook(bookId)) throw new Error('新しい版を読み込めませんでした');
+		}
 		closeLibrary();
 		return;
 	}
