@@ -104,6 +104,11 @@ public final class BookLedger
 		return UUID.nameUUIDFromBytes(("AozoraEpub3:source:"+sourceKey(sourceUrl)).getBytes(StandardCharsets.UTF_8)).toString();
 	}
 
+	/**
+	 * <b>この正規化を変えると、すでに出回っている本の identifier と、本棚が URL から計算し直す値が合わなくなり、
+	 * 本棚がその本を「Web から取った本」と見分けられなくなる</b>（{@code LibraryScanner.webSourceOf}。internal #19）。
+	 * 値は BookLedgerTest で固定してある
+	 */
 	static String sourceKey(String sourceUrl)
 	{
 		String url = sourceUrl.trim();

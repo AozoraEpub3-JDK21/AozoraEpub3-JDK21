@@ -100,6 +100,15 @@ public class LibraryScannerTest
 		assertNull("ポートが空", LibraryScanner.sanitizeSource("https://example.com:/path"));
 		assertEquals("https://example.com:8080/a", LibraryScanner.sanitizeSource("https://example.com:8080/a"));
 		assertEquals("http://[::1]:8080/a", LibraryScanner.sanitizeSource("http://[::1]:8080/a"));
+		// internal #19
+		assertNull("ホストに \\", LibraryScanner.sanitizeSource("https://evil.com\\.good.com/"));
+		assertNull("どこかに \\", LibraryScanner.sanitizeSource("https://good.com/a\\b"));
+		assertNull("ホストに U+00A0", LibraryScanner.sanitizeSource("https://exa\u00A0mple.com/"));
+		assertNull("ホストに U+3000", LibraryScanner.sanitizeSource("https://exa\u3000mple.com/"));
+		assertNull("U+2028", LibraryScanner.sanitizeSource("https://example.com/\u2028"));
+		assertNull("点だけのホスト", LibraryScanner.sanitizeSource("https://./x"));
+		assertNull("ありえないポート", LibraryScanner.sanitizeSource("https://host:99999/"));
+		assertEquals("https://host:65535/", LibraryScanner.sanitizeSource("https://host:65535/"));
 	}
 
 	@Test

@@ -57,7 +57,7 @@ public class LibraryIndexCache
 	 * 読んでから件数で切るのでは、その前に巨大なファイルを全部メモリに載せてしまう。</p>
 	 *
 	 * <p>書き: 件数だけで縛ると
-	 * {@link #MAX_ENTRIES} × {@link LibraryScanner#MAX_FIELD_CHARS} × 3 フィールドで
+	 * {@link #MAX_ENTRIES} × {@link LibraryScanner#MAX_FIELD_CHARS} × 4 フィールド（題・作者・表紙・掲載元）で
 	 * 最悪 20MB を超え、<b>書いた直後の自分のファイルを読み捨てる</b>ことになる。
 	 * 予算を超える分は古い方から落として、書ける形にしてから保存する。</p>
 	 */
@@ -169,7 +169,19 @@ public class LibraryIndexCache
 			StringBuilder buf = new StringBuilder(this.entries.size() * 128 + 64);
 			buf.append(HEADER).append('\n');
 			for (LibraryEntry entry : this.entries.values()) buf.append(formatLine(entry)).append('\n');
-			Files.writeString(this.file, buf.toString(), StandardCharsets.UTF_8);
+			//一時ファイルに書いてから置き換える。途中で切れると、最後の列（掲載元の URL）が切れた値のまま
+			//列の数も合ってしまい、別の作品の URL として読み戻されるため（internal #19）
+			Path tmp = Files.createTempFile(parent != null ? parent : Path.of("."), this.file.getFileName().toString(), ".tmp");
+			try {
+				Files.writeString(tmp, buf.toString(), StandardCharsets.UTF_8);
+				try {
+					Files.move(tmp, this.file, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+				} catch (java.nio.file.AtomicMoveNotSupportedException e) {
+					Files.move(tmp, this.file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				}
+			} finally {
+				Files.deleteIfExists(tmp);
+			}
 		} catch (IOException | RuntimeException e) {
 			/* 意図的: 保存できなくても本棚は毎回スキャンすれば動く */
 			logger.debug("本棚キャッシュを保存できませんでした: {}", this.file, e);

@@ -226,7 +226,9 @@ public class LibraryScanner
 		for (int i = 0; i < source.length(); ) {
 			int cp = source.codePointAt(i);
 			int type = Character.getType(cp);
-			if (type == Character.CONTROL || type == Character.FORMAT) return null;
+			//U+2028・U+2029 も（行の区切りとして扱われうる。internal #19）
+			if (type == Character.CONTROL || type == Character.FORMAT
+				|| type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR) return null;
 			i += Character.charCount(cp);
 		}
 		source = source.trim();
@@ -239,7 +241,14 @@ public class LibraryScanner
 			if (i >= 0 && i < end) end = i;
 		}
 		String authority = rest.substring(0, end);
-		if (authority.isEmpty() || authority.indexOf('@') >= 0 || authority.indexOf(' ') >= 0) return null;
+		if (authority.isEmpty() || authority.indexOf('@') >= 0) return null;
+		//ホストに \ や空白（ASCII 以外の空白も）があれば捨てる。WHATWG の URL は \ を / として読むので、
+		//https://evil.com\.good.com/ の行き先は evil.com になる（internal #19）
+		for (int i = 0; i < authority.length(); i++) {
+			char c = authority.charAt(i);
+			if (c == '\\' || Character.isWhitespace(c) || Character.isSpaceChar(c)) return null;
+		}
+		if (source.indexOf('\\') >= 0) return null;
 		//ホスト名があり、ポートは数字だけ（https://:443/ や https://example.com:bad/ を捨てる）
 		String host = authority;
 		String port = null;
@@ -260,7 +269,10 @@ public class LibraryScanner
 			}
 		}
 		if (host.isEmpty() || host.equals("[]") || host.indexOf(':') >= 0 && !host.startsWith("[")) return null;
-		if (port != null && (port.isEmpty() || !port.chars().allMatch(c -> c >= '0' && c <= '9') || port.length() > 5)) return null;
+		//点だけのホスト（https://./x）も捨てる
+		if (host.replace(".", "").isEmpty()) return null;
+		if (port != null && (port.isEmpty() || !port.chars().allMatch(c -> c >= '0' && c <= '9') || port.length() > 5
+			|| Integer.parseInt(port) > 65535)) return null;
 		return source;
 	}
 

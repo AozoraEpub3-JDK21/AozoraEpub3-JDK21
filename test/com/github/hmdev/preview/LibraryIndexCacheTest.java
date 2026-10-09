@@ -178,6 +178,21 @@ public class LibraryIndexCacheTest
 	}
 
 	/** 列数が合っていても、世代 1 の見出しなら読まない（世代を上げたことだけで落ちる形） */
+	/** 書くときは一時ファイルから置き換え、一時ファイルを残さない（途中で切れた行を読み戻さないように。internal #19） */
+	@Test
+	public void saveReplacesTheFileAndLeavesNoTemporary() throws Exception
+	{
+		Path book = temp.getRoot().toPath().resolve("a.epub");
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.update(List.of(new LibraryEntry(book, 1L, 2L, "書名", "著者", null, "https://ncode.syosetu.com/n1234ab/")));
+		cache.save();
+		cache.save();
+		try (java.util.stream.Stream<Path> files = Files.list(cacheFile().getParent())) {
+			assertEquals(List.of(cacheFile().getFileName().toString()),
+				files.map(f -> f.getFileName().toString()).filter(n -> n.startsWith(cacheFile().getFileName().toString())).toList());
+		}
+	}
+
 	@Test
 	public void aFirstGenerationHeaderAloneDiscardsTheFile() throws Exception
 	{
