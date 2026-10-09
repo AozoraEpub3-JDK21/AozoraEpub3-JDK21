@@ -115,9 +115,12 @@ public class WebAozoraConverterLongFileNameTest {
 		File outside = tempFolder.newFile("outside.txt");
 		Files.write(outside.toPath(), "外のファイル".getBytes(StandardCharsets.UTF_8));
 
-		// 作品のフォルダに、切った名前の txt として外を指すリンクを置く
+		// 作品のフォルダに、切った名前の txt として外を指すリンクを置く。
+		// txt をもう 1 つ置くのは、台帳より前の txt の名前を引き継ぐ処理（1 つだけのときに働く）にリンクを拾わせず、
+		// 切る前の名前で範囲を確かめた後に、切った名前へ書きに行く道を通すため
 		File workDir = new File(cache, base.substring(base.indexOf("//") + 2).replace(':', '_') + "/novel");
 		assertTrue(workDir.mkdirs());
+		Files.write(new File(workDir, "other.txt").toPath(), new byte[0]);
 		String cutName = com.github.hmdev.util.PathUtils.fitFileName("[著者] " + title, ".txt") + ".txt";
 		try {
 			Files.createSymbolicLink(new File(workDir, cutName).toPath(), outside.toPath());
