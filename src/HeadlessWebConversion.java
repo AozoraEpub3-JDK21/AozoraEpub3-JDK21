@@ -65,26 +65,35 @@ public class HeadlessWebConversion
 	 */
 	public Result convert(String url, File dstPath, File expectedOutFile, boolean overwrite)
 	{
+		//kindle は取りに行く前に断る（取ってから断ると、次の「更新分のみ」で更新なしに見える。#116 のゲート2）
+		String outExt = outExt();
+		if (outExt.startsWith(".mobi")) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
 		try {
 			WebAozoraConverter web = WebAozoraConverter.createWebAozoraConverter(url, new File(this.basePath + "web"));
 			if (web == null) return new Result(false, false, null, "このサイトには対応していません: " + url);
 			//WebAozoraConverter は FQDN ごとに使い回されるので、毎回すべて入れ直す（GUI と同じ）
 			web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
 			web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
-			File settingFile = new File(this.basePath + "setting_narourb.ini");
-			NarouFormatSettings.generateDefaultIfMissing(settingFile);
-			web.loadFormatSettings(settingFile);
-			web.getFormatSettings().loadReplacePatterns(new File(this.basePath + "replace_narourb.txt"));
-			String[] styles = { "css", "simple", "plain" };
-			int style = intOf("AuthorCommentStyle", 0);
-			if (style >= 0 && style < styles.length) web.getFormatSettings().setAuthorCommentStyle(styles[style]);
+			//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
+			try {
+				File settingFile = new File(this.basePath + "setting_narourb.ini");
+				NarouFormatSettings.generateDefaultIfMissing(settingFile);
+				web.loadFormatSettings(settingFile);
+				web.getFormatSettings().loadReplacePatterns(new File(this.basePath + "replace_narourb.txt"));
+				String[] styles = { "css", "simple", "plain" };
+				int style = intOf("AuthorCommentStyle", 0);
+				if (style >= 0 && style < styles.length) web.getFormatSettings().setAuthorCommentStyle(styles[style]);
+			} catch (Exception e) {
+				logger.warn("フォーマット設定を読み込めませんでした", e);
+				LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
+			}
 			web.skipImages = GuiConversionSettings.flag(this.props, "WebSkipImages");
 
 			int interval = 500;
-			try { interval = (int)(Float.parseFloat(this.props.getProperty("WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じ既定値 */ }
+			try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
 			int beforeChapter = GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
 			float modifiedExpire = 0;
-			try { modifiedExpire = Float.parseFloat(this.props.getProperty("WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じ既定値 */ }
+			try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
 			boolean convertUpdated = GuiConversionSettings.flag(this.props, "WebConvertUpdated");
 			boolean modifiedOnly = GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
@@ -104,8 +113,7 @@ public class HeadlessWebConversion
 	/** Web 変換でできた txt を EPUB にする（GUI の convertFile の、Web 変換のときの値で） */
 	Result convertText(File srcFile, File dstPath, File expectedOutFile, boolean overwrite) throws Exception
 	{
-		String outExt = this.props.getProperty("Ext", ".epub").trim();
-		if (outExt.isEmpty()) outExt = ".epub";
+		String outExt = outExt();
 		if (outExt.startsWith(".mobi")) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
 
 		GuiConversionSettings.applyTo(this.props, this.writer, this.imageWriter);
@@ -147,10 +155,18 @@ public class HeadlessWebConversion
 			if (bookInfo.creator == null || bookInfo.creator.length() == 0) bookInfo.creator = titleCreator[1] == null ? "" : titleCreator[1];
 		}
 
-		File outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, GuiConversionSettings.flag(this.props, "AutoFileName"), outExt);
-		if (expectedOutFile != null
-			&& !outFile.getCanonicalFile().equals(expectedOutFile.getCanonicalFile())) {
-			return new Result(false, false, outFile, "本棚の本と違う名前で出力されるので、書きませんでした: " + outFile.getName());
+		boolean autoFileName = GuiConversionSettings.flag(this.props, "AutoFileName");
+		//本棚の本と名前を照らすときは、照らす前に台帳へ名前を記録しない（違ったときに、違う名前が台帳に残る。#116 のゲート2）
+		File ledgerDir = bookInfo.ledgerDir;
+		if (expectedOutFile != null) bookInfo.ledgerDir = null;
+		File outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
+		if (expectedOutFile != null) {
+			if (!outFile.getCanonicalFile().equals(expectedOutFile.getCanonicalFile())) {
+				return new Result(false, false, outFile, "本棚の本と違う名前で出力されるので、書きませんでした: " + outFile.getName());
+			}
+			//名前が合っていれば、記録する（台帳にまだ名前が無いときだけ記録される）
+			bookInfo.ledgerDir = ledgerDir;
+			outFile = AozoraEpub3.getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
 		}
 		if (outFile.exists() && !overwrite) return new Result(false, false, outFile, "ファイルが存在します: " + outFile.getName());
 
@@ -161,6 +177,12 @@ public class HeadlessWebConversion
 
 	private int intOf(String key, int defaultValue)
 	{
-		try { return Integer.parseInt(this.props.getProperty(key).trim()); } catch (Exception e) { return defaultValue; }
+		try { return Integer.parseInt(GuiConversionSettings.text(this.props, key).trim()); } catch (Exception e) { return defaultValue; }
+	}
+
+	private String outExt()
+	{
+		String ext = this.props.getProperty("Ext", ".epub").trim();
+		return ext.isEmpty() ? ".epub" : ext;
 	}
 }

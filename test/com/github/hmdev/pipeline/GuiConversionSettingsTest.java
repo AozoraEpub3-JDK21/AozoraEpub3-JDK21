@@ -75,7 +75,7 @@ public class GuiConversionSettingsTest {
 			"AutoMargin", "", "AutoMarginWhiteLevel", "80",
 			"FontSize", "110.5"), off, offImage);
 		assertEquals(off.calls.get(0), offImage.calls.get(0));
-		assertEquals("image 600 800 600 800 0 0 400 600 600 3 true false 0 0.0 0 0 0 0.8 1.0 0 0 0 0.0 0 0.03",
+		assertEquals("image 600 800 600 800 0 0 400 600 600 3 true false 0 0.0 0 0 0 0.85 1.0 0 0 0 0.0 0 0.03",
 			off.calls.get(0));
 		assertEquals("styles 0.5em,0.5em,0.5em,0.5em 0em,0em,0em,0em 1.8 110 false false", off.calls.get(2));
 
@@ -147,5 +147,36 @@ public class GuiConversionSettingsTest {
 		assertEquals("comment true false", d.calls.get(7));
 		assertEquals("chukiRuby true false", d.calls.get(6));
 		assertEquals(0, d.calls.stream().filter(x -> x.startsWith("pageBreak")).count());
+	}
+
+	/**
+	 * キーが無いとき（手書きの ini・プリセット）は、GUI の部品の初期状態（#116 のゲート1・2）。
+	 * 縦書き・表題をファイル名に・なろう API・API の予備は ON で始まる。倍率のチェックは部品は ON だが、GUI はキーが無いと OFF にする
+	 */
+	@Test
+	public void missingKeysTakeTheGuiInitialState() throws Exception {
+		Properties empty = new Properties();
+		assertEquals(true, GuiConversionSettings.flag(empty, "Vertical"));
+		assertEquals(true, GuiConversionSettings.flag(empty, "AutoFileName"));
+		assertEquals(true, GuiConversionSettings.flag(empty, "UseNarouApi"));
+		assertEquals(true, GuiConversionSettings.flag(empty, "ApiFallback"));
+		assertEquals(false, GuiConversionSettings.flag(empty, "ImageScaleChecked"));
+		assertEquals(false, GuiConversionSettings.flag(empty, "NoIllust"));
+		assertEquals("書いてある空は OFF", false, GuiConversionSettings.flag(props("Vertical", ""), "Vertical"));
+		assertEquals("24", GuiConversionSettings.text(empty, "WebModifiedExpire"));
+		assertEquals("400", GuiConversionSettings.text(empty, "PageBreakSize"));
+
+		//改ページは表の既定で ON、大きさも GUI の初期値（0 にすると改ページが切れる）
+		GuiRecordingConverter c = new GuiRecordingConverter();
+		GuiConversionSettings.applyTo(empty, c, true);
+		//空行・章での改ページは表の既定で OFF
+		assertEquals("pageBreak " + (400 * 1024) + " 0 0 0 0",
+			c.calls.stream().filter(x -> x.startsWith("pageBreak")).findFirst().orElse("無い"));
+
+		//書き出しも、画面サイズ・JPEG の品質などは GUI の初期値
+		RecordingWriter w = new RecordingWriter();
+		GuiConversionSettings.applyTo(empty, w, new RecordingWriter());
+		assertEquals("image 600 800 600 800 0 0 400 600 600 3 true false 0 0.0 0 0 0 0.85 1.0 0 0 0 0.0 0 0.03", w.calls.get(0));
+		assertEquals("styles 0.5em,0.5em,0.5em,0.5em 0em,0em,0em,0em 1.8 100 false false", w.calls.get(2));
 	}
 }

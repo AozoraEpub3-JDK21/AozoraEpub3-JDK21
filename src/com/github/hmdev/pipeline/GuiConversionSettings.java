@@ -22,12 +22,32 @@ import com.github.hmdev.writer.Epub3Writer;
  * <li>改ページは {@code PageBreak} が ON のときだけ入れる。章のパターンは前後の空白を落とす</li>
  * </ul>
  *
- * <p>キーが無いときは GUI の部品の初期値（{@link SettingDefaults}）。数値が読めないときは GUI の既定値に倒す
- * （GUI は部品の入力で弾くので、そこで落ちることは無い）。</p>
+ * <p>キーが無いときは GUI の部品の初期値（{@link SettingDefaults}・{@link #INITIALLY_ON}・{@link #INITIAL_TEXT}）。数値が読めないときは
+ * GUI がその場で使う値に倒す（GUI は部品の入力で弾くので、そこで落ちることは無い）。</p>
  */
 public final class GuiConversionSettings
 {
 	private GuiConversionSettings() {}
+
+	/** 既定値の表に無く、GUI の部品が ON で始まるもの（AozoraEpub3Applet で作るときに選ばれている。#116 のゲート1・2） */
+	static final java.util.Set<String> INITIALLY_ON = java.util.Set.of("Vertical", "AutoFileName", "UseNarouApi", "ApiFallback");
+
+	/**
+	 * GUI の文字の欄・選択の初期値（キーが無いときに使う。AozoraEpub3Applet で部品を作るときの値）。
+	 * 既定値の表（SettingDefaults）にあるものは表を使う
+	 */
+	static final java.util.Map<String, String> INITIAL_TEXT = java.util.Map.ofEntries(
+		java.util.Map.entry("DispW", "600"), java.util.Map.entry("DispH", "800"),
+		java.util.Map.entry("CoverW", "600"), java.util.Map.entry("CoverH", "800"),
+		java.util.Map.entry("SinglePageWidth", "600"),
+		java.util.Map.entry("ImageScale", "1.0"), java.util.Map.entry("ImageFloatW", "600"), java.util.Map.entry("ImageFloatH", "400"),
+		java.util.Map.entry("ResizeNumW", "2048"), java.util.Map.entry("ResizeNumH", "2048"),
+		java.util.Map.entry("GammaValue", "1.0"),
+		java.util.Map.entry("AutoMarginLimitH", "15"), java.util.Map.entry("AutoMarginLimitV", "15"),
+		java.util.Map.entry("AutoMarginWhiteLevel", "80"), java.util.Map.entry("AutoMarginPadding", "1.0"),
+		java.util.Map.entry("AutoMarginNombreSize", "3.0"),
+		java.util.Map.entry("LineHeight", "1.8"), java.util.Map.entry("FontSize", "100"),
+		java.util.Map.entry("WebInterval", "0.5"), java.util.Map.entry("WebModifiedExpire", "24"), java.util.Map.entry("WebBeforeChapterCount", "1"));
 
 	private static boolean on(Properties p, String key)
 	{
@@ -35,26 +55,41 @@ public final class GuiConversionSettings
 	}
 
 	/**
-	 * ini のチェックの値。GUI の ini は全部のキーを持つ。キーが無いとき（手書きの ini）は、既定値の表にあるキーは GUI と同じ既定値、
-	 * 表に無いキーは OFF（GUI は部品の初期状態のまま。表に無いものは初期状態が OFF のものが多い）
+	 * ini のチェックの値。GUI の ini は全部のキーを持つ。キーが無いとき（手書きの ini・プリセット）は、GUI の部品の初期状態:
+	 * 既定値の表にあるキーは表、表に無いキーは {@link #INITIALLY_ON} なら ON、ほかは OFF。
+	 * {@code ImageScaleChecked} は部品が ON で始まるが、GUI はキーが無いと OFF にする（loadProperties）
 	 */
 	public static boolean flag(Properties p, String key)
 	{
 		try {
 			return SettingDefaults.getBoolean(p, key);
 		} catch (IllegalArgumentException e) {
+			if (!p.containsKey(key)) return INITIALLY_ON.contains(key);
 			return "1".equals(p.getProperty(key));
 		}
 	}
 
-	private static int intOf(Properties p, String key, int defaultValue)
+	/** ini の文字の値。キーが無いときは GUI の部品の初期値（既定値の表 → {@link #INITIAL_TEXT}） */
+	public static String text(Properties p, String key)
 	{
-		try { return Integer.parseInt(p.getProperty(key).trim()); } catch (Exception e) { return defaultValue; }
+		String value = p.getProperty(key);
+		if (value != null) return value;
+		try {
+			return Integer.toString(SettingDefaults.getInt(key));
+		} catch (IllegalArgumentException e) {
+			return INITIAL_TEXT.get(key);
+		}
 	}
 
-	private static float floatOf(Properties p, String key, float defaultValue)
+	/** 数値として読む。キーが無ければ GUI の初期値、読めなければ defaultValue（GUI が読めないときに使う値） */
+	static int intOf(Properties p, String key, int defaultValue)
 	{
-		try { return Float.parseFloat(p.getProperty(key).trim()); } catch (Exception e) { return defaultValue; }
+		try { return Integer.parseInt(text(p, key).trim()); } catch (Exception e) { return defaultValue; }
+	}
+
+	static float floatOf(Properties p, String key, float defaultValue)
+	{
+		try { return Float.parseFloat(text(p, key).trim()); } catch (Exception e) { return defaultValue; }
 	}
 
 	/** 書き出し 2 つ（本文と画像だけの本）に、画像・目次・スタイルの設定を入れる（GUI の convertFiles と同じ） */
@@ -80,7 +115,7 @@ public final class GuiConversionSettings
 			imageFloatH = intOf(p, "ImageFloatH", 0);
 		}
 		float jpegQuality = 0.8f;
-		try { jpegQuality = Integer.parseInt(p.getProperty("JpegQuality").trim()) / 100f; } catch (Exception e) { /* 意図的: 既定値を維持 */ }
+		try { jpegQuality = Integer.parseInt(text(p, "JpegQuality").trim()) / 100f; } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0.8 */ }
 		float gamma = on(p, "Gamma") ? floatOf(p, "GammaValue", 1.0f) : 1.0f;
 		int autoMarginLimitH = 0;
 		int autoMarginLimitV = 0;
@@ -94,7 +129,7 @@ public final class GuiConversionSettings
 			autoMarginWhiteLevel = intOf(p, "AutoMarginWhiteLevel", 0);
 			autoMarginPadding = floatOf(p, "AutoMarginPadding", 0);
 			autoMarginNombre = intOf(p, "AutoMarginNombre", 0);
-			try { autoMarginNombreSize = Float.parseFloat(p.getProperty("AutoMarginNombreSize").trim()) * 0.01f; } catch (Exception e) { /* 意図的: 既定値を維持 */ }
+			try { autoMarginNombreSize = Float.parseFloat(text(p, "AutoMarginNombreSize").trim()) * 0.01f; } catch (Exception e) { /* 意図的: 既定値を維持 */ }
 		}
 		int rotate = intOf(p, "RotateImage", 0);
 		int rotateAngle = rotate == 1 ? 90 : (rotate == 2 ? -90 : 0);
@@ -103,12 +138,11 @@ public final class GuiConversionSettings
 		boolean fitImage = on(p, "FitImage");
 		boolean svgImage = on(p, "SvgImage");
 
-		writer.setImageParam(dispW, dispH, coverW, coverH, resizeW, resizeH, singlePageSizeW, singlePageSizeH, singlePageWidth,
-			imageSizeType, fitImage, svgImage, rotateAngle,
-			imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQuality, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, autoMarginNombreSize);
-		imageWriter.setImageParam(dispW, dispH, coverW, coverH, resizeW, resizeH, singlePageSizeW, singlePageSizeH, singlePageWidth,
-			imageSizeType, fitImage, svgImage, rotateAngle,
-			imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQuality, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, autoMarginNombreSize);
+		for (Epub3Writer w : new Epub3Writer[]{ writer, imageWriter }) {
+			w.setImageParam(dispW, dispH, coverW, coverH, resizeW, resizeH, singlePageSizeW, singlePageSizeH, singlePageWidth,
+				imageSizeType, fitImage, svgImage, rotateAngle,
+				imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQuality, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, autoMarginNombreSize);
+		}
 		//目次階層化設定
 		writer.setTocParam(on(p, "NavNest"), on(p, "NcxNest"));
 
@@ -128,7 +162,7 @@ public final class GuiConversionSettings
 		String[] margins = { initial, initial, initial, initial };
 		String value = p.getProperty(key);
 		if (value != null) {
-			String[] values = value.split(",");
+			String[] values = value.split(",");//GUI の欄の数を超えた分は捨てる
 			for (int i = 0; i < Math.min(values.length, margins.length); i++) margins[i] = values[i];
 		}
 		for (int i = 0; i < margins.length; i++) margins[i] += unit;
@@ -157,6 +191,7 @@ public final class GuiConversionSettings
 		converter.setForceIndent(on(p, "ForceIndent"));
 		//強制改ページ。GUI は ON のときだけ入れる（OFF なら変換器の既定の 0 のまま）
 		if (on(p, "PageBreak")) {
+			//キーが無ければ GUI の初期値（400KB など）。0 にすると改ページが切れる（#116 のゲート1）
 			int size = intOf(p, "PageBreakSize", 0) * 1024;
 			int empty = 0;
 			int emptySize = 0;

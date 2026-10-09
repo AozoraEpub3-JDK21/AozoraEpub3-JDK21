@@ -34,6 +34,7 @@ public class HeadlessWebConversionTest {
 
 	private HttpServer server;
 	private String fqdn;
+	private final java.util.concurrent.atomic.AtomicInteger requests = new java.util.concurrent.atomic.AtomicInteger();
 
 	@After
 	public void tearDown() {
@@ -53,6 +54,7 @@ public class HeadlessWebConversionTest {
 	private String serveAndBase() throws Exception {
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
 		server.createContext("/", exchange -> {
+			requests.incrementAndGet();
 			String path = exchange.getRequestURI().getPath();
 			if (path.equals("/novel/")) {
 				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">"
@@ -75,13 +77,15 @@ public class HeadlessWebConversionTest {
 		for (File f : repo.listFiles((d, n) -> n.startsWith("chuki_") && n.endsWith(".txt"))) {
 			Files.copy(f.toPath(), new File(root, f.getName()).toPath());
 		}
-		return root.getAbsolutePath() + File.separator;
+		lastBasePath = root.getAbsolutePath() + File.separator;
+		return lastBasePath;
 	}
 
 	private HeadlessWebConversion conversion(Properties props, String basePath) throws Exception {
 		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
 		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
-		return new HeadlessWebConversion(props, basePath, tempFolder.newFolder("cache"), writer, imageWriter);
+		if (lastCache == null) lastCache = tempFolder.newFolder("cache");
+		return new HeadlessWebConversion(props, basePath, lastCache, writer, imageWriter);
 	}
 
 	private Properties guiDefaults() throws Exception {
@@ -116,6 +120,7 @@ public class HeadlessWebConversionTest {
 		assertFalse(r.ok());
 		assertTrue(r.message(), r.message().contains("kindle"));
 		assertEquals(0, dst.list().length);
+		assertEquals("取りに行く前に断る（取ってから断ると、次の更新で更新なしに見える）", 0, requests.get());
 	}
 
 	/** 本棚の本と違う名前に出力されるときは書かない（別の本として増えないように） */
@@ -128,6 +133,24 @@ public class HeadlessWebConversionTest {
 		assertFalse(r.ok());
 		assertTrue(r.message(), r.message().contains("違う名前"));
 		assertEquals(0, dst.list().length);
+		//違う名前を台帳に記録しない（記録すると、以後の変換がその名前になって本が 2 冊になる。#116 のゲート2）
+		com.github.hmdev.info.BookLedger ledger = ledgerOf();
+		assertNotNull(ledger);
+		assertEquals(null, ledger.outputBaseName);
+
+		//名前が合えば記録する
+		HeadlessWebConversion.Result ok = conversion(guiDefaults(), basePathOf()).convert("http://" + fqdn + "/novel/", dst, new File(dst, "[著者] 題.epub"), true);
+		assertTrue(ok.message(), ok.ok());
+		assertEquals("[著者] 題", ledgerOf().outputBaseName);
+	}
+
+	private String lastBasePath;
+	private File lastCache;
+
+	private String basePathOf() { return lastBasePath; }
+
+	private com.github.hmdev.info.BookLedger ledgerOf() {
+		return com.github.hmdev.info.BookLedger.load(new File(lastCache, fqdn.replace(':', '_') + "/novel"));
 	}
 
 	@Test
