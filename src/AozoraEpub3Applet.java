@@ -4358,6 +4358,8 @@ public class AozoraEpub3Applet extends JPanel
 					jCheckChapterName.isSelected(),
 					jCheckChapterNumOnly.isSelected()||jCheckChapterNumTitle.isSelected()||jCheckChapterNumParen.isSelected()||jCheckChapterNumParenTitle.isSelected(),
 					jCheckChapterPattern.isSelected());
+			String titleBefore = title.trim();
+			String creatorBefore = creator.trim();
 			this.jConfirmDialog.showDialog(
 				srcFile,
 				(dstPath!=null ? dstPath.getAbsolutePath() : srcFile.getParentFile().getAbsolutePath())+File.separator,
@@ -4384,6 +4386,12 @@ public class AozoraEpub3Applet extends JPanel
 			//確認ダイアログの値をBookInfoに設定
 			bookInfo.title = this.jConfirmDialog.getMetaTitle();
 			bookInfo.creator = this.jConfirmDialog.getMetaCreator();
+			//題か著者を書き換えたら、Web の作品でもこの回は書き換えた題で名前を作る（台帳の名前は使わず、記録もしない）
+			//画面のボタン（再取得・ファイル名優先）も題を書き換えるので、画面を出す前の値と比べる。画面の値は前後の空白を落としてある
+			if (!titleBefore.equals(bookInfo.title.trim()) || !creatorBefore.equals(bookInfo.creator.trim())) {
+				bookInfo.outputBaseName = null;
+				bookInfo.ledgerDir = null;
+			}
 			bookInfo.titleAs = this.jConfirmDialog.getMetaTitleAs();
 			bookInfo.creatorAs = this.jConfirmDialog.getMetaCreatorAs();
 			bookInfo.publisher = this.jConfirmDialog.getMetaPublisher();
