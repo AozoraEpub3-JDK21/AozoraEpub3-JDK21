@@ -93,7 +93,7 @@ public class ConversionSettingsTest {
 	}
 
 	/** 変換器が受け取った呼び出しを、名前と引数で順に記録する */
-	static final class RecordingConverter extends com.github.hmdev.converter.AozoraEpub3Converter {
+	static class RecordingConverter extends com.github.hmdev.converter.AozoraEpub3Converter {
 		final java.util.List<String> calls = new java.util.ArrayList<>();
 		RecordingConverter() throws Exception {
 			super(new com.github.hmdev.writer.Epub3Writer(com.github.hmdev.util.VelocityTestUtils.templateDir() + java.io.File.separator,
