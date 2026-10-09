@@ -1,0 +1,163 @@
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+
+import org.junit.Assume;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+
+import com.github.hmdev.info.BookInfo;
+
+/**
+ * 深いフォルダに出すとき、パス全体の長さ（MAX_PATH 259 文字・題から作る名前は 250 文字）で名前を切っても、
+ * 末尾だけ違う題が同じ名前にならないことのテスト（internal #16 の残件）。
+ *
+ * 修正前は名前の後ろを印なしで切っていたので、「…上」「…下」が同じ名前になり、あとの本が前の本を上書きしていた。
+ * 名前 1 つが 255 バイトを超えるときの切り詰め（PR #112）と同じ印（"~" と 16 進 6 桁）を付ける。
+ */
+public class AozoraEpub3DeepFolderNameTest {
+	@Rule
+	public TemporaryFolder tempFolder = new TemporaryFolder();
+
+	/** 出力先のパスがだいたい depth 文字になるフォルダ（win2 の実測は 187 文字） */
+	/** 一時フォルダの実パス（macOS の /var → /private/var を解いた先）。長さは実パスで数えるので、ここから作る */
+	private File root() throws Exception {
+		return tempFolder.getRoot().toPath().toRealPath().toFile();
+	}
+
+	private File deepFolder(int depth) throws Exception {
+		File dir = root();
+		while (dir.getAbsolutePath().length() < depth - 11) {
+			dir = new File(dir, "deepfolder");
+		}
+		dir.mkdirs();
+		return dir;
+	}
+
+	private File outFile(File dst, String title) throws Exception {
+		BookInfo bookInfo = new BookInfo(new File(dst, "in.txt"));
+		bookInfo.creator = "著者";
+		bookInfo.title = title;
+		return AozoraEpub3.getOutFile(new File(dst, "in.txt"), dst, bookInfo, true, ".epub");
+	}
+
+	/** 末尾だけ違う長い題 */
+	private static final String BODY = "とても長い題の作品".repeat(10);
+
+	@Test
+	public void titlesThatDifferOnlyAtTheEndDoNotShareANameInADeepFolder() throws Exception {
+		File dst = deepFolder(187);
+		File upper = outFile(dst, BODY + "（上）");
+		File lower = outFile(dst, BODY + "（下）");
+		assertNotEquals("上と下が同じ名前になって上書きしない", upper.getName(), lower.getName());
+		for (File f : new File[] { upper, lower }) {
+			assertTrue("フルパスは 259 文字以内: " + f.getAbsolutePath().length(), f.getAbsolutePath().length() <= 259);
+			assertTrue("題から作る名前は拡張子を除いて 250 文字以内",
+				f.getAbsolutePath().length() - ".epub".length() <= 250);
+			assertTrue(f.getName(), f.getName().matches("\\[著者\\] とても長い題の作品.*~[0-9a-f]{6}\\.epub"));
+		}
+		//同じ題からは毎回同じ名前（変換し直すたびに別の本が増えない）
+		assertEquals(upper.getName(), outFile(dst, BODY + "（上）").getName());
+	}
+
+	/** 出力先のパスがちょうど length 文字のフォルダ */
+	private File folderOfLength(int length) throws Exception {
+		File dir = root();
+		while (dir.getAbsolutePath().length() < length - 20) {
+			dir = new File(dir, "deepfolder");
+		}
+		int rest = length - dir.getAbsolutePath().length() - 1;
+		dir = new File(dir, "d".repeat(rest));
+		dir.mkdirs();
+		assertEquals(length, dir.getAbsolutePath().length());
+		return dir;
+	}
+
+	/**
+	 * 名前に使える文字が印の長さ（7 文字）ちょうどのときも、印を付ける（PR #114 の codex の指摘）。
+	 * 題から作る名前の上限は、拡張子を除いたフルパスで 250 文字なので、出力先が 242 文字だと名前に残るのは 7 文字。
+	 * 修正前は印を付けない切り方に落ち、上・下が同じ名前になって上書きしていた。
+	 */
+	@Test
+	public void aNameWithRoomOnlyForTheMarkIsTheMarkAlone() throws Exception {
+		File dst = folderOfLength(242);
+		File upper = outFile(dst, BODY + "（上）");
+		File lower = outFile(dst, BODY + "（下）");
+		assertNotEquals("上と下が同じ名前になって上書きしない", upper.getName(), lower.getName());
+		assertTrue(upper.getName(), upper.getName().matches("~[0-9a-f]{6}\\.epub"));
+		assertTrue(lower.getName(), lower.getName().matches("~[0-9a-f]{6}\\.epub"));
+	}
+
+	/**
+	 * 名前に使える文字が印の長さ（7 文字）より少ないとき、Windows では変換を断る（2026-10-09 利用者決定）。
+	 * 修正前は印を付けずに切っていたので、出力先が 243 文字だと上・下が同じ「[著者] と.epub」になり、上書きしていた。
+	 * mac・Linux は MAX_PATH が無いので断らず、切らずに書く（断ると、前は変換できた深いフォルダへの変換が止まる。#114 のゲート2）
+	 */
+	@Test
+	public void aFolderTooDeepForTheMarkIsRefusedOnlyOnWindows() throws Exception {
+		for (int length : new int[] { 243, 249 }) {
+			File dst = folderOfLength(length);
+			//OS は升の側で見る（製品の isWindows() を使うと、それが壊れたときに期待も一緒に動いて升が黙る）
+			if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows")) {
+				try {
+					outFile(dst, BODY + "（上）");
+					fail("出力先が " + length + " 文字なら断る");
+				} catch (IOException e) {
+					assertTrue(e.getMessage(), e.getMessage().startsWith("出力先のフォルダが深すぎて"));
+					assertTrue("どこまで浅くすればよいかを言う: " + e.getMessage(), e.getMessage().contains("242 文字以内"));
+				}
+			} else {
+				File upper = outFile(dst, BODY + "（上）");
+				File lower = outFile(dst, BODY + "（下）");
+				assertNotEquals("上と下が同じ名前になって上書きしない", upper.getName(), lower.getName());
+				assertTrue("名前は今までの作り方のまま（パスの長さでは切らない）: " + upper.getName(),
+					upper.getName().startsWith("[著者] とても長い題の作品"));
+			}
+		}
+	}
+
+	/** 出力先を symlink 越しに渡しても、長さは書く先の実パスで数える（#114 のゲート2。mac の /var も同じ形） */
+	@Test
+	public void theLengthIsCountedOnTheRealPath() throws Exception {
+		File real = deepFolder(200);
+		File link = new File(root(), "l");
+		try {
+			Files.createSymbolicLink(link.toPath(), real.toPath());
+		} catch (UnsupportedOperationException | IOException e) {
+			Assume.assumeNoException("リンクを作れない環境のためスキップ", e);
+		}
+		File out = outFile(link, BODY + "（上）");
+		String written = out.toPath().toAbsolutePath().toString();
+		String realPath = new File(real, out.getName()).getAbsolutePath();
+		assertTrue("書く先の実パスは 250 文字以内（拡張子を除く）: " + realPath.length(),
+			realPath.length() - ".epub".length() <= 250);
+		assertTrue(out.getName(), out.getName().matches(".*~[0-9a-f]{6}\\.epub"));
+		assertTrue(written, written.length() > 0);
+	}
+
+	@Test
+	public void aNameThatFitsIsNotChanged() throws Exception {
+		File dst = deepFolder(187);
+		assertEquals("[著者] 短い題.epub", outFile(dst, "短い題").getName());
+	}
+
+	@Test
+	public void theCutDoesNotSplitASurrogatePairOrLeaveATrailingSpace() throws Exception {
+		File dst = deepFolder(187);
+		//𠮷 (U+20BB7) はサロゲートペア。空白も混ぜて、どこで切れても壊れないことを見る
+		String title = "𠮷 ".repeat(60);
+		String name = outFile(dst, title).getName();
+		//切られて印が付いていることを先に確かめる（切られていなければ、下の確かめは名前の途中を見るだけで空振りする）
+		assertTrue("切られて印が付く: " + name, name.matches(".*~[0-9a-f]{6}\\.epub"));
+		String base = name.substring(0, name.length() - ".epub".length() - 7);
+		assertTrue("末尾に空白を残さない: [" + base + "]", !base.endsWith(" "));
+		char last = base.charAt(base.length() - 1);
+		assertTrue("サロゲートペアを割らない", !Character.isHighSurrogate(last));
+	}
+}

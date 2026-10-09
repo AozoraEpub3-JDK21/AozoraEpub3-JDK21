@@ -854,12 +854,19 @@ public class AozoraEpub3
 		return inWorkingDir;
 	}
 
+	/** MAX_PATH（フルパス 260 文字）の制限がある OS か */
+	static boolean isWindows()
+	{
+		return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows");
+	}
+
 	/** 出力ファイルを生成 */
 	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) throws IOException
 	{
 		//出力ファイル
 		if (dstPath == null) dstPath = srcFile.getAbsoluteFile().getParentFile();
 		String outFileName = "";
+		boolean fromTitle = false;
 		if (autoFileName && (bookInfo.outputBaseName != null || bookInfo.creator != null || bookInfo.title != null)) {
 			//Web から取った作品は、題が変わっても台帳の名前のまま（同じ本が別の名前で増えないように）
 			String baseName = bookInfo.outputBaseName;
@@ -877,15 +884,37 @@ public class AozoraEpub3
 				BookLedger.recordOutputBaseName(bookInfo, baseName);
 			}
 			outFileName = dstPath.getAbsolutePath()+"/"+baseName;
-			if (outFileName.length() > 250) outFileName = outFileName.substring(0, 250);
+			fromTitle = true;
 		} else {
 			outFileName = dstPath.getAbsolutePath()+"/"+srcFile.getName().replaceFirst("\\.[^\\.]+$", "");
 		}
 		if (outExt.length() == 0) outExt = ".epub";
 		// Windows MAX_PATH (260) 対策: フルパス長を拡張子込みで制限
 		int maxPath = 259; // 260 - 1 (null terminator)
-		if (outFileName.length() + outExt.length() > maxPath) {
-			outFileName = outFileName.substring(0, maxPath - outExt.length());
+		//題から作る名前は、拡張子を除いたフルパスでも 250 文字まで（前からの制限）
+		int maxChars = maxPath - outExt.length();
+		if (fromTitle) maxChars = Math.min(maxChars, 250);
+		//書くのは実パス（symlink・junction・8.3 形式の短い名前を解いた先）なので、長さもそちらで数える。
+		//見かけのパスで数えると、macOS の /var → /private/var のような出力先で上限を超えていた（#114 のゲート2）
+		String realDst = PathUtils.realPath(dstPath.toPath()).toString();
+		int prefixLen = realDst.length() + 1;
+		String nameOnly = outFileName.substring(dstPath.getAbsolutePath().length() + 1);
+		if (prefixLen + nameOnly.length() > maxChars) {
+			//名前の側だけを切って印を付ける（末尾だけ違う題が同じ名前になって上書きしないように。internal #16）
+			//名前に使える文字が印の長さちょうどなら、印だけの名前にする（> だと、先頭の数文字が同じ題どうしが上書きし合う。PR #114 の codex）
+			if (maxChars - prefixLen >= PathUtils.CUT_MARK_LENGTH) {
+				outFileName = dstPath.getAbsolutePath() + "/" + PathUtils.fitFileNameChars(nameOnly, maxChars - prefixLen);
+			} else if (isWindows()) {
+				//出力先が深すぎて、印（7 文字）の入る余地が無い。黙って切ると、先頭の数文字が同じ題どうしが
+				//上書きし合うので、変換を断る（2026-10-09 利用者決定。internal #16）
+				//長さは実パスで数えるので、リンク越しに渡されたときは実際の場所も出す（何が長いのか分かるように。#114 の win2）
+				String where = dstPath.getAbsolutePath();
+				if (!where.equals(realDst)) where += "（実際の場所: " + realDst + "、" + realDst.length() + " 文字）";
+				throw new IOException("出力先のフォルダが深すぎて、ファイル名を付けられません（フォルダのパスは "
+					+ (maxChars - PathUtils.CUT_MARK_LENGTH - 1) + " 文字以内にしてください）: " + where);
+			}
+			//mac・Linux は MAX_PATH が無く長いパスを作れるので、印の入る余地が無いときは切らずにそのまま書く
+			//（断ると、前は変換できていた深いフォルダへの変換が止まる。2026-10-09 利用者決定で、断るのは Windows だけ）
 		}
 		//その場所で作れない長い名前だけ、255 バイトに切る（Linux は題の長い本を作れなかった。internal #16）。
 		//Windows・mac は名前を文字数で数えるので、今までの名前のまま。切ったときに付ける印が削られないよう、パスの切り詰めの後に行う
