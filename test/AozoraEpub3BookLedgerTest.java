@@ -177,4 +177,24 @@ public class AozoraEpub3BookLedgerTest {
 			.filter(e -> e.file().getFileName().toString().equals(epubName)).findFirst().orElseThrow();
 		assertEquals(URL, book.source());
 	}
+
+	/** GUI・CLI で Web の本を書き終えたら、最後に作った txt の話数をその本の話数として記録する（本棚の更新が比べる元。PR #120 の codex） */
+	@Test
+	public void aWrittenBookRecordsItsEpisodeCount() throws Exception {
+		File dir = tempFolder.newFolder();
+		File txt = txt(dir, "題\n著者\n\n本文\n");
+		BookLedger.create(URL, "in").withEpisodes(9).withLastEpisodes(7).save(dir);
+		String templatePath = VelocityTestUtils.templateDir() + File.separator;
+		Epub3Writer writer = new Epub3Writer(templatePath, VelocityTestUtils.engineForTemplateSubpath(""));
+		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
+		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt);
+		BookInfo bookInfo = AozoraEpub3.getBookInfo(txt, "txt", 0, imageInfoReader, converter, "UTF-8",
+			BookInfo.TitleType.TITLE_AUTHOR, false);
+		File epub = AozoraEpub3.getOutFile(txt, tempFolder.newFolder(), bookInfo, true, ".epub");
+		assertTrue(AozoraEpub3.convertFile(txt, "txt", epub, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0));
+		BookLedger ledger = BookLedger.load(dir);
+		assertEquals("その本は 7 話", 7, ledger.episodesFor(epub));
+		assertEquals("作品の話数はそのまま", 9, ledger.episodes);
+		assertEquals("ほかの本は作品の話数", 9, ledger.episodesFor(new File(dir, "other.epub")));
+	}
 }
