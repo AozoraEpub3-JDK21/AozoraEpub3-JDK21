@@ -17,6 +17,7 @@
 	--stage: #e7e3dc;
 	--shadow: rgba(0, 0, 0, .16);
 	--mark: #fff3b0;
+	--danger: #a8392a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +33,7 @@
 		--stage: #111010;
 		--shadow: rgba(0, 0, 0, .5);
 		--mark: #4d4322;
+		--danger: #e8907c;
 	}
 }
 
@@ -47,6 +49,7 @@ body[data-theme="dark"] {
 	--stage: #111010;
 	--shadow: rgba(0, 0, 0, .5);
 	--mark: #4d4322;
+	--danger: #e8907c;
 }
 
 * { box-sizing: border-box; }
@@ -518,6 +521,54 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	text-align: left;
 	cursor: pointer;
 }
+
+/* 本 1 冊の枠。カードの上に「続きを取る」のボタンを重ね、下に進み具合を出す */
+.book-slot {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.book-slot > .book-card { flex: 1 1 auto; }
+
+.book-update {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	color: var(--accent);
+	font: inherit;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: 0 1px 4px var(--shadow);
+	opacity: 0.85;
+}
+.book-update:hover, .book-update:focus-visible { opacity: 1; border-color: var(--accent); }
+.book-update:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.book-update[aria-disabled="true"] { cursor: progress; opacity: 0.6; }
+.book-slot.updating .book-update { animation: book-update-spin 1.2s linear infinite; }
+@keyframes book-update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .book-slot.updating .book-update { animation: none; } }
+
+.book-update-status {
+	min-height: 1em;
+	font-size: 11px;
+	line-height: 1.35;
+	color: var(--text-sub);
+	/* 後半（開いている本も新しい版にした・失敗の理由）が切れないよう 2 行まで折り返す（win2 の確認） */
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+.book-update-status[data-state="failed"] { color: var(--danger); }
 
 .book-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--shadow); }
 .book-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

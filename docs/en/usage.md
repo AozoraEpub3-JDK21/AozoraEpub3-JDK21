@@ -254,6 +254,11 @@ java -jar AozoraEpub3.jar -of -d ./output/ --library ./output/ input.txt
 In the GUI, add folders under "Library folders" on the "Preview" tab and click "Open library".
 The folders you add are stored in `AozoraEpub3.ini`.
 
+Books converted from the web show ⟳ (fetch new chapters) at the top right of the cover. It fetches
+the work again and overwrites the book with the current settings (the GUI's settings when opened
+from the GUI, `AozoraEpub3.ini` from the CLI). The previous version is kept as `previous.epub` in
+the work's cache folder.
+
 > This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
 > rendering engines, so the result will not match a real device exactly.
 

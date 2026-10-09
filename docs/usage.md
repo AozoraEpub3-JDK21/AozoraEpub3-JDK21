@@ -319,6 +319,10 @@ java -jar AozoraEpub3.jar -of -d ./output/ --library ./output/ input.txt
 GUI では「プレビュー」タブでフォルダを追加し、「本棚を開く」で表示します。
 登録したフォルダは `AozoraEpub3.ini` に保存されます。
 
+Web から変換した本には、表紙の右上に ⟳（続きを取る）が出ます。押すと掲載元から取り直し、
+今の設定（GUI から開いたときは画面の設定、CLI では `AozoraEpub3.ini`）で本棚の本を上書きします。
+1 つ前の版は、キャッシュの作品のフォルダに `previous.epub` として残ります。
+
 > 画面サイズ・フォントの近似表示です。Kindle / Kobo / Apple Books は独自の描画エンジンを
 > 使うため、実機とまったく同じ見た目にはなりません。
 
