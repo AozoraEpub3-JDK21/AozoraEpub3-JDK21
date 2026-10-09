@@ -65,6 +65,16 @@ final class EpubFixture
 		return fixture;
 	}
 
+	/** {@code <dc:source>} に掲載元の URL を持つ構成（Web から取った本）。本棚の「続きを取る」用 */
+	static EpubFixture withSource(String source)
+	{
+		EpubFixture fixture = standard();
+		fixture.put("OPS/package.opf", packageOpf().replace(
+			"  </metadata>",
+			"    <dc:source>" + source + "</dc:source>\n  </metadata>"));
+		return fixture;
+	}
+
 	/**
 	 * EPUB2 の {@code <meta name="cover" content="id">} で表紙を指定した構成。
 	 * 併せて meta が XHTML を指す誤った EPUB も再現できるよう id を引数化してある。

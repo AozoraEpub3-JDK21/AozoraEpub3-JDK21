@@ -14,6 +14,7 @@ import java.nio.file.Path;
  * @param title {@code dc:title}。取れなければ null
  * @param creator {@code dc:creator}。取れなければ null
  * @param coverEntry 表紙画像の EPUB ルート相対パス。無ければ null
+ * @param source {@code dc:source}（Web から取った本の掲載元の URL）。http・https だけ。無ければ null
  */
 public record LibraryEntry(
 	Path file,
@@ -21,7 +22,8 @@ public record LibraryEntry(
 	long modifiedMillis,
 	String title,
 	String creator,
-	String coverEntry)
+	String coverEntry,
+	String source)
 {
 	/** 一覧に出す表示名。書名が取れなければファイル名 */
 	public String displayName()

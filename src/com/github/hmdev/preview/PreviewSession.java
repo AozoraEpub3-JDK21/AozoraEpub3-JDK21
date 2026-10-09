@@ -513,6 +513,8 @@ public class PreviewSession implements AutoCloseable
 			Json.prop(buf, "size", entry.size());
 			// 表紙が無い本にサムネイルを取りに行かせない (全冊ぶんの 404 になる)
 			Json.prop(buf, "hasCover", entry.coverEntry() != null);
+			// 掲載元の URL（Web から取った本だけ）。続きを取れる本の目印
+			Json.prop(buf, "source", entry.source());
 			buf.append('}');
 		}
 		buf.append(']');

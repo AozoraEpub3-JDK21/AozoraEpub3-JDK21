@@ -46,6 +46,21 @@ public class LibraryScannerTest
 	}
 
 	@Test
+	public void readsTheSourceUrlOfABookFromTheWeb() throws Exception
+	{
+		EpubFixture.withSource("https://ncode.syosetu.com/n1234ab/").writeTo(root().resolve("web.epub"));
+		EpubFixture.withSource("javascript:alert(1)").writeTo(root().resolve("bad.epub"));
+		EpubFixture.standard().writeTo(root().resolve("local.epub"));
+
+		java.util.Map<String, String> sources = new java.util.HashMap<>();
+		for (LibraryEntry e : LibraryScanner.scan(root(), 3, null)) sources.put(e.file().getFileName().toString(), e.source());
+		assertEquals("https://ncode.syosetu.com/n1234ab/", sources.get("web.epub"));
+		assertNull("http・https でない掲載元は持たない", sources.get("bad.epub"));
+		assertNull("手元のテキストから作った本は掲載元なし", sources.get("local.epub"));
+		assertEquals(3, sources.size());
+	}
+
+	@Test
 	public void extractsNothingToDisk() throws Exception
 	{
 		EpubFixture.standard().writeTo(root().resolve("a.epub"));
@@ -309,7 +324,7 @@ public class LibraryScannerTest
 		LibraryEntry cached = cache.get(epub);
 		assertNotNull(cached);
 		cache.update(List.of(new LibraryEntry(
-			cached.file(), cached.size(), cached.modifiedMillis(), "キャッシュ由来", "x", null)));
+			cached.file(), cached.size(), cached.modifiedMillis(), "キャッシュ由来", "x", null, null)));
 
 		assertEquals("サイズも更新時刻も同じなら再パースしない",
 			"キャッシュ由来", LibraryScanner.scan(root(), 3, cache).get(0).title());

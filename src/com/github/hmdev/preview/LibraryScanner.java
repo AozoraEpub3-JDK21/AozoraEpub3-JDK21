@@ -1,5 +1,6 @@
 package com.github.hmdev.preview;
 
+import com.github.hmdev.info.BookLedger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -176,7 +177,7 @@ public class LibraryScanner
 				coverEntry = null;
 			}
 			return new LibraryEntry(file.toAbsolutePath().normalize(), size, modifiedMillis,
-				truncate(opf.getTitle()), truncate(opf.getCreator()), coverEntry);
+				truncate(opf.getTitle()), truncate(opf.getCreator()), coverEntry, sanitizeSource(opf.getSource()));
 		}
 	}
 
@@ -185,6 +186,19 @@ public class LibraryScanner
 	{
 		if (value == null || value.length() <= MAX_FIELD_CHARS) return value;
 		return value.substring(0, MAX_FIELD_CHARS);
+	}
+
+	/**
+	 * 掲載元の URL を、本棚が扱ってよい形だけに絞る（続きを取るときに、この URL を取りに行く）。
+	 * http・https で始まり、制御文字が無く、{@link #MAX_FIELD_CHARS} 文字以内のもの。それ以外は null。
+	 * 切り詰めると別の URL に化けるので、長すぎるものは捨てる。キャッシュから復元した値もここを通す
+	 */
+	static String sanitizeSource(String source)
+	{
+		if (source == null) return null;
+		source = source.trim();
+		if (source.isEmpty() || source.length() > MAX_FIELD_CHARS) return null;
+		return BookLedger.isHttpUrl(source) ? source : null;
 	}
 
 	/**

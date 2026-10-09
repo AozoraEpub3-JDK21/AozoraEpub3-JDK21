@@ -38,10 +38,10 @@ public class LibraryIndexCache
 	private static final Logger logger = LoggerFactory.getLogger(LibraryIndexCache.class);
 
 	/** 形式が変わったら上げる。一致しない世代のファイルは読まずに捨てる */
-	static final String HEADER = "#aozoraepub3-preview-library\t1";
+	static final String HEADER = "#aozoraepub3-preview-library\t2";
 
-	/** 1 行あたりの列数 (path / size / modified / title / creator / coverEntry) */
-	private static final int COLUMNS = 6;
+	/** 1 行あたりの列数 (path / size / modified / title / creator / coverEntry / source)。2 世代目で source を足した */
+	private static final int COLUMNS = 7;
 
 	/**
 	 * 保存する上限行数。使わなくなった本の記録が無限に積み上がらないようにする。
@@ -217,7 +217,8 @@ public class LibraryIndexCache
 			Long.toString(entry.modifiedMillis()),
 			escape(entry.title()),
 			escape(entry.creator()),
-			escape(entry.coverEntry()));
+			escape(entry.coverEntry()),
+			escape(entry.source()));
 	}
 
 	/**
@@ -244,7 +245,8 @@ public class LibraryIndexCache
 				Long.parseLong(columns[2]),
 				LibraryScanner.truncate(unescape(columns[3])),
 				LibraryScanner.truncate(unescape(columns[4])),
-				LibraryScanner.sanitizeCoverEntry(unescape(columns[5])));
+				LibraryScanner.sanitizeCoverEntry(unescape(columns[5])),
+				LibraryScanner.sanitizeSource(unescape(columns[6])));
 		} catch (RuntimeException e) {
 			/* 意図的: 壊れた行はその 1 行だけ捨てる */
 			logger.debug("本棚キャッシュの行を解釈できませんでした: {}", line, e);
