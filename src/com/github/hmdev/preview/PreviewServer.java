@@ -138,7 +138,7 @@ public class PreviewServer implements AutoCloseable
 		final long createdNanos = System.nanoTime();
 		volatile String state = "queued";
 		volatile String message = "";
-		/** 「減ったまま更新する」で頼まれた仕事 */
+		/** 「減ったまま更新」で頼まれた仕事 */
 		final boolean allowFewer;
 
 		UpdateJob(String id, String bookId, boolean allowFewer)
@@ -564,13 +564,13 @@ public class PreviewServer implements AutoCloseable
 			respondJsonStatus(exchange, 400, errorJson("Web から取った本ではないので、続きを取れません"));
 			return;
 		}
-		//利用者が「減ったまま更新する」を選んだ（話数が減って止めた本を、それでも取り直す）
+		//利用者が「減ったまま更新」を選んだ（話数が減って止めた本を、それでも取り直す）
 		String query = exchange.getRequestURI().getRawQuery();
 		boolean allowFewer = query != null && java.util.Arrays.asList(query.split("&")).contains("allowFewer=1");
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
-			//「減ったまま更新する」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
+			//「減ったまま更新」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
 			if (job != null && job.allowFewer != allowFewer) {
 				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから選び直してください"));
 				return;

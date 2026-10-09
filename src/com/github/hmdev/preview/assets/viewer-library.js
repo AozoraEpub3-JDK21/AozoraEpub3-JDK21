@@ -393,7 +393,8 @@ function libraryCard(book)
 		const fewer = document.createElement('button');
 		fewer.type = 'button';
 		fewer.className = 'book-update-anyway';
-		fewer.textContent = '減ったまま更新する';
+		fewer.textContent = '減ったまま更新';
+		fewer.title = '話数が減ったまま、掲載元の今の内容で本を作り直す';
 		fewer.hidden = true;
 		fewer.addEventListener('click', event => {
 			event.stopPropagation();
@@ -467,7 +468,7 @@ function libraryBookButton(book)
 
 /**
  * 「続きを取る」を頼み、終わるまで状態を問い合わせる
- * @param {boolean} [allowFewer] 話数が減っていても取り直す (利用者が「減ったまま更新する」を押した)
+ * @param {boolean} [allowFewer] 話数が減っていても取り直す (利用者が「減ったまま更新」を押した)
  */
 async function startLibraryUpdate(book, allowFewer)
 {

@@ -557,7 +557,8 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 @media (prefers-reduced-motion: reduce) { .book-slot.updating .book-update { animation: none; } }
 
 .book-update-status {
-	min-height: 1em;
+	/* 2 行ぶんを先に取っておく（状態が出たときにカードの背が変わって列が揃わなくならないように） */
+	min-height: calc(2em * 1.35);
 	font-size: 11px;
 	line-height: 1.35;
 	color: var(--text-sub);
@@ -577,7 +578,10 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	position: absolute;
 	top: 14px;
 	left: 12px;
-	max-width: calc(100% - 64px);
+	max-width: calc(100% - 52px);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	box-shadow: 0 1px 4px var(--shadow);
 	padding: 3px 8px;
 	border: 1px solid var(--border);

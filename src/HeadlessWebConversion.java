@@ -121,14 +121,16 @@ public class HeadlessWebConversion
 
 					int interval = 500;
 					try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
-					int beforeChapter = GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
+					//本棚の更新は、いつも作品の全部で本を作る。「最新 N 話」「追加更新分のみ」は GUI が 1 回だけ出すファイルのための設定で、
+					//本棚の本に当てると、全話の本が一部の話だけの本で上書きされる（PR の手元の codex）
+					int beforeChapter = !updateGuard && GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
 					float modifiedExpire = 0;
 					try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
 					boolean convertUpdated = GuiConversionSettings.flag(this.props, "WebConvertUpdated");
-					boolean modifiedOnly = GuiConversionSettings.flag(this.props, "WebModifiedOnly");
+					boolean modifiedOnly = !updateGuard && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
 					srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
-						convertUpdated, modifiedOnly, GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
+						convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
 					if (srcFile == null) {
 						//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
 						if (updateGuard) {

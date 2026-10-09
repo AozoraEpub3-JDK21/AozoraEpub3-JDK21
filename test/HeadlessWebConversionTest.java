@@ -91,7 +91,8 @@ public class HeadlessWebConversionTest {
 				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
 				String n = path.replaceAll("\\D", "");
-				respond(exchange, "<html><body><h2>第" + n + "話</h2><div class=\"body\"><p>" + n + "話目</p></div></body></html>");
+				//本文は話ごとに違う仮名の印（数字は縦中横などで書き換わるので、本文から探せる印にする）
+				respond(exchange, "<html><body><h2>第" + n + "話</h2><div class=\"body\"><p>" + marker(n) + "</p></div></body></html>");
 			}
 		});
 		server.start();
@@ -367,6 +368,52 @@ public class HeadlessWebConversionTest {
 		HeadlessWebConversion.Result again = conversion(props, basePath)
 			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, false);
 		assertTrue(again.message(), again.noUpdate());
+	}
+
+	/**
+	 * 本棚の更新は、「最新 N 話」「追加更新分のみ」の設定でも作品の全部で本を作る（一部の話だけの本で上書きしない）。
+	 * 減ったまま更新を選んだときも、残った話がどれも新しくなくても作り直す（PR の手元の codex）
+	 */
+	@Test
+	public void libraryUpdatesAlwaysBuildTheWholeWork() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		Properties props = guiDefaults();
+		props.setProperty("WebModifiedOnly", "1");
+		props.setProperty("WebModifiedExpire", "0");
+		props.setProperty("WebBeforeChapter", "1");
+		props.setProperty("WebBeforeChapterCount", "1");
+		episodes = 4;
+		HeadlessWebConversion.Result r = conversion(props, basePath)
+			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, false);
+		assertTrue(r.message(), r.ok());
+		String text = epubText(book);
+		for (int i = 1; i <= 4; i++) assertTrue(i + " 話目がある", text.contains(marker(String.valueOf(i))));
+		episodes = 2;
+		HeadlessWebConversion.Result accepted = conversion(props, basePath)
+			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, true);
+		assertTrue(accepted.message(), accepted.ok());
+		String after = epubText(book);
+		assertTrue(after.contains(marker("1")) && after.contains(marker("2")));
+		assertFalse(after.contains(marker("3")));
+		assertEquals(2, ledgerOf().episodes);
+	}
+
+	/** n 話目の本文の印 */
+	private static String marker(String n) {
+		return n.isEmpty() ? "ほんぶん" : "ほんぶん" + "あいうえおかきくけこ".charAt(Integer.parseInt(n) % 10) + "の話";
+	}
+
+	/** EPUB の本文（xhtml）をつなげて返す */
+	private static String epubText(File epub) throws IOException {
+		StringBuilder text = new StringBuilder();
+		try (ZipFile zip = new ZipFile(epub)) {
+			for (java.util.zip.ZipEntry e : java.util.Collections.list(zip.entries())) {
+				if (e.getName().endsWith(".xhtml")) text.append(new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+			}
+		}
+		return text.toString();
 	}
 
 	/** 守りで止めたら、キャッシュの txt を前のまま残す（そこから作り直しても前の本になる。PR のゲート2） */

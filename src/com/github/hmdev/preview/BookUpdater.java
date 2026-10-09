@@ -30,7 +30,7 @@ public interface BookUpdater
 	Result update(String sourceUrl, Path epubFile) throws Exception;
 
 	/**
-	 * 話数が減っていても続けるかを選んで更新する（利用者が「減ったまま更新する」を選んだとき allowFewerEpisodes）。
+	 * 話数が減っていても続けるかを選んで更新する（利用者が「減ったまま更新」を選んだとき allowFewerEpisodes）。
 	 * 守りを持たない実装は、ふつうの更新と同じ
 	 */
 	default Result update(String sourceUrl, Path epubFile, boolean allowFewerEpisodes) throws Exception

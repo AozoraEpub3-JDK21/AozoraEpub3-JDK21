@@ -136,7 +136,7 @@ public class WebAozoraConverter
 	 * 目次の話数が台帳の話数より少ないときは書かずに止める。本棚の更新が鍵（WEB_LOCK）を持って立て、終わったら倒す
 	 */
 	public boolean updateGuard = false;
-	/** 本棚の更新の守りで、話数が減っていても続ける（利用者が「減ったまま更新する」を選んだ） */
+	/** 本棚の更新の守りで、話数が減っていても続ける（利用者が「減ったまま更新」を選んだ） */
 	public boolean allowFewerEpisodes = false;
 	/** 結果: 目次を取れなかったときの HTTP の状態。取れたら 0、HTTP の応答が無かったら -1 */
 	public int listFailure = 0;
