@@ -346,6 +346,29 @@ public class HeadlessWebConversionTest {
 		assertEquals("本棚の本はまだ守られる", HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
 	}
 
+	/** 「更新分のみ」でも、減ったまま更新すると選んだら作り直す（残った話が変わっていなくても、話が消えたことが更新。PR の手元の codex） */
+	@Test
+	public void acceptingFewerEpisodesRebuildsEvenWhenOnlyUpdatesAreConverted() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		byte[] before = Files.readAllBytes(book.toPath());
+		episodes = 2;
+		Properties props = guiDefaults();
+		props.setProperty("WebConvertUpdated", "1");
+		//既定（24 時間）だと、取ったばかりの話は「追加更新」とみなされて、減っていなくても作り直す
+		props.setProperty("WebModifiedExpire", "0");
+		HeadlessWebConversion.Result r = conversion(props, basePath)
+			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, true);
+		assertTrue(r.message(), r.ok());
+		assertFalse("本が作り直される", java.util.Arrays.equals(before, Files.readAllBytes(book.toPath())));
+		assertEquals(2, ledgerOf().episodes);
+		//減っていなければ、今までどおり「更新はありません」
+		HeadlessWebConversion.Result again = conversion(props, basePath)
+			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, false);
+		assertTrue(again.message(), again.noUpdate());
+	}
+
 	/** 守りで止めたら、キャッシュの txt を前のまま残す（そこから作り直しても前の本になる。PR のゲート2） */
 	@Test
 	public void aStoppedUpdateLeavesTheCachedTextAlone() throws Exception {

@@ -1097,8 +1097,9 @@ public class WebAozoraConverter
 			int selectedChapters = 0;
 			int writtenChapters = 0;
 			if (chapterHrefs.size() > 0) {
-				//全話で更新や追加があるかチェック
-				updated = false;
+				//全話で更新や追加があるかチェック。
+				//減ったまま更新すると選ばれたら、話が消えたこと自体が更新（残った話が変わっていなくても本を作り直す。PR の手元の codex）
+				updated = this.pendingEpisodes >= 0 && previous > chapterHrefs.size();
 				
 				//追加更新対象の期限 これより大きければ追加更新
 				long expire = System.currentTimeMillis()-(long)(this.modifiedExpire*3600000);
