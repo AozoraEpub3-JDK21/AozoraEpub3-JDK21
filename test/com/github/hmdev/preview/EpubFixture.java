@@ -77,13 +77,19 @@ final class EpubFixture
 	/** identifier と {@code <dc:source>} の並びを指定した構成。値は XML のためにエスケープする */
 	static EpubFixture withSources(String identifier, String... sources)
 	{
+		EpubFixture fixture = standard();
+		fixture.put("OPS/package.opf", withSourcesOpf(identifier, sources));
+		return fixture;
+	}
+
+	/** {@link #withSources} の OPF の文字列 */
+	static String withSourcesOpf(String identifier, String... sources)
+	{
 		StringBuilder elements = new StringBuilder();
 		for (String source : sources) elements.append("    <dc:source>").append(xml(source)).append("</dc:source>\n");
-		EpubFixture fixture = standard();
-		fixture.put("OPS/package.opf", packageOpf()
+		return packageOpf()
 			.replace("urn:uuid:test-0001", xml(identifier))
-			.replace("  </metadata>", elements + "  </metadata>"));
-		return fixture;
+			.replace("  </metadata>", elements + "  </metadata>");
 	}
 
 	private static String xml(String value)

@@ -143,4 +143,14 @@ public class BookLedgerTest {
 	private static void write(File dir, String text) throws Exception {
 		Files.write(new File(dir, BookLedger.FILE_NAME).toPath(), text.getBytes(StandardCharsets.UTF_8));
 	}
+
+	/**
+	 * identifier の値を固定する。変えると、すでにある本を本棚が Web の本と見分けられなくなる（internal #19）。
+	 * 値は #111 のときに計算したもの（n9623lp は実物の EPUB の identifier と同じ）
+	 */
+	@Test
+	public void identifierValuesArePinned() {
+		assertEquals("e725d932-aad6-3d8f-872f-075b9a6e7ec5", BookLedger.identifierFor("https://ncode.syosetu.com/n9623lp/"));
+		assertEquals(BookLedger.identifierFor("https://ncode.syosetu.com/n9623lp/"), BookLedger.identifierFor("http://NCODE.syosetu.com/n9623lp"));
+	}
 }

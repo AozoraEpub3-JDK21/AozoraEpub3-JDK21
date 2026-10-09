@@ -194,16 +194,20 @@ public class LibraryScanner
 	 * <p>{@code dc:source} はほかの出どころの本（Project Gutenberg など）も持つので、それだけでは決めない。
 	 * このアプリは identifier を掲載元の URL から作る（{@link BookLedger#identifierFor}）ので、
 	 * identifier がその URL から作った値と同じ {@code dc:source} だけを採る。
-	 * {@code dc:source} が複数あるときは（ISBN と URL など）、条件を満たす最初のもの</p>
+	 * {@code dc:source} が複数あるときは（ISBN と URL など）、条件を満たす最初のもの。
+	 * {@code dc:identifier} も複数ありうる（Calibre などが先頭に足す）ので、どれか 1 つが合えばよい</p>
 	 */
 	static String webSourceOf(OpfPackage opf)
 	{
-		String identifier = opf.getIdentifier();
-		if (identifier == null) return null;
+		java.util.Set<String> identifiers = new java.util.HashSet<>();
+		for (String identifier : opf.getIdentifiers()) {
+			if (identifier != null) identifiers.add(identifier.trim().toLowerCase(java.util.Locale.ROOT));
+		}
+		if (identifiers.isEmpty()) return null;
 		for (String raw : opf.getSources()) {
 			String source = sanitizeSource(raw);
 			if (source == null) continue;
-			if (identifier.trim().equalsIgnoreCase("urn:uuid:" + BookLedger.identifierFor(source))) return source;
+			if (identifiers.contains(("urn:uuid:" + BookLedger.identifierFor(source)).toLowerCase(java.util.Locale.ROOT))) return source;
 		}
 		return null;
 	}
@@ -218,9 +222,15 @@ public class LibraryScanner
 	{
 		if (source == null) return null;
 		//前後の空白を落とす前に見る（trim は制御文字も落とすので、落とした後では見えない）
-		for (int i = 0; i < source.length(); i++) {
-			int type = Character.getType(source.charAt(i));
-			if (type == Character.CONTROL || type == Character.FORMAT) return null;
+		//サロゲートペアの書式文字（U+E0001 など）も見るよう、コードポイントで数える
+		for (int i = 0; i < source.length(); ) {
+			int cp = source.codePointAt(i);
+			int type = Character.getType(cp);
+			//U+2028・U+2029 も（行の区切りとして扱われうる。internal #19）
+			//対になっていないサロゲートも（索引を UTF-8 で書けず、保存が毎回失敗する。#117 のゲート2）
+			if (type == Character.CONTROL || type == Character.FORMAT || type == Character.SURROGATE
+				|| type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR) return null;
+			i += Character.charCount(cp);
 		}
 		source = source.trim();
 		if (source.isEmpty() || source.length() > MAX_FIELD_CHARS) return null;
@@ -232,7 +242,42 @@ public class LibraryScanner
 			if (i >= 0 && i < end) end = i;
 		}
 		String authority = rest.substring(0, end);
-		if (authority.isEmpty() || authority.indexOf('@') >= 0 || authority.indexOf(' ') >= 0) return null;
+		if (authority.isEmpty() || authority.indexOf('@') >= 0) return null;
+		//ホストに空白（ASCII 以外の空白も）があれば捨てる。\ はどこにあっても捨てる（下）。WHATWG の URL は \ を / として読むので、
+		//https://evil.com\.good.com/ の行き先は evil.com になる（internal #19）
+		for (int i = 0; i < authority.length(); i++) {
+			char c = authority.charAt(i);
+			if (Character.isWhitespace(c) || Character.isSpaceChar(c)) return null;
+		}
+		if (source.indexOf('\\') >= 0) return null;
+		//ホスト名があり、ポートは数字だけ（https://:443/ や https://example.com:bad/ を捨てる）
+		String host = authority;
+		String port = null;
+		if (authority.startsWith("[")) {
+			int close = authority.indexOf(']');
+			if (close < 0) return null;
+			host = authority.substring(0, close + 1);
+			String after = authority.substring(close + 1);
+			if (!after.isEmpty()) {
+				if (!after.startsWith(":")) return null;
+				port = after.substring(1);
+			}
+		} else {
+			int colon = authority.lastIndexOf(':');
+			if (colon >= 0) {
+				host = authority.substring(0, colon);
+				port = authority.substring(colon + 1);
+			}
+		}
+		if (host.isEmpty() || host.equals("[]") || host.indexOf(':') >= 0 && !host.startsWith("[")) return null;
+		//点だけのホスト（https://./x）も捨てる。% を含むホストも（%2e は WHATWG の URL で . になる。PR #117 の codex）
+		if (host.replace(".", "").isEmpty() || host.indexOf('%') >= 0) return null;
+		//ポートは数字だけで 65535 以下。前の 0 は許す（:000080 は 80。PR #117 の codex）
+		if (port != null) {
+			if (port.isEmpty() || !port.chars().allMatch(c -> c >= '0' && c <= '9')) return null;
+			String digits = port.replaceFirst("^0+(?=.)", "");
+			if (digits.length() > 5 || Integer.parseInt(digits) > 65535) return null;
+		}
 		return source;
 	}
 

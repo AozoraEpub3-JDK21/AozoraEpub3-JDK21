@@ -61,6 +61,13 @@ public class LibraryScannerTest
 		EpubFixture.withSources("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(url), "urn:isbn:9784000000000", url)
 			.writeTo(root().resolve("multi.epub"));
 
+		// identifier が 2 つ（Calibre の値が先）。OPF の作りは withSource と同じで、identifier の行を 1 つ足す
+		String calibreUrl = "https://ncode.syosetu.com/n9999zz/";
+		EpubFixture calibre = EpubFixture.withSource(calibreUrl);
+		calibre.put("OPS/package.opf", EpubFixture.withSourcesOpf("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(calibreUrl), calibreUrl)
+			.replace("    <dc:identifier id=\"pub-id\">", "    <dc:identifier opf:scheme=\"calibre\" xmlns:opf=\"http://www.idpf.org/2007/opf\">aaaa-bbbb</dc:identifier>\n    <dc:identifier id=\"pub-id\">"));
+		calibre.writeTo(root().resolve("calibre.epub"));
+
 		java.util.Map<String, String> sources = new java.util.HashMap<>();
 		for (LibraryEntry e : LibraryScanner.scan(root(), 3, null)) sources.put(e.file().getFileName().toString(), e.source());
 		assertEquals("https://ncode.syosetu.com/n1234ab/", sources.get("web.epub"));
@@ -69,7 +76,33 @@ public class LibraryScannerTest
 		assertNull("手元のテキストから作った本は掲載元なし", sources.get("local.epub"));
 		assertNull("このアプリが作った本でなければ掲載元なし", sources.get("gutenberg.epub"));
 		assertEquals(url, sources.get("multi.epub"));
-		assertEquals(6, sources.size());
+		assertEquals("Calibre などが先に足した identifier があっても、このアプリの本と読む",
+			"https://ncode.syosetu.com/n9999zz/", sources.get("calibre.epub"));
+		assertEquals(7, sources.size());
+	}
+
+	/**
+	 * 掲載元の見分け方を変えたら、前の世代の索引で「掲載元なし」と記録された本も読み直す（#117 の codex）。
+	 * 世代を上げないと、ファイルが変わらない限り索引の値が使われ続ける
+	 */
+	@Test
+	public void aBookCachedWithoutASourceByTheOldRulesIsReadAgain() throws Exception
+	{
+		String url = "https://ncode.syosetu.com/n9999zz/";
+		EpubFixture calibre = EpubFixture.withSource(url);
+		calibre.put("OPS/package.opf", EpubFixture.withSourcesOpf("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(url), url)
+			.replace("    <dc:identifier id=\"pub-id\">", "    <dc:identifier opf:scheme=\"calibre\" xmlns:opf=\"http://www.idpf.org/2007/opf\">aaaa-bbbb</dc:identifier>\n    <dc:identifier id=\"pub-id\">"));
+		Path epub = calibre.writeTo(root().resolve("calibre.epub"));
+		Path index = root().resolve("index.tsv");
+		// 前の世代（2）の索引: 同じ大きさ・更新時刻で、掲載元なし
+		LibraryEntry old = new LibraryEntry(epub.toAbsolutePath().normalize(), Files.size(epub), Files.getLastModifiedTime(epub).toMillis(),
+			"テスト書籍", "テスト著者", null, null);
+		Files.writeString(index, "#aozoraepub3-preview-library\t2\n" + LibraryIndexCache.formatLine(old) + "\n", java.nio.charset.StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(index);
+		cache.load();
+		assertEquals(url, LibraryScanner.scan(root(), 3, cache).stream()
+			.filter(e -> e.file().getFileName().toString().equals("calibre.epub")).findFirst().orElseThrow().source());
 	}
 
 	@Test
@@ -84,6 +117,28 @@ public class LibraryScannerTest
 		assertNull("C0", LibraryScanner.sanitizeSource("\u0001https://example.com/"));
 		assertNull("C1", LibraryScanner.sanitizeSource("https://example.com/\u0085"));
 		assertNull("双方向の制御", LibraryScanner.sanitizeSource("https://example.com/\u202Eevil"));
+		// PR の codex の指摘
+		assertNull("補助面の書式文字", LibraryScanner.sanitizeSource("https://example.com/" + new String(Character.toChars(0xE0001))));
+		assertNull("ホスト名が空でポートだけ", LibraryScanner.sanitizeSource("https://:443/path"));
+		assertNull("ポートが数字でない", LibraryScanner.sanitizeSource("https://example.com:bad/path"));
+		assertNull("ポートが空", LibraryScanner.sanitizeSource("https://example.com:/path"));
+		assertEquals("https://example.com:8080/a", LibraryScanner.sanitizeSource("https://example.com:8080/a"));
+		assertEquals("http://[::1]:8080/a", LibraryScanner.sanitizeSource("http://[::1]:8080/a"));
+		// internal #19
+		assertNull("ホストに \\", LibraryScanner.sanitizeSource("https://evil.com\\.good.com/"));
+		assertNull("どこかに \\", LibraryScanner.sanitizeSource("https://good.com/a\\b"));
+		assertNull("ホストに U+00A0", LibraryScanner.sanitizeSource("https://exa\u00A0mple.com/"));
+		assertNull("ホストに U+3000", LibraryScanner.sanitizeSource("https://exa\u3000mple.com/"));
+		assertNull("U+2028", LibraryScanner.sanitizeSource("https://example.com/\u2028"));
+		assertNull("点だけのホスト", LibraryScanner.sanitizeSource("https://./x"));
+		assertNull("ありえないポート", LibraryScanner.sanitizeSource("https://host:99999/"));
+		assertEquals("https://host:65535/", LibraryScanner.sanitizeSource("https://host:65535/"));
+		assertNull("対になっていないサロゲート", LibraryScanner.sanitizeSource("https://example.com/\uD800x"));
+		// PR #117 の codex
+		assertNull("%2e のホスト", LibraryScanner.sanitizeSource("https://%2e/x"));
+		assertNull("% を含むホスト", LibraryScanner.sanitizeSource("https://exa%EF%BC%8Emple.com/"));
+		assertEquals("前の 0 のあるポート", "https://example.com:000080/", LibraryScanner.sanitizeSource("https://example.com:000080/"));
+		assertNull("前の 0 を除いても大きすぎるポート", LibraryScanner.sanitizeSource("https://example.com:0070000/"));
 	}
 
 	@Test

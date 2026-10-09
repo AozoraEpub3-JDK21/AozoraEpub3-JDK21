@@ -38,7 +38,8 @@ public class LibraryIndexCache
 	private static final Logger logger = LoggerFactory.getLogger(LibraryIndexCache.class);
 
 	/** 形式が変わったら上げる。一致しない世代のファイルは読まずに捨てる */
-	static final String HEADER = "#aozoraepub3-preview-library\t2";
+	//3: 掲載元の見分け方を変えた（identifier はどれか 1 つが合えばよい・URL の確かめを強くした）。2 の記録の「掲載元なし」を読み直させる
+	static final String HEADER = "#aozoraepub3-preview-library\t3";
 
 	/** 1 行あたりの列数 (path / size / modified / title / creator / coverEntry / source)。2 世代目で source を足した */
 	private static final int COLUMNS = 7;
@@ -57,7 +58,7 @@ public class LibraryIndexCache
 	 * 読んでから件数で切るのでは、その前に巨大なファイルを全部メモリに載せてしまう。</p>
 	 *
 	 * <p>書き: 件数だけで縛ると
-	 * {@link #MAX_ENTRIES} × {@link LibraryScanner#MAX_FIELD_CHARS} × 3 フィールドで
+	 * {@link #MAX_ENTRIES} × {@link LibraryScanner#MAX_FIELD_CHARS} × 4 フィールド（題・作者・表紙・掲載元）で
 	 * 最悪 20MB を超え、<b>書いた直後の自分のファイルを読み捨てる</b>ことになる。
 	 * 予算を超える分は古い方から落として、書ける形にしてから保存する。</p>
 	 */
@@ -90,6 +91,7 @@ public class LibraryIndexCache
 	public synchronized void load()
 	{
 		this.entries.clear();
+		sweepStaleTemporaries();
 		try {
 			if (!Files.isRegularFile(this.file)) return;
 			if (Files.size(this.file) > MAX_FILE_BYTES) {
@@ -169,10 +171,88 @@ public class LibraryIndexCache
 			StringBuilder buf = new StringBuilder(this.entries.size() * 128 + 64);
 			buf.append(HEADER).append('\n');
 			for (LibraryEntry entry : this.entries.values()) buf.append(formatLine(entry)).append('\n');
-			Files.writeString(this.file, buf.toString(), StandardCharsets.UTF_8);
+			writeReplacing(buf.toString());
 		} catch (IOException | RuntimeException e) {
 			/* 意図的: 保存できなくても本棚は毎回スキャンすれば動く */
 			logger.debug("本棚キャッシュを保存できませんでした: {}", this.file, e);
+		}
+	}
+
+	/**
+	 * 一時ファイルに書いてから置き換える。途中で切れると、最後の列（掲載元の URL）が切れた値のまま
+	 * 列の数も合ってしまい、別の作品の URL として読み戻されるため（internal #19）。
+	 * <ul>
+	 * <li>symlink なら、たどった先を置き換える（リンクを普通のファイルにしない）</li>
+	 * <li>前のファイルの権限を引き継ぐ（一時ファイルは 0600 で作られる）</li>
+	 * <li>置き換えられないとき（Windows でほかのプロセスが開いている、など）は、前と同じく直接書く</li>
+	 * </ul>
+	 * （#117 のゲート2）
+	 */
+	private void writeReplacing(String content) throws IOException
+	{
+		Path target = this.file;
+		if (Files.isSymbolicLink(target)) {
+			try { target = target.toRealPath(); } catch (IOException e) { /* 意図的: 切れたリンクはリンクの場所に書く */ }
+		}
+		Path dir = target.toAbsolutePath().getParent();
+		Path tmp = Files.createTempFile(dir, target.getFileName() + ".", TMP_SUFFIX);
+		try {
+			Files.writeString(tmp, content, StandardCharsets.UTF_8);
+			copyPermissions(target, tmp);
+			try {
+				try {
+					Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+				} catch (java.nio.file.AtomicMoveNotSupportedException e) {
+					Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				}
+			} catch (IOException e) {
+				logger.debug("本棚キャッシュを置き換えられないので直接書きます: {}", target, e);
+				Files.writeString(target, content, StandardCharsets.UTF_8);
+			}
+		} finally {
+			Files.deleteIfExists(tmp);
+		}
+	}
+
+	/** 一時ファイルの末尾 */
+	static final String TMP_SUFFIX = ".tmp";
+
+	/**
+	 * 前のファイルの POSIX の権限を写す。前のファイルが無ければ触らない（一時ファイルの 0600 のまま。
+	 * 決め打ちで広げると、厳しい umask を飛び越える。PR #117 の codex）
+	 */
+	private static void copyPermissions(Path from, Path to)
+	{
+		try {
+			if (!Files.exists(from)) return;
+			Files.setPosixFilePermissions(to, Files.getPosixFilePermissions(from));
+		} catch (UnsupportedOperationException | IOException e) {
+			/* 意図的: POSIX でない（Windows）なら何もしない */
+		}
+	}
+
+	/** 前に落ちたプロセスが残した一時ファイル（1 時間より古いもの）を消す。symlink なら、たどった先の隣（一時ファイルを作る所） */
+	private void sweepStaleTemporaries()
+	{
+		Path target = this.file;
+		if (Files.isSymbolicLink(target)) {
+			try { target = target.toRealPath(); } catch (IOException e) { /* 意図的: 切れたリンクはリンクの隣 */ }
+		}
+		Path dir = target.toAbsolutePath().getParent();
+		if (dir == null || !Files.isDirectory(dir)) return;
+		String prefix = target.getFileName() + ".";
+		long limit = System.currentTimeMillis() - 60L * 60 * 1000;
+		try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+			files.filter(p -> {
+				String name = p.getFileName().toString();
+				return name.startsWith(prefix) && name.endsWith(TMP_SUFFIX);
+			}).forEach(p -> {
+				try {
+					if (Files.getLastModifiedTime(p).toMillis() < limit) Files.deleteIfExists(p);
+				} catch (IOException e) { /* 意図的: 消せなければ次の機会に */ }
+			});
+		} catch (IOException e) {
+			/* 意図的: 掃除できなくても読み込みは続ける */
 		}
 	}
 
