@@ -5,7 +5,9 @@ import static org.junit.Assert.fail;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 
+import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -24,8 +26,13 @@ public class AozoraEpub3DeepFolderNameTest {
 	public TemporaryFolder tempFolder = new TemporaryFolder();
 
 	/** 出力先のパスがだいたい depth 文字になるフォルダ（win2 の実測は 187 文字） */
+	/** 一時フォルダの実パス（macOS の /var → /private/var を解いた先）。長さは実パスで数えるので、ここから作る */
+	private File root() throws Exception {
+		return tempFolder.getRoot().toPath().toRealPath().toFile();
+	}
+
 	private File deepFolder(int depth) throws Exception {
-		File dir = tempFolder.getRoot();
+		File dir = root();
 		while (dir.getAbsolutePath().length() < depth - 11) {
 			dir = new File(dir, "deepfolder");
 		}
@@ -61,7 +68,7 @@ public class AozoraEpub3DeepFolderNameTest {
 
 	/** 出力先のパスがちょうど length 文字のフォルダ */
 	private File folderOfLength(int length) throws Exception {
-		File dir = tempFolder.getRoot();
+		File dir = root();
 		while (dir.getAbsolutePath().length() < length - 20) {
 			dir = new File(dir, "deepfolder");
 		}
@@ -88,21 +95,49 @@ public class AozoraEpub3DeepFolderNameTest {
 	}
 
 	/**
-	 * 名前に使える文字が印の長さ（7 文字）より少ないときは、変換を断る（2026-10-09 利用者決定）。
+	 * 名前に使える文字が印の長さ（7 文字）より少ないとき、Windows では変換を断る（2026-10-09 利用者決定）。
 	 * 修正前は印を付けずに切っていたので、出力先が 243 文字だと上・下が同じ「[著者] と.epub」になり、上書きしていた。
+	 * mac・Linux は MAX_PATH が無いので断らず、切らずに書く（断ると、前は変換できた深いフォルダへの変換が止まる。#114 のゲート2）
 	 */
 	@Test
-	public void aFolderTooDeepForTheMarkIsRefused() throws Exception {
+	public void aFolderTooDeepForTheMarkIsRefusedOnlyOnWindows() throws Exception {
 		for (int length : new int[] { 243, 249 }) {
 			File dst = folderOfLength(length);
-			try {
-				outFile(dst, BODY + "（上）");
-				fail("出力先が " + length + " 文字なら断る");
-			} catch (IOException e) {
-				assertTrue(e.getMessage(), e.getMessage().startsWith("出力先のフォルダが深すぎて"));
-				assertTrue("どこまで浅くすればよいかを言う: " + e.getMessage(), e.getMessage().contains("242 文字以内"));
+			if (AozoraEpub3.isWindows()) {
+				try {
+					outFile(dst, BODY + "（上）");
+					fail("出力先が " + length + " 文字なら断る");
+				} catch (IOException e) {
+					assertTrue(e.getMessage(), e.getMessage().startsWith("出力先のフォルダが深すぎて"));
+					assertTrue("どこまで浅くすればよいかを言う: " + e.getMessage(), e.getMessage().contains("242 文字以内"));
+				}
+			} else {
+				File upper = outFile(dst, BODY + "（上）");
+				File lower = outFile(dst, BODY + "（下）");
+				assertNotEquals("上と下が同じ名前になって上書きしない", upper.getName(), lower.getName());
+				assertTrue("名前は今までの作り方のまま（パスの長さでは切らない）: " + upper.getName(),
+					upper.getName().startsWith("[著者] とても長い題の作品"));
 			}
 		}
+	}
+
+	/** 出力先を symlink 越しに渡しても、長さは書く先の実パスで数える（#114 のゲート2。mac の /var も同じ形） */
+	@Test
+	public void theLengthIsCountedOnTheRealPath() throws Exception {
+		File real = deepFolder(200);
+		File link = new File(root(), "l");
+		try {
+			Files.createSymbolicLink(link.toPath(), real.toPath());
+		} catch (UnsupportedOperationException | IOException e) {
+			Assume.assumeNoException("リンクを作れない環境のためスキップ", e);
+		}
+		File out = outFile(link, BODY + "（上）");
+		String written = out.toPath().toAbsolutePath().toString();
+		String realPath = new File(real, out.getName()).getAbsolutePath();
+		assertTrue("書く先の実パスは 250 文字以内（拡張子を除く）: " + realPath.length(),
+			realPath.length() - ".epub".length() <= 250);
+		assertTrue(out.getName(), out.getName().matches(".*~[0-9a-f]{6}\\.epub"));
+		assertTrue(written, written.length() > 0);
 	}
 
 	@Test
@@ -117,6 +152,8 @@ public class AozoraEpub3DeepFolderNameTest {
 		//𠮷 (U+20BB7) はサロゲートペア。空白も混ぜて、どこで切れても壊れないことを見る
 		String title = "𠮷 ".repeat(60);
 		String name = outFile(dst, title).getName();
+		//切られて印が付いていることを先に確かめる（切られていなければ、下の確かめは名前の途中を見るだけで空振りする）
+		assertTrue("切られて印が付く: " + name, name.matches(".*~[0-9a-f]{6}\\.epub"));
 		String base = name.substring(0, name.length() - ".epub".length() - 7);
 		assertTrue("末尾に空白を残さない: [" + base + "]", !base.endsWith(" "));
 		char last = base.charAt(base.length() - 1);
