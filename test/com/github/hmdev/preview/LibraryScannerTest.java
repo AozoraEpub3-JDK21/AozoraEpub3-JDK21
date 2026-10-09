@@ -61,6 +61,13 @@ public class LibraryScannerTest
 		EpubFixture.withSources("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(url), "urn:isbn:9784000000000", url)
 			.writeTo(root().resolve("multi.epub"));
 
+		// identifier が 2 つ（Calibre の値が先）。OPF の作りは withSource と同じで、identifier の行を 1 つ足す
+		String calibreUrl = "https://ncode.syosetu.com/n9999zz/";
+		EpubFixture calibre = EpubFixture.withSource(calibreUrl);
+		calibre.put("OPS/package.opf", EpubFixture.withSourcesOpf("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(calibreUrl), calibreUrl)
+			.replace("    <dc:identifier id=\"pub-id\">", "    <dc:identifier opf:scheme=\"calibre\" xmlns:opf=\"http://www.idpf.org/2007/opf\">aaaa-bbbb</dc:identifier>\n    <dc:identifier id=\"pub-id\">"));
+		calibre.writeTo(root().resolve("calibre.epub"));
+
 		java.util.Map<String, String> sources = new java.util.HashMap<>();
 		for (LibraryEntry e : LibraryScanner.scan(root(), 3, null)) sources.put(e.file().getFileName().toString(), e.source());
 		assertEquals("https://ncode.syosetu.com/n1234ab/", sources.get("web.epub"));
@@ -69,7 +76,9 @@ public class LibraryScannerTest
 		assertNull("手元のテキストから作った本は掲載元なし", sources.get("local.epub"));
 		assertNull("このアプリが作った本でなければ掲載元なし", sources.get("gutenberg.epub"));
 		assertEquals(url, sources.get("multi.epub"));
-		assertEquals(6, sources.size());
+		assertEquals("Calibre などが先に足した identifier があっても、このアプリの本と読む",
+			"https://ncode.syosetu.com/n9999zz/", sources.get("calibre.epub"));
+		assertEquals(7, sources.size());
 	}
 
 	@Test
@@ -84,6 +93,13 @@ public class LibraryScannerTest
 		assertNull("C0", LibraryScanner.sanitizeSource("\u0001https://example.com/"));
 		assertNull("C1", LibraryScanner.sanitizeSource("https://example.com/\u0085"));
 		assertNull("双方向の制御", LibraryScanner.sanitizeSource("https://example.com/\u202Eevil"));
+		// PR の codex の指摘
+		assertNull("補助面の書式文字", LibraryScanner.sanitizeSource("https://example.com/" + new String(Character.toChars(0xE0001))));
+		assertNull("ホスト名が空でポートだけ", LibraryScanner.sanitizeSource("https://:443/path"));
+		assertNull("ポートが数字でない", LibraryScanner.sanitizeSource("https://example.com:bad/path"));
+		assertNull("ポートが空", LibraryScanner.sanitizeSource("https://example.com:/path"));
+		assertEquals("https://example.com:8080/a", LibraryScanner.sanitizeSource("https://example.com:8080/a"));
+		assertEquals("http://[::1]:8080/a", LibraryScanner.sanitizeSource("http://[::1]:8080/a"));
 	}
 
 	@Test
