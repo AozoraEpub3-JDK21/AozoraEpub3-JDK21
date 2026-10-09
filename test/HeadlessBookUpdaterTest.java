@@ -142,8 +142,10 @@ public class HeadlessBookUpdaterTest {
 		p.setProperty("CachePath", ".cache");
 		org.junit.Assert.assertEquals(new File("/opt/aozora/.cache"), HeadlessBookUpdater.cachePathOf(p, "/opt/aozora/"));
 		org.junit.Assert.assertEquals("GUI の基は '' ＝カレント", new File(".cache"), HeadlessBookUpdater.cachePathOf(p, ""));
-		p.setProperty("CachePath", "/abs/cache");
-		org.junit.Assert.assertEquals(new File("/abs/cache"), HeadlessBookUpdater.cachePathOf(p, "/opt/aozora/"));
+		//絶対パスは、その OS の本物の絶対パスで（Windows ではドライブ名の無い /abs/cache は絶対パスにならない。win2 の確認）
+		String absolute = new File(System.getProperty("java.io.tmpdir"), "abs-cache").getAbsolutePath();
+		p.setProperty("CachePath", absolute);
+		org.junit.Assert.assertEquals(new File(absolute), HeadlessBookUpdater.cachePathOf(p, "/opt/aozora/"));
 		org.junit.Assert.assertEquals("空なら .cache", new File("/opt/aozora/.cache"), HeadlessBookUpdater.cachePathOf(new Properties(), "/opt/aozora/"));
 	}
 
