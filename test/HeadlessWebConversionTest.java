@@ -41,6 +41,8 @@ public class HeadlessWebConversionTest {
 	/** 目次を 2 ページに分ける（1 ページ目に 2 話、残りを 2 ページ目に）と、2 ページ目の HTTP の状態 */
 	private volatile boolean paged = false;
 	private volatile int page2Status = 200;
+	/** 目次に出す各話の更新日（改稿を作るときに変える） */
+	private volatile String upDate = "2026/01/01";
 
 	@After
 	public void tearDown() {
@@ -79,7 +81,7 @@ public class HeadlessWebConversionTest {
 				StringBuilder list = new StringBuilder();
 				if (paged && !secondPage) list.append("<li><a class=\"pager\" href=\"/novel/?p=2\">最後</a></li>");
 				for (int i = from; i <= to; i++) {
-					list.append("<li><a href=\"/ep/").append(i).append("/\">第").append(i).append("話</a><span class=\"up\">2026/01/01</span></li>");
+					list.append("<li><a href=\"/ep/").append(i).append("/\">第").append(i).append("話</a><span class=\"up\">").append(upDate).append("</span></li>");
 				}
 				//0 話のときは、一覧のページに本文だけがある（告知だけ残して話を消した、など。変換器は 1 ページの作品として読む）
 				String notice = episodes == 0 ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
@@ -350,11 +352,14 @@ public class HeadlessWebConversionTest {
 		File txt = java.util.Arrays.stream(ledgerDir().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"))).findFirst().orElseThrow();
 		byte[] before = Files.readAllBytes(txt.toPath());
 		File update = new File(ledgerDir(), "update.txt");
-		byte[] updateBefore = update.isFile() ? Files.readAllBytes(update.toPath()) : null;
+		assertTrue("この治具は update.txt を作る", update.isFile());
+		byte[] updateBefore = Files.readAllBytes(update.toPath());
 		episodes = 2;
+		//残った話は改稿された（止めずに進めば、update.txt に新しい日付が書かれる）
+		upDate = "2026/02/02";
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
 		org.junit.Assert.assertArrayEquals("txt は前のまま", before, Files.readAllBytes(txt.toPath()));
-		if (updateBefore != null) org.junit.Assert.assertArrayEquals("update.txt も前のまま", updateBefore, Files.readAllBytes(update.toPath()));
+		org.junit.Assert.assertArrayEquals("update.txt も前のまま", updateBefore, Files.readAllBytes(update.toPath()));
 		assertEquals("控えを残さない", 0, ledgerDir().listFiles((d, n) -> n.startsWith(".guard.")).length);
 	}
 
@@ -372,6 +377,11 @@ public class HeadlessWebConversionTest {
 		assertFalse(r.ok());
 		assertEquals(null, r.stop());
 		assertTrue(r.message(), r.message().contains("目次"));
+		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
+		//前の話数が記録に無くても（台帳より前の本）、欠けた目次では作らない
+		ledgerOf().withEpisodes(-1).save(ledgerDir());
+		HeadlessWebConversion.Result unknown = guardedUpdate(basePath, book, false);
+		assertFalse(unknown.ok());
 		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
 	}
 
