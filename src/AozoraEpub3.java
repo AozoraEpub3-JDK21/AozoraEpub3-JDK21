@@ -28,6 +28,7 @@ import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.ArchiveUrlUtils;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
+import com.github.hmdev.pipeline.ConversionSettings;
 import com.github.hmdev.pipeline.WriterConfigurator;
 import com.github.hmdev.update.UpdateChecker;
 import com.github.hmdev.web.NarouFormatSettings;
@@ -197,80 +198,19 @@ public class AozoraEpub3
 			int titleIndex = 0; //try { titleIndex = Integer.parseInt(props.getProperty("TitleType")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			
 			//コマンドラインオプション以外
-			//ini にキーが無いときは GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
-			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22 / 24)
-			boolean coverPage = SettingDefaults.getBoolean(props, "CoverPage");//表紙追加
-			int titlePage = BookInfo.TITLE_NONE;
-			if (SettingDefaults.getBoolean(props, "TitlePageWrite")) {
-				titlePage = SettingDefaults.getInt(props, "TitlePage");
-			}
-			boolean withMarkId = SettingDefaults.getBoolean(props, "MarkId");
-			//boolean gaiji32 = "1".equals(props.getProperty("Gaiji32"));
-			boolean commentPrint = SettingDefaults.getBoolean(props, "CommentPrint");
-			boolean commentConvert = SettingDefaults.getBoolean(props, "CommentConvert");
-			boolean autoYoko = SettingDefaults.getBoolean(props, "AutoYoko");
-			boolean autoYokoNum1 = SettingDefaults.getBoolean(props, "AutoYokoNum1");
-			boolean autoYokoNum3 = SettingDefaults.getBoolean(props, "AutoYokoNum3");
-			boolean autoYokoEQ1 = SettingDefaults.getBoolean(props, "AutoYokoEQ1");
-			int spaceHyp = SettingDefaults.getInt(props, "SpaceHyphenation");
-			boolean tocPage = SettingDefaults.getBoolean(props, "TocPage");//目次追加
-			boolean tocVertical = SettingDefaults.getBoolean(props, "TocVertical");//目次縦書き
-			boolean coverPageToc = SettingDefaults.getBoolean(props, "CoverPageToc");
-			int removeEmptyLine = SettingDefaults.getInt(props, "RemoveEmptyLine");
-			int maxEmptyLine = SettingDefaults.getInt(props, "MaxEmptyLine");
+			//ini から読む変換の設定は ConversionSettings にまとめてある（本棚の画面なしの変換でも使う予定。internal #11 の H2）。
+			//キーが無いときは GUI と同じ既定値を使う (docs/code-audit-followups.md 項目 22 / 24)
+			ConversionSettings settings = ConversionSettings.fromProps(props);
+			boolean coverPage = settings.coverPage;//表紙追加
+			int titlePage = settings.titlePage;
+			boolean tocPage = settings.tocPage;//目次追加
+			boolean tocVertical = settings.tocVertical;//目次縦書き
+			boolean coverPageToc = settings.coverPageToc;
 			
 			WriterConfigurator.apply(props, epub3Writer, epub3ImageWriter);
 			
 			
-			//自動改ページ
-			int forcePageBreakSize = 0;
-			int forcePageBreakEmpty = 0;
-			int forcePageBreakEmptySize = 0;
-			int forcePageBreakChapter = 0;
-			int forcePageBreakChapterSize = 0;
-			if (SettingDefaults.getBoolean(props, "PageBreak")) {
-				forcePageBreakSize = SettingDefaults.getInt(props, "PageBreakSize") * 1024;
-				if (SettingDefaults.getBoolean(props, "PageBreakEmpty")) {
-					forcePageBreakEmpty = SettingDefaults.getInt(props, "PageBreakEmptyLine");
-					forcePageBreakEmptySize = SettingDefaults.getInt(props, "PageBreakEmptySize") * 1024;
-				}
-				if (SettingDefaults.getBoolean(props, "PageBreakChapter")) {
-					forcePageBreakChapter = 1;
-					forcePageBreakChapterSize = SettingDefaults.getInt(props, "PageBreakChapterSize") * 1024;
-				}
-			}
-			//目次設定はキー不在時に GUI と同じ既定値を使う。SettingDefaults に一元化してあるので
-			//ここで props.getProperty を直接読まない (docs/code-audit-followups.md 項目 22)
-			//GUI が書くのは "MaxChapterNameLength"。CLI は別名を読んでいたため、
-			//GUI で設定した目次の最大文字数が CLI に届かず 64 のままだった。
-			//旧名 "ChapterNameLength" は SettingDefaults の表には載せず (GUI は書かない)、
-			//手書きの ini 向けの互換読み出しとしてここだけで扱う
-			int maxLength = SettingDefaults.getInt(props, "MaxChapterNameLength");
-			if (!props.containsKey("MaxChapterNameLength")) {
-				try { maxLength = Integer.parseInt(props.getProperty("ChapterNameLength")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }
-			}
-			boolean insertTitleToc = SettingDefaults.getBoolean(props, "TitleToc");
-			boolean chapterExclude = SettingDefaults.getBoolean(props, "ChapterExclude");
-			boolean chapterUseNextLine = SettingDefaults.getBoolean(props, "ChapterUseNextLine");
-			boolean chapterSection = SettingDefaults.getBoolean(props, "ChapterSection");
-			boolean chapterH = SettingDefaults.getBoolean(props, "ChapterH");
-			boolean chapterH1 = SettingDefaults.getBoolean(props, "ChapterH1");
-			boolean chapterH2 = SettingDefaults.getBoolean(props, "ChapterH2");
-			boolean chapterH3 = SettingDefaults.getBoolean(props, "ChapterH3");
-			boolean sameLineChapter = SettingDefaults.getBoolean(props, "SameLineChapter");
-			boolean chapterName = SettingDefaults.getBoolean(props, "ChapterName");
-			boolean chapterNumOnly = SettingDefaults.getBoolean(props, "ChapterNumOnly");
-			boolean chapterNumTitle = SettingDefaults.getBoolean(props, "ChapterNumTitle");
-			boolean chapterNumParen = SettingDefaults.getBoolean(props, "ChapterNumParen");
-			//GUI は "ChapterNumParenTitle" で書く。先頭の C が欠けており、CLI では永久に false だった
-			boolean chapterNumParenTitle = SettingDefaults.getBoolean(props, "ChapterNumParenTitle");
-			//ChapterPattern=1 だけを書いた手書き ini では ChapterPatternText が無く、
-			//null のまま setChapterLevel に渡って「パターンが不正」の警告が出ていた (項目 23)
-			String chapterPattern = "";
-			if (SettingDefaults.getBoolean(props, "ChapterPattern")) {
-				String patternText = props.getProperty("ChapterPatternText");
-				if (patternText != null) chapterPattern = patternText;
-			}
+			boolean insertTitleToc = settings.insertTitleToc;
 			
 			//オプション指定を反映
 			boolean useFileName = false;//表題に入力ファイル名利用
@@ -303,39 +243,8 @@ public class AozoraEpub3
 
 			//変換クラス生成とパラメータ設定
 			AozoraEpub3Converter  aozoraConverter = new AozoraEpub3Converter(epub3Writer, jarPath);
-			//挿絵なし
-			aozoraConverter.setNoIllust("1".equals(props.getProperty("NoIllust"))); 
-			//栞用span出力
-			aozoraConverter.setWithMarkId(withMarkId);
-			//変換オプション設定
-			aozoraConverter.setAutoYoko(autoYoko, autoYokoNum1, autoYokoNum3, autoYokoEQ1);
-			//文字出力設定
-			int dakutenType = SettingDefaults.getInt(props, "DakutenType");
-			boolean printIvsBMP = "1".equals(props.getProperty("IvsBMP"));
-			boolean printIvsSSP = "1".equals(props.getProperty("IvsSSP"));
-			
-			aozoraConverter.setCharOutput(dakutenType, printIvsBMP, printIvsSSP);
-			//外字の注記表示フォールバック (docs/gaiji-fallback-plan.md 機能1)
-			//GUI だけに付けると narou.rb 経由 (CLI 呼び出し) の利用者に届かないため CLI も同じ ini を読む
-			aozoraConverter.setGaijiFallback(
-					SettingDefaults.getBoolean(props, "GaijiFallback")
-						? SettingDefaults.getInt(props, "GaijiFallbackLevel") : 0,
-					SettingDefaults.getBoolean(props, "GaijiFallbackCode"));
-			//全角スペースの禁則
-			aozoraConverter.setSpaceHyphenation(spaceHyp);
-			//コメント
-			aozoraConverter.setCommentPrint(commentPrint, commentConvert);
-			
-			aozoraConverter.setRemoveEmptyLine(removeEmptyLine, maxEmptyLine);
-			
-			//強制改ページ
-			aozoraConverter.setForcePageBreak(forcePageBreakSize, forcePageBreakEmpty, forcePageBreakEmptySize, forcePageBreakChapter, forcePageBreakChapterSize);
-			//目次設定
-			aozoraConverter.setChapterLevel(maxLength, chapterExclude, chapterUseNextLine, chapterSection,
-					chapterH, chapterH1, chapterH2, chapterH3, sameLineChapter,
-					chapterName,
-					chapterNumOnly, chapterNumTitle, chapterNumParen, chapterNumParenTitle,
-					chapterPattern);
+			//変換の設定（挿絵・栞・縦中横・文字出力・外字・禁則・コメント・空行・改ページ・目次）
+			settings.applyTo(aozoraConverter);
 			
 			////////////////////////////////
 			//URL変換処理
