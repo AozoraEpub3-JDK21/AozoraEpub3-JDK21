@@ -559,10 +559,14 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 .book-update-status {
 	min-height: 1em;
 	font-size: 11px;
+	line-height: 1.35;
 	color: var(--text-sub);
+	/* 後半（開いている本も新しい版にした・失敗の理由）が切れないよう 2 行まで折り返す（win2 の確認） */
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 .book-update-status[data-state="failed"] { color: var(--danger); }
 

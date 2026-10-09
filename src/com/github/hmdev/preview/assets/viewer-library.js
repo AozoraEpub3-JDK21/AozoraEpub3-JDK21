@@ -548,7 +548,8 @@ function paintLibraryUpdate(slot, update)
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
 	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
-	status.title = update.message || '';
+	// 2 行に収まらないときのため、全文を title にも入れる
+	status.title = text + (update.message && !text.includes(update.message) ? '\n' + update.message : '');
 	status.dataset.state = update.state;
 }
 
