@@ -1405,8 +1405,8 @@ public class WebAozoraConverter
 		} finally {
 			bw.close();
 			if (this.guardStopped) {
-				//守りで止めたら、txt も更新情報も変換の前のまま（キャッシュの txt から作り直しても、前の本になるように）
-				this.pendingUpdateInfo = null;
+				//守りで止めたら、txt も更新情報も変換の前のまま（キャッシュの txt から作り直しても、前の本になるように）。
+				//更新情報は書かない（下の else を通らない）
 				if (guardBackup != null) Files.move(guardBackup.toPath(), txtFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 				else Files.deleteIfExists(txtFile.toPath());
 			} else {
