@@ -572,9 +572,14 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 .book-update-status[data-state="gone"],
 .book-update-status[data-state="shrunk"] { color: var(--danger); }
 
+/* 表紙の左上に重ねる（カードの下に足すと、そのカードだけ背が伸びて列が揃わない。PR のゲート2） */
 .book-update-anyway {
-	align-self: flex-start;
-	padding: 2px 8px;
+	position: absolute;
+	top: 14px;
+	left: 12px;
+	max-width: calc(100% - 64px);
+	box-shadow: 0 1px 4px var(--shadow);
+	padding: 3px 8px;
 	border: 1px solid var(--border);
 	border-radius: 4px;
 	background: var(--surface);

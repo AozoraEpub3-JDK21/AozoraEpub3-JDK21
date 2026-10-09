@@ -1236,6 +1236,23 @@ public class PreviewServerTest
 		assertEquals(java.util.List.of(false, true), allowed);
 	}
 
+	/** 更新中の本に「減ったまま更新する」が来たら、ふつうの仕事にまとめずに断る（まとめると、その仕事はまた止まる） */
+	@Test
+	public void aDifferentChoiceForARunningBookIsRefused() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater((url, file) -> {
+			release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+			return new BookUpdater.Result(true, false, "ok");
+		});
+		String first = post(base() + "api/book/" + ids[0] + "/update").body();
+		assertEquals(409, post(base() + "api/book/" + ids[0] + "/update?allowFewer=1").statusCode());
+		assertEquals("同じ選び方なら同じ仕事", 202, post(base() + "api/book/" + ids[0] + "/update").statusCode());
+		release.countDown();
+		waitForJob(first);
+	}
+
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */
 	@Test
 	public void theSameBookIsNotQueuedTwice() throws Exception

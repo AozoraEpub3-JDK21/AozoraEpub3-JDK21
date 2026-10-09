@@ -133,7 +133,7 @@ public class HeadlessWebConversion
 						//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
 						if (updateGuard) {
 							int status = web.listFailure;
-							if (status == 404 || status == 410) {
+							if ((status == 404 || status == 410) && !web.listFailureOnLaterPage) {
 								return new Result(false, false, null, "掲載元に作品がありません (HTTP " + status + ")", STOP_GONE);
 							}
 							if (status != 0) {
@@ -148,7 +148,15 @@ public class HeadlessWebConversion
 					}
 					//EPUB を作り終わるまで鍵を持つ。手放すと、同じ作品を GUI が変換したときに、読んでいる途中の txt
 					//（キャッシュ）が書き直される（PR #118 の codex）
-					return convertText(srcFile, dstPath, expectedOutFile, overwrite);
+					//EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新が前の話数と比べるように。PR の手元の codex）
+					boolean written = false;
+					try {
+						Result r = convertText(srcFile, dstPath, expectedOutFile, overwrite);
+						written = r.ok();
+						return r;
+					} finally {
+						if (!written && web.episodesRecorded) restoreEpisodes(srcFile, web.previousEpisodes);
+					}
 				} finally {
 					//変換器は GUI と使い回すので、守りは必ず倒す
 					web.updateGuard = false;
@@ -158,6 +166,19 @@ public class HeadlessWebConversion
 		} catch (Exception e) {
 			logger.error("画面なしの変換に失敗: {}", url, e);
 			return new Result(false, false, null, "変換できませんでした: " + e.getMessage());
+		}
+	}
+
+	/** 台帳の話数を戻す（-1 なら記録を消す） */
+	static void restoreEpisodes(File srcFile, int episodes)
+	{
+		File workDir = srcFile.getAbsoluteFile().getParentFile();
+		com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(workDir);
+		if (ledger == null) return;
+		try {
+			ledger.withEpisodes(episodes).save(workDir);
+		} catch (IOException e) {
+			logger.warn("台帳の話数を戻せませんでした: {}", workDir, e);
 		}
 	}
 

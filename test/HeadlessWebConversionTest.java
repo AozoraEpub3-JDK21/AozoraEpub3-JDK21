@@ -38,6 +38,9 @@ public class HeadlessWebConversionTest {
 	/** 手元のサーバの目次に並べる話数と、目次の HTTP の状態（試験の途中で変える） */
 	private volatile int episodes = 1;
 	private volatile int listStatus = 200;
+	/** 目次を 2 ページに分ける（1 ページ目に 2 話、残りを 2 ページ目に）と、2 ページ目の HTTP の状態 */
+	private volatile boolean paged = false;
+	private volatile int page2Status = 200;
 
 	@After
 	public void tearDown() {
@@ -65,11 +68,22 @@ public class HeadlessWebConversionTest {
 					exchange.close();
 					return;
 				}
+				boolean secondPage = "p=2".equals(exchange.getRequestURI().getQuery());
+				if (secondPage && page2Status != 200) {
+					exchange.sendResponseHeaders(page2Status, -1);
+					exchange.close();
+					return;
+				}
+				int from = paged && secondPage ? 3 : 1;
+				int to = paged && !secondPage ? Math.min(2, episodes) : episodes;
 				StringBuilder list = new StringBuilder();
-				for (int i = 1; i <= episodes; i++) {
+				if (paged && !secondPage) list.append("<li><a class=\"pager\" href=\"/novel/?p=2\">最後</a></li>");
+				for (int i = from; i <= to; i++) {
 					list.append("<li><a href=\"/ep/").append(i).append("/\">第").append(i).append("話</a><span class=\"up\">2026/01/01</span></li>");
 				}
-				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + list + "</ul></body></html>");
+				//0 話のときは、一覧のページに本文だけがある（告知だけ残して話を消した、など。変換器は 1 ページの作品として読む）
+				String notice = episodes == 0 ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
+				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
 				String n = path.replaceAll("\\D", "");
 				respond(exchange, "<html><body><h2>第" + n + "話</h2><div class=\"body\"><p>" + n + "話目</p></div></body></html>");
@@ -82,7 +96,8 @@ public class HeadlessWebConversionTest {
 		File siteDir = new File(root, "web/" + fqdn);
 		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
 		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
-			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a", "SUB_UPDATE\t.list .up", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
+			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a:not(.pager)", "SUB_UPDATE\t.list .up",
+			"PAGE_URL\ta.pager:-1\t(\\?p=)\\d+\\t(\\d+)\t$1$2", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
 			.getBytes(StandardCharsets.UTF_8));
 		//変換器は基のフォルダの注記の辞書（chuki_*.txt）を読む
 		File repo = VelocityTestUtils.templateDir().getParent().toFile();
@@ -311,15 +326,53 @@ public class HeadlessWebConversionTest {
 		assertTrue("前の版を残す", new File(ledgerDir(), HeadlessWebConversion.PREVIOUS_EPUB).exists());
 	}
 
-	/** 守りを付けない変換（GUI・CLI）は、話数が減っても今までどおり作る */
+	/**
+	 * 守りを付けない変換（GUI・CLI）は、話数が減っても今までどおり作る。ただし台帳の話数は下げない
+	 * （下げると、同じ作品を GUI で別のフォルダに変換しただけで、本棚の本の守りが外れる。PR のゲート2）
+	 */
 	@Test
 	public void conversionsWithoutTheGuardStillRunWithFewerEpisodes() throws Exception {
 		String basePath = serveAndBase();
 		episodes = 3;
-		shelfBook(basePath, tempFolder.newFolder("out"));
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
 		episodes = 2;
 		shelfBook(basePath, tempFolder.newFolder("out2"));
-		assertEquals(2, ledgerOf().episodes);
+		assertEquals(3, ledgerOf().episodes);
+		assertEquals("本棚の本はまだ守られる", HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
+	}
+
+	/** 守りで止めたら、キャッシュの txt を前のまま残す（そこから作り直しても前の本になる。PR のゲート2） */
+	@Test
+	public void aStoppedUpdateLeavesTheCachedTextAlone() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		File txt = java.util.Arrays.stream(ledgerDir().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"))).findFirst().orElseThrow();
+		byte[] before = Files.readAllBytes(txt.toPath());
+		File update = new File(ledgerDir(), "update.txt");
+		byte[] updateBefore = update.isFile() ? Files.readAllBytes(update.toPath()) : null;
+		episodes = 2;
+		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
+		org.junit.Assert.assertArrayEquals("txt は前のまま", before, Files.readAllBytes(txt.toPath()));
+		if (updateBefore != null) org.junit.Assert.assertArrayEquals("update.txt も前のまま", updateBefore, Files.readAllBytes(update.toPath()));
+		assertEquals("控えを残さない", 0, ledgerDir().listFiles((d, n) -> n.startsWith(".guard.")).length);
+	}
+
+	/** 目次の 2 ページ目以降が取れなければ止める。話数が減ったとも、作品が消えたとも言わない（PR のゲート2） */
+	@Test
+	public void aMissingLaterTocPageFailsTheUpdate() throws Exception {
+		String basePath = serveAndBase();
+		paged = true;
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		assertEquals(3, ledgerOf().episodes);
+		byte[] before = Files.readAllBytes(book.toPath());
+		page2Status = 404;
+		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
+		assertFalse(r.ok());
+		assertEquals(null, r.stop());
+		assertTrue(r.message(), r.message().contains("目次"));
+		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
 	}
 
 	/** 目次が 404 なら「作品が見つからない」で止め、キャッシュの古い目次で作り直さない */
@@ -368,6 +421,44 @@ public class HeadlessWebConversionTest {
 			"http://" + fqdn + "/novel/", new File(basePath + "web"));
 		assertFalse(shared.updateGuard);
 		assertFalse(shared.allowFewerEpisodes);
+	}
+
+	/** 目次の話が 0 になって一覧のページが 1 ページの作品に見えるとき（話を消して告知だけ、など）も止める（PR の手元の codex） */
+	@Test
+	public void anEmptyListStopsTheUpdate() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		byte[] before = Files.readAllBytes(book.toPath());
+		episodes = 0;
+		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
+		assertFalse(r.ok());
+		assertEquals(HeadlessWebConversion.STOP_SHRUNK, r.stop());
+		assertTrue(r.message(), r.message().contains("3 → 0 話"));
+		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
+	}
+
+	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */
+	@Test
+	public void aFailedUpdateKeepsThePreviousEpisodeCount() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		episodes = 2;
+		Epub3Writer failing = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath("")) {
+			@Override
+			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
+					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
+				throw new IOException("書いている途中で失敗");
+			}
+		};
+		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		HeadlessWebConversion.Result r = new HeadlessWebConversion(guiDefaults(), basePath, lastCache, failing, imageWriter)
+			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, true);
+		assertFalse(r.ok());
+		assertEquals(3, ledgerOf().episodes);
+		//次のふつうの更新は、前の話数（3）と比べて止まる
+		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
 	}
 
 	private File ledgerDir() {

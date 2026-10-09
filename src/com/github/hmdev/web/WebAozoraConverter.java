@@ -140,9 +140,18 @@ public class WebAozoraConverter
 	public boolean allowFewerEpisodes = false;
 	/** 結果: 目次を取れなかったときの HTTP の状態。取れたら 0、HTTP の応答が無かったら -1 */
 	public int listFailure = 0;
+	/** 結果: 取れなかったのは目次の 2 ページ目以降（作品が消えたのではない） */
+	public boolean listFailureOnLaterPage = false;
 	/** 結果: 守りで止めたときの、台帳の話数と今の目次の話数。止めていなければ -1 */
 	public int shrunkFrom = -1;
 	public int shrunkTo = -1;
+	/** 結果: 台帳に今の話数を書いたか、と書く前の話数（本棚の更新で EPUB を作れなかったとき、元に戻すため） */
+	public boolean episodesRecorded = false;
+	public int previousEpisodes = -1;
+	/** txt を作り終えたら台帳に書く話数。書かないなら -1 */
+	private int pendingEpisodes = -1;
+	/** 本棚の更新の守りで止めた。止めたら txt と update.txt を変換の前に戻す */
+	private boolean guardStopped = false;
 	//更新有りフラグ
 	boolean updated = false;
 
@@ -530,8 +539,13 @@ public class WebAozoraConverter
 	{
 		this.canceled = false;
 		this.listFailure = 0;
+		this.listFailureOnLaterPage = false;
 		this.shrunkFrom = -1;
 		this.shrunkTo = -1;
+		this.episodesRecorded = false;
+		this.previousEpisodes = -1;
+		this.pendingEpisodes = -1;
+		this.guardStopped = false;
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
@@ -759,6 +773,12 @@ public class WebAozoraConverter
 			parentFile.delete();
 		}
 		parentFile.mkdirs();
+		//本棚の更新の守りは目次を読んでから効くので、txt は書き始めている。止めたら戻せるよう、前の txt を控える（PR のゲート2）
+		File guardBackup = null;
+		if (this.updateGuard && txtFile.isFile()) {
+			guardBackup = File.createTempFile(".guard.", ".txt.tmp", parentFile);
+			Files.copy(txtFile.toPath(), guardBackup.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		}
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(txtFile.toPath()), "UTF-8"));
 		try {
 			
@@ -979,6 +999,13 @@ public class WebAozoraConverter
 									return null;
 								} catch (Exception e) {
 									LogAppender.println("目次ページ " + pageIdx + " 取得エラー: " + e.getMessage());
+									//本棚の更新は、目次の一部が欠けたまま作らない（話数が減ったように見える。PR のゲート2）
+									if (this.updateGuard) {
+										this.listFailure = (e instanceof HttpStatusException h) ? h.status : -1;
+										this.listFailureOnLaterPage = true;
+										this.guardStopped = true;
+										return null;
+									}
 								} finally {
 									tocPageFile.delete();
 								}
@@ -1043,21 +1070,24 @@ public class WebAozoraConverter
 
 			//目次の話数を台帳と比べる。減っていたら（掲載先で消された・要約版にされた・目次の 2 ページ目が取れなかった）、
 			//本棚の更新では書かずに止める（1 冊を上書きする方式で一番大きい事故＝読んだ話が消える、を防ぐ。internal #11）
-			if (chapterHrefs.size() > 0) {
-				int previous = ledger != null ? ledger.episodes : -1;
-				if (this.updateGuard && !this.allowFewerEpisodes && previous > chapterHrefs.size()) {
-					this.shrunkFrom = previous;
-					this.shrunkTo = chapterHrefs.size();
-					LogAppender.println("話数が減っています（前 "+previous+" 話 → 今 "+chapterHrefs.size()+" 話）。本は書き換えません");
-					return null;
-				}
-				if (ledger != null && previous != chapterHrefs.size()) {
-					try {
-						ledger.withEpisodes(chapterHrefs.size()).save(workDir);
-					} catch (IOException e) {
-						logger.warn("台帳に話数を書けませんでした: {}", this.dstPath, e);
-					}
-				}
+			//0 話になったとき（全部消された・目次の書き方が変わった）も比べる（PR の手元の codex）
+			int previous = ledger != null ? ledger.episodes : -1;
+			this.previousEpisodes = previous;
+			if (this.updateGuard && !this.allowFewerEpisodes && previous > chapterHrefs.size()) {
+				this.shrunkFrom = previous;
+				this.shrunkTo = chapterHrefs.size();
+				LogAppender.println("話数が減っています（前 "+previous+" 話 → 今 "+chapterHrefs.size()+" 話）。本は書き換えません");
+				this.guardStopped = true;
+				return null;
+			}
+			//台帳に書くのは txt を作り終えてから（途中で止まると、本と台帳の話数が食い違う。PR の手元の codex）。
+			//1 ページの作品（話の一覧が無い）は数えない
+			//守りの無い変換（GUI・CLI）は話数を上げるだけで下げない。下げると、本棚の本の守りが外れる
+			//（同じ作品を GUI で別のフォルダに変換しただけで、本棚の本が減った話数で上書きされる。PR のゲート2）
+			boolean lower = previous > chapterHrefs.size();
+			if (ledger != null && (chapterHrefs.size() > 0 || previous > 0) && previous != chapterHrefs.size()
+				&& (!lower || (this.updateGuard && this.allowFewerEpisodes))) {
+				this.pendingEpisodes = chapterHrefs.size();
 			}
 
 			List<String> failedHrefs = new ArrayList<>();
@@ -1374,8 +1404,16 @@ public class WebAozoraConverter
 
 		} finally {
 			bw.close();
-			//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
-			writePendingUpdateInfo();
+			if (this.guardStopped) {
+				//守りで止めたら、txt も更新情報も変換の前のまま（キャッシュの txt から作り直しても、前の本になるように）
+				this.pendingUpdateInfo = null;
+				if (guardBackup != null) Files.move(guardBackup.toPath(), txtFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+				else Files.deleteIfExists(txtFile.toPath());
+			} else {
+				//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
+				writePendingUpdateInfo();
+			}
+			if (guardBackup != null) Files.deleteIfExists(guardBackup.toPath());
 		}
 
 		// ファイナライズ処理: 文章全体の後処理
@@ -1387,6 +1425,19 @@ public class WebAozoraConverter
 			LogAppender.println("警告: ファイナライズ処理中にエラーが発生しました: " + e.getMessage());
 			logger.warn("テキストファイナライズ処理に失敗（付加処理のため変換は継続）: {}", txtFile, e);
 			// エラーが発生してもファイルは返す（ファイナライズ処理は付加的な処理のため）
+		}
+
+		if (this.pendingEpisodes >= 0) {
+			//台帳は読み直す（変換の途中で名前などが書き足されていることがある）
+			BookLedger current = BookLedger.load(workDir);
+			if (current != null) {
+				try {
+					current.withEpisodes(this.pendingEpisodes).save(workDir);
+					this.episodesRecorded = true;
+				} catch (IOException e) {
+					logger.warn("台帳に話数を書けませんでした: {}", this.dstPath, e);
+				}
+			}
 		}
 
 		this.canceled = false;

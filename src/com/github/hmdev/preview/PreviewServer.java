@@ -138,11 +138,14 @@ public class PreviewServer implements AutoCloseable
 		final long createdNanos = System.nanoTime();
 		volatile String state = "queued";
 		volatile String message = "";
+		/** 「減ったまま更新する」で頼まれた仕事 */
+		final boolean allowFewer;
 
-		UpdateJob(String id, String bookId)
+		UpdateJob(String id, String bookId, boolean allowFewer)
 		{
 			this.id = id;
 			this.bookId = bookId;
+			this.allowFewer = allowFewer;
 		}
 
 		boolean active()
@@ -567,6 +570,11 @@ public class PreviewServer implements AutoCloseable
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
+			//「減ったまま更新する」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
+			if (job != null && job.allowFewer != allowFewer) {
+				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから選び直してください"));
+				return;
+			}
 			if (job == null) {
 				forgetOldJobs();
 				//まだ終わっていない仕事でいっぱいなら断る（列が際限なく伸びないように。PR #118 の codex）
@@ -574,7 +582,7 @@ public class PreviewServer implements AutoCloseable
 					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
 					return;
 				}
-				job = new UpdateJob(newJobId(), bookId);
+				job = new UpdateJob(newJobId(), bookId, allowFewer);
 				this.jobs.put(job.id, job);
 				UpdateJob submitted = job;
 				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry, allowFewer));
