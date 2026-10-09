@@ -64,7 +64,7 @@ const LIBRARY_UPDATE_LABELS = {
 	done: '更新しました',
 	noUpdate: '更新はありません',
 	failed: '更新できませんでした',
-	gone: '掲載元で作品が見つかりません',
+	gone: '掲載元に作品がありません',
 	shrunk: '話数が減ったので止めました',
 };
 
@@ -562,7 +562,7 @@ function paintLibraryUpdate(slot, update)
 	const fewer = slot.querySelector('.book-update-anyway');
 	if (fewer) fewer.hidden = update.state !== 'shrunk';
 	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
-	//守りで止めたときは、サーバの文 (前 N 話 → 今 M 話・HTTP の状態) をそのまま出す
+	//守りで止めたときは、サーバの文 (N → M 話・HTTP の状態) をそのまま出す。どちらも本は書き換えていない
 	if ((update.state === 'gone' || update.state === 'shrunk') && update.message) text = update.message;
 	else if (update.state === 'failed' && update.message) text += ': ' + update.message;
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';

@@ -130,18 +130,17 @@ public class HeadlessWebConversion
 					srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
 						convertUpdated, modifiedOnly, GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
 					if (srcFile == null) {
+						//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
 						if (updateGuard) {
 							int status = web.listFailure;
 							if (status == 404 || status == 410) {
-								return new Result(false, false, null, "掲載元で作品が見つかりません (HTTP " + status + ")。本はそのままです", STOP_GONE);
+								return new Result(false, false, null, "掲載元に作品がありません (HTTP " + status + ")", STOP_GONE);
 							}
 							if (status != 0) {
-								return new Result(false, false, null, "掲載元の目次を取れませんでした"
-									+ (status > 0 ? " (HTTP " + status + ")" : "") + "。本はそのままです");
+								return new Result(false, false, null, "目次を取れませんでした" + (status > 0 ? " (HTTP " + status + ")" : ""));
 							}
 							if (web.shrunkFrom >= 0) {
-								return new Result(false, false, null, "話数が減っています (前 " + web.shrunkFrom + " 話 → 今 " + web.shrunkTo
-									+ " 話)。本はそのままです", STOP_SHRUNK);
+								return new Result(false, false, null, "話数が減ったので止めました (" + web.shrunkFrom + " → " + web.shrunkTo + " 話)", STOP_SHRUNK);
 							}
 						}
 						if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");

@@ -292,7 +292,7 @@ public class HeadlessWebConversionTest {
 		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
 		assertFalse(r.ok());
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, r.stop());
-		assertTrue(r.message(), r.message().contains("前 3 話 → 今 2 話"));
+		assertTrue(r.message(), r.message().contains("3 → 2 話"));
 		org.junit.Assert.assertArrayEquals("本棚の本はそのまま", before, Files.readAllBytes(book.toPath()));
 		assertEquals("台帳の話数を下げない（下げると、もう一度押すだけで通ってしまう）", 3, ledgerOf().episodes);
 		assertFalse("前の版も作らない", new File(ledgerDir(), HeadlessWebConversion.PREVIOUS_EPUB).exists());
