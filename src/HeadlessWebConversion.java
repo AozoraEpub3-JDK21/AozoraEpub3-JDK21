@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 
 import org.slf4j.Logger;
@@ -192,6 +193,14 @@ public class HeadlessWebConversion
 		try {
 			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
 			if (!ok) return new Result(false, false, outFile, "変換に失敗しました（本棚の本はそのまま）");
+			//前の本の権限を引き継ぐ（一時ファイルの既定の権限にしない。PR #118 の codex）
+			if (outFile.exists()) {
+				try {
+					java.nio.file.Files.setPosixFilePermissions(tmp.toPath(), java.nio.file.Files.getPosixFilePermissions(outFile.toPath()));
+				} catch (UnsupportedOperationException | IOException e) {
+					/* 意図的: POSIX でない（Windows）なら何もしない */
+				}
+			}
 			try {
 				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(),
 					java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);

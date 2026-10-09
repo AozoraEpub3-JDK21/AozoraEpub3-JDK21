@@ -1246,4 +1246,28 @@ public class PreviewServerTest
 		String json = get(base() + "api/library").body();
 		assertTrue(json, json.contains("\"title\":\"続きの入った書籍\""));
 	}
+
+	/** まだ終わっていない仕事が上限まであれば、新しく積まずに断る（PR #118 の codex） */
+	@Test
+	public void aFullQueueRefusesNewUpdates() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("many");
+		for (int i = 0; i < PreviewServer.MAX_JOBS + 1; i++) {
+			EpubFixture.withSource("https://ncode.syosetu.com/n" + (1000 + i) + "ab/").writeTo(shelf.resolve("b" + i + ".epub"));
+		}
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null))));
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater((url, file) -> {
+			release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+			return new BookUpdater.Result(true, false, "ok");
+		});
+		String json = get(base() + "api/library").body();
+		java.util.regex.Matcher ids = java.util.regex.Pattern.compile("\"id\":\"([^\"]+)\"").matcher(json);
+		java.util.List<Integer> statuses = new java.util.ArrayList<>();
+		while (ids.find()) statuses.add(post(base() + "api/book/" + ids.group(1) + "/update").statusCode());
+		release.countDown();
+		assertEquals(PreviewServer.MAX_JOBS + 1, statuses.size());
+		assertEquals("上限までは積む", PreviewServer.MAX_JOBS, statuses.stream().filter(c -> c == 202).count());
+		assertEquals("上限を超えたら断る", Integer.valueOf(503), statuses.get(statuses.size() - 1));
+	}
 }

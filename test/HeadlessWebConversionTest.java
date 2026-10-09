@@ -223,4 +223,24 @@ public class HeadlessWebConversionTest {
 		assertEquals("本棚の本は元のまま", "元の本", new String(Files.readAllBytes(book.toPath()), StandardCharsets.UTF_8));
 		assertEquals("一時ファイルを残さない", java.util.List.of("[著者] 題.epub"), java.util.Arrays.asList(dst.list()));
 	}
+
+	/** 置き換えた本は、前の本の権限を引き継ぐ（PR #118 の codex） */
+	@Test
+	public void theReplacedBookKeepsItsPermissions() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		File book = new File(dst, "[著者] 題.epub");
+		Files.write(book.toPath(), "元の本".getBytes(StandardCharsets.UTF_8));
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> perms;
+		try {
+			perms = java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----");
+			Files.setPosixFilePermissions(book.toPath(), perms);
+		} catch (UnsupportedOperationException e) {
+			Assume.assumeNoException("POSIX の権限が無い環境", e);
+			return;
+		}
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).convert("http://" + fqdn + "/novel/", dst, book, true);
+		assertTrue(r.message(), r.ok());
+		assertEquals(perms, Files.getPosixFilePermissions(book.toPath()));
+	}
 }

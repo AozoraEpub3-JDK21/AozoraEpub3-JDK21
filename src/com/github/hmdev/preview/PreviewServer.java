@@ -566,6 +566,11 @@ public class PreviewServer implements AutoCloseable
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
 			if (job == null) {
 				forgetOldJobs();
+				//まだ終わっていない仕事でいっぱいなら断る（列が際限なく伸びないように。PR #118 の codex）
+				if (this.jobs.values().stream().filter(UpdateJob::active).count() >= MAX_JOBS) {
+					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
+					return;
+				}
 				job = new UpdateJob(newJobId(), bookId);
 				this.jobs.put(job.id, job);
 				UpdateJob submitted = job;
