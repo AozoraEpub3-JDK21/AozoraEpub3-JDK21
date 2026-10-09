@@ -1223,7 +1223,7 @@ public class PreviewServerTest
 		assertEquals(1, calls.get());
 	}
 
-	/** 更新が済んだら、本棚の本を読み直す（上書きした本の題・表紙が古いまま出ない） */
+	/** 更新が済んだら、本棚の一覧に上書きした本の新しい題が出る（一覧は読むたびに本を読み直す） */
 	@Test
 	public void theShelfEntryIsReadAgainAfterAnUpdate() throws Exception
 	{

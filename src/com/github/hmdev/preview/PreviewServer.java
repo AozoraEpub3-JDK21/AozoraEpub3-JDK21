@@ -582,8 +582,7 @@ public class PreviewServer implements AutoCloseable
 			BookUpdater.Result result = updater.update(entry.source(), entry.file());
 			job.message = result.message() == null ? "" : result.message();
 			if (result.ok()) {
-				//上書きした本の題・表紙を読み直す
-				this.session.refreshLibraryEntry(job.bookId);
+				//上書きした本の題・表紙は、本棚の一覧（api/library）が読むたびに読み直すので、ここでは何もしない
 				job.state = "done";
 			} else {
 				job.state = result.noUpdate() ? "noUpdate" : "failed";
