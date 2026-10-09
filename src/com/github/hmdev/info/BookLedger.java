@@ -40,6 +40,7 @@ public final class BookLedger
 	static final String KEY_IDENTIFIER = "identifier";
 	static final String KEY_TEXT_BASE_NAME = "textBaseName";
 	static final String KEY_OUTPUT_BASE_NAME = "outputBaseName";
+	static final String KEY_EPISODES = "episodes";
 
 	/** 掲載元の URL（最初に取ったときのもの） */
 	public final String sourceUrl;
@@ -49,13 +50,21 @@ public final class BookLedger
 	public final String textBaseName;
 	/** EPUB の名前（拡張子なし）。最初に「出力ファイル名に表題利用」で変換したときに記録する。まだなら null */
 	public final String outputBaseName;
+	/** 前に取ったときの目次の話数。本棚の更新で話数が減ったのを見つけるのに使う（internal #11）。まだなら -1 */
+	public final int episodes;
 
 	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName)
+	{
+		this(sourceUrl, identifier, textBaseName, outputBaseName, -1);
+	}
+
+	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName, int episodes)
 	{
 		this.sourceUrl = sourceUrl;
 		this.identifier = identifier;
 		this.textBaseName = textBaseName;
 		this.outputBaseName = outputBaseName;
+		this.episodes = episodes;
 	}
 
 	/** 新しい作品の台帳。identifier は URL から決める */
@@ -66,12 +75,17 @@ public final class BookLedger
 
 	public BookLedger withTextBaseName(String textBaseName)
 	{
-		return new BookLedger(this.sourceUrl, this.identifier, textBaseName, this.outputBaseName);
+		return new BookLedger(this.sourceUrl, this.identifier, textBaseName, this.outputBaseName, this.episodes);
 	}
 
 	public BookLedger withOutputBaseName(String outputBaseName)
 	{
-		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, outputBaseName);
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, outputBaseName, this.episodes);
+	}
+
+	public BookLedger withEpisodes(int episodes)
+	{
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, episodes);
 	}
 
 	/**
@@ -156,7 +170,14 @@ public final class BookLedger
 		}
 		//identifier が読めなければ URL から決め直す（同じ値になる）
 		if (identifier == null || !isUuid(identifier)) identifier = identifierFor(sourceUrl);
-		return new BookLedger(sourceUrl, identifier, textBaseName, outputBaseName);
+		int episodes = -1;
+		try {
+			String value = props.getProperty(KEY_EPISODES);
+			if (value != null) episodes = Math.max(-1, Integer.parseInt(value.trim()));
+		} catch (NumberFormatException e) {
+			/* 意図的: 読めなければ記録が無いのと同じ（話数の守りが 1 回効かないだけ） */
+		}
+		return new BookLedger(sourceUrl, identifier, textBaseName, outputBaseName, episodes);
 	}
 
 	/** 作品のフォルダに書く。途中で止まっても前の台帳が壊れないよう、一時ファイルから置き換える */
@@ -167,6 +188,7 @@ public final class BookLedger
 		props.setProperty(KEY_IDENTIFIER, this.identifier);
 		if (this.textBaseName != null) props.setProperty(KEY_TEXT_BASE_NAME, this.textBaseName);
 		if (this.outputBaseName != null) props.setProperty(KEY_OUTPUT_BASE_NAME, this.outputBaseName);
+		if (this.episodes >= 0) props.setProperty(KEY_EPISODES, String.valueOf(this.episodes));
 		Path dir = workDir.toPath();
 		Files.createDirectories(dir);
 		Path tmp = Files.createTempFile(dir, FILE_NAME, ".tmp");

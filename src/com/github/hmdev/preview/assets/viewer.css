@@ -568,7 +568,22 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	overflow: hidden;
 	overflow-wrap: anywhere;
 }
-.book-update-status[data-state="failed"] { color: var(--danger); }
+.book-update-status[data-state="failed"],
+.book-update-status[data-state="gone"],
+.book-update-status[data-state="shrunk"] { color: var(--danger); }
+
+.book-update-anyway {
+	align-self: flex-start;
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+.book-update-anyway:hover, .book-update-anyway:focus-visible { border-color: var(--accent); }
 
 .book-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--shadow); }
 .book-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

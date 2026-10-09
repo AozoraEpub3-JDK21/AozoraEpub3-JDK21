@@ -64,6 +64,8 @@ const LIBRARY_UPDATE_LABELS = {
 	done: '更新しました',
 	noUpdate: '更新はありません',
 	failed: '更新できませんでした',
+	gone: '掲載元で作品が見つかりません',
+	shrunk: '話数が減ったので止めました',
 };
 
 function bindLibraryEvents()
@@ -387,7 +389,17 @@ function libraryCard(book)
 			startLibraryUpdate(book).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
 		});
 		status.setAttribute('aria-live', 'polite');
-		slot.append(update, status);
+		//話数が減って止めたときだけ出す。掲載先で話がまとめられただけ、などのとき利用者が選んで取り直す
+		const fewer = document.createElement('button');
+		fewer.type = 'button';
+		fewer.className = 'book-update-anyway';
+		fewer.textContent = '減ったまま更新する';
+		fewer.hidden = true;
+		fewer.addEventListener('click', event => {
+			event.stopPropagation();
+			startLibraryUpdate(book, true).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
+		});
+		slot.append(update, status, fewer);
 		paintLibraryUpdate(slot, libraryUpdates.get(book.id));
 	} else {
 		slot.appendChild(status);
@@ -453,13 +465,17 @@ function libraryBookButton(book)
 	return card;
 }
 
-/** 「続きを取る」を頼み、終わるまで状態を問い合わせる */
-async function startLibraryUpdate(book)
+/**
+ * 「続きを取る」を頼み、終わるまで状態を問い合わせる
+ * @param {boolean} [allowFewer] 話数が減っていても取り直す (利用者が「減ったまま更新する」を押した)
+ */
+async function startLibraryUpdate(book, allowFewer)
 {
 	const current = libraryUpdates.get(book.id);
 	if (current && (current.state === 'queued' || current.state === 'running')) return;
 	setLibraryUpdate(book.id, {state: 'queued', message: ''});
-	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/update', {method: 'POST', cache: 'no-store'});
+	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/update' + (allowFewer ? '?allowFewer=1' : ''),
+		{method: 'POST', cache: 'no-store'});
 	let body = null;
 	try { body = await response.json(); } catch (e) { /* 本文の無い応答 */ }
 	if (!response.ok || !body || !body.job) {
@@ -543,8 +559,12 @@ function paintLibraryUpdate(slot, update)
 		status.textContent = '';
 		return;
 	}
+	const fewer = slot.querySelector('.book-update-anyway');
+	if (fewer) fewer.hidden = update.state !== 'shrunk';
 	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
-	if (update.state === 'failed' && update.message) text += ': ' + update.message;
+	//守りで止めたときは、サーバの文 (前 N 話 → 今 M 話・HTTP の状態) をそのまま出す
+	if ((update.state === 'gone' || update.state === 'shrunk') && update.message) text = update.message;
+	else if (update.state === 'failed' && update.message) text += ': ' + update.message;
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
 	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;

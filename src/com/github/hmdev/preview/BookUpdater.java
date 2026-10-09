@@ -10,8 +10,17 @@ import java.nio.file.Path;
  */
 public interface BookUpdater
 {
-	/** 更新の結果。noUpdate は「更新分のみ」で更新が無かったこと */
-	record Result(boolean ok, boolean noUpdate, String message) {}
+	/**
+	 * 更新の結果。noUpdate は「更新分のみ」で更新が無かったこと。stop は守りで止めた理由
+	 * （"gone": 掲載元で作品が見つからない、"shrunk": 話数が減った）。止めていなければ null
+	 */
+	record Result(boolean ok, boolean noUpdate, String message, String stop)
+	{
+		public Result(boolean ok, boolean noUpdate, String message)
+		{
+			this(ok, noUpdate, message, null);
+		}
+	}
 
 	/**
 	 * 掲載元の URL から取り直して、本棚の本（epubFile）を上書きする。呼ばれるのは本棚の仕事の列の 1 本のスレッドから
@@ -19,4 +28,13 @@ public interface BookUpdater
 	 * @param epubFile 本棚の本
 	 */
 	Result update(String sourceUrl, Path epubFile) throws Exception;
+
+	/**
+	 * 話数が減っていても続けるかを選んで更新する（利用者が「減ったまま更新する」を選んだとき allowFewerEpisodes）。
+	 * 守りを持たない実装は、ふつうの更新と同じ
+	 */
+	default Result update(String sourceUrl, Path epubFile, boolean allowFewerEpisodes) throws Exception
+	{
+		return update(sourceUrl, epubFile);
+	}
 }

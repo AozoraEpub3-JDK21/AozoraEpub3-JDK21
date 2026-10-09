@@ -1203,6 +1203,39 @@ public class PreviewServerTest
 		assertEquals(404, get(base() + "api/jobs/0123456789abcdef01234567").statusCode());
 	}
 
+	/** 守りで止めた理由（作品が見つからない・話数が減った）は、仕事の状態として出す。「減ったまま更新する」は更新する側へ渡す */
+	@Test
+	public void guardStopsAreReportedAndFewerEpisodesCanBeAllowed() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(false, false, "掲載元で作品が見つかりません (HTTP 404)", "gone"));
+		String gone = waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
+		assertTrue(gone, gone.contains("\"state\":\"gone\""));
+		assertTrue(gone, gone.contains("404"));
+
+		java.util.List<Boolean> allowed = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override
+			public Result update(String sourceUrl, java.nio.file.Path epubFile)
+			{
+				throw new AssertionError("守りのある呼び方を使う");
+			}
+
+			@Override
+			public Result update(String sourceUrl, java.nio.file.Path epubFile, boolean allowFewerEpisodes)
+			{
+				allowed.add(allowFewerEpisodes);
+				return allowFewerEpisodes ? new Result(true, false, "変換しました")
+					: new Result(false, false, "話数が減っています (前 3 話 → 今 2 話)", "shrunk");
+			}
+		});
+		String shrunk = waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
+		assertTrue(shrunk, shrunk.contains("\"state\":\"shrunk\""));
+		String accepted = waitForJob(post(base() + "api/book/" + ids[0] + "/update?allowFewer=1").body());
+		assertTrue(accepted, accepted.contains("\"state\":\"done\""));
+		assertEquals(java.util.List.of(false, true), allowed);
+	}
+
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */
 	@Test
 	public void theSameBookIsNotQueuedTwice() throws Exception

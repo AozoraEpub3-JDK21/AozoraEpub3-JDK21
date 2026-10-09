@@ -130,7 +130,7 @@ public class PreviewServer implements AutoCloseable
 	static final int MAX_JOBS = 64;
 	private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
 
-	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed */
+	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed、守りで止めたら gone・shrunk */
 	static final class UpdateJob
 	{
 		final String id;
@@ -561,6 +561,9 @@ public class PreviewServer implements AutoCloseable
 			respondJsonStatus(exchange, 400, errorJson("Web から取った本ではないので、続きを取れません"));
 			return;
 		}
+		//利用者が「減ったまま更新する」を選んだ（話数が減って止めた本を、それでも取り直す）
+		String query = exchange.getRequestURI().getRawQuery();
+		boolean allowFewer = query != null && java.util.Arrays.asList(query.split("&")).contains("allowFewer=1");
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
@@ -574,21 +577,24 @@ public class PreviewServer implements AutoCloseable
 				job = new UpdateJob(newJobId(), bookId);
 				this.jobs.put(job.id, job);
 				UpdateJob submitted = job;
-				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry));
+				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry, allowFewer));
 			}
 		}
 		respondJsonStatus(exchange, 202, jobJson(job));
 	}
 
-	private void runUpdate(UpdateJob job, BookUpdater updater, LibraryEntry entry)
+	private void runUpdate(UpdateJob job, BookUpdater updater, LibraryEntry entry, boolean allowFewer)
 	{
 		job.state = "running";
 		try {
-			BookUpdater.Result result = updater.update(entry.source(), entry.file());
+			BookUpdater.Result result = updater.update(entry.source(), entry.file(), allowFewer);
 			job.message = result.message() == null ? "" : result.message();
 			if (result.ok()) {
 				//上書きした本の題・表紙は、本棚の一覧（api/library）が読むたびに読み直すので、ここでは何もしない
 				job.state = "done";
+			} else if (result.stop() != null) {
+				//守りで止めた（"gone"・"shrunk"）。本棚の画面が理由ごとに出し分ける
+				job.state = result.stop();
 			} else {
 				job.state = result.noUpdate() ? "noUpdate" : "failed";
 			}

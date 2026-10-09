@@ -153,4 +153,22 @@ public class BookLedgerTest {
 		assertEquals("e725d932-aad6-3d8f-872f-075b9a6e7ec5", BookLedger.identifierFor("https://ncode.syosetu.com/n9623lp/"));
 		assertEquals(BookLedger.identifierFor("https://ncode.syosetu.com/n9623lp/"), BookLedger.identifierFor("http://NCODE.syosetu.com/n9623lp"));
 	}
+
+	/** 話数は書いて読み戻せる。記録が無い・読めないときは -1（守りが 1 回効かないだけで、台帳は使える） */
+	@Test
+	public void theEpisodeCountRoundTrips() throws Exception {
+		java.io.File dir = java.nio.file.Files.createTempDirectory("ledger").toFile();
+		BookLedger.create("https://kakuyomu.jp/works/1", "[著者] 題").save(dir);
+		assertEquals(-1, BookLedger.load(dir).episodes);
+		BookLedger.load(dir).withEpisodes(151).save(dir);
+		BookLedger loaded = BookLedger.load(dir);
+		assertEquals(151, loaded.episodes);
+		assertEquals("ほかの欄は残る", "[著者] 題", loaded.textBaseName);
+		assertEquals("名前を変えても話数は残る", 151, loaded.withOutputBaseName("x").withTextBaseName("y").episodes);
+		java.nio.file.Path file = dir.toPath().resolve(BookLedger.FILE_NAME);
+		java.nio.file.Files.writeString(file, java.nio.file.Files.readString(file).replace("episodes=151", "episodes=abc"));
+		BookLedger broken = BookLedger.load(dir);
+		assertEquals(-1, broken.episodes);
+		assertEquals("[著者] 題", broken.textBaseName);
+	}
 }

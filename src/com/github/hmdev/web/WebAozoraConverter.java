@@ -130,6 +130,19 @@ public class WebAozoraConverter
 	////////////////////////////////
 	//キャンセルリクエストされたらtrue
 	boolean canceled = false;
+
+	/**
+	 * 本棚の更新の守り（internal #11）。立てると、目次が取れないときにキャッシュの目次で続けず、
+	 * 目次の話数が台帳の話数より少ないときは書かずに止める。本棚の更新が鍵（WEB_LOCK）を持って立て、終わったら倒す
+	 */
+	public boolean updateGuard = false;
+	/** 本棚の更新の守りで、話数が減っていても続ける（利用者が「減ったまま更新する」を選んだ） */
+	public boolean allowFewerEpisodes = false;
+	/** 結果: 目次を取れなかったときの HTTP の状態。取れたら 0、HTTP の応答が無かったら -1 */
+	public int listFailure = 0;
+	/** 結果: 守りで止めたときの、台帳の話数と今の目次の話数。止めていなければ -1 */
+	public int shrunkFrom = -1;
+	public int shrunkTo = -1;
 	//更新有りフラグ
 	boolean updated = false;
 
@@ -516,6 +529,9 @@ public class WebAozoraConverter
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
 	{
 		this.canceled = false;
+		this.listFailure = 0;
+		this.shrunkFrom = -1;
+		this.shrunkTo = -1;
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
@@ -627,6 +643,9 @@ public class WebAozoraConverter
 			if (e instanceof javax.net.ssl.SSLException && urlString.startsWith("https://")) {
 				LogAppender.println("サイトの https の証明書を確かめられませんでした。http:// で始まる URL で読めるか試してください");
 			}
+			this.listFailure = (e instanceof HttpStatusException h) ? h.status : -1;
+			//本棚の更新は、キャッシュの古い目次で作り直さない（掲載元で消えていても「更新しました」になる）
+			if (this.updateGuard) return null;
 			if (!cacheFile.exists()) return null;
 
 			LogAppender.println("キャッシュファイルを利用します。");
@@ -1019,6 +1038,25 @@ public class WebAozoraConverter
 				if (!tocChapterMap.isEmpty()) {
 					this.nextDataEpisodeChapterMap = tocChapterMap;
 					LogAppender.println("一覧から章マッピング構築: " + tocChapterMap.size() + "エピソード");
+				}
+			}
+
+			//目次の話数を台帳と比べる。減っていたら（掲載先で消された・要約版にされた・目次の 2 ページ目が取れなかった）、
+			//本棚の更新では書かずに止める（1 冊を上書きする方式で一番大きい事故＝読んだ話が消える、を防ぐ。internal #11）
+			if (chapterHrefs.size() > 0) {
+				int previous = ledger != null ? ledger.episodes : -1;
+				if (this.updateGuard && !this.allowFewerEpisodes && previous > chapterHrefs.size()) {
+					this.shrunkFrom = previous;
+					this.shrunkTo = chapterHrefs.size();
+					LogAppender.println("話数が減っています（前 "+previous+" 話 → 今 "+chapterHrefs.size()+" 話）。本は書き換えません");
+					return null;
+				}
+				if (ledger != null && previous != chapterHrefs.size()) {
+					try {
+						ledger.withEpisodes(chapterHrefs.size()).save(workDir);
+					} catch (IOException e) {
+						logger.warn("台帳に話数を書けませんでした: {}", this.dstPath, e);
+					}
 				}
 			}
 
@@ -3173,7 +3211,7 @@ public class WebAozoraConverter
 					else LogAppender.println(e.getMessage());
 					throw e;
 				}
-				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
+				throw new HttpStatusException(responseCode, urlString);
 			}
 
 			try (BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(cacheFile.toPath()))) {
