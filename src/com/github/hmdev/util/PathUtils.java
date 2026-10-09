@@ -154,7 +154,7 @@ public class PathUtils
 	 * {@link #fitFileName(String, String, int)} と同じ印を付ける。文字の途中（サロゲートペアの間）では切らず、
 	 * 切った後の末尾の空白とドットは落とす。収まっていれば、そのまま返す。
 	 * <p>パス全体の長さで切ると、末尾だけ違う題（上・下など）が同じ名前になり、あとの本が前の本を上書きする（internal #16）。</p>
-	 * @param maxChars 印を含めた上限。{@link #CUT_MARK_LENGTH} より大きいこと
+	 * @param maxChars 印を含めた上限。{@link #CUT_MARK_LENGTH} 以上であること（ちょうどなら印だけの名前になる）
 	 */
 	public static String fitFileNameChars(String baseName, int maxChars)
 	{

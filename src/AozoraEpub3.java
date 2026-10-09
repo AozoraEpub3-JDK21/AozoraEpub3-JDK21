@@ -891,7 +891,8 @@ public class AozoraEpub3
 		if (outFileName.length() > maxChars) {
 			//名前の側だけを切って印を付ける（末尾だけ違う題が同じ名前になって上書きしないように。internal #16）
 			int prefixLen = dstPath.getAbsolutePath().length() + 1;
-			if (maxChars - prefixLen > PathUtils.CUT_MARK_LENGTH) {
+			//名前に使える文字が印の長さちょうどなら、印だけの名前にする（> だと、先頭の数文字が同じ題どうしが上書きし合う。PR #114 の codex）
+			if (maxChars - prefixLen >= PathUtils.CUT_MARK_LENGTH) {
 				outFileName = outFileName.substring(0, prefixLen)
 					+ PathUtils.fitFileNameChars(outFileName.substring(prefixLen), maxChars - prefixLen);
 			} else {

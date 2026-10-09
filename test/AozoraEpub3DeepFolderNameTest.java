@@ -57,6 +57,34 @@ public class AozoraEpub3DeepFolderNameTest {
 		assertEquals(upper.getName(), outFile(dst, BODY + "（上）").getName());
 	}
 
+	/** 出力先のパスがちょうど length 文字のフォルダ */
+	private File folderOfLength(int length) throws Exception {
+		File dir = tempFolder.getRoot();
+		while (dir.getAbsolutePath().length() < length - 20) {
+			dir = new File(dir, "deepfolder");
+		}
+		int rest = length - dir.getAbsolutePath().length() - 1;
+		dir = new File(dir, "d".repeat(rest));
+		dir.mkdirs();
+		assertEquals(length, dir.getAbsolutePath().length());
+		return dir;
+	}
+
+	/**
+	 * 名前に使える文字が印の長さ（7 文字）ちょうどのときも、印を付ける（PR #114 の codex の指摘）。
+	 * 題から作る名前の上限は、拡張子を除いたフルパスで 250 文字なので、出力先が 242 文字だと名前に残るのは 7 文字。
+	 * 修正前は印を付けない切り方に落ち、上・下が同じ名前になって上書きしていた。
+	 */
+	@Test
+	public void aNameWithRoomOnlyForTheMarkIsTheMarkAlone() throws Exception {
+		File dst = folderOfLength(242);
+		File upper = outFile(dst, BODY + "（上）");
+		File lower = outFile(dst, BODY + "（下）");
+		assertNotEquals("上と下が同じ名前になって上書きしない", upper.getName(), lower.getName());
+		assertTrue(upper.getName(), upper.getName().matches("~[0-9a-f]{6}\\.epub"));
+		assertTrue(lower.getName(), lower.getName().matches("~[0-9a-f]{6}\\.epub"));
+	}
+
 	@Test
 	public void aNameThatFitsIsNotChanged() throws Exception {
 		File dst = deepFolder(187);
