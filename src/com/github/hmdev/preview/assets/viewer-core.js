@@ -207,12 +207,15 @@ function setBookControlsEnabled(enabled)
 }
 
 /**
- * 本を読み込む。keepPath を渡すと、新しい本にも同じパスのセクションがあればそこを開く
- * (本棚の「続きを取る」で開いている本が上書きされたとき、読んでいた所に留まる)
+ * 本を読み込む。keepPlace なら、新しい本にも今のセクションと同じパスがあればそこを開く
+ * (本棚の「続きを取る」で開いている本が上書きされたとき、読んでいた所に留まる)。
+ * 今のセクションは読み込みが返ってから見る (待っている間に読み進めた所を巻き戻さない。PR #119 の codex)
  */
-async function loadBook(keepPath)
+async function loadBook(keepPlace)
 {
 	const book = await getJson('api/book/' + encodeURIComponent(state.bookId));
+	const current = (keepPlace && state.book && state.book.spine) ? state.book.spine[state.spineIndex] : null;
+	const keepPath = current ? current.path : null;
 	// 本文が 1 つも無い本を黙って受け入れると、書名だけ新しくなって
 	// iframe には前の本が映ったまま残る (gotoSection が何もせずに返るため)
 	if (!book.spine || book.spine.length === 0) {
@@ -227,6 +230,8 @@ async function loadBook(keepPath)
 	buildSectionSelect();
 	buildToc();
 	const kept = keepPath ? book.spine.findIndex(item => item.path === keepPath) : -1;
+	// 同じパスでも中身は新しい版なので、iframe を必ず読み直させる
+	if (keepPlace) el.frame.removeAttribute('data-path');
 	gotoSection(kept >= 0 ? kept : 0, null);
 }
 

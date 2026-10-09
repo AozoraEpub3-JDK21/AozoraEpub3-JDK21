@@ -507,12 +507,10 @@ async function reloadOpenBook(bookId)
 		libraryStale.add(bookId);
 		return false;
 	}
-	const item = state.book && state.book.spine ? state.book.spine[state.spineIndex] : null;
 	libraryOpening = true;
 	try {
 		state.inspection = null;
-		el.frame.removeAttribute('data-path');
-		await loadBook(item ? item.path : null);
+		await loadBook(true);
 		if (!el.inspectPanel.hidden) renderInspector();
 		libraryStale.delete(bookId);
 		return true;
