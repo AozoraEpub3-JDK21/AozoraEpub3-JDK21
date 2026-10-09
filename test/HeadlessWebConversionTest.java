@@ -197,4 +197,30 @@ public class HeadlessWebConversionTest {
 		assertTrue(r.message(), r.ok());
 		assertTrue("EPUB を書いている間、鍵を持っている", heldWhileWriting.get());
 	}
+
+	/**
+	 * 変換が途中で失敗しても、本棚の本は消えずに元のまま（PR #118 のゲート2）。書き出しは失敗すると出力を消すので、
+	 * 一時ファイルに書いてから置き換える。一時ファイルも残さない
+	 */
+	@Test
+	public void aFailedConversionLeavesTheShelfBookAlone() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		File book = new File(dst, "[著者] 題.epub");
+		Files.write(book.toPath(), "元の本".getBytes(StandardCharsets.UTF_8));
+		Epub3Writer failing = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath("")) {
+			@Override
+			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
+					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
+				Files.write(epubFile.toPath(), new byte[]{ 1, 2, 3 });
+				throw new IOException("書いている途中で失敗");
+			}
+		};
+		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		HeadlessWebConversion.Result r = new HeadlessWebConversion(guiDefaults(), basePath, tempFolder.newFolder("cache3"), failing, imageWriter)
+			.convert("http://" + fqdn + "/novel/", dst, book, true);
+		assertFalse(r.ok());
+		assertEquals("本棚の本は元のまま", "元の本", new String(Files.readAllBytes(book.toPath()), StandardCharsets.UTF_8));
+		assertEquals("一時ファイルを残さない", java.util.List.of("[著者] 題.epub"), java.util.Arrays.asList(dst.list()));
+	}
 }

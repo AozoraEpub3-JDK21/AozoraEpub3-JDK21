@@ -5729,7 +5729,6 @@ public class AozoraEpub3Applet extends JPanel
 		}
 	}
 	
-	/** アプレットの設定状態をpropsに保存 */
 	/** 画面の今の設定を、ini と同じ形で写す（本棚の更新から呼ばれる。部品は EDT で読む） */
 	private Properties snapshotSettings()
 	{
@@ -5745,6 +5744,7 @@ public class AozoraEpub3Applet extends JPanel
 		return snapshot;
 	}
 
+	/** アプレットの設定状態をpropsに保存 */
 	private void setProperties(Properties props)
 	{
 		//アップレット設定の保存

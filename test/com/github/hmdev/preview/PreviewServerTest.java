@@ -1192,6 +1192,11 @@ public class PreviewServerTest
 		assertTrue(noUpdate, noUpdate.contains("\"state\":\"noUpdate\""));
 
 		this.server.setBookUpdater((url, file) -> { throw new IllegalStateException("落ちた"); });
+		String failedByException = waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
+		assertTrue(failedByException, failedByException.contains("\"state\":\"failed\""));
+
+		//Error でも「実行中」のまま残さない（残ると、同じ本の仕事として返し続けて二度と更新できない。PR #118 のゲート2）
+		this.server.setBookUpdater((url, file) -> { throw new AssertionError("落ちた"); });
 		String failed = waitForJob(post(base() + "api/book/" + ids[0] + "/update").body());
 		assertTrue(failed, failed.contains("\"state\":\"failed\""));
 		assertTrue(failed, failed.contains("落ちた"));

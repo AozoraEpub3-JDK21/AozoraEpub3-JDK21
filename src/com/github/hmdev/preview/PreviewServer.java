@@ -587,10 +587,12 @@ public class PreviewServer implements AutoCloseable
 			} else {
 				job.state = result.noUpdate() ? "noUpdate" : "failed";
 			}
-		} catch (Exception e) {
+		} catch (Throwable e) {
+			//Error（メモリ不足など）でも「実行中」のまま残さない。残ると、同じ本の仕事として返し続けて二度と更新できない（PR #118 のゲート2）
 			logger.warn("本棚の更新に失敗しました: {}", entry.file(), e);
 			job.message = String.valueOf(e.getMessage());
 			job.state = "failed";
+			if (e instanceof Error) throw (Error)e;
 		}
 	}
 

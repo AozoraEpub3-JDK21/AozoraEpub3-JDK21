@@ -185,8 +185,23 @@ public class HeadlessWebConversion
 				java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 		}
 		LogAppender.println("画面なしで変換します : " + srcFile.getPath());
-		boolean ok = AozoraEpub3.convertFile(srcFile, "txt", outFile, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
-		return new Result(ok, false, outFile, ok ? "変換しました" : "変換に失敗しました");
+		//同じフォルダの一時ファイルに書いてから置き換える。書き出しは失敗すると出力を消すので、直接書くと
+		//本棚の本が消える。途中で止まっても（本棚を閉じてプロセスが終わるなど）本棚の本は元のまま（PR #118 のゲート2）。
+		//一時ファイルの名前は .epub で終わらせない（本棚に並ばないように）
+		File tmp = File.createTempFile("." + outFile.getName() + ".", ".tmp", outFile.getAbsoluteFile().getParentFile());
+		try {
+			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
+			if (!ok) return new Result(false, false, outFile, "変換に失敗しました（本棚の本はそのまま）");
+			try {
+				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+			} catch (java.nio.file.AtomicMoveNotSupportedException e) {
+				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
+			return new Result(true, false, outFile, "変換しました");
+		} finally {
+			java.nio.file.Files.deleteIfExists(tmp.toPath());
+		}
 	}
 
 	/**

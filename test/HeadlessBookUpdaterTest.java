@@ -44,11 +44,13 @@ public class HeadlessBookUpdaterTest {
 	public void localAndPrivateHostsAreRecognised() {
 		for (String url : new String[]{ "http://127.0.0.1/x", "http://127.0.0.1:8080/x", "http://localhost/x", "http://a.localhost/x",
 				"http://[::1]:8080/x", "http://10.0.0.1/x", "http://192.168.10.109/x", "http://172.16.0.1/x", "http://169.254.1.1/x",
-				"http://0.0.0.0/x", "http://[fd00::1]/x", "http://[fe80::1]/x" }) {
+				"http://0.0.0.0/x", "http://[fd00::1]/x", "http://[fe80::1]/x",
+				// PR #118 のゲート2
+				"http://a@127.0.0.1:8080/x", "http://user@[::1]/x", "http://100.64.0.1/x", "http://100.127.255.255/x", "http://0.1.2.3/x" }) {
 			assertTrue(url, HeadlessBookUpdater.isLocalOrPrivate(url));
 		}
 		for (String url : new String[]{ "https://ncode.syosetu.com/n1234ab/", "https://kakuyomu.jp/works/1", "http://8.8.8.8/x",
-				"https://[2001:db8::1]/x" }) {
+				"https://[2001:db8::1]/x", "http://100.128.0.1/x" }) {
 			assertFalse(url, HeadlessBookUpdater.isLocalOrPrivate(url));
 		}
 	}
@@ -131,5 +133,34 @@ public class HeadlessBookUpdaterTest {
 		} catch (Exception e) {
 			throw new IllegalStateException(e);
 		}
+	}
+
+	/** キャッシュの場所の相対パスは、基のフォルダから（CLI を別のフォルダから起こしても GUI と同じキャッシュ。PR #118 のゲート2） */
+	@Test
+	public void aRelativeCachePathIsUnderTheBaseFolder() {
+		Properties p = new Properties();
+		p.setProperty("CachePath", ".cache");
+		org.junit.Assert.assertEquals(new File("/opt/aozora/.cache"), HeadlessBookUpdater.cachePathOf(p, "/opt/aozora/"));
+		org.junit.Assert.assertEquals("GUI の基は '' ＝カレント", new File(".cache"), HeadlessBookUpdater.cachePathOf(p, ""));
+		p.setProperty("CachePath", "/abs/cache");
+		org.junit.Assert.assertEquals(new File("/abs/cache"), HeadlessBookUpdater.cachePathOf(p, "/opt/aozora/"));
+		org.junit.Assert.assertEquals("空なら .cache", new File("/opt/aozora/.cache"), HeadlessBookUpdater.cachePathOf(new Properties(), "/opt/aozora/"));
+	}
+
+	/** 設定は Web 変換の鍵を取ってから写す（GUI が部品を一時的に書き換えている間の値を写さない。PR #118 のゲート2） */
+	@Test
+	public void settingsAreTakenWhileHoldingTheWebLock() throws Exception {
+		java.util.concurrent.atomic.AtomicBoolean held = new java.util.concurrent.atomic.AtomicBoolean(false);
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> {
+			held.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
+			return new Properties();
+		}, "");
+		updater.conversions = props -> { throw new IllegalStateException("ここまで来れば十分"); };
+		try {
+			updater.update("https://ncode.syosetu.com/n1234ab/", tempFolder.newFile("b.epub").toPath());
+		} catch (IllegalStateException e) {
+			/* 意図的: 変換は作らない */
+		}
+		assertTrue(held.get());
 	}
 }

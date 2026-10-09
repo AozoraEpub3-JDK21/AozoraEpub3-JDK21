@@ -41,17 +41,27 @@ public class HeadlessBookUpdater implements BookUpdater
 		if (isLocalOrPrivate(sourceUrl) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
 			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + sourceUrl);
 		}
-		Properties props = this.settings.get();
-		HeadlessWebConversion.Result r = this.conversions.apply(props)
-			.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true);
-		return new Result(r.ok(), r.noUpdate(), r.message());
+		//設定は Web 変換の鍵を取ってから写す。GUI は Web 変換の間、画面の部品を一時的に書き換えている（表紙・文字コード・
+		//コメント）ので、その間に写すと一時的な値（別の作品の表紙など）が入る（PR #118 のゲート2）
+		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+			Properties props = this.settings.get();
+			HeadlessWebConversion.Result r = this.conversions.apply(props)
+				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true);
+			return new Result(r.ok(), r.noUpdate(), r.message());
+		}
 	}
 
-	/** キャッシュの場所。GUI と同じく ini の CachePath（相対ならカレントから）、空なら基のフォルダの .cache */
+	/**
+	 * キャッシュの場所。ini の CachePath（GUI は空なら ".cache" を書く）、空なら ".cache"。
+	 * 相対なら基のフォルダから（GUI の基は "" ＝カレント。CLI は jar の隣。別のフォルダから CLI を起こしても GUI と同じキャッシュになるように。
+	 * PR #118 のゲート2）
+	 */
 	static File cachePathOf(Properties props, String basePath)
 	{
 		String value = props.getProperty("CachePath", "").trim();
-		return value.isEmpty() ? new File(basePath + ".cache") : new File(value);
+		if (value.isEmpty()) value = ".cache";
+		File file = new File(value);
+		return file.isAbsolute() || basePath.isEmpty() ? file : new File(basePath + value);
 	}
 
 	/**
@@ -67,6 +77,9 @@ public class HeadlessBookUpdater implements BookUpdater
 			if (i >= 0 && i < end) end = i;
 		}
 		String host = rest.substring(0, end);
+		//利用者情報（user@）を除く（PR #118 のゲート2。本棚の確かめで弾いているが、ここだけでも止まるように）
+		int at = host.lastIndexOf('@');
+		if (at >= 0) host = host.substring(at + 1);
 		if (host.startsWith("[")) {
 			host = host.substring(1, Math.max(1, host.indexOf(']')));
 		} else {
@@ -83,7 +96,11 @@ public class HeadlessBookUpdater implements BookUpdater
 				|| address.isAnyLocalAddress()) return true;
 			//IPv6 の ULA（fc00::/7）は Java では site-local と見なされない
 			byte[] bytes = address.getAddress();
-			return bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
+			if (bytes.length == 16) return (bytes[0] & 0xfe) == 0xfc;
+			//CGNAT（100.64.0.0/10）と 0.0.0.0/8 も
+			int b0 = bytes[0] & 0xff;
+			int b1 = bytes[1] & 0xff;
+			return (b0 == 100 && b1 >= 64 && b1 <= 127) || b0 == 0;
 		} catch (Exception e) {
 			//IP の書き方なのに読めないものは取りに行かない
 			return true;
