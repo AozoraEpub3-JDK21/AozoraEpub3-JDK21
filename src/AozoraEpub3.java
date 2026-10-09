@@ -155,6 +155,8 @@ public class AozoraEpub3
 			//(棚だけ読み込んで何も表示しないのでは意味がない)。
 			//-preview と同じくブラウザを閉じるまで待機することはヘルプに明記してある
 			boolean preview = commandLine.hasOption("preview") || (libraryDirs != null && libraryDirs.length > 0);
+			//プレビュー（本棚）を開く道のどれからでも「続きを取る」が使えるよう、先に渡しておく
+			if (preview) registerBookUpdater(jarPath);
 			//入力が EPUB だけなら変換せずそのままプレビューする。
 			//-url が併用されている場合は変換対象があるので通常の変換フローに進める
 			if (preview && fileNames.length > 0 && !commandLine.hasOption("url") && isAllEpub(fileNames)) {
@@ -616,14 +618,16 @@ public class AozoraEpub3
 	 * 本棚だけをプレビューし、ブラウザが閉じられるか Ctrl-C まで待機する。
 	 * 入力ファイルを伴わない {@code --library} の経路。
 	 */
-	static int previewLibrary(String[] libraryDirs, String jarPath)
+	/**
+	 * CLI で開いた本棚の「続きを取る」は、ini の設定（GUI が保存したもの）で、画面を使わずに変換する（internal #11）。
+	 * ini は更新のたびに読み直す（本棚を開いたまま GUI で設定を変えて閉じても効くように）。
+	 * 本棚を開く CLI の道（-library だけ・本と一緒・変換の後）のすべてで呼ぶ（PR #118 の codex）
+	 */
+	static void registerBookUpdater(String jarPath)
 	{
-		//本棚の「続きを取る」は、ini の設定（GUI が保存したもの）で、画面を使わずに変換する（internal #11）。
-		//ini は更新のたびに読み直す（本棚を開いたまま GUI で設定を変えて閉じても効くように）
-		String iniJarPath = jarPath;
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(() -> {
 			Properties props = new Properties();
-			File ini = resolveDefaultIniFile(iniJarPath, "AozoraEpub3.ini", null);
+			File ini = resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
 			try (java.io.InputStream in = Files.newInputStream(ini.toPath())) {
 				props.load(in);
 			} catch (Exception e) {
@@ -631,6 +635,11 @@ public class AozoraEpub3
 			}
 			return props;
 		}, jarPath));
+	}
+
+	static int previewLibrary(String[] libraryDirs, String jarPath)
+	{
+		registerBookUpdater(jarPath);
 		java.util.List<java.nio.file.Path> folders = new ArrayList<>();
 		for (String dir : libraryDirs) {
 			File file = new File(dir);

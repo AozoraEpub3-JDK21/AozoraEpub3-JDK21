@@ -4605,7 +4605,8 @@ public class AozoraEpub3Applet extends JPanel
 				LogAppender.append(urlString);
 				LogAppender.println(" を読み込みます");
 				
-				//変換器は FQDN ごとに使い回されるので、本棚の更新（画面なしの変換）と同時に触らない（internal #11）
+				//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、本棚の更新（画面なしの変換）とは、
+				//変換器を取ってから EPUB を作り終わるまでを 1 つずつにする（internal #11。PR #118 の codex）
 				File srcFile;
 				synchronized (WebAozoraConverter.WEB_LOCK) {
 					webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
@@ -4663,53 +4664,53 @@ public class AozoraEpub3Applet extends JPanel
 					srcFile = webConverter.convertToAozoraText(urlString, this.cachePath, interval, modifiedExpire,
 						this.jCheckWebConvertUpdated.isSelected(), this.jCheckWebModifiedOnly.isSelected(), jCheckWebModifiedTail.isSelected(),
 						beforeChapter);
+				
+					if (srcFile == null) {
+						LogAppender.append(urlString);
+						if (jCheckWebConvertUpdated.isSelected() && !webConverter.isUpdated()
+							|| jCheckWebModifiedOnly.isSelected() && !webConverter.isUpdated())
+							LogAppender.println(" の変換をスキップしました");
+						else if (webConverter.isCanceled())
+							LogAppender.println(" の変換をキャンセルしました");
+						else
+							LogAppender.println(" は変換できませんでした");
+						continue;
+					}
+				
+					//エンコードを変換時のみUTF-8にする
+					String encType = (String)jComboEncType.getSelectedItem();
+					jComboEncType.setSelectedItem("UTF-8");
+					int titleTypeIdx = jComboTitle.getSelectedIndex();
+					jComboTitle.setSelectedIndex(0);
+					boolean checkUseFileName = jCheckUseFileName.isSelected();
+					jCheckUseFileName.setSelected(false);
+					//コメント出力
+					boolean commentPrint = jCheckCommentPrint.isSelected();
+					jCheckCommentPrint.setSelected(true);
+					boolean commentConvert = jCheckCommentConvert.isSelected();
+					jCheckCommentConvert.setSelected(true);
+				
+					//表紙画像はconverted.pngで保存される 指定がない場合はそれを利用する
+					Object coverItem = jComboCover.getSelectedItem();
+					//入力ファイルと同じ表紙の指定の場合 ショートカットファイルのパスにファイルがあればファイルパスを指定に変更
+					if (jComboCover.getSelectedIndex() == 1 && urSrcFile != null) {
+						String coverFileName = AozoraEpub3.getSameCoverFileName(urSrcFile);
+						jComboCover.setSelectedItem(coverFileName);
+					}
+					//同名のファイルが無い場合はconverted.pngを利用する設定に変更
+					if (jComboCover.getSelectedIndex() == 0 || jComboCover.getSelectedIndex() == 1) jComboCover.setSelectedIndex(1);
+				
+					//変換処理実行
+					convertFiles(new File[]{srcFile}, dstPath);
+				
+					//設定を戻す
+					jComboEncType.setSelectedItem(encType);
+					jComboTitle.setSelectedIndex(titleTypeIdx);
+					jCheckUseFileName.setSelected(checkUseFileName);
+					jCheckCommentPrint.setSelected(commentPrint);
+					jCheckCommentConvert.setSelected(commentConvert);
+					jComboCover.setSelectedItem(coverItem);
 				}
-				
-				if (srcFile == null) {
-					LogAppender.append(urlString);
-					if (jCheckWebConvertUpdated.isSelected() && !webConverter.isUpdated()
-						|| jCheckWebModifiedOnly.isSelected() && !webConverter.isUpdated())
-						LogAppender.println(" の変換をスキップしました");
-					else if (webConverter.isCanceled())
-						LogAppender.println(" の変換をキャンセルしました");
-					else
-						LogAppender.println(" は変換できませんでした");
-					continue;
-				}
-				
-				//エンコードを変換時のみUTF-8にする
-				String encType = (String)jComboEncType.getSelectedItem();
-				jComboEncType.setSelectedItem("UTF-8");
-				int titleTypeIdx = jComboTitle.getSelectedIndex();
-				jComboTitle.setSelectedIndex(0);
-				boolean checkUseFileName = jCheckUseFileName.isSelected();
-				jCheckUseFileName.setSelected(false);
-				//コメント出力
-				boolean commentPrint = jCheckCommentPrint.isSelected();
-				jCheckCommentPrint.setSelected(true);
-				boolean commentConvert = jCheckCommentConvert.isSelected();
-				jCheckCommentConvert.setSelected(true);
-				
-				//表紙画像はconverted.pngで保存される 指定がない場合はそれを利用する
-				Object coverItem = jComboCover.getSelectedItem();
-				//入力ファイルと同じ表紙の指定の場合 ショートカットファイルのパスにファイルがあればファイルパスを指定に変更
-				if (jComboCover.getSelectedIndex() == 1 && urSrcFile != null) {
-					String coverFileName = AozoraEpub3.getSameCoverFileName(urSrcFile);
-					jComboCover.setSelectedItem(coverFileName);
-				}
-				//同名のファイルが無い場合はconverted.pngを利用する設定に変更
-				if (jComboCover.getSelectedIndex() == 0 || jComboCover.getSelectedIndex() == 1) jComboCover.setSelectedIndex(1);
-				
-				//変換処理実行
-				convertFiles(new File[]{srcFile}, dstPath);
-				
-				//設定を戻す
-				jComboEncType.setSelectedItem(encType);
-				jComboTitle.setSelectedIndex(titleTypeIdx);
-				jCheckUseFileName.setSelected(checkUseFileName);
-				jCheckCommentPrint.setSelected(commentPrint);
-				jCheckCommentConvert.setSelected(commentConvert);
-				jComboCover.setSelectedItem(coverItem);
 				
 			} catch (Exception e) {
 				logger.error("ファイル変換ワーカーでエラー", e);

@@ -72,7 +72,7 @@ public class HeadlessWebConversion
 		String outExt = outExt();
 		if (outExt.startsWith(".mobi")) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
 		try {
-			//変換器は FQDN ごとに使い回されるので、GUI の Web 変換と同時に触らない（WebAozoraConverter.WEB_LOCK）
+			//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、GUI の Web 変換とは 1 つずつ（WebAozoraConverter.WEB_LOCK）
 			File srcFile;
 			synchronized (WebAozoraConverter.WEB_LOCK) {
 				WebAozoraConverter web = WebAozoraConverter.createWebAozoraConverter(url, new File(this.basePath + "web"));
@@ -109,8 +109,10 @@ public class HeadlessWebConversion
 					if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");
 					return new Result(false, false, null, "取得できませんでした: " + url);
 				}
+				//EPUB を作り終わるまで鍵を持つ。手放すと、同じ作品を GUI が変換したときに、読んでいる途中の txt
+				//（キャッシュ）が書き直される（PR #118 の codex）
+				return convertText(srcFile, dstPath, expectedOutFile, overwrite);
 			}
-			return convertText(srcFile, dstPath, expectedOutFile, overwrite);
 		} catch (Exception e) {
 			logger.error("画面なしの変換に失敗: {}", url, e);
 			return new Result(false, false, null, "変換できませんでした: " + e.getMessage());

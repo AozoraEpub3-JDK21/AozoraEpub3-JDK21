@@ -174,4 +174,27 @@ public class HeadlessWebConversionTest {
 		assertEquals("今の形はそのまま", HeadlessWebConversion.COVER_NONE, HeadlessWebConversion.normalizeCover(HeadlessWebConversion.COVER_NONE));
 		assertEquals("直接の指定はそのまま", "/x/cover.jpg", HeadlessWebConversion.normalizeCover("/x/cover.jpg"));
 	}
+
+	/**
+	 * EPUB を書いている間も Web 変換の鍵を持つ（PR #118 の codex）。手放すと、同じ作品を GUI が変換したときに、
+	 * 読んでいる途中の txt（キャッシュ）が書き直される
+	 */
+	@Test
+	public void theWebLockIsHeldUntilTheEpubIsWritten() throws Exception {
+		String basePath = serveAndBase();
+		java.util.concurrent.atomic.AtomicBoolean heldWhileWriting = new java.util.concurrent.atomic.AtomicBoolean(false);
+		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath("")) {
+			@Override
+			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
+					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
+				heldWhileWriting.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
+				super.write(converter, src, srcFile, srcExt, epubFile, bookInfo, imageInfoReader);
+			}
+		};
+		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		HeadlessWebConversion.Result r = new HeadlessWebConversion(guiDefaults(), basePath, tempFolder.newFolder("cache2"), writer, imageWriter)
+			.convert("http://" + fqdn + "/novel/", tempFolder.newFolder("out"), null, true);
+		assertTrue(r.message(), r.ok());
+		assertTrue("EPUB を書いている間、鍵を持っている", heldWhileWriting.get());
+	}
 }
