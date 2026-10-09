@@ -21,6 +21,8 @@ public class HeadlessBookUpdater implements BookUpdater
 
 	private final Supplier<Properties> settings;
 	private final String basePath;
+	/** 設定から画面なしの変換を作る。試験では、専用の VelocityEngine を渡した書き出しで作る（静的な Velocity を使わない） */
+	java.util.function.Function<Properties, HeadlessWebConversion> conversions;
 
 	/**
 	 * @param settings 更新のたびに呼ぶ。GUI の ini と同じ形の設定
@@ -30,6 +32,7 @@ public class HeadlessBookUpdater implements BookUpdater
 	{
 		this.settings = settings;
 		this.basePath = basePath;
+		this.conversions = props -> new HeadlessWebConversion(props, basePath, cachePathOf(props, basePath));
 	}
 
 	@Override
@@ -39,7 +42,7 @@ public class HeadlessBookUpdater implements BookUpdater
 			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + sourceUrl);
 		}
 		Properties props = this.settings.get();
-		HeadlessWebConversion.Result r = new HeadlessWebConversion(props, this.basePath, cachePathOf(props, this.basePath))
+		HeadlessWebConversion.Result r = this.conversions.apply(props)
 			.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true);
 		return new Result(r.ok(), r.noUpdate(), r.message());
 	}

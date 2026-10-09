@@ -94,17 +94,18 @@ public class HeadlessBookUpdaterTest {
 		for (File f : repo.listFiles((d, n) -> n.startsWith("chuki_") && n.endsWith(".txt"))) {
 			Files.copy(f.toPath(), new File(root, f.getName()).toPath());
 		}
-		Files.createSymbolicLink(new File(root, "template").toPath(), VelocityTestUtils.templateDir());
 		String basePath = root.getAbsolutePath() + File.separator;
 		Properties props = new Properties();
 		props.load(Files.newInputStream(new File(repo, "test_data/gui_default_settings.ini").toPath()));
 		props.setProperty("CachePath", new File(root, "cache").getAbsolutePath());
 		System.setProperty(HeadlessBookUpdater.ALLOW_LOCAL_PROPERTY, "true");
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
+		//静的な Velocity は先に走った試験の初期化が残るので、専用の VelocityEngine を渡した書き出しで作る
+		updater.conversions = p -> conversion(p, basePath, new File(root, "cache"));
 
 		//最初の本（1 話）を作る
 		File shelf = tempFolder.newFolder("shelf");
-		HeadlessWebConversion.Result first = new HeadlessWebConversion(props, basePath, new File(root, "cache"))
+		HeadlessWebConversion.Result first = conversion(props, basePath, new File(root, "cache"))
 			.convert(base + "/novel/", shelf, null, true);
 		assertTrue(first.message(), first.ok());
 		byte[] before = Files.readAllBytes(first.epub().toPath());
@@ -118,5 +119,17 @@ public class HeadlessBookUpdaterTest {
 		assertTrue("1 つ前の版が残る: " + previous, previous.isFile());
 		assertArrayEquals(before, Files.readAllBytes(previous.toPath()));
 		assertTrue("ほかの名前の本が増えない", shelf.list().length == 1);
+	}
+
+	private static HeadlessWebConversion conversion(Properties props, String basePath, File cache) {
+		try {
+			com.github.hmdev.writer.Epub3Writer writer = new com.github.hmdev.writer.Epub3Writer(
+				VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+			com.github.hmdev.writer.Epub3Writer imageWriter = new com.github.hmdev.writer.Epub3Writer(
+				VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+			return new HeadlessWebConversion(props, basePath, cache, writer, imageWriter);
+		} catch (Exception e) {
+			throw new IllegalStateException(e);
+		}
 	}
 }
