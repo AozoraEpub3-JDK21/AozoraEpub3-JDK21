@@ -141,5 +141,8 @@ public class PathUtilsFitFileNameTest {
 			assertEquals(base, PathUtils.fitFileNameIn(missing, base, ".txt"));
 			assertFalse("試すとフォルダを作る", missing.exists());
 		}
+		// 拡張子の側の区切り文字も（CLI の -ext。PR の codex の指摘）
+		assertEquals("題".repeat(100), PathUtils.fitFileNameIn(missing, "題".repeat(100), "/../x.epub"));
+		assertFalse("試すとフォルダを作る", missing.exists());
 	}
 }
