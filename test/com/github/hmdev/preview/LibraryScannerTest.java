@@ -49,15 +49,41 @@ public class LibraryScannerTest
 	public void readsTheSourceUrlOfABookFromTheWeb() throws Exception
 	{
 		EpubFixture.withSource("https://ncode.syosetu.com/n1234ab/").writeTo(root().resolve("web.epub"));
+		// クエリの & は OPF では &amp; と書かれる
+		EpubFixture.withSource("https://example.com/novel?id=1&p=2").writeTo(root().resolve("query.epub"));
 		EpubFixture.withSource("javascript:alert(1)").writeTo(root().resolve("bad.epub"));
 		EpubFixture.standard().writeTo(root().resolve("local.epub"));
+		// ほかの出どころの本（Project Gutenberg など）も dc:source を持つ。identifier が URL から作った値でなければ採らない（ゲート2の指摘）
+		EpubFixture.withSources("urn:uuid:12345678-1234-1234-1234-123456789abc", "https://www.gutenberg.org/ebooks/1342")
+			.writeTo(root().resolve("gutenberg.epub"));
+		// dc:source が複数（ISBN が先）でも、条件を満たす URL を採る
+		String url = "https://kakuyomu.jp/works/1";
+		EpubFixture.withSources("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(url), "urn:isbn:9784000000000", url)
+			.writeTo(root().resolve("multi.epub"));
 
 		java.util.Map<String, String> sources = new java.util.HashMap<>();
 		for (LibraryEntry e : LibraryScanner.scan(root(), 3, null)) sources.put(e.file().getFileName().toString(), e.source());
 		assertEquals("https://ncode.syosetu.com/n1234ab/", sources.get("web.epub"));
+		assertEquals("https://example.com/novel?id=1&p=2", sources.get("query.epub"));
 		assertNull("http・https でない掲載元は持たない", sources.get("bad.epub"));
 		assertNull("手元のテキストから作った本は掲載元なし", sources.get("local.epub"));
-		assertEquals(3, sources.size());
+		assertNull("このアプリが作った本でなければ掲載元なし", sources.get("gutenberg.epub"));
+		assertEquals(url, sources.get("multi.epub"));
+		assertEquals(6, sources.size());
+	}
+
+	@Test
+	public void aSourceMustHaveAPlainHostAndNoHiddenCharacters()
+	{
+		assertEquals("https://example.com/a", LibraryScanner.sanitizeSource(" https://example.com/a "));
+		assertEquals("https://example.com?x=1", LibraryScanner.sanitizeSource("https://example.com?x=1"));
+		assertNull("ホストが無い", LibraryScanner.sanitizeSource("https://"));
+		assertNull("ホストが無い", LibraryScanner.sanitizeSource("https:///path"));
+		assertNull("利用者情報", LibraryScanner.sanitizeSource("https://user@example.com/"));
+		assertNull("ホストに空白", LibraryScanner.sanitizeSource("https://a b/"));
+		assertNull("C0", LibraryScanner.sanitizeSource("\u0001https://example.com/"));
+		assertNull("C1", LibraryScanner.sanitizeSource("https://example.com/\u0085"));
+		assertNull("双方向の制御", LibraryScanner.sanitizeSource("https://example.com/\u202Eevil"));
 	}
 
 	@Test

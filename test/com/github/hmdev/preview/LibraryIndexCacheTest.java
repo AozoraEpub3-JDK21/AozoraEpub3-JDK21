@@ -177,6 +177,21 @@ public class LibraryIndexCacheTest
 		assertNull(cache.get(book));
 	}
 
+	/** 列数が合っていても、世代 1 の見出しなら読まない（世代を上げたことだけで落ちる形） */
+	@Test
+	public void aFirstGenerationHeaderAloneDiscardsTheFile() throws Exception
+	{
+		Path book = temp.getRoot().toPath().resolve("a.epub");
+		Files.writeString(cacheFile(),
+			"#aozoraepub3-preview-library\t1\n"
+			+ LibraryIndexCache.formatLine(new LibraryEntry(book, 1L, 2L, "書名", "著者", null, null)) + "\n",
+			StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(cacheFile());
+		cache.load();
+		assertNull(cache.get(book));
+	}
+
 	@Test
 	public void aForeignOrOldFormatIsDiscardedWholesale() throws Exception
 	{

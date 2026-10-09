@@ -65,14 +65,30 @@ final class EpubFixture
 		return fixture;
 	}
 
-	/** {@code <dc:source>} に掲載元の URL を持つ構成（Web から取った本）。本棚の「続きを取る」用 */
+	/**
+	 * このアプリが Web から取って作った本の構成。{@code <dc:source>} に掲載元の URL を持ち、
+	 * identifier はその URL から作った値（{@code Epub3Writer} と同じ）。本棚の「続きを取る」用
+	 */
 	static EpubFixture withSource(String source)
 	{
+		return withSources("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(source), source);
+	}
+
+	/** identifier と {@code <dc:source>} の並びを指定した構成。値は XML のためにエスケープする */
+	static EpubFixture withSources(String identifier, String... sources)
+	{
+		StringBuilder elements = new StringBuilder();
+		for (String source : sources) elements.append("    <dc:source>").append(xml(source)).append("</dc:source>\n");
 		EpubFixture fixture = standard();
-		fixture.put("OPS/package.opf", packageOpf().replace(
-			"  </metadata>",
-			"    <dc:source>" + source + "</dc:source>\n  </metadata>"));
+		fixture.put("OPS/package.opf", packageOpf()
+			.replace("urn:uuid:test-0001", xml(identifier))
+			.replace("  </metadata>", elements + "  </metadata>"));
 		return fixture;
+	}
+
+	private static String xml(String value)
+	{
+		return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 
 	/**

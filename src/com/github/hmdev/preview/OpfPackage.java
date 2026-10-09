@@ -31,8 +31,8 @@ public class OpfPackage
 	private String publisher;
 	private String language;
 	private String identifier;
-	/** dc:source（Web から取った本の掲載元の URL） */
-	private String source;
+	/** dc:source の並び（Web から取った本は掲載元の URL を 1 つ持つ。ほかの出どころの本は ISBN なども持ちうる） */
+	private java.util.List<String> sources = java.util.List.of();
 	private String modified;
 	/** meta[property=rendition:layout] */
 	private String renditionLayout;
@@ -71,7 +71,7 @@ public class OpfPackage
 	public String getPageProgressionDirection() { return this.pageProgressionDirection; }
 	public String getTitle() { return this.title; }
 	public String getCreator() { return this.creator; }
-	public String getSource() { return this.source; }
+	public java.util.List<String> getSources() { return this.sources; }
 	public String getPublisher() { return this.publisher; }
 	public String getLanguage() { return this.language; }
 	public String getIdentifier() { return this.identifier; }
@@ -167,7 +167,7 @@ public class OpfPackage
 	void setPublisher(String value) { this.publisher = value; }
 	void setLanguage(String value) { this.language = value; }
 	void setIdentifier(String value) { this.identifier = value; }
-	void setSource(String value) { this.source = value; }
+	void setSources(java.util.List<String> values) { this.sources = java.util.List.copyOf(values); }
 	void setModified(String value) { this.modified = value; }
 	void setRenditionLayout(String value) { this.renditionLayout = value; }
 	void setPrimaryWritingMode(String value) { this.primaryWritingMode = value; }

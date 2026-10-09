@@ -177,7 +177,7 @@ public class LibraryScanner
 				coverEntry = null;
 			}
 			return new LibraryEntry(file.toAbsolutePath().normalize(), size, modifiedMillis,
-				truncate(opf.getTitle()), truncate(opf.getCreator()), coverEntry, sanitizeSource(opf.getSource()));
+				truncate(opf.getTitle()), truncate(opf.getCreator()), coverEntry, webSourceOf(opf));
 		}
 	}
 
@@ -189,16 +189,51 @@ public class LibraryScanner
 	}
 
 	/**
+	 * このアプリが Web から取って作った本の掲載元の URL。無ければ null。
+	 *
+	 * <p>{@code dc:source} はほかの出どころの本（Project Gutenberg など）も持つので、それだけでは決めない。
+	 * このアプリは identifier を掲載元の URL から作る（{@link BookLedger#identifierFor}）ので、
+	 * identifier がその URL から作った値と同じ {@code dc:source} だけを採る。
+	 * {@code dc:source} が複数あるときは（ISBN と URL など）、条件を満たす最初のもの</p>
+	 */
+	static String webSourceOf(OpfPackage opf)
+	{
+		String identifier = opf.getIdentifier();
+		if (identifier == null) return null;
+		for (String raw : opf.getSources()) {
+			String source = sanitizeSource(raw);
+			if (source == null) continue;
+			if (identifier.trim().equalsIgnoreCase("urn:uuid:" + BookLedger.identifierFor(source))) return source;
+		}
+		return null;
+	}
+
+	/**
 	 * 掲載元の URL を、本棚が扱ってよい形だけに絞る（続きを取るときに、この URL を取りに行く）。
-	 * http・https で始まり、制御文字が無く、{@link #MAX_FIELD_CHARS} 文字以内のもの。それ以外は null。
+	 * http・https で始まり、ホストがあって利用者情報（user@）が無く、制御文字・書式文字（双方向の制御など）が無く、
+	 * {@link #MAX_FIELD_CHARS} 文字以内のもの。それ以外は null。
 	 * 切り詰めると別の URL に化けるので、長すぎるものは捨てる。キャッシュから復元した値もここを通す
 	 */
 	static String sanitizeSource(String source)
 	{
 		if (source == null) return null;
+		//前後の空白を落とす前に見る（trim は制御文字も落とすので、落とした後では見えない）
+		for (int i = 0; i < source.length(); i++) {
+			int type = Character.getType(source.charAt(i));
+			if (type == Character.CONTROL || type == Character.FORMAT) return null;
+		}
 		source = source.trim();
 		if (source.isEmpty() || source.length() > MAX_FIELD_CHARS) return null;
-		return BookLedger.isHttpUrl(source) ? source : null;
+		if (!BookLedger.isHttpUrl(source)) return null;
+		String rest = source.substring(source.indexOf("://") + 3);
+		int end = rest.length();
+		for (char c : new char[]{ '/', '?', '#' }) {
+			int i = rest.indexOf(c);
+			if (i >= 0 && i < end) end = i;
+		}
+		String authority = rest.substring(0, end);
+		if (authority.isEmpty() || authority.indexOf('@') >= 0 || authority.indexOf(' ') >= 0) return null;
+		return source;
 	}
 
 	/**
