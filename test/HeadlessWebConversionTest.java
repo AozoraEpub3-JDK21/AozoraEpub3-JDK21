@@ -362,9 +362,12 @@ public class HeadlessWebConversionTest {
 	public void theGuardIsOffAgainAfterAnUpdate() throws Exception {
 		String basePath = serveAndBase();
 		File book = shelfBook(basePath, tempFolder.newFolder("out"));
-		assertTrue(guardedUpdate(basePath, book, false).ok());
-		listStatus = 404;
-		shelfBook(basePath, tempFolder.newFolder("out2"));
+		assertTrue(guardedUpdate(basePath, book, true).ok());
+		//GUI は守りを立て直さずに同じ変換器を使うので、使い回される変換器そのものを見る
+		com.github.hmdev.web.WebAozoraConverter shared = com.github.hmdev.web.WebAozoraConverter.createWebAozoraConverter(
+			"http://" + fqdn + "/novel/", new File(basePath + "web"));
+		assertFalse(shared.updateGuard);
+		assertFalse(shared.allowFewerEpisodes);
 	}
 
 	private File ledgerDir() {
