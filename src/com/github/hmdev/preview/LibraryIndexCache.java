@@ -38,7 +38,8 @@ public class LibraryIndexCache
 	private static final Logger logger = LoggerFactory.getLogger(LibraryIndexCache.class);
 
 	/** 形式が変わったら上げる。一致しない世代のファイルは読まずに捨てる */
-	static final String HEADER = "#aozoraepub3-preview-library\t2";
+	//3: 掲載元の見分け方を変えた（identifier はどれか 1 つが合えばよい・URL の確かめを強くした）。2 の記録の「掲載元なし」を読み直させる
+	static final String HEADER = "#aozoraepub3-preview-library\t3";
 
 	/** 1 行あたりの列数 (path / size / modified / title / creator / coverEntry / source)。2 世代目で source を足した */
 	private static final int COLUMNS = 7;

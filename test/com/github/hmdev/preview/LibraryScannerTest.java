@@ -81,6 +81,30 @@ public class LibraryScannerTest
 		assertEquals(7, sources.size());
 	}
 
+	/**
+	 * 掲載元の見分け方を変えたら、前の世代の索引で「掲載元なし」と記録された本も読み直す（#117 の codex）。
+	 * 世代を上げないと、ファイルが変わらない限り索引の値が使われ続ける
+	 */
+	@Test
+	public void aBookCachedWithoutASourceByTheOldRulesIsReadAgain() throws Exception
+	{
+		String url = "https://ncode.syosetu.com/n9999zz/";
+		EpubFixture calibre = EpubFixture.withSource(url);
+		calibre.put("OPS/package.opf", EpubFixture.withSourcesOpf("urn:uuid:" + com.github.hmdev.info.BookLedger.identifierFor(url), url)
+			.replace("    <dc:identifier id=\"pub-id\">", "    <dc:identifier opf:scheme=\"calibre\" xmlns:opf=\"http://www.idpf.org/2007/opf\">aaaa-bbbb</dc:identifier>\n    <dc:identifier id=\"pub-id\">"));
+		Path epub = calibre.writeTo(root().resolve("calibre.epub"));
+		Path index = root().resolve("index.tsv");
+		// 前の世代（2）の索引: 同じ大きさ・更新時刻で、掲載元なし
+		LibraryEntry old = new LibraryEntry(epub.toAbsolutePath().normalize(), Files.size(epub), Files.getLastModifiedTime(epub).toMillis(),
+			"テスト書籍", "テスト著者", null, null);
+		Files.writeString(index, "#aozoraepub3-preview-library\t2\n" + LibraryIndexCache.formatLine(old) + "\n", java.nio.charset.StandardCharsets.UTF_8);
+
+		LibraryIndexCache cache = new LibraryIndexCache(index);
+		cache.load();
+		assertEquals(url, LibraryScanner.scan(root(), 3, cache).stream()
+			.filter(e -> e.file().getFileName().toString().equals("calibre.epub")).findFirst().orElseThrow().source());
+	}
+
 	@Test
 	public void aSourceMustHaveAPlainHostAndNoHiddenCharacters()
 	{
