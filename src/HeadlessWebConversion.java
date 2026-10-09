@@ -140,7 +140,7 @@ public class HeadlessWebConversion
 			? SettingDefaults.getInt(this.props, "TitlePage") : BookInfo.TITLE_NONE;
 
 		//表紙: GUI の Web 変換は「先頭の挿絵」「入力と同じ名前」を「入力と同じ名前」にそろえる。「表紙なし」と直接の指定はそのまま
-		String cover = this.props.getProperty("Cover", "");
+		String cover = normalizeCover(this.props.getProperty("Cover", ""));
 		String coverFileName;
 		if (COVER_NONE.equals(cover)) coverFileName = null;
 		else if (cover.isEmpty() || COVER_SAME_FILE.equals(cover)) coverFileName = AozoraEpub3.getSameCoverFileName(srcFile);
@@ -173,6 +173,26 @@ public class HeadlessWebConversion
 		LogAppender.println("画面なしで変換します : " + srcFile.getPath());
 		boolean ok = AozoraEpub3.convertFile(srcFile, "txt", outFile, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
 		return new Result(ok, false, outFile, ok ? "変換しました" : "変換に失敗しました");
+	}
+
+	/**
+	 * 旧形式の ini は、表紙の選択肢の表示名（「[先頭の挿絵]」など）をそのまま書いていた。GUI はそれを選択肢として読むので、
+	 * 同じく「先頭の挿絵」「入力と同じ名前」「表紙なし」に読み替える（PR #116 の codex）。日本語・英語のどちらの表示名でも
+	 */
+	static String normalizeCover(String cover)
+	{
+		if (cover == null) return "";
+		for (java.util.Locale locale : new java.util.Locale[]{ java.util.Locale.JAPANESE, java.util.Locale.ENGLISH }) {
+			try {
+				java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("i18n.messages", locale);
+				if (cover.equals(bundle.getString("ui.combo.cover.first"))) return "";
+				if (cover.equals(bundle.getString("ui.combo.cover.sameFile"))) return COVER_SAME_FILE;
+				if (cover.equals(bundle.getString("ui.combo.cover.none"))) return COVER_NONE;
+			} catch (java.util.MissingResourceException e) {
+				/* 意図的: その言語の資源が無ければ次へ */
+			}
+		}
+		return cover;
 	}
 
 	private int intOf(String key, int defaultValue)

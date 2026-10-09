@@ -162,4 +162,16 @@ public class HeadlessWebConversionTest {
 		assertFalse(r.ok());
 		assertEquals(1, Files.size(new File(dst, "[著者] 題.epub").toPath()));
 	}
+
+	/** 旧形式の ini は表紙の選択肢の表示名をそのまま書いていた。GUI と同じく選択肢として読む（PR #116 の codex） */
+	@Test
+	public void oldCoverLabelsAreReadAsTheChoices() {
+		assertEquals("", HeadlessWebConversion.normalizeCover("[先頭の挿絵]"));
+		assertEquals(HeadlessWebConversion.COVER_SAME_FILE, HeadlessWebConversion.normalizeCover("[入力ファイル名と同じ画像(png,jpg)]"));
+		assertEquals(HeadlessWebConversion.COVER_NONE, HeadlessWebConversion.normalizeCover("[表紙無し]"));
+		assertEquals(HeadlessWebConversion.COVER_SAME_FILE, HeadlessWebConversion.normalizeCover("[Same name as input (png,jpg)]"));
+		assertEquals(HeadlessWebConversion.COVER_NONE, HeadlessWebConversion.normalizeCover("[No cover]"));
+		assertEquals("今の形はそのまま", HeadlessWebConversion.COVER_NONE, HeadlessWebConversion.normalizeCover(HeadlessWebConversion.COVER_NONE));
+		assertEquals("直接の指定はそのまま", "/x/cover.jpg", HeadlessWebConversion.normalizeCover("/x/cover.jpg"));
+	}
 }
