@@ -73,11 +73,15 @@ public class PathUtils
 		return !canCreate(d, ".aozora-probe-" + Long.toHexString(System.nanoTime()) + ".tmp");
 	}
 
-	/** name と同じ UTF-8 のバイト数で、先頭の 1 文字を "." と "_" に替えた名前 */
+	/**
+	 * name と同じ UTF-8 のバイト数で、先頭の 1 文字を "." と "_" に替えた名前。
+	 * name が "." で始まるときは "_" に替える（"." のままだと本物の名前と同じになる）
+	 */
 	static String probeName(String name)
 	{
 		int first = name.codePointAt(0);
-		return "." + "_".repeat(utf8Length(first) - 1) + name.substring(Character.charCount(first));
+		String head = first == '.' ? "_" : "." + "_".repeat(utf8Length(first) - 1);
+		return head + name.substring(Character.charCount(first));
 	}
 
 	/** 作れたら消す（消せなくても作れたことに変わりはない） */

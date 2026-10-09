@@ -107,6 +107,10 @@ public class PathUtilsFitFileNameTest {
 			assertEquals(name, bytes(name), bytes(probe));
 			assertNotEquals(name, probe);
 		}
+		// "." で始まる名前でも、本物の名前とは別の名前で試す（PR の codex の指摘）
+		String dotted = ".題名.txt";
+		assertNotEquals(dotted, PathUtils.probeName(dotted));
+		assertEquals(bytes(dotted), bytes(PathUtils.probeName(dotted)));
 	}
 
 	@Test
