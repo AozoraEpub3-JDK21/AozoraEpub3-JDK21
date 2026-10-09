@@ -227,7 +227,8 @@ public class LibraryScanner
 			int cp = source.codePointAt(i);
 			int type = Character.getType(cp);
 			//U+2028・U+2029 も（行の区切りとして扱われうる。internal #19）
-			if (type == Character.CONTROL || type == Character.FORMAT
+			//対になっていないサロゲートも（索引を UTF-8 で書けず、保存が毎回失敗する。#117 のゲート2）
+			if (type == Character.CONTROL || type == Character.FORMAT || type == Character.SURROGATE
 				|| type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR) return null;
 			i += Character.charCount(cp);
 		}
@@ -242,11 +243,11 @@ public class LibraryScanner
 		}
 		String authority = rest.substring(0, end);
 		if (authority.isEmpty() || authority.indexOf('@') >= 0) return null;
-		//ホストに \ や空白（ASCII 以外の空白も）があれば捨てる。WHATWG の URL は \ を / として読むので、
+		//ホストに空白（ASCII 以外の空白も）があれば捨てる。\ はどこにあっても捨てる（下）。WHATWG の URL は \ を / として読むので、
 		//https://evil.com\.good.com/ の行き先は evil.com になる（internal #19）
 		for (int i = 0; i < authority.length(); i++) {
 			char c = authority.charAt(i);
-			if (c == '\\' || Character.isWhitespace(c) || Character.isSpaceChar(c)) return null;
+			if (Character.isWhitespace(c) || Character.isSpaceChar(c)) return null;
 		}
 		if (source.indexOf('\\') >= 0) return null;
 		//ホスト名があり、ポートは数字だけ（https://:443/ や https://example.com:bad/ を捨てる）

@@ -133,6 +133,7 @@ public class LibraryScannerTest
 		assertNull("点だけのホスト", LibraryScanner.sanitizeSource("https://./x"));
 		assertNull("ありえないポート", LibraryScanner.sanitizeSource("https://host:99999/"));
 		assertEquals("https://host:65535/", LibraryScanner.sanitizeSource("https://host:65535/"));
+		assertNull("対になっていないサロゲート", LibraryScanner.sanitizeSource("https://example.com/\uD800x"));
 	}
 
 	@Test

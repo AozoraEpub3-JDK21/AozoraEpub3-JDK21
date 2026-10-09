@@ -91,6 +91,7 @@ public class LibraryIndexCache
 	public synchronized void load()
 	{
 		this.entries.clear();
+		sweepStaleTemporaries();
 		try {
 			if (!Files.isRegularFile(this.file)) return;
 			if (Files.size(this.file) > MAX_FILE_BYTES) {
@@ -170,22 +171,83 @@ public class LibraryIndexCache
 			StringBuilder buf = new StringBuilder(this.entries.size() * 128 + 64);
 			buf.append(HEADER).append('\n');
 			for (LibraryEntry entry : this.entries.values()) buf.append(formatLine(entry)).append('\n');
-			//一時ファイルに書いてから置き換える。途中で切れると、最後の列（掲載元の URL）が切れた値のまま
-			//列の数も合ってしまい、別の作品の URL として読み戻されるため（internal #19）
-			Path tmp = Files.createTempFile(parent != null ? parent : Path.of("."), this.file.getFileName().toString(), ".tmp");
-			try {
-				Files.writeString(tmp, buf.toString(), StandardCharsets.UTF_8);
-				try {
-					Files.move(tmp, this.file, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-				} catch (java.nio.file.AtomicMoveNotSupportedException e) {
-					Files.move(tmp, this.file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-				}
-			} finally {
-				Files.deleteIfExists(tmp);
-			}
+			writeReplacing(buf.toString());
 		} catch (IOException | RuntimeException e) {
 			/* 意図的: 保存できなくても本棚は毎回スキャンすれば動く */
 			logger.debug("本棚キャッシュを保存できませんでした: {}", this.file, e);
+		}
+	}
+
+	/**
+	 * 一時ファイルに書いてから置き換える。途中で切れると、最後の列（掲載元の URL）が切れた値のまま
+	 * 列の数も合ってしまい、別の作品の URL として読み戻されるため（internal #19）。
+	 * <ul>
+	 * <li>symlink なら、たどった先を置き換える（リンクを普通のファイルにしない）</li>
+	 * <li>前のファイルの権限を引き継ぐ（一時ファイルは 0600 で作られる）</li>
+	 * <li>置き換えられないとき（Windows でほかのプロセスが開いている、など）は、前と同じく直接書く</li>
+	 * </ul>
+	 * （#117 のゲート2）
+	 */
+	private void writeReplacing(String content) throws IOException
+	{
+		Path target = this.file;
+		if (Files.isSymbolicLink(target)) {
+			try { target = target.toRealPath(); } catch (IOException e) { /* 意図的: 切れたリンクはリンクの場所に書く */ }
+		}
+		Path dir = target.toAbsolutePath().getParent();
+		Path tmp = Files.createTempFile(dir, target.getFileName() + ".", TMP_SUFFIX);
+		try {
+			Files.writeString(tmp, content, StandardCharsets.UTF_8);
+			copyPermissions(target, tmp);
+			try {
+				try {
+					Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+				} catch (java.nio.file.AtomicMoveNotSupportedException e) {
+					Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				}
+			} catch (IOException e) {
+				logger.debug("本棚キャッシュを置き換えられないので直接書きます: {}", target, e);
+				Files.writeString(target, content, StandardCharsets.UTF_8);
+			}
+		} finally {
+			Files.deleteIfExists(tmp);
+		}
+	}
+
+	/** 一時ファイルの末尾 */
+	static final String TMP_SUFFIX = ".tmp";
+
+	/** 前のファイルの POSIX の権限を写す。前のファイルが無ければ、普通に作ったときと同じ rw-r--r-- にする */
+	private static void copyPermissions(Path from, Path to)
+	{
+		try {
+			java.util.Set<java.nio.file.attribute.PosixFilePermission> perms = Files.exists(from)
+				? Files.getPosixFilePermissions(from)
+				: java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--");
+			Files.setPosixFilePermissions(to, perms);
+		} catch (UnsupportedOperationException | IOException e) {
+			/* 意図的: POSIX でない（Windows）なら何もしない */
+		}
+	}
+
+	/** 前に落ちたプロセスが残した一時ファイル（1 時間より古いもの）を消す */
+	private void sweepStaleTemporaries()
+	{
+		Path dir = this.file.toAbsolutePath().getParent();
+		if (dir == null || !Files.isDirectory(dir)) return;
+		String prefix = this.file.getFileName() + ".";
+		long limit = System.currentTimeMillis() - 60L * 60 * 1000;
+		try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+			files.filter(p -> {
+				String name = p.getFileName().toString();
+				return name.startsWith(prefix) && name.endsWith(TMP_SUFFIX);
+			}).forEach(p -> {
+				try {
+					if (Files.getLastModifiedTime(p).toMillis() < limit) Files.deleteIfExists(p);
+				} catch (IOException e) { /* 意図的: 消せなければ次の機会に */ }
+			});
+		} catch (IOException e) {
+			/* 意図的: 掃除できなくても読み込みは続ける */
 		}
 	}
 

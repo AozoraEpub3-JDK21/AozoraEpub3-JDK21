@@ -1,6 +1,7 @@
 package com.github.hmdev.preview;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -177,7 +178,6 @@ public class LibraryIndexCacheTest
 		assertNull(cache.get(book));
 	}
 
-	/** 列数が合っていても、世代 1 の見出しなら読まない（世代を上げたことだけで落ちる形） */
 	/** 書くときは一時ファイルから置き換え、一時ファイルを残さない（途中で切れた行を読み戻さないように。internal #19） */
 	@Test
 	public void saveReplacesTheFileAndLeavesNoTemporary() throws Exception
@@ -193,6 +193,7 @@ public class LibraryIndexCacheTest
 		}
 	}
 
+	/** 列数が合っていても、世代 1 の見出しなら読まない（世代を上げたことだけで落ちる形） */
 	@Test
 	public void aFirstGenerationHeaderAloneDiscardsTheFile() throws Exception
 	{
@@ -342,5 +343,61 @@ public class LibraryIndexCacheTest
 		cache.load();
 		assertEquals(0, cache.size());
 		assertNull(cache.get(temp.getRoot().toPath().resolve("a.epub")));
+	}
+
+	/** symlink の索引は、リンクのまま、たどった先を書き換える（#117 のゲート2） */
+	@Test
+	public void aLinkedIndexStaysALink() throws Exception
+	{
+		Path real = temp.getRoot().toPath().resolve("real.tsv");
+		Files.writeString(real, "x", StandardCharsets.UTF_8);
+		Path link = temp.getRoot().toPath().resolve("link.tsv");
+		try {
+			Files.createSymbolicLink(link, real);
+		} catch (UnsupportedOperationException | java.io.IOException e) {
+			org.junit.Assume.assumeNoException("リンクを作れない環境", e);
+		}
+		LibraryIndexCache cache = new LibraryIndexCache(link);
+		cache.update(List.of(new LibraryEntry(temp.getRoot().toPath().resolve("a.epub"), 1L, 2L, "書名", "著者", null, null)));
+		cache.save();
+		assertTrue("リンクのまま", Files.isSymbolicLink(link));
+		assertTrue("たどった先が書き換わる", Files.readString(real, StandardCharsets.UTF_8).startsWith(LibraryIndexCache.HEADER));
+	}
+
+	/** 前のファイルの権限を引き継ぐ（一時ファイルは 0600 で作られる。#117 のゲート2） */
+	@Test
+	public void saveKeepsThePermissions() throws Exception
+	{
+		Path file = cacheFile();
+		Files.createDirectories(file.getParent());
+		Files.writeString(file, "x", StandardCharsets.UTF_8);
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> perms;
+		try {
+			perms = java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----");
+			Files.setPosixFilePermissions(file, perms);
+		} catch (UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("POSIX の権限が無い環境", e);
+			return;
+		}
+		LibraryIndexCache cache = new LibraryIndexCache(file);
+		cache.update(List.of(new LibraryEntry(temp.getRoot().toPath().resolve("a.epub"), 1L, 2L, "書名", "著者", null, null)));
+		cache.save();
+		assertEquals(perms, Files.getPosixFilePermissions(file));
+	}
+
+	/** 落ちたプロセスが残した古い一時ファイルは、読むときに消す（#117 のゲート2） */
+	@Test
+	public void staleTemporariesAreSweptOnLoad() throws Exception
+	{
+		Path file = cacheFile();
+		Files.createDirectories(file.getParent());
+		Path stale = file.getParent().resolve(file.getFileName() + ".123" + LibraryIndexCache.TMP_SUFFIX);
+		Path fresh = file.getParent().resolve(file.getFileName() + ".456" + LibraryIndexCache.TMP_SUFFIX);
+		Files.writeString(stale, "x", StandardCharsets.UTF_8);
+		Files.writeString(fresh, "x", StandardCharsets.UTF_8);
+		Files.setLastModifiedTime(stale, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 2L * 60 * 60 * 1000));
+		new LibraryIndexCache(file).load();
+		assertFalse("古いものは消す", Files.exists(stale));
+		assertTrue("書いている最中かもしれない新しいものは残す", Files.exists(fresh));
 	}
 }
