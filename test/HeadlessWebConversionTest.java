@@ -178,6 +178,12 @@ public class HeadlessWebConversionTest {
 		assertNotNull(ledger);
 		assertEquals("本の名前を記録しない", null, ledger.outputBaseName);
 
+		//設定が .epub で、本棚の本が .kepub.epub（本の形が違う。.epub で終わっていても上書きしない。PR のゲート2）
+		File kepub = new File(dst, "別の名前.kepub.epub");
+		Files.write(kepub.toPath(), new byte[]{9});
+		HeadlessWebConversion.Result kobo1 = conversion(guiDefaults(), basePathOf()).convert("http://" + fqdn + "/novel/", dst, kepub, true);
+		assertFalse(kobo1.ok());
+		org.junit.Assert.assertArrayEquals(new byte[]{9}, Files.readAllBytes(kepub.toPath()));
 		//設定が .kepub.epub で、本棚の本が .epub（拡張子が合わない）
 		Properties kobo = guiDefaults();
 		kobo.setProperty("Ext", ".kepub.epub");

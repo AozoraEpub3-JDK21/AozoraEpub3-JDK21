@@ -882,47 +882,54 @@ public class PreviewServer implements AutoCloseable
 			respondJsonStatus(exchange, 400, errorJson("Web から取った本だけ名前を変えられます"));
 			return;
 		}
-		synchronized (this.jobs) {
-			if (this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active())) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから変えてください"));
-				return;
-			}
-		}
 		byte[] body = exchange.getRequestBody().readNBytes(MAX_PATH_BYTES + 1);
 		String name = new String(body, StandardCharsets.UTF_8).replaceAll("[\\r\\n]+$", "");
 		if (body.length > MAX_PATH_BYTES) {
 			respondJsonStatus(exchange, 400, errorJson("名前が長すぎます"));
 			return;
 		}
-		BookUpdater.Result result;
-		try {
-			result = updater.rename(entry.source(), entry.file(), name);
-		} catch (UnsupportedOperationException e) {
-			respondJsonStatus(exchange, 503, errorJson("この本棚からは名前を変えられません"));
-			return;
-		} catch (Exception e) {
-			logger.warn("名前を変えられませんでした: {}", entry.file(), e);
-			respondJsonStatus(exchange, 500, errorJson("名前を変えられませんでした: " + e.getMessage()));
-			return;
-		}
-		if (!result.ok()) {
-			respondJsonStatus(exchange, 400, errorJson(result.message()));
-			return;
-		}
-		//本棚を読み直す（本の ID が変わる）
-		ShelfAdder adder = this.shelfAdder;
-		if (adder != null) {
-			try {
-				adder.add(entry.file().getParent());
-			} catch (IOException | RuntimeException e) {
-				logger.warn("名前を変えた本を本棚に出せませんでした: {}", entry.file(), e);
+		//名前を変えるのも仕事の列で（変換が鍵を持っている間、HTTP のスレッドを待たせない。PR のゲート2）。
+		//同じ本の仕事（更新・名前を変える）がまだ終わっていなければ断る
+		UpdateJob job;
+		synchronized (this.jobs) {
+			if (this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active())) {
+				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから変えてください"));
+				return;
 			}
+			forgetOldJobs();
+			job = new UpdateJob(newJobId(), bookId, false);
+			this.jobs.put(job.id, job);
+			UpdateJob submitted = job;
+			this.updateExecutor.submit(() -> runRename(submitted, updater, entry, name));
 		}
-		StringBuilder buf = new StringBuilder(128);
-		buf.append('{');
-		Json.prop(buf, "message", result.message());
-		buf.append('}');
-		respondJson(exchange, buf.toString());
+		respondJsonStatus(exchange, 202, jobJson(job));
+	}
+
+	private void runRename(UpdateJob job, BookUpdater updater, LibraryEntry entry, String name)
+	{
+		job.state = "running";
+		try {
+			BookUpdater.Result result = updater.rename(entry.source(), entry.file(), name);
+			//本棚を読み直してから「済んだ」にする（本の ID が変わる）
+			ShelfAdder adder = this.shelfAdder;
+			if (result.ok() && adder != null) {
+				try {
+					adder.add(entry.file().getParent());
+				} catch (IOException | RuntimeException e) {
+					logger.warn("名前を変えた本を本棚に出せませんでした: {}", entry.file(), e);
+				}
+			}
+			job.message = result.message() == null ? "" : result.message();
+			job.state = result.ok() ? "done" : "failed";
+		} catch (UnsupportedOperationException e) {
+			job.message = "この本棚からは名前を変えられません";
+			job.state = "failed";
+		} catch (Throwable e) {
+			logger.warn("名前を変えられませんでした: {}", entry.file(), e);
+			job.message = String.valueOf(e.getMessage());
+			job.state = "failed";
+			if (e instanceof Error) throw (Error)e;
+		}
 	}
 
 	/** 落とす URL として受け取る本文の上限（バイト） */

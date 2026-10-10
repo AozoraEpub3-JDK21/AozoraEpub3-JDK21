@@ -43,4 +43,15 @@ public class ShelfNamesTest {
 		org.junit.Assert.assertNull("200 文字までは使える", ShelfNames.invalidReason("あ".repeat(200)));
 		org.junit.Assert.assertNull("CON で始まるだけの名前は使える", ShelfNames.invalidReason("CONTACT"));
 	}
+
+	/** 本の形の拡張子は、二重のものをまとめて 1 つ */
+	@Test
+	public void extensionsKeepTheBookFormat() {
+		assertEquals(".epub", ShelfNames.extensionOf("題.epub"));
+		assertEquals(".kepub.epub", ShelfNames.extensionOf("題.kepub.epub"));
+		assertEquals(".fxl.kepub.epub", ShelfNames.extensionOf("題.fxl.kepub.epub"));
+		assertEquals(".KEPUB.EPUB", ShelfNames.extensionOf("題.KEPUB.EPUB"));
+		assertEquals("名前が拡張子だけなら、最後の . から", ".epub", ShelfNames.extensionOf(".kepub.epub"));
+		assertEquals("", ShelfNames.extensionOf("題"));
+	}
 }

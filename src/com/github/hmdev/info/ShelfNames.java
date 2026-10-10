@@ -62,6 +62,23 @@ public final class ShelfNames
 		return null;
 	}
 
+	/** 二重の拡張子（設定で選べる出力の形）。長いものから見る */
+	private static final String[] COMPOUND_EXTS = { ".fxl.kepub.epub", ".kepub.epub" };
+
+	/**
+	 * 本の名前の拡張子（{@code .fxl.kepub.epub}・{@code .kepub.epub} はまとめて 1 つ）。無ければ ""。
+	 * 名前を変えても、更新しても、本の形（Kobo・固定レイアウト）を変えないように（PR のゲート2）
+	 */
+	public static String extensionOf(String fileName)
+	{
+		String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+		for (String ext : COMPOUND_EXTS) {
+			if (lower.endsWith(ext) && lower.length() > ext.length()) return fileName.substring(fileName.length() - ext.length());
+		}
+		int dot = fileName.lastIndexOf('.');
+		return dot > 0 ? fileName.substring(dot) : "";
+	}
+
 	private static int indexOfAny(String s, char a, char b)
 	{
 		int i = s.indexOf(a);

@@ -246,11 +246,24 @@ function renderLibraryKeepingView()
 	const focusId = slot ? slot.dataset.bookId : null;
 	const focusUpdate = !!(active && active.classList && active.classList.contains('book-update'));
 
+	//開いている名前の欄は、描き直しても残す (打ちかけの名前を消さない。PR のゲート2)
+	const renaming = el.libraryGrid.querySelector('.book-rename-form');
+	const renameState = renaming ? {id: renaming.closest('.book-slot').dataset.bookId, value: renaming.querySelector('input').value,
+		focused: renaming.contains(document.activeElement)} : null;
+
 	libraryVisible = visibleLibraryBooks();
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
 	appendLibraryCards(Math.max(shown, LIBRARY_PAGE_SIZE));
 	el.libraryGrid.scrollTop = top;
+	if (renameState) {
+		const slot = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(renameState.id) + '"]');
+		const book = libraryVisible.find(b => b.id === renameState.id);
+		if (slot && book) {
+			openRenameForm(slot, book, renameState.focused);
+			slot.querySelector('.book-rename-form input').value = renameState.value;
+		}
+	}
 	if (focusId) {
 		const again = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(focusId) + '"]');
 		const target = again ? again.querySelector(focusUpdate ? '.book-update' : '.book-card') : null;
@@ -861,16 +874,34 @@ async function pickWebShelf()
  * カードの下に入力欄を出す。拡張子は変えない (アプリが元の拡張子を付ける)
  */
 
-/** 本の名前から拡張子を除いた部分 */
+/** 本の名前から拡張子を除いた部分 (.fxl.kepub.epub・.kepub.epub はまとめて 1 つ。アプリの ShelfNames.extensionOf と同じ) */
 function baseNameOf(fileName)
 {
 	const lower = fileName.toLowerCase();
-	if (lower.endsWith('.kepub.epub')) return fileName.slice(0, -'.kepub.epub'.length);
+	for (const ext of ['.fxl.kepub.epub', '.kepub.epub']) {
+		if (lower.endsWith(ext) && lower.length > ext.length) return fileName.slice(0, -ext.length);
+	}
 	const dot = fileName.lastIndexOf('.');
 	return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
-function openRenameForm(slot, book)
+/** 名前を変える仕事を待つ。最後の状態を返す */
+async function waitRenameJob(jobId)
+{
+	let misses = 0;
+	for (;;) {
+		await new Promise(resolve => setTimeout(resolve, 500));
+		try {
+			const job = await getJson('api/jobs/' + encodeURIComponent(jobId));
+			misses = 0;
+			if (job.state !== 'queued' && job.state !== 'running') return job;
+		} catch (e) {
+			if (++misses >= LIBRARY_UPDATE_MISSES) throw e;
+		}
+	}
+}
+
+function openRenameForm(slot, book, focus = true)
 {
 	if (slot.querySelector('.book-rename-form')) return;
 	const form = document.createElement('form');
@@ -902,7 +933,10 @@ function openRenameForm(slot, book)
 		note.textContent = '変えています…';
 		try {
 			const {response, json} = await postText('api/book/' + encodeURIComponent(book.id) + '/rename', input.value);
-			if (!response.ok) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+			if (!response.ok || !json || !json.job) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+			// ほかの本を更新している間は待つ (名前を変えるのも同じ列)
+			const job = await waitRenameJob(json.job);
+			if (job.state !== 'done') throw new Error(job.message || '名前を変えられませんでした');
 			form.remove();
 			await loadLibrary(true);
 		} catch (err) {
@@ -911,7 +945,9 @@ function openRenameForm(slot, book)
 		}
 	});
 	slot.appendChild(form);
-	input.focus();
-	input.select();
+	if (focus) {
+		input.focus();
+		input.select();
+	}
 }
 

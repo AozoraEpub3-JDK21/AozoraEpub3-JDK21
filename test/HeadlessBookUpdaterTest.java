@@ -321,4 +321,42 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(book.isFile());
 		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "short").ok());
 	}
+
+	/** 名前を変えても本の形（.fxl.kepub.epub）を保つ。大文字と小文字だけの変更もできる。消えた本は更新しない（PR のゲート2） */
+	@Test
+	public void renamingKeepsTheFormatAndHandlesCaseOnlyChanges() throws Exception {
+		File dir = tempFolder.newFolder("books");
+		File book = new File(dir, "abc.fxl.kepub.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "def").ok());
+		File def = new File(dir, "def.fxl.kepub.epub");
+		assertTrue(def.isFile());
+		BookUpdater.Result cased = updater.rename("https://example.com/novel/", def.toPath(), "DEF");
+		assertTrue(cased.message(), cased.ok());
+		org.junit.Assert.assertEquals(java.util.List.of("DEF.fxl.kepub.epub"), java.util.Arrays.asList(dir.list()));
+		//消えた本（名前を変えた前の名前）は更新しない（更新の待ちの間に名前を変えたとき、前の名前の本を作り直さない）
+		BookUpdater.Result gone = updater.update("https://example.com/novel/", book.toPath());
+		assertFalse(gone.ok());
+		assertTrue(gone.message(), gone.message().contains("見つかりません"));
+	}
+
+	/** 設定のキャッシュの台帳（GUI で変換した作品）では、本の名前を変えても作品の名前は変えない（GUI の次の変換が 2 冊目を作らない） */
+	@Test
+	public void renamingAGuiBookKeepsTheWorkName() throws Exception {
+		File cache = tempFolder.newFolder("settings-cache");
+		File work = new File(cache, "example.com/novel");
+		assertTrue(work.mkdirs());
+		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").withOutputBaseName("[a] 題").save(work);
+		File dir = tempFolder.newFolder("gui-out");
+		File book = new File(dir, "[a] 題.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		Properties props = new Properties();
+		props.setProperty("CachePath", cache.getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "好きな名前").ok());
+		org.junit.Assert.assertEquals("[a] 題", com.github.hmdev.info.BookLedger.load(work).outputBaseName);
+	}
 }

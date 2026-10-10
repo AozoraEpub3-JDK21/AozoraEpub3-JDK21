@@ -1709,12 +1709,14 @@ public class PreviewServerTest
 		assertEquals(404, postText(base() + "api/book/nope/rename", "x").statusCode());
 		assertEquals("Web から取った本だけ", 400, postText(base() + "api/book/" + ids[1] + "/rename", "x").statusCode());
 		HttpResponse<String> ok = postText(base() + "api/book/" + ids[0] + "/rename", "新しい名前\n");
-		assertEquals(ok.body(), 200, ok.statusCode());
+		assertEquals(ok.body(), 202, ok.statusCode());
+		String done = waitForJob(ok.body());
+		assertTrue(done, done.contains("\"state\":\"done\""));
 		assertEquals(List.of("web.epub -> 新しい名前"), calls);
 		assertEquals("本棚を読み直す", 1, added.size());
-		HttpResponse<String> bad = postText(base() + "api/book/" + ids[0] + "/rename", "だめ");
-		assertEquals(400, bad.statusCode());
-		assertTrue(bad.body(), bad.body().contains("使えない文字"));
+		String bad = waitForJob(postText(base() + "api/book/" + ids[0] + "/rename", "だめ").body());
+		assertTrue(bad, bad.contains("\"state\":\"failed\"") && bad.contains("使えない文字"));
+		assertEquals("失敗したら読み直さない", 1, added.size());
 		assertEquals(405, get(base() + "api/book/" + ids[0] + "/rename").statusCode());
 	}
 
@@ -1736,6 +1738,6 @@ public class PreviewServerTest
 		assertEquals(409, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
 		release.countDown();
 		waitForJob(job);
-		assertEquals(200, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
+		assertEquals(202, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
 	}
 }
