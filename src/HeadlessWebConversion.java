@@ -33,8 +33,19 @@ public class HeadlessWebConversion
 	static final String COVER_SAME_FILE = "#samefile";
 	static final String COVER_NONE = "#none";
 
-	/** 上書きの前の本を残す名前（作品のフォルダの中） */
-	static final String PREVIOUS_EPUB = "previous.epub";
+	/**
+	 * 上書きの前の本を残す名前（作品のフォルダの中）。本ごとに分ける: 同じ作品の本が本棚に 2 冊あると、
+	 * 片方の更新がもう片方の 1 つ前の版を消していた（PR #120 の win2 の確認）
+	 */
+	static String previousEpubName(File workDir, File book)
+	{
+		//どの本の版かが名前で分かるよう、本の名前を添える。同じ名前の本が別のフォルダにあることもあるので、本の印の頭 8 桁も付ける
+		//（PR のゲート2）。長い題は、その場所で作れる長さに切る
+		String name = book.getName();
+		int dot = name.toLowerCase(java.util.Locale.ROOT).endsWith(".kepub.epub") ? name.length() - ".kepub.epub".length() : name.lastIndexOf('.');
+		String base = "previous " + com.github.hmdev.info.BookLedger.bookKey(book).substring(0, 8) + " " + (dot > 0 ? name.substring(0, dot) : name);
+		return com.github.hmdev.util.PathUtils.fitFileNameIn(workDir, base, ".epub") + ".epub";
+	}
 
 	/** 守りで止めた理由: 掲載元で作品が見つからない（404・410） */
 	public static final String STOP_GONE = "gone";
@@ -247,19 +258,23 @@ public class HeadlessWebConversion
 		}
 		if (outFile.exists() && !overwrite) return new Result(false, false, outFile, "ファイルが存在します: " + outFile.getName());
 
-		//上書きの前に、今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）
-		if (outFile.exists()) {
-			java.nio.file.Files.copy(outFile.toPath(), new File(srcFile.getAbsoluteFile().getParentFile(), PREVIOUS_EPUB).toPath(),
-				java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-		}
 		LogAppender.println("画面なしで変換します : " + srcFile.getPath());
 		//同じフォルダの一時ファイルに書いてから置き換える。書き出しは失敗すると出力を消すので、直接書くと
 		//本棚の本が消える。途中で止まっても（本棚を閉じてプロセスが終わるなど）本棚の本は元のまま（PR #118 のゲート2）。
 		//一時ファイルの名前は .epub で終わらせない（本棚に並ばないように）
 		File tmp = File.createTempFile("." + outFile.getName() + ".", ".tmp", outFile.getAbsoluteFile().getParentFile());
+		File workDir = srcFile.getAbsoluteFile().getParentFile();
+		File backup = null;
 		try {
 			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
 			if (!ok) return new Result(false, false, outFile, "変換に失敗しました（本棚の本はそのまま）");
+			//今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）。
+			//いったん控えに写し、本を置き換えられてから 1 つ前の版の名前にする（先に上書きすると、変換や置き換えに
+			//失敗したとき＝Windows で本が開かれていたときなど、本は元のままなのに、もっと前の版を失う。PR のゲート2・#121 の codex）
+			if (outFile.exists()) {
+				backup = File.createTempFile(".previous.", ".tmp", workDir);
+				java.nio.file.Files.copy(outFile.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
 			//前の本の権限を引き継ぐ（一時ファイルの既定の権限にしない。PR #118 の codex）
 			if (outFile.exists()) {
 				try {
@@ -274,11 +289,26 @@ public class HeadlessWebConversion
 			} catch (java.nio.file.AtomicMoveNotSupportedException e) {
 				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
+			//本はもう置き換えたので、ここから先の失敗で更新を失敗にしない（台帳の話数が戻って、本と食い違う。#121 の codex）
+			String note = "";
+			if (backup != null) {
+				File previous = new File(workDir, previousEpubName(workDir, outFile));
+				try {
+					java.nio.file.Files.move(backup.toPath(), previous.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				} catch (IOException e) {
+					//前の版が開かれている（Windows）など。控えは消さずに残す（前の本はそこから戻せる）
+					logger.warn("1 つ前の版を残せませんでした: {}", previous, e);
+					LogAppender.println("1 つ前の版を " + previous.getName() + " に残せませんでした。前の本は " + backup.getName() + " にあります");
+					note = "（1 つ前の版は残せませんでした）";
+					backup = null;
+				}
+			}
 			//置き換えた本の話数を記録する（書き出しは一時ファイルなので convertFile は記録しない）
 			com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
-			return new Result(true, false, outFile, "変換しました");
+			return new Result(true, false, outFile, "変換しました" + note);
 		} finally {
 			java.nio.file.Files.deleteIfExists(tmp.toPath());
+			if (backup != null) java.nio.file.Files.deleteIfExists(backup.toPath());
 		}
 	}
 

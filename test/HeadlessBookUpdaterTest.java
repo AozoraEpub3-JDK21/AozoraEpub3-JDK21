@@ -71,7 +71,7 @@ public class HeadlessBookUpdaterTest {
 		exchange.close();
 	}
 
-	/** 本棚の本を、取り直した内容で上書きし、前の本を作品のフォルダに previous.epub として残す */
+	/** 本棚の本を、取り直した内容で上書きし、前の本を作品のフォルダに 1 つ前の版（本ごと）として残す */
 	@Test
 	public void theShelfBookIsOverwrittenAndThePreviousVersionKept() throws Exception {
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
@@ -118,7 +118,7 @@ public class HeadlessBookUpdaterTest {
 		BookUpdater.Result r = updater.update(base + "/novel/", first.epub().toPath());
 		assertTrue(r.message(), r.ok());
 		assertFalse("本棚の本が新しくなる", java.util.Arrays.equals(before, Files.readAllBytes(first.epub().toPath())));
-		File previous = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel/" + HeadlessWebConversion.PREVIOUS_EPUB);
+		File previous = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel/" + HeadlessWebConversion.previousEpubName(new File(root, "cache/" + fqdn.replace(':', '_') + "/novel"), first.epub()));
 		assertTrue("1 つ前の版が残る: " + previous, previous.isFile());
 		assertArrayEquals(before, Files.readAllBytes(previous.toPath()));
 		assertTrue("ほかの名前の本が増えない", shelf.list().length == 1);

@@ -256,9 +256,10 @@ The folders you add are stored in `AozoraEpub3.ini`.
 
 Books converted from the web show ⟳ (fetch new chapters) at the top right of the cover. It fetches
 the work again and overwrites the book with the current settings (the GUI's settings when opened
-from the GUI, `AozoraEpub3.ini` from the CLI). The previous version is kept as `previous.epub` in
-the work's cache folder. If the work is gone from the site, or has fewer episodes than last time, the
-book is left as it is (for fewer episodes, "減ったまま更新" fetches it anyway).
+from the GUI, `AozoraEpub3.ini` from the CLI). The previous version of each book is kept in the
+work's cache folder as `previous <id> <book name>.epub`. If the work is gone from the site, or has
+fewer episodes than last time, the book is left as it is (for fewer episodes, "減ったまま更新"
+fetches it anyway).
 
 > This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
 > rendering engines, so the result will not match a real device exactly.
