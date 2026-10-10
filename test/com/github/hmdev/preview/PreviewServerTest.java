@@ -1673,4 +1673,18 @@ public class PreviewServerTest
 		String unsupported = waitForJob(postText(base() + "api/download", "https://kakuyomu.jp/works/1").body());
 		assertTrue(unsupported, unsupported.contains("\"state\":\"failed\""));
 	}
+
+	/** まだ場所が無いとき、フォルダ選択は提案の場所の、あるところまで上のフォルダから開く（win2 の確認） */
+	@Test
+	public void pickingStartsFromTheNearestExistingSuggestion() throws Exception
+	{
+		Path shelf = temp.newFolder("nearest").toPath();
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, List.of())));
+		java.util.List<Path> initials = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setWebShelf(new FakeWebShelf() {
+			@Override public Path pickFolder(Path initial) { initials.add(initial); return null; }
+		});
+		post(base() + "api/webshelf/pick");
+		assertEquals("提案の Web はまだ無いので、その上の棚から", List.of(shelf.toAbsolutePath().normalize()), initials);
+	}
 }

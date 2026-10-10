@@ -118,12 +118,22 @@ public class HeadlessBookUpdater implements BookUpdater
 			return null;
 		}
 		if (name == null) return null;
+		String bookName = name;
 		String prefix = name + ".";
 		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfDir, com.github.hmdev.preview.LibraryScanner.DEFAULT_MAX_DEPTH)) {
 			return files.filter(p -> {
 				String file = p.getFileName().toString();
-				return file.startsWith(prefix) && file.toLowerCase(java.util.Locale.ROOT).endsWith(".epub")
-					&& !hiddenUnder(shelfDir, p);
+				if (!file.toLowerCase(java.util.Locale.ROOT).endsWith(".epub") || hiddenUnder(shelfDir, p)) return false;
+				if (file.startsWith(prefix)) return true;
+				//深いフォルダでは、名前がさらに縮められている（getOutFile と同じ決まり。PR の codex）
+				try {
+					for (String ext : new String[]{ ".epub", ".kepub.epub" }) {
+						if (file.equals(AozoraEpub3.fittedTitleName(p.getParent().toFile(), bookName, ext) + ext)) return true;
+					}
+				} catch (java.io.IOException e) {
+					/* 意図的: 長さを数えられなければ、縮めない名前だけで見る */
+				}
+				return false;
 			}).findFirst().orElse(null);
 		} catch (java.io.IOException | java.io.UncheckedIOException e) {
 			return null;

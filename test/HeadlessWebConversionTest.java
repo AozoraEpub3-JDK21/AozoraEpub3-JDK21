@@ -742,6 +742,8 @@ public class HeadlessWebConversionTest {
 			shelf = new File(shelf, "d".repeat(Math.min(40, 225 - shelf.toPath().toRealPath().toString().length())));
 			assertTrue(shelf.mkdirs() || shelf.isDirectory());
 		}
+		//本棚の更新と同じく、記録は Web 本棚の .aozora に（もうある作品かを、そこの台帳で見る）
+		lastCache = new File(shelf, ".aozora");
 		String longTitle = "あ".repeat(30);
 		workTitle = "【書籍化】" + longTitle + "～一部～";
 		HeadlessWebConversion.Result a = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
@@ -751,6 +753,8 @@ public class HeadlessWebConversionTest {
 		assertTrue(b.message(), b.ok());
 		assertFalse("名前は縮められている: " + a.epub().getName(), a.epub().getName().startsWith("[著者] " + longTitle + ".epub"));
 		assertFalse(a.epub().getName().equals(b.epub().getName()));
+		//縮められた名前でも、もう落としてある作品だと分かる（PR の codex）
+		assertTrue(HeadlessBookUpdater.existingBook(shelf.toPath(), "http://" + fqdn + "/novel/") != null);
 	}
 
 	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */

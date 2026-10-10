@@ -71,6 +71,15 @@ final class FolderPicker
 
 	private static Path pickWithChooser(Path initial, String title)
 	{
+		//CLI から開いた本棚では見た目が JDK の既定（Metal）のままで、古いデザインの選択画面になる。OS の見た目にする
+		//（GUI は FlatLaf を使っているので、そのまま。利用者の指摘 2026-10-10）
+		if (javax.swing.UIManager.getLookAndFeel() instanceof javax.swing.plaf.metal.MetalLookAndFeel) {
+			try {
+				javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName());
+			} catch (Exception e) {
+				/* 意図的: OS の見た目が無ければ既定のまま */
+			}
+		}
 		JFrame owner = new JFrame();
 		try {
 			owner.setUndecorated(true);

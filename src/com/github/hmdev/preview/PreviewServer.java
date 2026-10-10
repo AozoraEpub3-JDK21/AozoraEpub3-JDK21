@@ -755,7 +755,9 @@ public class PreviewServer implements AutoCloseable
 		try {
 			Path location = shelf.location();
 			Path initial = location != null ? location : webShelfSuggestion();
-			picked = shelf.pickFolder(initial != null && Files.isDirectory(initial) ? initial : null);
+			//提案の場所がまだ無ければ、あるところまで上のフォルダから開く（書類フォルダから開かないように。win2 の確認）
+			while (initial != null && !Files.isDirectory(initial)) initial = initial.getParent();
+			picked = shelf.pickFolder(initial);
 		} catch (UnsupportedOperationException e) {
 			respondJsonStatus(exchange, 501, errorJson("フォルダ選択を出せません。パスを入力してください"));
 			return;
