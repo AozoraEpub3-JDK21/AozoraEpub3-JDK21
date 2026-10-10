@@ -318,7 +318,7 @@ public class HeadlessWebConversionTest {
 		assertTrue(r.message(), r.message().contains("3 → 2 話"));
 		org.junit.Assert.assertArrayEquals("本棚の本はそのまま", before, Files.readAllBytes(book.toPath()));
 		assertEquals("台帳の話数を下げない（下げると、もう一度押すだけで通ってしまう）", 3, ledgerOf().episodesFor(book));
-		assertFalse("前の版も作らない", new File(ledgerDir(), HeadlessWebConversion.PREVIOUS_EPUB).exists());
+		assertFalse("前の版も作らない", new File(ledgerDir(), HeadlessWebConversion.previousEpubName(book)).exists());
 	}
 
 	/** 利用者が「減ったまま更新する」を選んだら取り直し、台帳の話数も今の数にする */
@@ -332,7 +332,7 @@ public class HeadlessWebConversionTest {
 		assertTrue(r.message(), r.ok());
 		assertEquals("その本の話数", 2, ledgerOf().episodesFor(book));
 		assertEquals("作品の話数は下げない", 3, ledgerOf().episodes);
-		assertTrue("前の版を残す", new File(ledgerDir(), HeadlessWebConversion.PREVIOUS_EPUB).exists());
+		assertTrue("前の版を残す", new File(ledgerDir(), HeadlessWebConversion.previousEpubName(book)).exists());
 	}
 
 	/**
@@ -573,6 +573,24 @@ public class HeadlessWebConversionTest {
 		assertEquals("5 話の本は 4 話で上書きしない", HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, b, false).stop());
 		assertEquals(4, ledgerOf().episodesFor(a));
 		assertEquals(5, ledgerOf().episodesFor(b));
+	}
+
+	/** 1 つ前の版は本ごとに残す。同じ作品のもう 1 冊を更新しても、こちらの 1 つ前の版は消えない（PR #120 の win2 の確認） */
+	@Test
+	public void eachBookKeepsItsOwnPreviousVersion() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File a = shelfBook(basePath, tempFolder.newFolder("a"));
+		File b = shelfBook(basePath, tempFolder.newFolder("b"));
+		episodes = 2;
+		byte[] aBefore = Files.readAllBytes(a.toPath());
+		assertTrue(guardedUpdate(basePath, a, false).ok());
+		byte[] bBefore = Files.readAllBytes(b.toPath());
+		assertTrue(guardedUpdate(basePath, b, false).ok());
+		org.junit.Assert.assertArrayEquals("a の 1 つ前の版が残る", aBefore,
+			Files.readAllBytes(new File(ledgerDir(), HeadlessWebConversion.previousEpubName(a)).toPath()));
+		org.junit.Assert.assertArrayEquals(bBefore,
+			Files.readAllBytes(new File(ledgerDir(), HeadlessWebConversion.previousEpubName(b)).toPath()));
 	}
 
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */

@@ -33,8 +33,14 @@ public class HeadlessWebConversion
 	static final String COVER_SAME_FILE = "#samefile";
 	static final String COVER_NONE = "#none";
 
-	/** 上書きの前の本を残す名前（作品のフォルダの中） */
-	static final String PREVIOUS_EPUB = "previous.epub";
+	/**
+	 * 上書きの前の本を残す名前（作品のフォルダの中）。本ごとに分ける: 同じ作品の本が本棚に 2 冊あると、
+	 * 片方の更新がもう片方の 1 つ前の版を消していた（PR #120 の win2 の確認）
+	 */
+	static String previousEpubName(File book)
+	{
+		return "previous." + com.github.hmdev.info.BookLedger.bookKey(book) + ".epub";
+	}
 
 	/** 守りで止めた理由: 掲載元で作品が見つからない（404・410） */
 	public static final String STOP_GONE = "gone";
@@ -249,7 +255,7 @@ public class HeadlessWebConversion
 
 		//上書きの前に、今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）
 		if (outFile.exists()) {
-			java.nio.file.Files.copy(outFile.toPath(), new File(srcFile.getAbsoluteFile().getParentFile(), PREVIOUS_EPUB).toPath(),
+			java.nio.file.Files.copy(outFile.toPath(), new File(srcFile.getAbsoluteFile().getParentFile(), previousEpubName(outFile)).toPath(),
 				java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 		}
 		LogAppender.println("画面なしで変換します : " + srcFile.getPath());

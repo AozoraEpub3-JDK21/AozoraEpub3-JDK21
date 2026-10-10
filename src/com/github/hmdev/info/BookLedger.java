@@ -149,8 +149,8 @@ public final class BookLedger
 		return n != null ? n : this.episodes;
 	}
 
-	/** 本のパスの印（パスそのものは台帳に書かない） */
-	static String bookKey(File epub)
+	/** 本のパスの印（パスそのものは台帳に書かない）。本ごとに分ける置き場の名前にも使う */
+	public static String bookKey(File epub)
 	{
 		String path;
 		try {

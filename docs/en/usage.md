@@ -256,7 +256,7 @@ The folders you add are stored in `AozoraEpub3.ini`.
 
 Books converted from the web show ⟳ (fetch new chapters) at the top right of the cover. It fetches
 the work again and overwrites the book with the current settings (the GUI's settings when opened
-from the GUI, `AozoraEpub3.ini` from the CLI). The previous version is kept as `previous.epub` in
+from the GUI, `AozoraEpub3.ini` from the CLI). The previous version is kept as `previous.<id per book>.epub` (one per book) in
 the work's cache folder. If the work is gone from the site, or has fewer episodes than last time, the
 book is left as it is (for fewer episodes, "減ったまま更新" fetches it anyway).
 

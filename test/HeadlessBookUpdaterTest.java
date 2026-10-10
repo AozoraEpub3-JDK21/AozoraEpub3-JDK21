@@ -118,7 +118,7 @@ public class HeadlessBookUpdaterTest {
 		BookUpdater.Result r = updater.update(base + "/novel/", first.epub().toPath());
 		assertTrue(r.message(), r.ok());
 		assertFalse("本棚の本が新しくなる", java.util.Arrays.equals(before, Files.readAllBytes(first.epub().toPath())));
-		File previous = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel/" + HeadlessWebConversion.PREVIOUS_EPUB);
+		File previous = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel/" + HeadlessWebConversion.previousEpubName(first.epub()));
 		assertTrue("1 つ前の版が残る: " + previous, previous.isFile());
 		assertArrayEquals(before, Files.readAllBytes(previous.toPath()));
 		assertTrue("ほかの名前の本が増えない", shelf.list().length == 1);
