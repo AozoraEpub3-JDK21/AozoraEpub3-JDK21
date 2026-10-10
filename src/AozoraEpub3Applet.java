@@ -1,6 +1,7 @@
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -6013,6 +6014,28 @@ public class AozoraEpub3Applet extends JPanel
 		return UiThemeManager.Mode.fromIni(bootProps.getProperty(UiThemeManager.INI_KEY));
 	}
 
+	/** 窓の位置と大きさ・設定を保存して終える（窓を閉じたときと、mac の Cmd+Q） */
+	static void saveAndExit(JFrame jFrame, AozoraEpub3Applet applet)
+	{
+		try {
+			//Window位置を割くに設定しておく
+			Point location = jFrame.getLocation();
+			Dimension size = jFrame.getSize();
+			applet.props.setProperty("PosX", ""+location.getX());
+			applet.props.setProperty("PosY", ""+location.getY());
+			applet.props.setProperty("SizeW", ""+size.getWidth());
+			applet.props.setProperty("SizeH", ""+size.getHeight());
+			//props保存と終了処理
+			//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
+			//ここが Object.finalize() (何もしない) を呼んだままになっていた。
+			//そのため終了時に AozoraEpub3.ini が一切保存されていない
+			applet.saveProperties();
+		} catch (Throwable e) {
+			logger.error("終了時の処理でエラー", e);
+		}
+		System.exit(0);
+	}
+
 	/** Jar実行用 */
 	public static void main(String args[])
 	{
@@ -6057,25 +6080,14 @@ public class AozoraEpub3Applet extends JPanel
 		jFrame.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent evt) {
-				try {
-					//Window位置を割くに設定しておく
-					Point location = jFrame.getLocation();
-					Dimension size = jFrame.getSize();
-					applet.props.setProperty("PosX", ""+location.getX());
-					applet.props.setProperty("PosY", ""+location.getY());
-					applet.props.setProperty("SizeW", ""+size.getWidth());
-					applet.props.setProperty("SizeH", ""+size.getHeight());
-					//props保存と終了処理
-					//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
-					//ここが Object.finalize() (何もしない) を呼んだままになっていた。
-					//そのため終了時に AozoraEpub3.ini が一切保存されていない
-					applet.saveProperties();
-				} catch (Throwable e) {
-					logger.error("ウィンドウクローズ時の終了処理でエラー", e);
-				}
-				System.exit(0);
+				saveAndExit(jFrame, applet);
 			}
 		});
+		//mac の Cmd+Q（メニューの「終了」）も、窓を閉じるのと同じ道（windowClosing）を通して設定を保存してから終える。
+		//既定では Cmd+Q は windowClosing を通らずに JVM を終え、ini が一切保存されない（internal #27）。終わる道は 1 つにする
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_STRATEGY)) {
+			Desktop.getDesktop().setQuitStrategy(java.awt.desktop.QuitStrategy.CLOSE_ALL_WINDOWS);
+		}
 		jFrame.add(applet);
 		jFrame.setVisible(true);
 		
@@ -6168,6 +6180,8 @@ public class AozoraEpub3Applet extends JPanel
 			
 			//設定ファイル更新
 			if (this.jarPath != null && this.propFileName != null) {
+				//その場で書く（一時ファイルから置き換えると、ini の権限が変わる・フォルダに書けない置き場で保存できない・
+				//先の無いリンクを置き換える、の後退が出た。PR #125 の codex）
 				try (OutputStream fos = Files.newOutputStream(Path.of(this.jarPath+this.propFileName))) {
 					this.props.store(fos, "AozoraEpub3 Parameters");
 				}
