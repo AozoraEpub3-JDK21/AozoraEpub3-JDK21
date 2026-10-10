@@ -1397,6 +1397,22 @@ public class PreviewServerTest
 		assertTrue(web.set.isEmpty());
 	}
 
+	/** 書き込めないフォルダは断る（落とした本を置けない） */
+	@Test
+	public void anUnwritableWebShelfIsRefused() throws Exception
+	{
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		java.io.File locked = temp.newFolder("locked");
+		org.junit.Assume.assumeTrue("書き込みを禁じられない環境（root・Windows）では飛ばす", locked.setWritable(false) && !java.nio.file.Files.isWritable(locked.toPath()));
+		try {
+			assertEquals(400, postText(base() + "api/webshelf", locked.getAbsolutePath()).statusCode());
+			assertTrue(web.set.isEmpty());
+		} finally {
+			locked.setWritable(true);
+		}
+	}
+
 	/** 棚が上限まであるときは、今の棚に含まれる場所だけ決められる */
 	@Test
 	public void theWebShelfRespectsTheShelfLimit() throws Exception

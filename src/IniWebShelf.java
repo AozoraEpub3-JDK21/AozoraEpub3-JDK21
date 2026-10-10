@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import com.github.hmdev.preview.LibraryScanner;
 import com.github.hmdev.preview.PreviewLauncher;
 import com.github.hmdev.preview.PreviewLibraryPrefs;
 import com.github.hmdev.preview.WebShelf;
@@ -44,13 +43,10 @@ class IniWebShelf implements WebShelf
 	{
 		Properties props = read();
 		WebShelfPrefs.store(props, dir);
+		//同じ棚は store が畳み、上限を超えた分は落とす
 		List<String> folders = new ArrayList<>(PreviewLibraryPrefs.load(props));
-		String key = PreviewLibraryPrefs.dedupeKey(dir.toString());
-		boolean known = folders.stream().anyMatch(f -> key.equals(PreviewLibraryPrefs.dedupeKey(f)));
-		if (!known && folders.size() < LibraryScanner.MAX_SHELVES) {
-			folders.add(dir.toString());
-			PreviewLibraryPrefs.store(props, folders);
-		}
+		folders.add(dir.toString());
+		PreviewLibraryPrefs.store(props, folders);
 		write(props);
 		PreviewLauncher.addShelf(dir);
 	}
