@@ -139,6 +139,63 @@ public class NarouRankingTest
 		}
 	}
 
+	/** 上限を超える長さを名乗る応答は、本文を待たずにその場で断る（溜めてから断る形だと、止まった本文で期限まで待つ） */
+	@Test(timeout = 20_000)
+	public void aBodyThatDeclaresMoreThanTheLimitIsRefused() throws Exception
+	{
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		com.sun.net.httpserver.HttpServer big = com.sun.net.httpserver.HttpServer.create(
+			new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+		big.createContext("/", exchange -> {
+			exchange.sendResponseHeaders(200, NarouRanking.MAX_BYTES + 1L);
+			try {
+				//長さだけ名乗って 1 バイト送り、止まる
+				exchange.getResponseBody().write('[');
+				exchange.getResponseBody().flush();
+				release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (IOException e) {
+				//受け取る側が切った
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.close();
+		});
+		big.start();
+		try {
+			URI uri = URI.create("http://" + PreviewServer.urlHost(java.net.InetAddress.getLoopbackAddress()) + ":" + big.getAddress().getPort() + "/");
+			long t0 = System.nanoTime();
+			try {
+				NarouRanking.httpGet(uri, java.time.Duration.ofSeconds(10));
+				fail("上限を超える応答は断る");
+			} catch (IOException e) {
+				assertTrue(e.getMessage(), e.getMessage().contains("大きすぎます"));
+			}
+			long millis = (System.nanoTime() - t0) / 1_000_000L;
+			assertTrue("本文を待たない: " + millis + "ms", millis < 5_000);
+		} finally {
+			release.countDown();
+			big.stop(0);
+		}
+	}
+
+	/** つながらないときに「null」と出さない */
+	@Test(timeout = 20_000)
+	public void aRefusedConnectionSaysSoInsteadOfNull() throws Exception
+	{
+		int port;
+		try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+			port = probe.getLocalPort();
+		}
+		URI uri = URI.create("http://" + PreviewServer.urlHost(java.net.InetAddress.getLoopbackAddress()) + ":" + port + "/");
+		try {
+			NarouRanking.httpGet(uri, java.time.Duration.ofSeconds(5));
+			fail("閉じたポートからは取れない");
+		} catch (IOException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("つながりません"));
+			assertFalse(e.getMessage(), e.getMessage().contains("null"));
+		}
+	}
+
 	@Test
 	public void gzipBodiesAreUnpackedAndPlainOnesPassThrough() throws Exception
 	{

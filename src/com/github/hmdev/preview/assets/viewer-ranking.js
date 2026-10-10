@@ -88,7 +88,9 @@ function toggleRanking(force)
 	el.libraryStatus.hidden = show;
 	el.libraryGrid.hidden = show;
 	el.libraryRankingToggle.setAttribute('aria-pressed', String(show));
-	if (show && !rankingWorks.length) loadRanking();
+	// 開くたびに頼む。同じ問い合わせはサーバが 10 分覚えているので、なろうへは行かない。
+	// 前に開いたときの一覧を出したままにすると、日をまたいでも古い順位が残る (PR #127 の codex)
+	if (show) loadRanking();
 }
 
 /** Esc で手前のランキングを先にしまう。しまったら true */
@@ -105,6 +107,8 @@ function loadRanking()
 {
 	el.rankingStatus.textContent = '読み込み中…';
 	el.rankingStatus.dataset.state = '';
+	// 走っている問い合わせの返りは、もう今の選択の答えではない。捨てさせる (PR #127 の codex)
+	rankingLoadSeq++;
 	rankingWanted = true;
 	clearTimeout(rankingTimer);
 	rankingTimer = setTimeout(pumpRanking, RANKING_DELAY);
@@ -126,8 +130,10 @@ async function pumpRanking()
 
 async function fetchRanking()
 {
-	const seq = ++rankingLoadSeq;
-	const query = 'period=' + encodeURIComponent(el.rankingPeriod.value)
+	// 選択が変わるたびに loadRanking が番号を進める。返ったときに番号が違えば、選択が変わっている
+	const seq = rankingLoadSeq;
+	const period = el.rankingPeriod.value;
+	const query = 'period=' + encodeURIComponent(period)
 		+ '&genre=' + encodeURIComponent(el.rankingGenre.value)
 		+ '&serial=' + (el.rankingSerial.checked ? '1' : '0');
 	let rows;
@@ -153,7 +159,7 @@ async function fetchRanking()
 	el.rankingStatus.textContent = rankingWorks.length
 		? 'なろうの今のポイントで並べています (サイトのランキングのページと順番が少し違うことがあります)'
 		: '作品がありません';
-	renderRanking();
+	renderRanking(period);
 }
 
 /** 本棚にある作品のコード (dc:source の URL から取る。小文字) */
@@ -180,10 +186,11 @@ function rankingWorkUrl(work)
 	return 'https://ncode.syosetu.com/' + work.ncode.toLowerCase() + '/';
 }
 
-function renderRanking()
+/** period は頼んだときの期間 (点数の項目を選ぶ。今の選択で読むと、別の期間の答えで点数が消える) */
+function renderRanking(period)
 {
 	const owned = shelfNcodes();
-	const point = RANKING_POINTS[el.rankingPeriod.value];
+	const point = RANKING_POINTS[period];
 	const items = rankingWorks.map((work, index) => rankingCard(work, index + 1, point, owned));
 	el.rankingList.replaceChildren(...items);
 }
@@ -270,6 +277,14 @@ async function downloadFromRanking(button)
 	if (libraryDownloadJob || rankingBusyNcode) {
 		showDownloadStatus('ほかの作品を落としています。終わってから押してください');
 		el.libraryDownload.hidden = false;
+		el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
+		return;
+	}
+	// Web 本棚の場所を聞いている間は、決めたら落とす URL が 1 つ待っている。上書きすると先に押した作品が消える
+	if (libraryPendingUrl) {
+		el.libraryDownload.hidden = false;
+		el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
+		el.libraryShelfNote.textContent = '先に Web 本棚の場所を決めてください (決めると、先に押した作品を落とします)';
 		return;
 	}
 	const item = button.closest('.ranking-card');
@@ -309,8 +324,9 @@ function rankingKind(work)
 {
 	if (work.noveltype === 2) return '短編';
 	const episodes = (typeof work.general_all_no === 'number') ? work.general_all_no + ' 話' : '';
-	const state = work.end === 1 ? '連載中' : '完結';
-	return episodes ? state + ' ' + episodes : state;
+	// state という名前はビューアー全体の状態 (viewer-core.js) と重なるので使わない
+	const progress = work.end === 1 ? '連載中' : '完結';
+	return episodes ? progress + ' ' + episodes : progress;
 }
 
 function rankingPoints(value)

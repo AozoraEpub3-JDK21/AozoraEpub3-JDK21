@@ -198,7 +198,14 @@ final class NarouRanking
 			//request の timeout は見出しが届くまでしか効かない。本文の途中で止まると、
 			//プレビューの 4 本しかないスレッドを掴んだままになる（PR #127 の codex P2）。
 			//本文を受け取り終えるまでを 1 つの期限で囲む
-			CompletableFuture<HttpResponse<byte[]>> pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray());
+			//長さを名乗る応答は、上限を超えていたら本文を読まずにその場で断る（ofByteArray は全部を溜めてから返す）。
+			//長さを名乗らない応答は、期限までしか受け取らない
+			HttpResponse.BodyHandler<byte[]> handler = info -> {
+				long length = info.headers().firstValueAsLong("Content-Length").orElse(-1L);
+				if (length > MAX_BYTES) throw new java.io.UncheckedIOException(new IOException("なろうの API の応答が大きすぎます"));
+				return HttpResponse.BodySubscribers.ofByteArray();
+			};
+			CompletableFuture<HttpResponse<byte[]>> pending = client.sendAsync(request, handler);
 			HttpResponse<byte[]> response;
 			try {
 				response = pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
@@ -206,8 +213,12 @@ final class NarouRanking
 				pending.cancel(true);
 				throw new IOException("なろうの API が " + deadline.toSeconds() + " 秒で応えませんでした");
 			} catch (ExecutionException e) {
+				//つながらないときの ConnectException は文言が null のことがある。画面に「null」と出さない
 				Throwable cause = e.getCause();
-				throw (cause instanceof IOException io) ? io : new IOException(String.valueOf(cause), cause);
+				if (cause instanceof java.io.UncheckedIOException unchecked) throw unchecked.getCause();
+				String why = (cause != null && cause.getMessage() != null) ? cause.getMessage()
+					: (cause != null ? cause.getClass().getSimpleName() : "不明");
+				throw new IOException("なろうの API につながりません (" + why + ")", cause);
 			}
 			if (response.statusCode() != 200) {
 				throw new IOException("なろうの API が HTTP " + response.statusCode() + " を返しました");
