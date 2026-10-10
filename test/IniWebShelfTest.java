@@ -57,4 +57,37 @@ public class IniWebShelfTest {
 		new IniWebShelf(ini).setLocation(dir);
 		assertEquals(dir.toString(), read(ini).getProperty(WebShelfPrefs.KEY));
 	}
+
+	/** 既にある ini が読めなければ、書かずに失敗にする（空のまま書き戻すと、ほかの設定が消える） */
+	@Test
+	public void anUnreadableIniIsNotOverwritten() throws Exception {
+		File ini = new File(temp.getRoot(), "AozoraEpub3.ini");
+		byte[] broken = "Vertical=1\nBad=\\uZZZZ\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+		Files.write(ini.toPath(), broken);
+		try {
+			new IniWebShelf(ini).setLocation(temp.newFolder("web").toPath());
+			org.junit.Assert.fail("読めない ini に書いた");
+		} catch (java.io.IOException expected) {
+			/* 意図的: 書かずに失敗する */
+		}
+		org.junit.Assert.assertArrayEquals(broken, Files.readAllBytes(ini.toPath()));
+	}
+
+	/** CLI は決めてある Web 本棚を棚の先頭に加える（棚が上限を超えると後ろから落ちるので） */
+	@Test
+	public void theCliPutsTheWebShelfFirst() throws Exception {
+		File ini = new File(temp.getRoot(), "AozoraEpub3.ini");
+		Path web = temp.newFolder("web").toPath();
+		new IniWebShelf(ini).setLocation(web);
+		try {
+			AozoraEpub3.registerBookUpdater(null, ini.getPath());
+			java.util.List<Path> folders = new java.util.ArrayList<>(List.of(temp.newFolder("a").toPath()));
+			AozoraEpub3.addWebShelf(folders);
+			assertEquals(web.toAbsolutePath().normalize(), folders.get(0));
+			assertEquals(2, folders.size());
+		} finally {
+			com.github.hmdev.preview.PreviewLauncher.setWebShelf(null);
+			com.github.hmdev.preview.PreviewLauncher.setBookUpdater(null);
+		}
+	}
 }

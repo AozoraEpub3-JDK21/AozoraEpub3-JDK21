@@ -40,7 +40,15 @@ class IniWebShelf implements WebShelf
 	@Override
 	public void setLocation(Path dir) throws IOException
 	{
-		Properties props = read();
+		//書く前に読めなければ書かない（読めなかった設定を空のまま書き戻すと、ほかの設定が消える。PR の手元の codex）
+		Properties props = new Properties();
+		if (this.iniFile.isFile()) {
+			try (InputStream in = Files.newInputStream(this.iniFile.toPath())) {
+				props.load(in);
+			} catch (IllegalArgumentException e) {
+				throw new IOException("設定ファイルを読めないため、Web 本棚を保存しませんでした: " + this.iniFile, e);
+			}
+		}
 		WebShelfPrefs.store(props, dir);
 		//同じ棚は store が畳み、上限を超えた分は落とす
 		List<String> folders = new ArrayList<>(PreviewLibraryPrefs.load(props));

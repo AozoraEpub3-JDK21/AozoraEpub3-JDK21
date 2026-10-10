@@ -5280,9 +5280,10 @@ public class AozoraEpub3Applet extends JPanel
 			}
 		}
 		//決めてある Web 本棚もいつも加える（棚の一覧がいっぱいで一覧に入らなかったときも、本棚に出す。PR の手元の codex）。
+		//先頭に置く（棚が上限を超えると後ろから落ちるので。落とした本を置く場所なので、ほかの棚より先に出す）。
 		//今の棚に含まれていれば、本棚を開くときに畳まれる
 		Path webShelf = com.github.hmdev.preview.WebShelfPrefs.load(this.props);
-		if (webShelf != null && Files.isDirectory(webShelf)) paths.add(webShelf);
+		if (webShelf != null && Files.isDirectory(webShelf)) paths.add(0, webShelf);
 		//初回スキャンは冊数に比例して重い (1 冊ずつ ZIP を開いて OPF を読む)。
 		//2 回目以降は LibraryIndexCache が効いて stat だけになる
 		this.libraryOpening = true;

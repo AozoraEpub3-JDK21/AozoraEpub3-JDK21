@@ -632,13 +632,16 @@ public class AozoraEpub3
 	/** CLI で開いた本棚の Web 本棚（registerBookUpdater で決まる） */
 	private static volatile IniWebShelf cliWebShelf;
 
-	/** 決めてある Web 本棚を棚に加える（本棚を開く CLI のどの道でも。今の棚に含まれていれば、開くときに畳まれる） */
+	/**
+	 * 決めてある Web 本棚を棚の先頭に加える（本棚を開く CLI のどの道でも。棚が上限を超えると後ろから落ちるので先頭に。
+	 * 今の棚に含まれていれば、開くときに畳まれる）
+	 */
 	static void addWebShelf(java.util.List<java.nio.file.Path> folders)
 	{
 		IniWebShelf shelf = cliWebShelf;
 		if (shelf == null) return;
 		java.nio.file.Path location = shelf.location();
-		if (location != null && Files.isDirectory(location)) folders.add(location);
+		if (location != null && Files.isDirectory(location)) folders.add(0, location);
 	}
 
 	static void registerBookUpdater(String jarPath, String iniFileName)
