@@ -6124,8 +6124,7 @@ public class AozoraEpub3Applet extends JPanel
 		applet.jTabbedPane.requestFocus();
 	}
 	
-	/** アプレット終了時の処理
-	 * 設定ファイルを保存 */
+	/** 設定ファイルを保存する。終了時と、窓が手前から外れたときに呼ばれる */
 	void saveProperties()
 	{
 		try {
@@ -6202,7 +6201,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 		} catch (Exception e) {
-			logger.error("終了時のプロパティファイル保存でエラー", e);
+			logger.error("プロパティファイル保存でエラー", e);
 		}
 	}
 	
