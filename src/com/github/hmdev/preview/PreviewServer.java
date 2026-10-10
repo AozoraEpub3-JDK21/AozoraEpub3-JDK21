@@ -933,7 +933,7 @@ public class PreviewServer implements AutoCloseable
 	/** http・https の URL として読めるか（ホストがあること） */
 	static boolean isHttpUrl(String url)
 	{
-		if (url.isEmpty() || url.chars().anyMatch(Character::isWhitespace)) return false;
+		//空白などの URL に使えない文字は URI が断る
 		try {
 			java.net.URI uri = new java.net.URI(url);
 			String scheme = uri.getScheme();

@@ -1612,6 +1612,9 @@ public class PreviewServerTest
 		assertEquals("Web 本棚がまだ無ければ聞いてもらう", 409, need.statusCode());
 		assertTrue(need.body(), need.body().contains("\"needShelf\":true"));
 		assertEquals(405, get(base() + "api/download").statusCode());
+		//決めてあった Web 本棚のフォルダが消えていても、聞き直す
+		web.location = temp.getRoot().toPath().resolve("removed");
+		assertEquals(409, postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/").statusCode());
 	}
 
 	/** 落とせたら、Web 本棚を本棚に出す（読み直す）。同じ URL は 1 つの仕事。落とせない本棚は失敗で知らせる */
