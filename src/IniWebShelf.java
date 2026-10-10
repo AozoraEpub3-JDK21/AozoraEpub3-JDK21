@@ -84,14 +84,17 @@ class IniWebShelf implements WebShelf
 	/** 一時ファイルに書いてから置き換える（途中で止まっても ini が壊れない） */
 	private void write(Properties props) throws IOException
 	{
-		Path dir = this.iniFile.getAbsoluteFile().getParentFile().toPath();
+		//ini がリンクなら、リンクの先を書き換える（リンクを普通のファイルに置き換えない。PR の codex）
+		Path target = this.iniFile.toPath();
+		if (Files.exists(target)) target = target.toRealPath();
+		Path dir = target.toAbsolutePath().getParent();
 		Files.createDirectories(dir);
-		Path tmp = Files.createTempFile(dir, this.iniFile.getName(), ".tmp");
+		Path tmp = Files.createTempFile(dir, target.getFileName().toString(), ".tmp");
 		try {
 			try (OutputStream out = Files.newOutputStream(tmp)) {
 				props.store(out, "AozoraEpub3 Parameters");
 			}
-			Files.move(tmp, this.iniFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
 		} finally {
 			Files.deleteIfExists(tmp);
 		}

@@ -673,8 +673,9 @@ public class AozoraEpub3
 			}
 			folders.add(file.toPath());
 		}
-		if (folders.isEmpty()) return 1;
+		//Web 本棚は空かを見る前に加える（指定した棚がどれも無くても、Web 本棚は開く。PR の codex）
 		addWebShelf(folders);
+		if (folders.isEmpty()) return 1;
 		try {
 			String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(folders);
 			LogAppender.println("本棚を開きました : "+url);
@@ -726,8 +727,8 @@ public class AozoraEpub3
 			}
 			folders.add(file.toPath());
 		}
-		if (folders.isEmpty()) return;
 		addWebShelf(folders);
+		if (folders.isEmpty()) return;
 		try {
 			int count = com.github.hmdev.preview.PreviewLauncher.loadLibraryInto(folders);
 			LogAppender.println("本棚を読み込みました : "+count+" 冊");

@@ -90,4 +90,22 @@ public class IniWebShelfTest {
 			com.github.hmdev.preview.PreviewLauncher.setBookUpdater(null);
 		}
 	}
+
+	/** ini がリンクなら、リンクは残してリンクの先を書き換える（PR の codex） */
+	@Test
+	public void aLinkedIniStaysALink() throws Exception {
+		File real = new File(temp.newFolder("shared"), "AozoraEpub3.ini");
+		Files.write(real.toPath(), "Vertical=1\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+		Path link = temp.getRoot().toPath().resolve("AozoraEpub3.ini");
+		try {
+			Files.createSymbolicLink(link, real.toPath());
+		} catch (UnsupportedOperationException | java.io.IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		Path web = temp.newFolder("web").toPath();
+		new IniWebShelf(link.toFile()).setLocation(web);
+		org.junit.Assert.assertTrue("リンクのまま", Files.isSymbolicLink(link));
+		assertEquals(web.toString(), read(real).getProperty(WebShelfPrefs.KEY));
+		assertEquals("1", read(real).getProperty("Vertical"));
+	}
 }
