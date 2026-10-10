@@ -1148,9 +1148,10 @@ public class WebAozoraConverter
 					//記録が無いと全部が改稿に見える。PR のゲート2）
 					else if (noUpdateUrls != null && updateInfoFile.exists() && !noUpdateUrls.contains(chapterHref)) revisedCount++;
 				}
-				//その本の話数（記録）より目次が多ければ、その分は本に入っていない（キャッシュにはあっても。更新で話は取れたが
-				//本を書けなかった・同じ作品を別に変換した、など。PR の手元の codex）
-				if (previous >= 0 && now - previous > newCount) newCount = now - previous;
+				//その本の話数の記録があれば、新着はそれとの差（キャッシュの有無に依らない。キャッシュにはあっても本に入っていない話＝
+				//更新で話は取れたが本を書けなかった・同じ作品を別に変換した、と、キャッシュを消しただけの話を、どちらも正しく数える。
+				//PR の手元の codex・PR の codex）。記録が無ければキャッシュに無い話
+				if (previous >= 0) newCount = Math.max(0, now - previous);
 				this.checkedEpisodes = now;
 				this.checkedNew = newCount;
 				this.checkedRevised = revisedCount;

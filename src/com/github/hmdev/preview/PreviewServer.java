@@ -974,6 +974,11 @@ public class PreviewServer implements AutoCloseable
 		String key = "check:" + bookId;
 		UpdateJob job;
 		synchronized (this.jobs) {
+			//更新・名前を変えている最中の本は確かめない（名前が変わると、積んだ確かめる仕事が古い名前を見る。PR の codex）
+			if (this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active())) {
+				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから確かめてください"));
+				return;
+			}
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(key) && j.active()).findFirst().orElse(null);
 			if (job == null) {
 				forgetOldJobs();

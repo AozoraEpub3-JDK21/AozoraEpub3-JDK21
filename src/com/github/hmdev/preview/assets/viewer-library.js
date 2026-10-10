@@ -991,6 +991,7 @@ async function checkAllBooks()
 	libraryChecking = true;
 	updateCheckAllButton();
 	let found = 0;
+	let failed = 0;
 	try {
 		for (let i = 0; i < books.length; i++) {
 			const book = books[i];
@@ -1006,11 +1007,16 @@ async function checkAllBooks()
 				setLibraryUpdate(book.id, {state: state, message: job.message || '',
 					newEpisodes: job.newEpisodes, revisedEpisodes: job.revisedEpisodes});
 				if (job.state === 'checked' && (job.newEpisodes > 0 || job.revisedEpisodes > 0)) found++;
+				else if (job.state !== 'checked') failed++;
 			} catch (err) {
 				setLibraryUpdate(book.id, {state: 'checkFailed', message: err.message});
+				failed++;
 			}
 		}
-		showLibraryStatus(found ? '新着のある本: ' + found + ' 冊 (⟳ で取れます)' : '新着のある本はありません');
+		// 確かめられなかった本があるときは「新着は無い」と言い切らない (PR の codex)
+		let summary = found ? '新着のある本: ' + found + ' 冊 (⟳ で取れます)' : (failed ? '' : '新着のある本はありません');
+		if (failed) summary += (summary ? '・' : '') + '確かめられなかった本: ' + failed + ' 冊';
+		showLibraryStatus(summary);
 	} finally {
 		libraryChecking = false;
 		el.libraryCheckAll.textContent = '新着を確かめる';

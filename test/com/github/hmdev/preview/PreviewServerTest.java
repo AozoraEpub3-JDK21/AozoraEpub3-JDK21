@@ -1773,4 +1773,25 @@ public class PreviewServerTest
 		assertTrue(shrunk, shrunk.contains("\"state\":\"shrunk\""));
 		assertEquals(405, get(base() + "api/book/" + ids[0] + "/check").statusCode());
 	}
+
+	/** 更新している最中の本は確かめない */
+	@Test
+	public void aBookBeingUpdatedIsNotChecked() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override public Result update(String sourceUrl, Path epubFile) throws Exception
+			{
+				release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+				return new Result(true, false, "ok");
+			}
+			@Override public CheckResult check(String sourceUrl, Path epubFile) { return new CheckResult(true, "新着はありません", 1, 0, 0, null); }
+		});
+		String job = post(base() + "api/book/" + ids[0] + "/update").body();
+		assertEquals(409, post(base() + "api/book/" + ids[0] + "/check").statusCode());
+		release.countDown();
+		waitForJob(job);
+		assertEquals(202, post(base() + "api/book/" + ids[0] + "/check").statusCode());
+	}
 }

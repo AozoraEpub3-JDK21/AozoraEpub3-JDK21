@@ -740,6 +740,24 @@ public class HeadlessWebConversionTest {
 		assertEquals(2, conv.checkedNew);
 	}
 
+	/** キャッシュを消しただけなら、新着としない（その本の話数の記録と比べる。PR の codex） */
+	@Test
+	public void aClearedCacheIsNotNews() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		//話のキャッシュ（作品のフォルダの隣の ep/）を消す
+		File episodesCache = new File(ledgerDir().getParentFile(), "ep");
+		assertTrue("この治具は話を ep/ にキャッシュする", episodesCache.isDirectory());
+		try (java.util.stream.Stream<java.nio.file.Path> walk = Files.walk(episodesCache.toPath())) {
+			walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+		}
+		assertFalse(episodesCache.exists());
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		conv.check("http://" + fqdn + "/novel/", book);
+		assertEquals(0, conv.checkedNew);
+	}
+
 	/** 1 ページの作品は確かめられない（本文も取りに行かない） */
 	@Test
 	public void aOnePageWorkCannotBeChecked() throws Exception {
