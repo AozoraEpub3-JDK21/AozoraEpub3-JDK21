@@ -76,6 +76,7 @@ function bindLibraryEvents()
 	el.libraryClose.addEventListener('click', () => closeLibrary());
 
 	bindDownloadEvents();
+	bindRankingEvents();
 	el.libraryCheckAll.addEventListener('click', () => {
 		checkAllBooks().catch(err => showLibraryStatus('新着を確かめられませんでした: ' + err.message));
 	});
@@ -117,6 +118,11 @@ function onLibraryKeyDown(event)
 			el.libraryFilter.value = '';
 			clearTimeout(libraryFilterTimer);
 			renderLibrary();
+			event.preventDefault();
+			return;
+		}
+		// 手前に出しているランキングを先にしまう
+		if (closeRankingIfOpen()) {
 			event.preventDefault();
 			return;
 		}
@@ -197,6 +203,8 @@ async function openLibrary()
 	el.libraryClose.hidden = !state.bookId;
 	// 開くたびに取り直す。変換し直した本の書名・表紙・更新日時を古いまま出さないため
 	await loadLibrary();
+	// ランキングを出したまま本棚を閉じていたら、開き直したときに頼み直す (古い順位を出したままにしない)
+	if (rankingOpen()) loadRanking();
 	el.libraryFilter.focus();
 }
 
@@ -240,6 +248,9 @@ async function loadLibrary(keepView)
 	buildShelfSelect();
 	if (keepView) renderLibraryKeepingView();
 	else renderLibrary();
+	// ランキングの「本棚にあります」も付け直す。Web 本棚の場所を聞いてから落とした本は
+	// ランキングの札を通らずに落ちる (viewer-ranking.js)
+	remarkRanking();
 }
 
 /** 描き直しても、描いた枚数・スクロール位置・フォーカスを保つ */
@@ -699,6 +710,11 @@ async function switchBook(bookId)
 
 /** 落とす仕事の ID (問い合わせ中なら)。同時に 1 つだけ */
 let libraryDownloadJob = null;
+/**
+ * api/download へ POST している最中か。仕事の ID は POST が返ってからなので、その間は ID だけでは見張れない
+ * (＋ とランキングの札の両方から押せる。PR #127 の codex)
+ */
+let libraryDownloadPosting = false;
 /** Web 本棚の場所を聞いている間、決めたら続けて落とす URL */
 let libraryPendingUrl = null;
 
@@ -742,10 +758,12 @@ async function checkDownloadAvailable()
 		const response = await fetch('api/webshelf', {cache: 'no-store'});
 		const info = response.ok ? await response.json() : null;
 		el.libraryDownloadToggle.hidden = !(info && info.canDownload);
+		el.libraryRankingToggle.hidden = !(info && info.canDownload);
 		libraryCanCheck = !!(info && info.canDownload);
 		updateCheckAllButton();
 	} catch (e) {
 		el.libraryDownloadToggle.hidden = true;
+		el.libraryRankingToggle.hidden = true;
 		libraryDownloadChecked = false;
 	}
 }
@@ -768,9 +786,22 @@ async function postText(path, body)
 
 async function startDownload(url)
 {
-	if (!url || libraryDownloadJob) return;
-	showDownloadStatus('頼んでいます…');
-	const {response, json} = await postText('api/download', url);
+	if (!url || libraryDownloadJob || libraryDownloadPosting) return;
+	// Web 本棚の場所を聞いている間は、決めたら落とす URL が待っている。別の URL で上書きすると、
+	// 先に頼んだ作品 (ランキングの札など) が黙って消える (PR #127 の codex)
+	if (libraryPendingUrl && libraryPendingUrl !== url) {
+		el.libraryShelfNote.textContent = '先に Web 本棚の場所を決めてください (決めると、先に頼んだ作品を落とします)';
+		return;
+	}
+	libraryDownloadPosting = true;
+	let response, json;
+	try {
+		showDownloadStatus('頼んでいます…');
+		({response, json} = await postText('api/download', url));
+	} finally {
+		// ここから libraryDownloadJob を入れるまでに await は無いので、隙間はできない
+		libraryDownloadPosting = false;
+	}
 	if (response.status === 409 && json && json.needShelf) {
 		//Web 本棚がまだ無い。場所を決めたら、この URL を続けて落とす
 		libraryPendingUrl = url;

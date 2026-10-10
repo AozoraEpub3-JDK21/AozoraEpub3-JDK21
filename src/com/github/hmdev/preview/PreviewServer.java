@@ -58,7 +58,8 @@ public class PreviewServer implements AutoCloseable
 		"viewer-frame.js",
 		"viewer-events.js",
 		"viewer-inspector.js",
-		"viewer-library.js"
+		"viewer-library.js",
+		"viewer-ranking.js"
 	};
 
 	/**
@@ -527,6 +528,8 @@ public class PreviewServer implements AutoCloseable
 				respondJson(exchange, this.session.libraryJson());
 			} else if (rest.startsWith("api/library/cover/")) {
 				serveCover(exchange, rest.substring("api/library/cover/".length()));
+			} else if (rest.equals("api/ranking")) {
+				serveRanking(exchange);
 			} else if (rest.startsWith("api/jobs/")) {
 				serveJob(exchange, rest.substring("api/jobs/".length()));
 			} else if (rest.startsWith("api/book/")) {
@@ -1112,6 +1115,47 @@ public class PreviewServer implements AutoCloseable
 		} catch (java.net.URISyntaxException e) {
 			return false;
 		}
+	}
+
+	/** 本棚のランキング（なろう）。試験では差し替える */
+	private volatile NarouRanking narouRanking = new NarouRanking();
+
+	void setNarouRanking(NarouRanking narouRanking)
+	{
+		this.narouRanking = narouRanking;
+	}
+
+	/**
+	 * ランキング（GET api/ranking?period=d&genre=0&serial=1）。API の応答の JSON をそのまま返す。
+	 * 落とせる本棚（アプリから開いた本棚）だけ。札から落とせないランキングは出さない
+	 */
+	private void serveRanking(HttpExchange exchange) throws IOException
+	{
+		if (this.bookUpdater == null || this.webShelf == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚ではランキングを使えません（アプリから本棚を開いてください）"));
+			return;
+		}
+		NarouRanking.Query query = NarouRanking.Query.parse(exchange.getRequestURI().getRawQuery());
+		if (query == null) {
+			respondJsonStatus(exchange, 400, errorJson("ランキングの期間かジャンルの指定が読めません"));
+			return;
+		}
+		byte[] body;
+		try {
+			body = this.narouRanking.fetch(query);
+		} catch (NarouRanking.BusyException e) {
+			respondJsonStatus(exchange, 503, errorJson(e.getMessage()));
+			return;
+		} catch (IOException e) {
+			logger.info("ランキングを取れませんでした: {}", e.getMessage());
+			respondJsonStatus(exchange, 502, errorJson("ランキングを取れませんでした: " + e.getMessage()));
+			return;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			respondJsonStatus(exchange, 503, errorJson("ランキングを取れませんでした（中断しました）"));
+			return;
+		}
+		respond(exchange, 200, "application/json; charset=utf-8", body);
 	}
 
 	/** 仕事の状態（GET api/jobs/{id}） */

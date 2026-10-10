@@ -269,6 +269,9 @@ be renamed with ✎ on its cover (the extension stays; fetching new chapters kee
 "新着を確かめる" in the header reads only the table of contents of each book taken from the web and shows
 the number of new and revised episodes on its card (nothing is fetched; ⟳ fetches them; revisions are
 known only on sites whose table of contents shows a date per episode).
+"ランキング" in the header lists Shōsetsuka ni Narō works by period (daily to all-time) and genre; "落とす"
+on a card fetches the work the same way as + ("本棚にあります" marks works already on the shelf). The
+order follows current points, so it can differ slightly from the site's ranking pages.
 
 > This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
 > rendering engines, so the result will not match a real device exactly.
