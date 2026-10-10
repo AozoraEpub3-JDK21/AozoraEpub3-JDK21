@@ -520,6 +520,8 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	border-radius: 6px;
 }
 .library-download .note { font-size: 12px; color: var(--text-sub); min-height: 1em; }
+/* display を指定した要素は hidden の属性が効かなくなるので、明示する */
+.library-download[hidden], .library-download .ask[hidden] { display: none; }
 .library-download .note[data-state="failed"] { color: var(--danger); }
 
 .library-status {
