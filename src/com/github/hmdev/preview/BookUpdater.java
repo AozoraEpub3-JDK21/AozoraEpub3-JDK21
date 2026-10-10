@@ -37,4 +37,13 @@ public interface BookUpdater
 	{
 		return update(sourceUrl, epubFile);
 	}
+
+	/**
+	 * 掲載元の URL の作品を、Web 本棚に新しく落とす（internal #11 の案 A）。本は Web 本棚の直下に短い名前で、
+	 * 記録とキャッシュは Web 本棚の {@code .aozora} に置く。落とせない実装は {@link UnsupportedOperationException}
+	 */
+	default Result download(String url, Path shelfDir) throws Exception
+	{
+		throw new UnsupportedOperationException();
+	}
 }

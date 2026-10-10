@@ -103,7 +103,7 @@ public class HeadlessBookUpdaterTest {
 		System.setProperty(HeadlessBookUpdater.ALLOW_LOCAL_PROPERTY, "true");
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
 		//静的な Velocity は先に走った試験の初期化が残るので、専用の VelocityEngine を渡した書き出しで作る
-		updater.conversions = p -> conversion(p, basePath, new File(root, "cache"));
+		updater.conversions = (p, cache) -> conversion(p, basePath, cache);
 
 		//最初の本（1 話）を作る
 		File shelf = tempFolder.newFolder("shelf");
@@ -147,6 +147,80 @@ public class HeadlessBookUpdaterTest {
 		}
 	}
 
+	/**
+	 * Web 本棚に落とすと、本は Web 本棚の直下、記録とキャッシュは Web 本棚の .aozora に置く。
+	 * その本の続きを取るときも .aozora を使う（設定のキャッシュの場所に依らない。internal #11 の案 A）
+	 */
+	@Test
+	public void aDownloadKeepsItsRecordsInTheWebShelf() throws Exception {
+		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+		server.createContext("/", exchange -> {
+			String path = exchange.getRequestURI().getPath();
+			if (path.equals("/novel/")) {
+				//長い題（短い名前と違う名前になるように）
+				respond(exchange, "<html><body><h1>【書籍化】題～副題がある～</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
+			} else {
+				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + path + "の本文</p></div></body></html>");
+			}
+		});
+		server.start();
+		String base = "http://127.0.0.1:" + server.getAddress().getPort();
+		fqdn = base.substring(base.indexOf("//") + 2);
+		File root = tempFolder.newFolder("base");
+		File siteDir = new File(root, "web/" + fqdn);
+		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
+		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
+			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
+			.getBytes(StandardCharsets.UTF_8));
+		File repo = VelocityTestUtils.templateDir().getParent().toFile();
+		for (File f : repo.listFiles((d, n) -> n.startsWith("chuki_") && n.endsWith(".txt"))) {
+			Files.copy(f.toPath(), new File(root, f.getName()).toPath());
+		}
+		String basePath = root.getAbsolutePath() + File.separator;
+		Properties props = new Properties();
+		props.load(Files.newInputStream(new File(repo, "test_data/gui_default_settings.ini").toPath()));
+		File settingsCache = new File(root, "settings-cache");
+		props.setProperty("CachePath", settingsCache.getAbsolutePath());
+		//「出力ファイル名に表題利用」を切っていても、落とした本は短い名前で、その名前のまま続きを取れる（PR の手元の codex）
+		props.setProperty("AutoFileName", "");
+		System.setProperty(HeadlessBookUpdater.ALLOW_LOCAL_PROPERTY, "true");
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
+		updater.conversions = (p, cache) -> conversion(p, basePath, cache);
+
+		File shelf = tempFolder.newFolder("webshelf");
+		BookUpdater.Result r = updater.download(base + "/novel/", shelf.toPath());
+		assertTrue(r.message(), r.ok());
+		File[] books = shelf.listFiles((d, n) -> n.endsWith(".epub"));
+		org.junit.Assert.assertEquals("本は Web 本棚の直下", 1, books.length);
+		org.junit.Assert.assertEquals("[著者] 題.epub", books[0].getName());
+		File work = new File(shelf, ".aozora/" + fqdn.replace(':', '_') + "/novel");
+		assertTrue("記録は .aozora に", new File(work, com.github.hmdev.info.BookLedger.FILE_NAME).isFile());
+		assertFalse("設定のキャッシュは使わない", settingsCache.exists());
+
+		episodes += "<li><a href=\"/ep/2/\">第2話</a></li>";
+		BookUpdater.Result updated = updater.update(base + "/novel/", books[0].toPath());
+		assertTrue(updated.message(), updated.ok());
+		assertTrue("続きも .aozora で（1 つ前の版がそこにできる）",
+			work.listFiles((d, n) -> n.startsWith("previous ")).length == 1);
+		assertFalse(settingsCache.exists());
+
+		//Web 本棚の下のフォルダに整理しても、上の .aozora を使う（PR のゲート2）
+		File sub = new File(shelf, "整理");
+		assertTrue(sub.mkdir());
+		File moved = new File(sub, books[0].getName());
+		Files.move(books[0].toPath(), moved.toPath());
+		episodes += "<li><a href=\"/ep/3/\">第3話</a></li>";
+		BookUpdater.Result again = updater.update(base + "/novel/", moved.toPath());
+		assertTrue(again.message(), again.ok());
+		assertFalse(settingsCache.exists());
+
+		//整理した本と同じ作品をもう一度落とそうとしても、2 冊目を作らない（取りに行く前に断る。PR の codex）
+		BookUpdater.Result twice = updater.download(base + "/novel/", shelf.toPath());
+		assertFalse(twice.ok());
+		assertTrue(twice.message(), twice.message().contains("もう Web 本棚にある本です") && twice.message().contains("整理"));
+		org.junit.Assert.assertEquals(0, shelf.listFiles((d, n) -> n.endsWith(".epub")).length);
+	}
+
 	/** キャッシュの場所の相対パスは、基のフォルダから（CLI を別のフォルダから起こしても GUI と同じキャッシュ。PR #118 のゲート2） */
 	@Test
 	public void aRelativeCachePathIsUnderTheBaseFolder() {
@@ -169,12 +243,32 @@ public class HeadlessBookUpdaterTest {
 			held.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
 			return new Properties();
 		}, "");
-		updater.conversions = props -> { throw new IllegalStateException("ここまで来れば十分"); };
+		updater.conversions = (props, cache) -> { throw new IllegalStateException("ここまで来れば十分"); };
 		try {
 			updater.update("https://ncode.syosetu.com/n1234ab/", tempFolder.newFile("b.epub").toPath());
 		} catch (IllegalStateException e) {
 			/* 意図的: 変換は作らない */
 		}
 		assertTrue(held.get());
+	}
+
+	/**
+	 * .aozora を使うのは、その中にこの作品の台帳があるときだけ（前から本のあるフォルダを Web 本棚にしても、
+	 * 前からの本は設定のキャッシュのまま＝話数の記録と名前を失わない。PR の手元の codex）
+	 */
+	@Test
+	public void theShelfCacheIsUsedOnlyForItsOwnWorks() throws Exception {
+		File shelf = tempFolder.newFolder("mixed");
+		File work = new File(shelf, ".aozora/example.com/novel");
+		assertTrue(work.mkdirs());
+		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").save(work);
+		Properties props = new Properties();
+		File settingsCache = tempFolder.newFolder("settings-cache");
+		props.setProperty("CachePath", settingsCache.getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		File book = new File(shelf, "sub/book.epub");
+		org.junit.Assert.assertEquals(new File(shelf, ".aozora"), updater.cacheFor(props, book.toPath(), "https://example.com/novel/"));
+		org.junit.Assert.assertEquals("前からの別の作品は設定のキャッシュ", settingsCache,
+			updater.cacheFor(props, book.toPath(), "https://ncode.syosetu.com/n0000aa/"));
 	}
 }

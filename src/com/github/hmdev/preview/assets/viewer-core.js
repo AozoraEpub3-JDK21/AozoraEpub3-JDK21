@@ -154,7 +154,9 @@ function cacheElements()
 		'themeSelect', 'settingsReset', 'pageLeft', 'pageRight',
 		'mainBody', 'libraryToggle', 'libraryView', 'libraryFolderName', 'libraryShelfSelect',
 		'libraryFilter', 'librarySort',
-		'libraryReload', 'libraryClose', 'libraryStatus', 'libraryGrid'];
+		'libraryReload', 'libraryClose', 'libraryStatus', 'libraryGrid',
+		'libraryDownloadToggle', 'libraryDownload', 'libraryDownloadForm', 'libraryDownloadUrl', 'libraryDownloadGo',
+		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus'];
 	for (const id of ids) el[id] = document.getElementById(id);
 }
 

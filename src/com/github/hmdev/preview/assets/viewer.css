@@ -472,6 +472,58 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	font-family: inherit;
 }
 
+/* URL から落とす (本棚の見出しの下に開く) */
+.library-download {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 12px;
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+	flex: 0 0 auto;
+}
+.library-download .row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+.library-download input {
+	flex: 1 1 240px;
+	min-width: 0;
+	height: 28px;
+	padding: 0 8px;
+	background: var(--surface-2);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font: inherit;
+}
+.library-download button {
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	cursor: pointer;
+}
+.library-download button[type="submit"], #libraryShelfUse { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.library-download button:disabled { opacity: 0.6; cursor: progress; }
+.library-download .ask {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+}
+.library-download .note { font-size: 12px; color: var(--text-sub); min-height: 1em; }
+/* display を指定した要素は hidden の属性が効かなくなるので、明示する */
+.library-download[hidden], .library-download .ask[hidden] { display: none; }
+.library-download .note[data-state="failed"] { color: var(--danger); }
+
 .library-status {
 	display: flex;
 	align-items: center;

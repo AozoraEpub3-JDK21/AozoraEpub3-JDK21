@@ -21,8 +21,13 @@ public class HeadlessBookUpdater implements BookUpdater
 
 	private final Supplier<Properties> settings;
 	private final String basePath;
-	/** 設定から画面なしの変換を作る。試験では、専用の VelocityEngine を渡した書き出しで作る（静的な Velocity を使わない） */
-	java.util.function.Function<Properties, HeadlessWebConversion> conversions;
+	/** Web 本棚の、記録とキャッシュを置くフォルダの名前（internal #11 の案 A） */
+	static final String SHELF_CACHE = ".aozora";
+
+	/**
+	 * 設定とキャッシュの場所から画面なしの変換を作る。試験では、専用の VelocityEngine を渡した書き出しで作る（静的な Velocity を使わない）
+	 */
+	java.util.function.BiFunction<Properties, File, HeadlessWebConversion> conversions;
 
 	/**
 	 * @param settings 更新のたびに呼ぶ。GUI の ini と同じ形の設定
@@ -32,7 +37,7 @@ public class HeadlessBookUpdater implements BookUpdater
 	{
 		this.settings = settings;
 		this.basePath = basePath;
-		this.conversions = props -> new HeadlessWebConversion(props, basePath, cachePathOf(props, basePath));
+		this.conversions = (props, cache) -> new HeadlessWebConversion(props, basePath, cache);
 	}
 
 	@Override
@@ -52,9 +57,108 @@ public class HeadlessBookUpdater implements BookUpdater
 		//コメント）ので、その間に写すと一時的な値（別の作品の表紙など）が入る（PR #118 のゲート2）
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			Properties props = this.settings.get();
-			HeadlessWebConversion.Result r = this.conversions.apply(props)
+			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl))
 				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true, true, allowFewerEpisodes);
 			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		}
+	}
+
+	/**
+	 * Web 本棚に新しく落とす。キャッシュは Web 本棚の .aozora（本と記録を一緒に写せる。設定のキャッシュの場所に依らない）
+	 */
+	@Override
+	public Result download(String url, Path shelfDir) throws Exception
+	{
+		if (isLocalOrPrivate(url) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
+			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + url);
+		}
+		//もう落としてある作品なら、取りに行かずに知らせる（Web 本棚の下のフォルダに整理してあっても。PR の codex）
+		Path existing = existingBook(shelfDir, url);
+		if (existing != null) {
+			return new Result(false, false, "もう Web 本棚にある本です: " + shelfDir.relativize(existing) + "（続きは本棚の ⟳ で取れます）");
+		}
+		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+			Properties props = this.settings.get();
+			File shelf = shelfDir.toFile();
+			HeadlessWebConversion.Result r = this.conversions.apply(props, new File(shelf, SHELF_CACHE)).convertNewBook(url, shelf);
+			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		}
+	}
+
+	/**
+	 * 本のキャッシュの場所。本のフォルダか、その上のフォルダの .aozora に、この作品の台帳があれば（Web 本棚に落とした本。
+	 * 下のフォルダに整理したときも）そこ、無ければ設定のキャッシュ。台帳を確かめるのは、前から本のあるフォルダを Web 本棚にしたとき、
+	 * 前からの本まで .aozora に切り替わって、話数の記録（守り）と名前を失わないように（PR のゲート2・手元の codex）
+	 */
+	File cacheFor(Properties props, Path epubFile, String sourceUrl)
+	{
+		for (Path dir = epubFile.toAbsolutePath().getParent(); dir != null; dir = dir.getParent()) {
+			File shelfCache = new File(dir.toFile(), SHELF_CACHE);
+			if (shelfCache.isDirectory() && holdsWork(shelfCache.toPath(), sourceUrl)) return shelfCache;
+		}
+		return cachePathOf(props, this.basePath);
+	}
+
+	/**
+	 * Web 本棚にもう落としてある、この作品の本（.aozora に台帳があり、その名前の本が Web 本棚のどこかにある）。無ければ null。
+	 * . で始まるフォルダ（.aozora の 1 つ前の版など）は見ない
+	 */
+	static Path existingBook(Path shelfDir, String sourceUrl)
+	{
+		Path shelfCache = shelfDir.resolve(SHELF_CACHE);
+		if (!java.nio.file.Files.isDirectory(shelfCache)) return null;
+		String identifier = com.github.hmdev.info.BookLedger.identifierFor(sourceUrl);
+		String name = null;
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfCache, 8)) {
+			name = files.filter(p -> p.getFileName().toString().equals(com.github.hmdev.info.BookLedger.FILE_NAME))
+				.map(p -> com.github.hmdev.info.BookLedger.load(p.getParent().toFile()))
+				.filter(l -> l != null && identifier.equals(l.identifier) && l.outputBaseName != null)
+				.map(l -> l.outputBaseName).findFirst().orElse(null);
+		} catch (java.io.IOException | java.io.UncheckedIOException e) {
+			return null;
+		}
+		if (name == null) return null;
+		String bookName = name;
+		String prefix = name + ".";
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfDir, com.github.hmdev.preview.LibraryScanner.DEFAULT_MAX_DEPTH)) {
+			return files.filter(p -> {
+				String file = p.getFileName().toString();
+				if (!file.toLowerCase(java.util.Locale.ROOT).endsWith(".epub") || hiddenUnder(shelfDir, p)) return false;
+				if (file.startsWith(prefix)) return true;
+				//深いフォルダでは、名前がさらに縮められている（getOutFile と同じ決まり。PR の codex）
+				try {
+					for (String ext : new String[]{ ".epub", ".kepub.epub" }) {
+						if (file.equals(AozoraEpub3.fittedTitleName(p.getParent().toFile(), bookName, ext) + ext)) return true;
+					}
+				} catch (java.io.IOException e) {
+					/* 意図的: 長さを数えられなければ、縮めない名前だけで見る */
+				}
+				return false;
+			}).findFirst().orElse(null);
+		} catch (java.io.IOException | java.io.UncheckedIOException e) {
+			return null;
+		}
+	}
+
+	/** shelfDir から p までに . で始まるフォルダがあるか */
+	private static boolean hiddenUnder(Path shelfDir, Path p)
+	{
+		for (Path part : shelfDir.relativize(p)) {
+			if (part.toString().startsWith(".")) return true;
+		}
+		return false;
+	}
+
+	/** .aozora の中に、この作品の台帳があるか（サイトと作品のフォルダの下。深さは URL の作りによる） */
+	static boolean holdsWork(Path shelfCache, String sourceUrl)
+	{
+		String identifier = com.github.hmdev.info.BookLedger.identifierFor(sourceUrl);
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfCache, 8)) {
+			return files.filter(p -> p.getFileName().toString().equals(com.github.hmdev.info.BookLedger.FILE_NAME))
+				.map(p -> com.github.hmdev.info.BookLedger.load(p.getParent().toFile()))
+				.anyMatch(l -> l != null && identifier.equals(l.identifier));
+		} catch (java.io.IOException | java.io.UncheckedIOException e) {
+			return false;
 		}
 	}
 

@@ -819,6 +819,21 @@ public class AozoraEpub3
 	}
 
 	/** 出力ファイルを生成 */
+	/**
+	 * 題から作る名前を、getOutFile と同じ長さの決まりで縮めた名前（拡張子なし）。縮める余地が無ければそのまま
+	 * （Web 本棚で、空いている名前を探すときに使う。getOutFile の長さの決まりを変えたら、ここも変える）
+	 */
+	static String fittedTitleName(File dstPath, String baseName, String outExt) throws IOException
+	{
+		if (outExt.length() == 0) outExt = ".epub";
+		int maxChars = Math.min(259 - outExt.length(), 250);
+		int prefixLen = PathUtils.realPath(dstPath.toPath()).toString().length() + 1;
+		if (prefixLen + baseName.length() > maxChars && maxChars - prefixLen >= PathUtils.CUT_MARK_LENGTH) {
+			return PathUtils.fitFileNameChars(baseName, maxChars - prefixLen);
+		}
+		return baseName;
+	}
+
 	static File getOutFile(File srcFile, File dstPath, BookInfo bookInfo, boolean autoFileName, String outExt) throws IOException
 	{
 		//出力ファイル

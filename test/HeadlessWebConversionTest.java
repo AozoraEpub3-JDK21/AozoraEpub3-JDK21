@@ -45,6 +45,8 @@ public class HeadlessWebConversionTest {
 	private volatile String upDate = "2026/01/01";
 	/** 作品の更新日（null なら一覧に出さない。update.txt の 1 行目になる） */
 	private volatile String workUpdate = null;
+	/** 作品の題 */
+	private volatile String workTitle = "題";
 	/** 0 話のとき、一覧のページに本文（告知）を置くか */
 	private volatile boolean noticeWhenEmpty = true;
 
@@ -68,7 +70,7 @@ public class HeadlessWebConversionTest {
 		server.createContext("/", exchange -> {
 			requests.incrementAndGet();
 			String path = exchange.getRequestURI().getPath();
-			if (path.equals("/novel/")) {
+			if (path.equals("/novel/") || path.equals("/novel2/")) {
 				if (listStatus != 200) {
 					exchange.sendResponseHeaders(listStatus, -1);
 					exchange.close();
@@ -90,7 +92,7 @@ public class HeadlessWebConversionTest {
 				//0 話のときは、一覧のページに本文だけがある（告知だけ残して話を消した、など。変換器は 1 ページの作品として読む）
 				String notice = episodes == 0 && noticeWhenEmpty ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
 				String work = workUpdate != null ? "<p class=\"workup\">" + workUpdate + "</p>" : "";
-				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
+				respond(exchange, "<html><body><h1>" + workTitle + "</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
 				String n = path.replaceAll("\\D", "");
 				//本文は話ごとに違う仮名の印（数字は縦中横などで書き換わるので、本文から探せる印にする）
@@ -686,6 +688,92 @@ public class HeadlessWebConversionTest {
 		assertEquals(3, ledgerOf().episodesFor(book));
 		//次のふつうの更新は、前の話数（3）と比べて止まる
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
+	}
+
+	/** 新しく落とす本は、「最新 N 話」「追加更新分のみ」「更新分のみ」でも作品の全部で作る（落とし直しもできる。PR のゲート2） */
+	@Test
+	public void aNewBookIsTheWholeWorkWhateverTheSettings() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		//「最新 1 話」でも全話（「追加更新分のみ」と一緒だと「最新 N 話」は効かないので、別に見る）
+		Properties latest = guiDefaults();
+		latest.setProperty("WebBeforeChapter", "1");
+		latest.setProperty("WebBeforeChapterCount", "1");
+		File shelf = tempFolder.newFolder("webshelf");
+		HeadlessWebConversion.Result r = conversion(latest, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertTrue(r.message(), r.ok());
+		String text = epubText(r.epub());
+		for (int i = 1; i <= 3; i++) assertTrue(i + " 話目がある", text.contains(marker(String.valueOf(i))));
+		//消してから落とし直せる（キャッシュが同じでも「追加更新分はありません」「更新はありません」にしない）
+		Files.delete(r.epub().toPath());
+		Properties updatesOnly = guiDefaults();
+		updatesOnly.setProperty("WebModifiedOnly", "1");
+		updatesOnly.setProperty("WebModifiedExpire", "0");
+		updatesOnly.setProperty("WebConvertUpdated", "1");
+		HeadlessWebConversion.Result again = conversion(updatesOnly, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertTrue(again.message(), again.ok());
+		String againText = epubText(again.epub());
+		for (int i = 1; i <= 3; i++) assertTrue(i + " 話目がある（落とし直し）", againText.contains(marker(String.valueOf(i))));
+	}
+
+	/** 違う作品が同じ短い名前になるときは、空いている名前にする（同じ名前の本があると落とせない。PR のゲート2） */
+	@Test
+	public void differentWorksWithTheSameShortNameDoNotCollide() throws Exception {
+		String basePath = serveAndBase();
+		File shelf = tempFolder.newFolder("webshelf");
+		workTitle = "【書籍化】題～一部～";
+		HeadlessWebConversion.Result a = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		workTitle = "【書籍化】題～二部～";
+		HeadlessWebConversion.Result b = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel2/", shelf);
+		assertTrue(a.message(), a.ok());
+		assertTrue(b.message(), b.ok());
+		assertEquals("[著者] 題.epub", a.epub().getName());
+		assertEquals("[著者] 題 (2).epub", b.epub().getName());
+	}
+
+	/** 深い Web 本棚でさらに縮められる名前でも、同じ短い名前の別の作品は別の名前になる（PR の手元の codex） */
+	@Test
+	public void deepShelvesStillKeepSameShortNamesApart() throws Exception {
+		String basePath = serveAndBase();
+		File shelf = tempFolder.newFolder("deep");
+		//本の名前（35 文字ほど）が、フルパスの上限（250 文字）を超えて縮められる深さにする
+		String realRoot = shelf.toPath().toRealPath().toString();
+		while (realRoot.length() + 1 + 220 - realRoot.length() > 0 && shelf.toPath().toRealPath().toString().length() < 225) {
+			shelf = new File(shelf, "d".repeat(Math.min(40, 225 - shelf.toPath().toRealPath().toString().length())));
+			assertTrue(shelf.mkdirs() || shelf.isDirectory());
+		}
+		//本棚の更新と同じく、記録は Web 本棚の .aozora に（もうある作品かを、そこの台帳で見る）
+		lastCache = new File(shelf, ".aozora");
+		String longTitle = "あ".repeat(30);
+		workTitle = "【書籍化】" + longTitle + "～一部～";
+		HeadlessWebConversion.Result a = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		workTitle = "【書籍化】" + longTitle + "～二部～";
+		HeadlessWebConversion.Result b = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel2/", shelf);
+		assertTrue(a.message(), a.ok());
+		assertTrue(b.message(), b.ok());
+		assertFalse("名前は縮められている: " + a.epub().getName(), a.epub().getName().startsWith("[著者] " + longTitle + ".epub"));
+		assertFalse(a.epub().getName().equals(b.epub().getName()));
+		//縮められた名前でも、もう落としてある作品だと分かる（PR の codex）
+		assertTrue(HeadlessBookUpdater.existingBook(shelf.toPath(), "http://" + fqdn + "/novel/") != null);
+	}
+
+	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */
+	@Test
+	public void aNewBookGetsAShortNameAndIsNotOverwritten() throws Exception {
+		String basePath = serveAndBase();
+		workTitle = "【書籍化】長い題～副題がとても長い";
+		Properties props = guiDefaults();
+		props.setProperty("AutoFileName", "");
+		File shelf = tempFolder.newFolder("webshelf");
+		HeadlessWebConversion.Result r = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertTrue(r.message(), r.ok());
+		assertEquals("[著者] 長い題.epub", r.epub().getName());
+		assertEquals("台帳に記録する（続きを取っても同じ名前）", "[著者] 長い題", ledgerOf().outputBaseName);
+		byte[] before = Files.readAllBytes(r.epub().toPath());
+		HeadlessWebConversion.Result again = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertFalse(again.ok());
+		assertTrue(again.message(), again.message().contains("もう Web 本棚にある"));
+		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(r.epub().toPath()));
 	}
 
 	private File ledgerDir() {

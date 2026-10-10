@@ -99,8 +99,26 @@
 			<option value="title">書名順</option>
 			<option value="creator">著者順</option>
 		</select>
+		<!-- アプリから開いた本棚だけ viewer-library.js が hidden を外す -->
+		<button id="libraryDownloadToggle" class="icon" type="button" title="URL から作品を落とす" aria-label="URL から作品を落とす" aria-expanded="false" hidden>＋</button>
 		<button id="libraryReload" class="icon" type="button" title="一覧を更新 (フォルダの再スキャンは行いません)" aria-label="一覧を更新">⟳</button>
 		<button id="libraryClose" class="icon" type="button" title="本棚を閉じる" aria-label="本棚を閉じる">✕</button>
+	</div>
+	<div id="libraryDownload" class="library-download" hidden>
+		<form id="libraryDownloadForm" class="row">
+			<input id="libraryDownloadUrl" type="url" placeholder="作品のページの URL（小説家になろう・カクヨムなど）" autocomplete="off" required>
+			<button id="libraryDownloadGo" type="submit">落とす</button>
+		</form>
+		<div id="libraryShelfAsk" class="ask" hidden>
+			<div>落とした本を置く「Web 本棚」のフォルダを決めてください（最初の 1 回だけ）。</div>
+			<div class="row">
+				<input id="libraryShelfPath" type="text" spellcheck="false" aria-label="Web 本棚のフォルダ">
+				<button id="libraryShelfUse" type="button">この場所にする</button>
+				<button id="libraryShelfPick" type="button" hidden>別の場所…</button>
+			</div>
+			<div id="libraryShelfNote" class="note"></div>
+		</div>
+		<div id="libraryDownloadStatus" class="note" aria-live="polite"></div>
 	</div>
 	<div id="libraryStatus" class="library-status"></div>
 	<div id="libraryGrid" class="library-grid"></div>

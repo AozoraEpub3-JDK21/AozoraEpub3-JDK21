@@ -73,6 +73,8 @@ function bindLibraryEvents()
 	el.libraryToggle.addEventListener('click', () => toggleLibrary());
 	el.libraryClose.addEventListener('click', () => closeLibrary());
 
+	bindDownloadEvents();
+
 	el.libraryReload.addEventListener('click', () => {
 		loadLibrary().catch(err => showLibraryStatus('本棚を読み込めませんでした: ' + err.message));
 	});
@@ -224,6 +226,7 @@ async function loadLibrary(keepView)
 	}
 	if (seq !== libraryLoadSeq) return;
 	state.library = library;
+	checkDownloadAvailable();
 	state.libraryFolder = library.folderName || null;
 	state.libraryShelfCount = library.shelves ? library.shelves.length : state.libraryShelfCount;
 	state.libraryCount = library.count;
@@ -654,3 +657,191 @@ async function switchBook(bookId)
 		/* 意図的: URL を書き換えられなくても表示中の本には影響しない */
 	}
 }
+
+/*
+ * URL から落とす (internal #11 の案 A)
+ *
+ * - 落とした本は Web 本棚 (アプリの設定に持つフォルダ) に置く。まだ決まっていなければ、最初に落とすときに聞く
+ *   (本棚の画面を開いただけでは聞かない。手元の本を読むだけの人に割り込まない)
+ * - 「別の場所…」はアプリ (Java) がフォルダ選択を出す。Windows では選択画面がブラウザの上に出ても、
+ *   クリックするまで入力はブラウザに行くので、そう知らせる。パスを打ち込む欄も置く
+ */
+
+/** 落とす仕事の ID (問い合わせ中なら)。同時に 1 つだけ */
+let libraryDownloadJob = null;
+/** Web 本棚の場所を聞いている間、決めたら続けて落とす URL */
+let libraryPendingUrl = null;
+
+const LIBRARY_DOWNLOAD_LABELS = {
+	queued: '順番待ち…',
+	running: '取っています… (話数が多いと時間がかかります)',
+	done: '落としました',
+	failed: '落とせませんでした',
+};
+
+function bindDownloadEvents()
+{
+	el.libraryDownloadToggle.addEventListener('click', () => {
+		const open = el.libraryDownload.hidden;
+		el.libraryDownload.hidden = !open;
+		el.libraryDownloadToggle.setAttribute('aria-expanded', String(open));
+		if (open) el.libraryDownloadUrl.focus();
+	});
+	el.libraryDownloadForm.addEventListener('submit', event => {
+		event.preventDefault();
+		startDownload(el.libraryDownloadUrl.value.trim())
+			.catch(err => showDownloadStatus('落とせませんでした: ' + err.message, true));
+	});
+	el.libraryShelfUse.addEventListener('click', () => {
+		useWebShelf(el.libraryShelfPath.value).catch(err => { el.libraryShelfNote.textContent = err.message; });
+	});
+	el.libraryShelfPick.addEventListener('click', () => {
+		pickWebShelf().catch(err => { el.libraryShelfNote.textContent = err.message; });
+	});
+}
+
+/** 落とせるかを確かめたか (本棚を読み直すたびに問い合わせない) */
+let libraryDownloadChecked = false;
+
+/** アプリから開いた本棚 (Web 本棚と変換を使える) だけ、落とすボタンを出す */
+async function checkDownloadAvailable()
+{
+	if (libraryDownloadChecked) return;
+	libraryDownloadChecked = true;
+	try {
+		const response = await fetch('api/webshelf', {cache: 'no-store'});
+		const info = response.ok ? await response.json() : null;
+		el.libraryDownloadToggle.hidden = !(info && info.canDownload);
+	} catch (e) {
+		el.libraryDownloadToggle.hidden = true;
+		libraryDownloadChecked = false;
+	}
+}
+
+function showDownloadStatus(text, failed)
+{
+	el.libraryDownloadStatus.textContent = text;
+	el.libraryDownloadStatus.dataset.state = failed ? 'failed' : '';
+}
+
+/** 本文を 1 つ POST して、JSON (読めなければ null) と状態を返す */
+async function postText(path, body)
+{
+	const response = await fetch(path, {method: 'POST', cache: 'no-store',
+		headers: {'Content-Type': 'text/plain; charset=utf-8'}, body: body});
+	let json = null;
+	try { json = await response.json(); } catch (e) { /* 本文の無い応答 */ }
+	return {response, json};
+}
+
+async function startDownload(url)
+{
+	if (!url || libraryDownloadJob) return;
+	showDownloadStatus('頼んでいます…');
+	const {response, json} = await postText('api/download', url);
+	if (response.status === 409 && json && json.needShelf) {
+		//Web 本棚がまだ無い。場所を決めたら、この URL を続けて落とす
+		libraryPendingUrl = url;
+		showDownloadStatus('');
+		await askWebShelf();
+		return;
+	}
+	if (!response.ok || !json || !json.job) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+	libraryDownloadJob = json.job;
+	el.libraryDownloadGo.disabled = true;
+	try {
+		await pollDownload(json.job);
+	} finally {
+		libraryDownloadJob = null;
+		el.libraryDownloadGo.disabled = false;
+	}
+}
+
+async function pollDownload(jobId)
+{
+	let misses = 0;
+	for (;;) {
+		let job;
+		try {
+			job = await getJson('api/jobs/' + encodeURIComponent(jobId));
+			misses = 0;
+		} catch (e) {
+			// 一時的な失敗で「失敗」にしない。アプリでは落とし続けている
+			if (++misses < LIBRARY_UPDATE_MISSES) {
+				await new Promise(resolve => setTimeout(resolve, LIBRARY_UPDATE_POLL));
+				continue;
+			}
+			showDownloadStatus('進み具合を確かめられません (落とし続けているかもしれません。⟳ 一覧を更新で確かめてください): ' + e.message, true);
+			return;
+		}
+		const label = LIBRARY_DOWNLOAD_LABELS[job.state] || job.state;
+		const failed = job.state === 'failed';
+		showDownloadStatus(failed && job.message ? label + ': ' + job.message : label, failed);
+		if (job.state === 'done') {
+			el.libraryDownloadUrl.value = '';
+			try {
+				await loadLibrary(true);
+			} catch (e) {
+				// 落とせている。本棚の読み直しだけが失敗した (PR のゲート2)
+				showDownloadStatus(label + ' (本棚に出せませんでした。⟳ 一覧を更新を押してください): ' + e.message, true);
+			}
+			return;
+		}
+		if (job.state !== 'queued' && job.state !== 'running') return;
+		await new Promise(resolve => setTimeout(resolve, LIBRARY_UPDATE_POLL));
+	}
+}
+
+/** Web 本棚の場所を聞く。提案の場所を入れておく */
+async function askWebShelf()
+{
+	const info = await getJson('api/webshelf');
+	el.libraryShelfPath.value = info.location || info.suggestion || '';
+	el.libraryShelfPick.hidden = !info.canPick;
+	el.libraryShelfNote.textContent = '';
+	el.libraryShelfAsk.hidden = false;
+	el.libraryShelfUse.focus();
+}
+
+async function useWebShelf(path)
+{
+	if (!path.trim()) {
+		el.libraryShelfNote.textContent = 'フォルダのパスを入れてください';
+		return;
+	}
+	const {response, json} = await postText('api/webshelf', path);
+	if (!response.ok) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+	el.libraryShelfAsk.hidden = true;
+	showDownloadStatus('Web 本棚: ' + json.location);
+	// Web 本棚が棚に加わったので、本棚を読み直す
+	await loadLibrary(true);
+	const url = libraryPendingUrl;
+	libraryPendingUrl = null;
+	if (url) await startDownload(url);
+}
+
+/** アプリにフォルダ選択を出してもらう。選んだ場所は入力欄に入れるだけ (決めるのは「この場所にする」) */
+async function pickWebShelf()
+{
+	el.libraryShelfPick.disabled = true;
+	el.libraryShelfNote.textContent = 'アプリがフォルダ選択を開きました (ブラウザの外の窓を見てください。出てこなければ、パスを入力してください)';
+	try {
+		const {response, json} = await postText('api/webshelf/pick', '');
+		if (response.status === 501) {
+			el.libraryShelfPick.hidden = true;
+			el.libraryShelfNote.textContent = 'フォルダ選択を出せません。パスを入力してください';
+			return;
+		}
+		if (!response.ok) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+		if (json.path) {
+			el.libraryShelfPath.value = json.path;
+			el.libraryShelfNote.textContent = 'この場所でよければ「この場所にする」を押してください';
+			el.libraryShelfUse.focus();
+		} else {
+			el.libraryShelfNote.textContent = '';
+		}
+	} finally {
+		el.libraryShelfPick.disabled = false;
+	}
+}
+

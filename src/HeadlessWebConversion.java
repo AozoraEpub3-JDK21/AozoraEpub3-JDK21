@@ -94,6 +94,28 @@ public class HeadlessWebConversion
 		return convert(url, dstPath, expectedOutFile, overwrite, false, false);
 	}
 
+	/** 新しく落とす本は、短い名前にする（convertNewBook の間だけ立てる） */
+	private boolean newBookName = false;
+
+	/**
+	 * Web 本棚に新しく落とす（internal #11 の案 A）。名前は短い名前（{@link com.github.hmdev.info.ShelfNames}）を台帳に記録して使い、
+	 * 「出力ファイル名に表題利用」の設定に依らない。もう同じ名前の本があれば書かない
+	 */
+	public Result convertNewBook(String url, File shelfDir)
+	{
+		this.newBookName = true;
+		try {
+			Result r = convert(url, shelfDir, null, false, false, false);
+			//同じ名前の本がもうある（同じ作品をもう落とした、など）。上書きはしない
+			if (!r.ok() && r.epub() != null && r.epub().exists()) {
+				return new Result(false, false, r.epub(), "もう Web 本棚にある本です: " + r.epub().getName() + "（続きは本棚の ⟳ で取れます）");
+			}
+			return r;
+		} finally {
+			this.newBookName = false;
+		}
+	}
+
 	/**
 	 * 本棚の更新の守りを付けて変換する（internal #11）。updateGuard なら、目次が取れないときと、話数が台帳より減ったときは書かずに止める
 	 * @param allowFewerEpisodes 話数が減っていても続ける（利用者が選んだとき）
@@ -133,13 +155,16 @@ public class HeadlessWebConversion
 
 					int interval = 500;
 					try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
+					//本棚の更新と、Web 本棚に新しく落とす本は、作品の全部で作る（PR のゲート2）
+					boolean fullWork = updateGuard || this.newBookName;
 					//本棚の更新は、いつも作品の全部で本を作る。「最新 N 話」「追加更新分のみ」は GUI が 1 回だけ出すファイルのための設定で、
 					//本棚の本に当てると、全話の本が一部の話だけの本で上書きされる（PR の手元の codex）
-					int beforeChapter = !updateGuard && GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
+					int beforeChapter = !fullWork && GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
 					float modifiedExpire = 0;
 					try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
-					boolean convertUpdated = GuiConversionSettings.flag(this.props, "WebConvertUpdated");
-					boolean modifiedOnly = !updateGuard && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
+					//新しく落とす本は「更新分のみ」も見ない（落とし直したときにキャッシュが同じで「更新はありません」になる）
+					boolean convertUpdated = !this.newBookName && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
+					boolean modifiedOnly = !fullWork && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
 					srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
 						convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
@@ -160,6 +185,8 @@ public class HeadlessWebConversion
 						if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");
 						return new Result(false, false, null, "取得できませんでした: " + url);
 					}
+					//新しく落とす本は、短い名前を台帳に記録する（まだ記録が無いときだけ。続きを取っても同じ名前のまま）
+					if (this.newBookName) recordShortName(srcFile, dstPath, outExt());
 					//EPUB を作り終わるまで鍵を持つ。手放すと、同じ作品を GUI が変換したときに、読んでいる途中の txt
 					//（キャッシュ）が書き直される（PR #118 の codex）
 					//EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新が前の話数と比べるように。PR の手元の codex）
@@ -181,6 +208,27 @@ public class HeadlessWebConversion
 		} catch (Exception e) {
 			logger.error("画面なしの変換に失敗: {}", url, e);
 			return new Result(false, false, null, "変換できませんでした: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * 台帳に短い名前を記録する（もう名前があれば何もしない）。違う作品が同じ短い名前になるときは、空いている名前に
+	 * 「 (2)」などを付ける（同じ名前の本があると落とせない。PR のゲート2）
+	 */
+	static void recordShortName(File srcFile, File shelfDir, String outExt)
+	{
+		File workDir = srcFile.getAbsoluteFile().getParentFile();
+		com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(workDir);
+		if (ledger == null || ledger.outputBaseName != null || ledger.textBaseName == null) return;
+		String name = com.github.hmdev.info.ShelfNames.shortBaseName(ledger.textBaseName);
+		//空いているかは、実際に書く名前（深い場所では、さらに縮めた名前）で見る（PR の手元の codex）
+		try {
+			for (int n = 2; n < 100 && new File(shelfDir, AozoraEpub3.fittedTitleName(shelfDir, name, outExt) + outExt).exists(); n++) {
+				name = com.github.hmdev.info.ShelfNames.shortBaseName(ledger.textBaseName) + " (" + n + ")";
+			}
+			ledger.withOutputBaseName(name).save(workDir);
+		} catch (IOException e) {
+			logger.warn("台帳に短い名前を書けませんでした: {}", workDir, e);
 		}
 	}
 
@@ -243,7 +291,10 @@ public class HeadlessWebConversion
 			if (bookInfo.creator == null || bookInfo.creator.length() == 0) bookInfo.creator = titleCreator[1] == null ? "" : titleCreator[1];
 		}
 
-		boolean autoFileName = GuiConversionSettings.flag(this.props, "AutoFileName");
+		//新しく落とす本は、台帳の短い名前を使う（「出力ファイル名に表題利用」に依らない）。本棚の本を書き換えるときも、
+		//台帳に名前があればそれを使う（設定を切っていると長い名前になって、本棚の本と名前が合わずに断る。PR の手元の codex）
+		boolean autoFileName = this.newBookName || GuiConversionSettings.flag(this.props, "AutoFileName")
+			|| (expectedOutFile != null && bookInfo.outputBaseName != null);
 		//本棚の本と名前を照らすときは、照らす前に台帳へ名前を記録しない（違ったときに、違う名前が台帳に残る。#116 のゲート2）
 		File ledgerDir = bookInfo.ledgerDir;
 		if (expectedOutFile != null) bookInfo.ledgerDir = null;

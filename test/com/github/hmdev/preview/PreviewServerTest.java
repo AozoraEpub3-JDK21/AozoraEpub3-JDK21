@@ -1374,6 +1374,9 @@ public class PreviewServerTest
 		assertTrue(before, before.contains("\"suggestion\":" + Json.str(shelf.toAbsolutePath().normalize().resolve("Web").toString())));
 		assertFalse(before, before.contains("\"location\""));
 		assertTrue(before, before.contains("\"canPick\":true"));
+		assertTrue("変換するものが無ければ落とせない: " + before, before.contains("\"canDownload\":false"));
+		this.server.setBookUpdater((u, f) -> new BookUpdater.Result(true, false, "ok"));
+		assertTrue(get(base() + "api/webshelf").body().contains("\"canDownload\":true"));
 
 		Path dir = temp.getRoot().toPath().resolve("web shelf").resolve("深い");
 		HttpResponse<String> r = postText(base() + "api/webshelf", dir + "\r\n");
@@ -1594,5 +1597,94 @@ public class PreviewServerTest
 		}
 		assertEquals(400, postText(base() + "api/webshelf", link.resolve("x").toString()).statusCode());
 		assertTrue("利用者のリンクは残る", java.nio.file.Files.isSymbolicLink(link));
+	}
+
+	// ---- URL から落とす（internal #11 の案 A） ----
+
+	@Test
+	public void downloadingNeedsTheAppAWebShelfAndAUrl() throws Exception
+	{
+		assertEquals(503, postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/").statusCode());
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		for (String bad : new String[]{ "", "ftp://example.com/x", "https://exa mple.com/", "https:///nohost", "not a url" }) {
+			assertEquals(bad, 400, postText(base() + "api/download", bad).statusCode());
+		}
+		HttpResponse<String> need = postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/");
+		assertEquals("Web 本棚がまだ無ければ聞いてもらう", 409, need.statusCode());
+		assertTrue(need.body(), need.body().contains("\"needShelf\":true"));
+		assertEquals(405, get(base() + "api/download").statusCode());
+		//決めてあった Web 本棚のフォルダが消えていても、聞き直す
+		web.location = temp.getRoot().toPath().resolve("removed");
+		assertEquals(409, postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/").statusCode());
+	}
+
+	private volatile String lastJob;
+
+	/** 落とせたら、Web 本棚を本棚に出す（読み直す）。同じ URL は 1 つの仕事。落とせない本棚は失敗で知らせる */
+	@Test
+	public void aDownloadRunsAsAJobAndShowsTheShelf() throws Exception
+	{
+		Path shelfDir = temp.newFolder("web").toPath();
+		FakeWebShelf web = new FakeWebShelf();
+		web.location = shelfDir;
+		this.server.setWebShelf(web);
+		java.util.List<Path> added = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.List<String> stateWhileAdding = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setShelfAdder(folder -> {
+			added.add(folder);
+			//本棚に出している最中は、まだ「済んだ」と言わない
+			try {
+				stateWhileAdding.add(get(base() + "api/jobs/" + lastJob).body());
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			}
+		});
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		java.util.List<String> got = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override public Result update(String sourceUrl, Path epubFile) { return new Result(true, false, "ok"); }
+			@Override public Result download(String url, Path dir) throws Exception
+			{
+				got.add(url + " -> " + dir);
+				release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+				return new Result(true, false, "変換しました");
+			}
+		});
+		String url = "https://ncode.syosetu.com/n1234ab/";
+		String first = postText(base() + "api/download", "  " + url + "\n").body();
+		String second = postText(base() + "api/download", url).body();
+		java.util.regex.Matcher a = java.util.regex.Pattern.compile("\"job\":\"([0-9a-f]+)\"").matcher(first);
+		java.util.regex.Matcher b = java.util.regex.Pattern.compile("\"job\":\"([0-9a-f]+)\"").matcher(second);
+		assertTrue(first, a.find());
+		assertTrue(second, b.find());
+		assertEquals("同じ URL は同じ仕事", a.group(1), b.group(1));
+		lastJob = a.group(1);
+		release.countDown();
+		String done = waitForJob(first);
+		assertTrue(done, done.contains("\"state\":\"done\""));
+		assertEquals(List.of(url + " -> " + shelfDir), got);
+		assertEquals("落とした本を本棚に出す", List.of(shelfDir), added);
+		assertEquals(1, stateWhileAdding.size());
+		assertTrue(stateWhileAdding.get(0), stateWhileAdding.get(0).contains("\"state\":\"running\""));
+
+		this.server.setBookUpdater((u, f) -> new BookUpdater.Result(true, false, "ok"));
+		String unsupported = waitForJob(postText(base() + "api/download", "https://kakuyomu.jp/works/1").body());
+		assertTrue(unsupported, unsupported.contains("\"state\":\"failed\""));
+	}
+
+	/** まだ場所が無いとき、フォルダ選択は提案の場所の、あるところまで上のフォルダから開く（win2 の確認） */
+	@Test
+	public void pickingStartsFromTheNearestExistingSuggestion() throws Exception
+	{
+		Path shelf = temp.newFolder("nearest").toPath();
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, List.of())));
+		java.util.List<Path> initials = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setWebShelf(new FakeWebShelf() {
+			@Override public Path pickFolder(Path initial) { initials.add(initial); return null; }
+		});
+		post(base() + "api/webshelf/pick");
+		assertEquals("提案の Web はまだ無いので、その上の棚から", List.of(shelf.toAbsolutePath().normalize()), initials);
 	}
 }

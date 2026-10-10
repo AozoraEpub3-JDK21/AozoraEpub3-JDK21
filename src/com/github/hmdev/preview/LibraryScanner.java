@@ -353,6 +353,19 @@ public class LibraryScanner
 			this.maxCandidates = maxCandidates;
 		}
 
+		/**
+		 * . で始まるフォルダ（棚そのものを除く）は見ない。Web 本棚の {@code .aozora} には作品ごとの記録と
+		 * 1 つ前の版（EPUB）があり、本として並べると同じ本が 2 冊に見える（internal #11 の案 A。PR のゲート2）
+		 */
+		@Override
+		public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+		{
+			if (!dir.equals(this.root) && dir.getFileName() != null && dir.getFileName().toString().startsWith(".")) {
+				return FileVisitResult.SKIP_SUBTREE;
+			}
+			return FileVisitResult.CONTINUE;
+		}
+
 		@Override
 		public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
 		{

@@ -261,6 +261,11 @@ work's cache folder as `previous <id> <book name>.epub`. If the work is gone fro
 fewer episodes than last time, the book is left as it is (for fewer episodes, "減ったまま更新"
 fetches it anyway).
 
+The + button in the library header fetches a new work from its page URL. The book goes into the
+"Web shelf" folder as `[author] title` (a long title loses a leading 【…】 and anything after ～), and
+its records and cache go into `.aozora` in the same folder. The first time, the library asks where the
+Web shelf is (only when the library was opened from the GUI or the CLI).
+
 > This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
 > rendering engines, so the result will not match a real device exactly.
 

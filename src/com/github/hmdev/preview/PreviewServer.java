@@ -484,6 +484,10 @@ public class PreviewServer implements AutoCloseable
 				serveWebShelf(exchange, method);
 				return;
 			}
+			if (rest.equals("api/download")) {
+				serveDownload(exchange, method);
+				return;
+			}
 			if (rest.equals("api/webshelf/pick")) {
 				serveWebShelfPick(exchange, method);
 				return;
@@ -751,7 +755,9 @@ public class PreviewServer implements AutoCloseable
 		try {
 			Path location = shelf.location();
 			Path initial = location != null ? location : webShelfSuggestion();
-			picked = shelf.pickFolder(initial != null && Files.isDirectory(initial) ? initial : null);
+			//提案の場所がまだ無ければ、あるところまで上のフォルダから開く（書類フォルダから開かないように。win2 の確認）
+			while (initial != null && !Files.isDirectory(initial)) initial = initial.getParent();
+			picked = shelf.pickFolder(initial);
 		} catch (UnsupportedOperationException e) {
 			respondJsonStatus(exchange, 501, errorJson("フォルダ選択を出せません。パスを入力してください"));
 			return;
@@ -778,6 +784,8 @@ public class PreviewServer implements AutoCloseable
 		if (location != null) Json.prop(buf, "location", location.toString());
 		Json.prop(buf, "suggestion", webShelfSuggestion().toString());
 		Json.prop(buf, "canPick", shelf.canPick());
+		//落とすには、変換をするもの（BookUpdater）も要る
+		Json.prop(buf, "canDownload", this.bookUpdater != null);
 		buf.append('}');
 		return buf.toString();
 	}
@@ -842,6 +850,100 @@ public class PreviewServer implements AutoCloseable
 				return;
 			}
 			if (p.equals(top)) return;
+		}
+	}
+
+	/** 落とす URL として受け取る本文の上限（バイト） */
+	static final int MAX_URL_BYTES = 2048;
+
+	/**
+	 * 掲載元の URL の作品を Web 本棚に新しく落とす仕事を列に積む（POST、本文は URL。internal #11 の案 A）。202 と仕事の ID を返す。
+	 * Web 本棚がまだ決まっていなければ 409（{@code needShelf}）で、画面が場所を聞く。同じ URL の仕事が終わっていなければ、その仕事を返す
+	 */
+	private void serveDownload(HttpExchange exchange, String method) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		BookUpdater updater = this.bookUpdater;
+		WebShelf shelf = this.webShelf;
+		if (updater == null || shelf == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚からは落とせません（アプリから本棚を開いてください）"));
+			return;
+		}
+		byte[] body = exchange.getRequestBody().readNBytes(MAX_URL_BYTES + 1);
+		String url = new String(body, StandardCharsets.UTF_8).strip();
+		if (body.length > MAX_URL_BYTES || !isHttpUrl(url)) {
+			respondJsonStatus(exchange, 400, errorJson("作品のページの URL（http:// か https:// で始まるもの）を貼ってください"));
+			return;
+		}
+		Path location = shelf.location();
+		if (location == null || !Files.isDirectory(location)) {
+			StringBuilder buf = new StringBuilder(64);
+			buf.append('{');
+			Json.prop(buf, "needShelf", true);
+			Json.prop(buf, "error", "Web 本棚の場所を決めてください");
+			buf.append('}');
+			respondJsonStatus(exchange, 409, buf.toString());
+			return;
+		}
+		String key = "url:" + url;
+		UpdateJob job;
+		synchronized (this.jobs) {
+			job = this.jobs.values().stream().filter(j -> j.bookId.equals(key) && j.active()).findFirst().orElse(null);
+			if (job == null) {
+				forgetOldJobs();
+				if (this.jobs.values().stream().filter(UpdateJob::active).count() >= MAX_JOBS) {
+					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
+					return;
+				}
+				job = new UpdateJob(newJobId(), key, false);
+				this.jobs.put(job.id, job);
+				UpdateJob submitted = job;
+				this.updateExecutor.submit(() -> runDownload(submitted, updater, url, location));
+			}
+		}
+		respondJsonStatus(exchange, 202, jobJson(job));
+	}
+
+	private void runDownload(UpdateJob job, BookUpdater updater, String url, Path location)
+	{
+		job.state = "running";
+		try {
+			BookUpdater.Result result = updater.download(url, location);
+			//落とした本を本棚に出してから「済んだ」にする（先に済んだにすると、画面が読み直す本棚にまだ出ていない。PR の手元の codex）
+			ShelfAdder adder = this.shelfAdder;
+			if (result.ok() && adder != null) {
+				try {
+					adder.add(location);
+				} catch (IOException | RuntimeException e) {
+					logger.warn("落とした本を本棚に出せませんでした: {}", location, e);
+				}
+			}
+			job.message = result.message() == null ? "" : result.message();
+			job.state = result.ok() ? "done" : "failed";
+		} catch (UnsupportedOperationException e) {
+			job.message = "この本棚からは落とせません";
+			job.state = "failed";
+		} catch (Throwable e) {
+			logger.warn("落とせませんでした: {}", url, e);
+			job.message = String.valueOf(e.getMessage());
+			job.state = "failed";
+			if (e instanceof Error) throw (Error)e;
+		}
+	}
+
+	/** http・https の URL として読めるか（ホストがあること） */
+	static boolean isHttpUrl(String url)
+	{
+		//空白などの URL に使えない文字は URI が断る
+		try {
+			java.net.URI uri = new java.net.URI(url);
+			String scheme = uri.getScheme();
+			return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) && uri.getHost() != null;
+		} catch (java.net.URISyntaxException e) {
+			return false;
 		}
 	}
 
