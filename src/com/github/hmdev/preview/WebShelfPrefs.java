@@ -29,7 +29,8 @@ public final class WebShelfPrefs
 		String value = props.getProperty(KEY);
 		if (value == null || value.isBlank()) return null;
 		try {
-			Path path = Path.of(value.trim());
+			//空白は落とさない（末尾が空白のフォルダ名もある）
+			Path path = Path.of(value);
 			return path.isAbsolute() ? path.normalize() : null;
 		} catch (InvalidPathException e) {
 			return null;

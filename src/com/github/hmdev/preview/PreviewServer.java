@@ -649,7 +649,9 @@ public class PreviewServer implements AutoCloseable
 		}
 		if ("POST".equals(method)) {
 			byte[] body = exchange.getRequestBody().readNBytes(MAX_PATH_BYTES + 1);
-			String text = new String(body, StandardCharsets.UTF_8).trim();
+			//末尾の改行だけを落とす。前後の空白は落とさない（末尾が空白のフォルダ名もある。PR の手元の codex）
+			String text = new String(body, StandardCharsets.UTF_8).replaceAll("[\\r\\n]+$", "");
+			if (text.isBlank()) text = "";
 			Path dir;
 			try {
 				if (body.length > MAX_PATH_BYTES || text.isEmpty()) throw new InvalidPathException(text, "empty or too long");

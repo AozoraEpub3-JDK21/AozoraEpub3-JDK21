@@ -5280,6 +5280,10 @@ public class AozoraEpub3Applet extends JPanel
 				logger.warn("本棚のフォルダとして扱えないパスを飛ばします: {}", folder, e);
 			}
 		}
+		//決めてある Web 本棚もいつも加える（棚の一覧がいっぱいで一覧に入らなかったときも、本棚に出す。PR の手元の codex）。
+		//今の棚に含まれていれば、本棚を開くときに畳まれる
+		Path webShelf = com.github.hmdev.preview.WebShelfPrefs.load(this.props);
+		if (webShelf != null && Files.isDirectory(webShelf)) paths.add(webShelf);
 		//初回スキャンは冊数に比例して重い (1 冊ずつ ZIP を開いて OPF を読む)。
 		//2 回目以降は LibraryIndexCache が効いて stat だけになる
 		this.libraryOpening = true;

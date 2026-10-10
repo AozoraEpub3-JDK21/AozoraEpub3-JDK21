@@ -26,6 +26,9 @@ public class WebShelfPrefsTest {
 		assertEquals(dir.toAbsolutePath().normalize(), WebShelfPrefs.load(p));
 		p.setProperty(WebShelfPrefs.KEY, "relative/web");
 		assertNull("相対パスは読まない（どこを指すかが起動の仕方で変わる）", WebShelfPrefs.load(p));
+		Path spaced = temp.getRoot().toPath().resolve("web ");
+		WebShelfPrefs.store(p, spaced);
+		assertEquals("末尾の空白を残す", spaced.toAbsolutePath().normalize(), WebShelfPrefs.load(p));
 		p.setProperty(WebShelfPrefs.KEY, "  ");
 		assertNull(WebShelfPrefs.load(p));
 		WebShelfPrefs.store(p, null);

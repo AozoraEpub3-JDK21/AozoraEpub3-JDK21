@@ -1376,7 +1376,7 @@ public class PreviewServerTest
 		assertTrue(before, before.contains("\"canPick\":true"));
 
 		Path dir = temp.getRoot().toPath().resolve("web shelf").resolve("深い");
-		HttpResponse<String> r = postText(base() + "api/webshelf", "  " + dir + "\n");
+		HttpResponse<String> r = postText(base() + "api/webshelf", dir + "\r\n");
 		assertEquals(r.body(), 200, r.statusCode());
 		assertTrue("フォルダを作る", java.nio.file.Files.isDirectory(dir));
 		assertEquals(List.of(dir.toRealPath()), web.set);
@@ -1395,6 +1395,19 @@ public class PreviewServerTest
 		assertEquals("ファイルの場所はフォルダにできない", 400, postText(base() + "api/webshelf", file.toString()).statusCode());
 		assertEquals(400, postText(base() + "api/webshelf", "/" + "a".repeat(PreviewServer.MAX_PATH_BYTES + 10)).statusCode());
 		assertTrue(web.set.isEmpty());
+	}
+
+	/** 末尾が空白のフォルダ名はそのまま使う（落とすと別のフォルダになる。PR の手元の codex） */
+	@Test
+	public void aTrailingSpaceInTheWebShelfNameIsKept() throws Exception
+	{
+		org.junit.Assume.assumeFalse("Windows のフォルダ名は末尾の空白を持てない", System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		Path dir = temp.getRoot().toPath().resolve("ends with space ");
+		assertEquals(200, postText(base() + "api/webshelf", dir.toString()).statusCode());
+		assertTrue(java.nio.file.Files.isDirectory(dir));
+		assertEquals(dir.toRealPath(), web.set.get(0));
 	}
 
 	/** 書き込めないフォルダは断る（落とした本を置けない） */
