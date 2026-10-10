@@ -21,8 +21,13 @@ public class HeadlessBookUpdater implements BookUpdater
 
 	private final Supplier<Properties> settings;
 	private final String basePath;
-	/** 設定から画面なしの変換を作る。試験では、専用の VelocityEngine を渡した書き出しで作る（静的な Velocity を使わない） */
-	java.util.function.Function<Properties, HeadlessWebConversion> conversions;
+	/** Web 本棚の、記録とキャッシュを置くフォルダの名前（internal #11 の案 A） */
+	static final String SHELF_CACHE = ".aozora";
+
+	/**
+	 * 設定とキャッシュの場所から画面なしの変換を作る。試験では、専用の VelocityEngine を渡した書き出しで作る（静的な Velocity を使わない）
+	 */
+	java.util.function.BiFunction<Properties, File, HeadlessWebConversion> conversions;
 
 	/**
 	 * @param settings 更新のたびに呼ぶ。GUI の ini と同じ形の設定
@@ -32,7 +37,7 @@ public class HeadlessBookUpdater implements BookUpdater
 	{
 		this.settings = settings;
 		this.basePath = basePath;
-		this.conversions = props -> new HeadlessWebConversion(props, basePath, cachePathOf(props, basePath));
+		this.conversions = (props, cache) -> new HeadlessWebConversion(props, basePath, cache);
 	}
 
 	@Override
@@ -52,10 +57,34 @@ public class HeadlessBookUpdater implements BookUpdater
 		//コメント）ので、その間に写すと一時的な値（別の作品の表紙など）が入る（PR #118 のゲート2）
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			Properties props = this.settings.get();
-			HeadlessWebConversion.Result r = this.conversions.apply(props)
+			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile))
 				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true, true, allowFewerEpisodes);
 			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
 		}
+	}
+
+	/**
+	 * Web 本棚に新しく落とす。キャッシュは Web 本棚の .aozora（本と記録を一緒に写せる。設定のキャッシュの場所に依らない）
+	 */
+	@Override
+	public Result download(String url, Path shelfDir) throws Exception
+	{
+		if (isLocalOrPrivate(url) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
+			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + url);
+		}
+		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+			Properties props = this.settings.get();
+			File shelf = shelfDir.toFile();
+			HeadlessWebConversion.Result r = this.conversions.apply(props, new File(shelf, SHELF_CACHE)).convertNewBook(url, shelf);
+			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		}
+	}
+
+	/** 本のキャッシュの場所。本の隣に .aozora があれば（Web 本棚の本）そこ、無ければ設定のキャッシュ */
+	File cacheFor(Properties props, Path epubFile)
+	{
+		File shelfCache = new File(epubFile.toAbsolutePath().getParent().toFile(), SHELF_CACHE);
+		return shelfCache.isDirectory() ? shelfCache : cachePathOf(props, this.basePath);
 	}
 
 	/**

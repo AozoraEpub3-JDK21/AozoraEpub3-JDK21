@@ -45,6 +45,8 @@ public class HeadlessWebConversionTest {
 	private volatile String upDate = "2026/01/01";
 	/** 作品の更新日（null なら一覧に出さない。update.txt の 1 行目になる） */
 	private volatile String workUpdate = null;
+	/** 作品の題 */
+	private volatile String workTitle = "題";
 	/** 0 話のとき、一覧のページに本文（告知）を置くか */
 	private volatile boolean noticeWhenEmpty = true;
 
@@ -90,7 +92,7 @@ public class HeadlessWebConversionTest {
 				//0 話のときは、一覧のページに本文だけがある（告知だけ残して話を消した、など。変換器は 1 ページの作品として読む）
 				String notice = episodes == 0 && noticeWhenEmpty ? "<div class=\"body\"><p>お知らせ</p></div>" : "";
 				String work = workUpdate != null ? "<p class=\"workup\">" + workUpdate + "</p>" : "";
-				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
+				respond(exchange, "<html><body><h1>" + workTitle + "</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
 				String n = path.replaceAll("\\D", "");
 				//本文は話ごとに違う仮名の印（数字は縦中横などで書き換わるので、本文から探せる印にする）
@@ -686,6 +688,25 @@ public class HeadlessWebConversionTest {
 		assertEquals(3, ledgerOf().episodesFor(book));
 		//次のふつうの更新は、前の話数（3）と比べて止まる
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
+	}
+
+	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */
+	@Test
+	public void aNewBookGetsAShortNameAndIsNotOverwritten() throws Exception {
+		String basePath = serveAndBase();
+		workTitle = "【書籍化】長い題～副題がとても長い";
+		Properties props = guiDefaults();
+		props.setProperty("AutoFileName", "");
+		File shelf = tempFolder.newFolder("webshelf");
+		HeadlessWebConversion.Result r = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertTrue(r.message(), r.ok());
+		assertEquals("[著者] 長い題.epub", r.epub().getName());
+		assertEquals("台帳に記録する（続きを取っても同じ名前）", "[著者] 長い題", ledgerOf().outputBaseName);
+		byte[] before = Files.readAllBytes(r.epub().toPath());
+		HeadlessWebConversion.Result again = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertFalse(again.ok());
+		assertTrue(again.message(), again.message().contains("もう Web 本棚にある"));
+		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(r.epub().toPath()));
 	}
 
 	private File ledgerDir() {
