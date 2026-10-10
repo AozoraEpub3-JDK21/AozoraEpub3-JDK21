@@ -45,7 +45,9 @@ public class PreviewServerTest
 			new PreviewSettingsStore(temp.getRoot().toPath().resolve("settings.json")));
 		this.bookId = this.session.addBook(epub);
 		this.server.start();
-		this.client = HttpClient.newHttpClient();
+		// 本物のアプリでこのサーバに送るのはブラウザで、http:// では h2c の upgrade をしない。試験もそれにそろえる。
+		// 既定（HTTP_2）のままだと、JDK 21.0.12+8 以前で GET の後の POST の本文が届かず止まる（監査項目 31）
+		this.client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 	}
 
 	@After
