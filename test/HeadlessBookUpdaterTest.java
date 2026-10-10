@@ -301,4 +301,24 @@ public class HeadlessBookUpdaterTest {
 		org.junit.Assert.assertEquals("前からの別の作品は設定のキャッシュ", settingsCache,
 			updater.cacheFor(props, book.toPath(), "https://ncode.syosetu.com/n0000aa/"));
 	}
+
+	/** 深いフォルダで、更新のときに縮められる長さの名前には変えない（変えると続きを取れなくなる。PR の手元の codex） */
+	@Test
+	public void aNameTooLongForTheFolderIsRefused() throws Exception {
+		File dir = tempFolder.newFolder("deep");
+		while (dir.toPath().toRealPath().toString().length() < 120) {
+			dir = new File(dir, "d".repeat(20));
+			assertTrue(dir.mkdirs() || dir.isDirectory());
+		}
+		File book = new File(dir, "book.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		BookUpdater.Result r = updater.rename("https://example.com/novel/", book.toPath(), "x".repeat(180));
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("長すぎます"));
+		assertTrue(book.isFile());
+		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "short").ok());
+	}
 }

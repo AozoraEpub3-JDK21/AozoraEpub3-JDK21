@@ -18,6 +18,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import com.github.hmdev.preview.BookUpdater;
 import com.github.hmdev.util.VelocityTestUtils;
 import com.github.hmdev.writer.Epub3Writer;
 import com.sun.net.httpserver.HttpExchange;
@@ -759,6 +760,14 @@ public class HeadlessWebConversionTest {
 		assertFalse(a.epub().getName().equals(b.epub().getName()));
 		//縮められた名前でも、もう落としてある作品だと分かる（PR の codex）
 		assertTrue(HeadlessBookUpdater.existingBook(shelf.toPath(), "http://" + fqdn + "/novel/") != null);
+		//縮められた名前の本の名前を変えても、作品の名前が変わり、もう一度落とすときに見つけられる（PR の手元の codex）
+		Properties props = guiDefaults();
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
+		BookUpdater.Result renamed = updater.rename("http://" + fqdn + "/novel/", a.epub().toPath(), "改名");
+		assertTrue(renamed.message(), renamed.ok());
+		java.nio.file.Path found = HeadlessBookUpdater.existingBook(shelf.toPath(), "http://" + fqdn + "/novel/");
+		assertNotNull(found);
+		assertEquals("改名.epub", found.getFileName().toString());
 	}
 
 	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */

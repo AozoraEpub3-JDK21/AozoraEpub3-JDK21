@@ -188,6 +188,11 @@ public class HeadlessBookUpdater implements BookUpdater
 		String oldBase = fileName.substring(0, fileName.length() - ext.length());
 		Path target = epubFile.resolveSibling(newBaseName + ext);
 		if (target.equals(epubFile)) return new Result(true, false, "名前は同じです");
+		//更新のときに縮められる長さの名前は使わない（縮めた名前が本の名前と合わず、続きを取れなくなる。PR の手元の codex）
+		String extForFit = ext.isEmpty() ? ".epub" : ext;
+		if (!AozoraEpub3.fittedTitleName(epubFile.toAbsolutePath().getParent().toFile(), newBaseName, extForFit).equals(newBaseName)) {
+			return new Result(false, false, "このフォルダでは名前が長すぎます（短くしてください）");
+		}
 		//変換が本を書き換えている間に動かさない
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			if (java.nio.file.Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)
@@ -197,13 +202,13 @@ public class HeadlessBookUpdater implements BookUpdater
 			Properties props = this.settings.get();
 			Path ledgerDir = ledgerDirOf(cacheFor(props, epubFile, sourceUrl).toPath(), sourceUrl);
 			java.nio.file.Files.move(epubFile, target);
-			if (ledgerDir != null) moveRecords(ledgerDir, epubFile, target, oldBase, newBaseName);
+			if (ledgerDir != null) moveRecords(ledgerDir, epubFile, target, oldBase, newBaseName, extForFit);
 			return new Result(true, false, "名前を変えました: " + target.getFileName());
 		}
 	}
 
 	/** 台帳の本ごとの記録を、新しい名前の本に動かす（失敗しても名前は変わっている。記録が古い名前のまま残るだけ） */
-	private static void moveRecords(Path ledgerDir, Path from, Path to, String oldBase, String newBase)
+	private static void moveRecords(Path ledgerDir, Path from, Path to, String oldBase, String newBase, String ext)
 	{
 		File dir = ledgerDir.toFile();
 		try {
@@ -217,7 +222,11 @@ public class HeadlessBookUpdater implements BookUpdater
 			com.github.hmdev.info.BookLedger next = ledger;
 			int own = ledger.ownEpisodesFor(from.toFile());
 			if (own >= 0) next = next.withBookEpisodes(from.toFile(), -1).withBookEpisodes(to.toFile(), own);
-			if (oldBase.equals(ledger.outputBaseName)) next = next.withOutputBaseName(newBase);
+			//本の名前が作品の名前（深いフォルダでは縮めた名前）なら、作品の名前も変える（PR の手元の codex）
+			if (ledger.outputBaseName != null && (oldBase.equals(ledger.outputBaseName)
+				|| oldBase.equals(AozoraEpub3.fittedTitleName(from.toAbsolutePath().getParent().toFile(), ledger.outputBaseName, ext)))) {
+				next = next.withOutputBaseName(newBase);
+			}
 			if (next != ledger) next.save(dir);
 		} catch (java.io.IOException e) {
 			org.slf4j.LoggerFactory.getLogger(HeadlessBookUpdater.class).warn("台帳の記録を新しい名前に動かせませんでした: {}", ledgerDir, e);
