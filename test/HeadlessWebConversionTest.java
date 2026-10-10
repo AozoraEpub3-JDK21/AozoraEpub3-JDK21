@@ -48,6 +48,8 @@ public class HeadlessWebConversionTest {
 	private volatile String workUpdate = null;
 	/** 作品の題 */
 	private volatile String workTitle = "題";
+	/** 話のページを頼まれた回数（確かめるだけのときは 0 のまま） */
+	private final java.util.concurrent.atomic.AtomicInteger episodeRequests = new java.util.concurrent.atomic.AtomicInteger();
 	/** 0 話のとき、一覧のページに本文（告知）を置くか */
 	private volatile boolean noticeWhenEmpty = true;
 
@@ -95,6 +97,7 @@ public class HeadlessWebConversionTest {
 				String work = workUpdate != null ? "<p class=\"workup\">" + workUpdate + "</p>" : "";
 				respond(exchange, "<html><body><h1>" + workTitle + "</h1><p class=\"author\">著者</p>" + work + "<ul class=\"list\">" + list + "</ul>" + notice + "</body></html>");
 			} else {
+				episodeRequests.incrementAndGet();
 				String n = path.replaceAll("\\D", "");
 				//本文は話ごとに違う仮名の印（数字は縦中横などで書き換わるので、本文から探せる印にする）
 				respond(exchange, "<html><body><h2>第" + n + "話</h2><div class=\"body\"><p>" + marker(n) + "</p></div></body></html>");
@@ -676,6 +679,123 @@ public class HeadlessWebConversionTest {
 		File[] kept = ledgerDir().listFiles((d, n) -> n.startsWith(".previous."));
 		assertEquals("前の本は控えに残る", 1, kept.length);
 		org.junit.Assert.assertArrayEquals(v1, Files.readAllBytes(kept[0].toPath()));
+	}
+
+	/** 新着を確かめる: 目次だけを読み、新しい話を数える。話は取らず、本も台帳も txt も書かない（internal #11） */
+	@Test
+	public void checkingCountsNewEpisodesWithoutWriting() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		byte[] before = Files.readAllBytes(book.toPath());
+		File txt = java.util.Arrays.stream(ledgerDir().listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"))).findFirst().orElseThrow();
+		byte[] txtBefore = Files.readAllBytes(txt.toPath());
+		String ledgerBefore = Files.readString(new File(ledgerDir(), com.github.hmdev.info.BookLedger.FILE_NAME).toPath());
+		episodes = 5;
+		episodeRequests.set(0);
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		HeadlessWebConversion.Result r = conv.check("http://" + fqdn + "/novel/", book);
+		assertTrue(r.message(), r.ok());
+		assertEquals(HeadlessWebConversion.STOP_CHECKED, r.stop());
+		assertEquals(5, conv.checkedEpisodes);
+		assertEquals(2, conv.checkedNew);
+		assertEquals(0, conv.checkedRevised);
+		assertTrue(r.message(), r.message().contains("2 話新着"));
+		assertEquals("話は取らない", 0, episodeRequests.get());
+		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
+		org.junit.Assert.assertArrayEquals(txtBefore, Files.readAllBytes(txt.toPath()));
+		assertEquals("台帳を書かない", ledgerBefore, Files.readString(new File(ledgerDir(), com.github.hmdev.info.BookLedger.FILE_NAME).toPath()));
+		assertEquals("前の版も作らない", 0, ledgerDir().listFiles((d, n) -> n.startsWith("previous")).length);
+	}
+
+	/** 目次の更新日が変わった話は改稿として数える（narou.rb と同じく、新しい話と改稿の両方） */
+	@Test
+	public void checkingCountsRevisedEpisodes() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		HeadlessWebConversion none = conversion(guiDefaults(), basePath);
+		HeadlessWebConversion.Result same = none.check("http://" + fqdn + "/novel/", book);
+		assertTrue(same.message(), same.message().contains("新着はありません"));
+		upDate = "2026/03/03";
+		episodes = 4;
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		HeadlessWebConversion.Result r = conv.check("http://" + fqdn + "/novel/", book);
+		assertEquals(1, conv.checkedNew);
+		assertEquals(3, conv.checkedRevised);
+		assertTrue(r.message(), r.message().contains("1 話新着・3 話改稿"));
+	}
+
+	/** 話がキャッシュにあっても、その本に入っていなければ新着として数える（更新で話は取れたが本を書けなかった、など。PR の手元の codex） */
+	@Test
+	public void episodesCachedButNotInTheBookAreNew() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		episodes = 5;
+		//同じ作品を別の場所に変換して、話をキャッシュに入れる（本棚の本は 3 話のまま）
+		shelfBook(basePath, tempFolder.newFolder("other"));
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		conv.check("http://" + fqdn + "/novel/", book);
+		assertEquals(2, conv.checkedNew);
+	}
+
+	/** キャッシュを消しただけなら、新着としない（その本の話数の記録と比べる。PR の codex） */
+	@Test
+	public void aClearedCacheIsNotNews() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		//話のキャッシュ（作品のフォルダの隣の ep/）を消す
+		File episodesCache = new File(ledgerDir().getParentFile(), "ep");
+		assertTrue("この治具は話を ep/ にキャッシュする", episodesCache.isDirectory());
+		try (java.util.stream.Stream<java.nio.file.Path> walk = Files.walk(episodesCache.toPath())) {
+			walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+		}
+		assertFalse(episodesCache.exists());
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		conv.check("http://" + fqdn + "/novel/", book);
+		assertEquals(0, conv.checkedNew);
+	}
+
+	/** 1 ページの作品は確かめられない（本文も取りに行かない） */
+	@Test
+	public void aOnePageWorkCannotBeChecked() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 0;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		episodeRequests.set(0);
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).check("http://" + fqdn + "/novel/", book);
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("確かめられません"));
+	}
+
+	/** 前の更新日の記録（update.txt）が無ければ、改稿は数えない（全部が改稿に見えるので。PR のゲート2）。kindle の設定でも確かめられる */
+	@Test
+	public void noUpdateRecordMeansNoRevisionsAndKindleCanCheck() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		Files.delete(new File(ledgerDir(), "update.txt").toPath());
+		upDate = "2026/04/04";
+		Properties kindle = guiDefaults();
+		kindle.setProperty("Ext", ".mobi");
+		HeadlessWebConversion conv = conversion(kindle, basePath);
+		HeadlessWebConversion.Result r = conv.check("http://" + fqdn + "/novel/", book);
+		assertTrue(r.message(), r.ok());
+		assertEquals(0, conv.checkedRevised);
+	}
+
+	/** 確かめるときも、話数が減った・作品が無いは更新と同じく知らせる */
+	@Test
+	public void checkingReportsFewerEpisodesAndMissingWorks() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		episodes = 2;
+		assertEquals(HeadlessWebConversion.STOP_SHRUNK, conversion(guiDefaults(), basePath).check("http://" + fqdn + "/novel/", book).stop());
+		listStatus = 404;
+		assertEquals(HeadlessWebConversion.STOP_GONE, conversion(guiDefaults(), basePath).check("http://" + fqdn + "/novel/", book).stop());
 	}
 
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */

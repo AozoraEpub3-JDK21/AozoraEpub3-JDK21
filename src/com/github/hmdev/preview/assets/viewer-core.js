@@ -156,7 +156,8 @@ function cacheElements()
 		'libraryFilter', 'librarySort',
 		'libraryReload', 'libraryClose', 'libraryStatus', 'libraryGrid',
 		'libraryDownloadToggle', 'libraryDownload', 'libraryDownloadForm', 'libraryDownloadUrl', 'libraryDownloadGo',
-		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus'];
+		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
+		'libraryCheckAll'];
 	for (const id of ids) el[id] = document.getElementById(id);
 }
 

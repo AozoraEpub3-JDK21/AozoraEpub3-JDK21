@@ -140,6 +140,15 @@ public class WebAozoraConverter
 	public boolean allowFewerEpisodes = false;
 	/** 本棚の更新で上書きする本。話数はこの本の記録と比べ、この本の記録に書く（PR #120 の codex） */
 	public File guardBook = null;
+	/**
+	 * 新着を確かめるだけ（internal #11）。目次を読んで、新しい話（まだキャッシュに無い話）と改稿された話（目次の更新日が
+	 * 前に記録したものと違う話）を数え、話は取らず、何も書かずに止める。守り（updateGuard）と一緒に立てる
+	 */
+	public boolean checkOnly = false;
+	/** 結果: 確かめたときの、目次の話数・新しい話・改稿された話。確かめていなければ -1 */
+	public int checkedEpisodes = -1;
+	public int checkedNew = -1;
+	public int checkedRevised = -1;
 	/** 結果: 目次を取れなかったときの HTTP の状態。取れたら 0、HTTP の応答が無かったら -1 */
 	public int listFailure = 0;
 	/** 結果: 取れなかったのは目次の 2 ページ目以降（作品が消えたのではない） */
@@ -543,6 +552,9 @@ public class WebAozoraConverter
 		this.canceled = false;
 		this.listFailure = 0;
 		this.listFailureOnLaterPage = false;
+		this.checkedEpisodes = -1;
+		this.checkedNew = -1;
+		this.checkedRevised = -1;
 		this.shrunkFrom = -1;
 		this.shrunkTo = -1;
 		this.episodesRecorded = false;
@@ -788,7 +800,8 @@ public class WebAozoraConverter
 			
 			//表紙画像
 			Elements images = getExtractElements(doc, this.queryMap.get(ExtractId.COVER_IMG));
-			if (images != null) {
+			//確かめるだけのときは表紙を取らない
+			if (images != null && !this.checkOnly) {
 				printImage(null, images.get(0), coverImageFile);
 			}
 			
@@ -851,7 +864,8 @@ public class WebAozoraConverter
 					LogAppender.println("なろうAPI: あらすじ使用");
 				} else {
 					Element description = getExtractFirstElement(doc, this.queryMap.get(ExtractId.DESCRIPTION));
-					if (description != null) {
+					//確かめるだけのときは、あらすじも書き出さない（中の挿絵を取りに行かない。PR の手元の codex）
+					if (description != null && !this.checkOnly) {
 						if (!formatSettings.isIncludeTocUrl()) {
 							bw.append('\n');
 							bw.append("［＃区切り線］\n");
@@ -937,7 +951,11 @@ public class WebAozoraConverter
 					}
 				} else {
 					Elements contentDivs = getExtractElements(doc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
-					if (contentDivs != null) {
+					if (contentDivs != null && this.checkOnly) {
+						//1 ページの作品は話が無いので、確かめられない（本文も挿絵も取りに行かない。PR の手元の codex）
+						this.guardStopped = true;
+						return null;
+					} else if (contentDivs != null) {
 						//一覧のリンクはないが本文がある場合
 						docToAozoraText(bw, doc, false, null, null, null);
 					} else {
@@ -1111,6 +1129,37 @@ public class WebAozoraConverter
 				if (now != ledger.lastEpisodes) this.pendingLastEpisodes = now;
 			}
 			boolean acceptedFewer = this.updateGuard && this.allowFewerEpisodes && previous > now;
+
+			//新着を確かめるだけなら、ここで数えて止める（話は取らない。txt と更新情報は守りの止め方で前のまま）
+			if (this.checkOnly) {
+				int newCount = 0;
+				int revisedCount = 0;
+				for (String chapterHref : chapterHrefs) {
+					if (chapterHref == null || chapterHref.isEmpty()) continue;
+					File chapterCacheFile;
+					try {
+						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
+						chapterCacheFile = resolveHtmlCacheFile(safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":"")));
+					} catch (IOException | RuntimeException e) {
+						continue;
+					}
+					if (!chapterCacheFile.exists()) newCount++;
+					//目次の更新日が前に記録したものと違う話（更新日を出しているサイトで、前の記録＝update.txt があるときだけ。
+					//記録が無いと全部が改稿に見える。PR のゲート2）
+					else if (noUpdateUrls != null && updateInfoFile.exists() && !noUpdateUrls.contains(chapterHref)) revisedCount++;
+				}
+				//その本の話数の記録があれば、新着はそれとの差（キャッシュの有無に依らない。キャッシュにはあっても本に入っていない話＝
+				//更新で話は取れたが本を書けなかった・同じ作品を別に変換した、と、キャッシュを消しただけの話を、どちらも正しく数える。
+				//PR の手元の codex・PR の codex）。記録が無ければキャッシュに無い話
+				if (previous >= 0) newCount = Math.max(0, now - previous);
+				this.checkedEpisodes = now;
+				this.checkedNew = newCount;
+				this.checkedRevised = revisedCount;
+				this.pendingEpisodes = -1;
+				this.pendingLastEpisodes = -1;
+				this.guardStopped = true;
+				return null;
+			}
 
 			List<String> failedHrefs = new ArrayList<>();
 			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
