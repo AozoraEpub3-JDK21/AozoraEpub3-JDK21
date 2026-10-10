@@ -76,6 +76,7 @@ function bindLibraryEvents()
 	el.libraryClose.addEventListener('click', () => closeLibrary());
 
 	bindDownloadEvents();
+	bindRankingEvents();
 	el.libraryCheckAll.addEventListener('click', () => {
 		checkAllBooks().catch(err => showLibraryStatus('新着を確かめられませんでした: ' + err.message));
 	});
@@ -117,6 +118,11 @@ function onLibraryKeyDown(event)
 			el.libraryFilter.value = '';
 			clearTimeout(libraryFilterTimer);
 			renderLibrary();
+			event.preventDefault();
+			return;
+		}
+		// 手前に出しているランキングを先にしまう
+		if (closeRankingIfOpen()) {
 			event.preventDefault();
 			return;
 		}
@@ -240,6 +246,9 @@ async function loadLibrary(keepView)
 	buildShelfSelect();
 	if (keepView) renderLibraryKeepingView();
 	else renderLibrary();
+	// ランキングの「本棚にあります」も付け直す。Web 本棚の場所を聞いてから落とした本は
+	// ランキングの札を通らずに落ちる (viewer-ranking.js)
+	remarkRanking();
 }
 
 /** 描き直しても、描いた枚数・スクロール位置・フォーカスを保つ */
@@ -742,10 +751,12 @@ async function checkDownloadAvailable()
 		const response = await fetch('api/webshelf', {cache: 'no-store'});
 		const info = response.ok ? await response.json() : null;
 		el.libraryDownloadToggle.hidden = !(info && info.canDownload);
+		el.libraryRankingToggle.hidden = !(info && info.canDownload);
 		libraryCanCheck = !!(info && info.canDownload);
 		updateCheckAllButton();
 	} catch (e) {
 		el.libraryDownloadToggle.hidden = true;
+		el.libraryRankingToggle.hidden = true;
 		libraryDownloadChecked = false;
 	}
 }

@@ -227,7 +227,7 @@ public class PreviewServerTest
 		// ALLOWED_ASSETS の更新漏れはビューアーが動かない事故になるので、全ファイルを検証する
 		for (String name : new String[] {"viewer-core.js", "viewer-util.js", "viewer-settings.js",
 			"viewer-toc.js", "viewer-frame.js", "viewer-events.js", "viewer-inspector.js",
-			"viewer-library.js"}) {
+			"viewer-library.js", "viewer-ranking.js"}) {
 			assertEquals(name, 200, get(base() + "asset/" + name).statusCode());
 		}
 		assertEquals(200, get(base() + "asset/viewer.css").statusCode());
@@ -1618,6 +1618,36 @@ public class PreviewServerTest
 		//決めてあった Web 本棚のフォルダが消えていても、聞き直す
 		web.location = temp.getRoot().toPath().resolve("removed");
 		assertEquals(409, postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/").statusCode());
+	}
+
+	// ---- ランキング（internal #11） ----
+
+	/** アプリから開いた本棚だけ。期間・ジャンルが読めなければ 400、取れなければ 502、取れたら API の本文のまま */
+	@Test
+	public void theRankingNeedsTheAppAndPassesTheApiBodyThrough() throws Exception
+	{
+		java.util.List<URI> asked = new java.util.concurrent.CopyOnWriteArrayList<>();
+		byte[] list = "[{\"allcount\":1},{\"ncode\":\"N1234AB\",\"title\":\"<b>題</b>\"}]".getBytes(StandardCharsets.UTF_8);
+		this.server.setNarouRanking(new NarouRanking(uri -> { asked.add(uri); return list; }));
+		assertEquals(503, get(base() + "api/ranking").statusCode());
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		this.server.setWebShelf(new FakeWebShelf());
+		assertEquals(400, get(base() + "api/ranking?period=x").statusCode());
+		assertEquals(400, get(base() + "api/ranking?genre=5").statusCode());
+		assertTrue("断った問い合わせは API へ出さない", asked.isEmpty());
+
+		HttpResponse<String> ok = get(base() + "api/ranking?period=w&genre=201&serial=1&tab=t1");
+		assertEquals(200, ok.statusCode());
+		assertEquals(new String(list, StandardCharsets.UTF_8), ok.body());
+		assertTrue(ok.headers().firstValue("Content-Type").orElse(""), ok.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
+		assertEquals(1, asked.size());
+		assertTrue(asked.get(0).toString(), asked.get(0).toString().contains("order=weeklypoint"));
+		assertEquals(405, postText(base() + "api/ranking", "").statusCode());
+
+		this.server.setNarouRanking(new NarouRanking(uri -> { throw new IOException("つながりません"); }));
+		HttpResponse<String> down = get(base() + "api/ranking");
+		assertEquals(502, down.statusCode());
+		assertTrue(down.body(), down.body().contains("つながりません"));
 	}
 
 	private volatile String lastJob;

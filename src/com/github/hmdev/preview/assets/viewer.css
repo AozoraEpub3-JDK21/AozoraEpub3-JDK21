@@ -524,6 +524,73 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 .library-download[hidden], .library-download .ask[hidden] { display: none; }
 .library-download .note[data-state="failed"] { color: var(--danger); }
 
+/* ランキング (viewer-ranking.js)。出している間は本の一覧を隠す */
+.library-ranking {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 12px 0;
+}
+.library-ranking .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.library-ranking .label { font-weight: bold; }
+.library-ranking select {
+	height: 28px;
+	background: var(--surface-2);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font: inherit;
+}
+.library-ranking label { display: flex; gap: 4px; align-items: center; font-size: 13px; }
+.library-ranking .note { font-size: 12px; color: var(--text-sub); min-height: 1em; }
+.library-ranking .note[data-state="failed"] { color: var(--danger); }
+.ranking-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	list-style: none;
+	margin: 0;
+	padding: 0 0 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.ranking-card {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 8px 10px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+.ranking-card .rank { flex: 0 0 2.5em; text-align: right; font-weight: bold; color: var(--text-sub); }
+.ranking-card .body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ranking-card .title { color: var(--text); font-weight: bold; text-decoration: none; overflow-wrap: anywhere; }
+.ranking-card .title:hover { color: var(--accent); text-decoration: underline; }
+.ranking-card .meta { font-size: 12px; color: var(--text-sub); }
+.ranking-card .story { font-size: 12px; color: var(--text-sub); }
+.ranking-card .story summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-card .story[open] summary { white-space: normal; }
+.ranking-card .story div { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 4px; }
+.ranking-card .ranking-get {
+	flex: 0 0 auto;
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+	background: var(--accent);
+	color: var(--accent-text);
+	font: inherit;
+	cursor: pointer;
+}
+.ranking-card .ranking-get:disabled { background: var(--surface); color: var(--text-sub); border-color: var(--border); cursor: default; }
+.ranking-card .ranking-get[data-state="busy"] { cursor: progress; }
+/* display を指定した要素は hidden の属性が効かなくなるので、明示する */
+.library-ranking[hidden], .library-status[hidden], .library-grid[hidden] { display: none; }
+
 .library-status {
 	display: flex;
 	align-items: center;
