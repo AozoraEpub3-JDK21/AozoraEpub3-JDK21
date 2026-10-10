@@ -644,6 +644,27 @@ public class HeadlessWebConversionTest {
 		assertEquals("控えを残さない", 0, ledgerDir().listFiles((d, n) -> n.startsWith(".previous.")).length);
 	}
 
+	/** 本を置き換えた後で 1 つ前の版を残せなくても、更新は成功のまま（本と台帳が食い違わない）。前の本は控えに残る（#121 の codex） */
+	@Test
+	public void aPreviousVersionThatCannotBeKeptDoesNotFailTheUpdate() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		byte[] v1 = Files.readAllBytes(book.toPath());
+		//1 つ前の版の名前に、置き換えられないもの（中身のあるフォルダ）を置く
+		File previous = new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), book));
+		assertTrue(previous.mkdir());
+		Files.write(new File(previous, "x").toPath(), new byte[]{1});
+		episodes = 2;
+		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
+		assertTrue(r.message(), r.ok());
+		assertTrue(r.message(), r.message().contains("残せませんでした"));
+		assertEquals("台帳は新しい本の話数", 2, ledgerOf().episodesFor(book));
+		File[] kept = ledgerDir().listFiles((d, n) -> n.startsWith(".previous."));
+		assertEquals("前の本は控えに残る", 1, kept.length);
+		org.junit.Assert.assertArrayEquals(v1, Files.readAllBytes(kept[0].toPath()));
+	}
+
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */
 	@Test
 	public void aFailedUpdateKeepsThePreviousEpisodeCount() throws Exception {

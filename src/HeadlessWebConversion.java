@@ -289,13 +289,23 @@ public class HeadlessWebConversion
 			} catch (java.nio.file.AtomicMoveNotSupportedException e) {
 				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
+			//本はもう置き換えたので、ここから先の失敗で更新を失敗にしない（台帳の話数が戻って、本と食い違う。#121 の codex）
+			String note = "";
 			if (backup != null) {
-				java.nio.file.Files.move(backup.toPath(), new File(workDir, previousEpubName(workDir, outFile)).toPath(),
-					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				File previous = new File(workDir, previousEpubName(workDir, outFile));
+				try {
+					java.nio.file.Files.move(backup.toPath(), previous.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				} catch (IOException e) {
+					//前の版が開かれている（Windows）など。控えは消さずに残す（前の本はそこから戻せる）
+					logger.warn("1 つ前の版を残せませんでした: {}", previous, e);
+					LogAppender.println("1 つ前の版を " + previous.getName() + " に残せませんでした。前の本は " + backup.getName() + " にあります");
+					note = "（1 つ前の版は残せませんでした）";
+					backup = null;
+				}
 			}
 			//置き換えた本の話数を記録する（書き出しは一時ファイルなので convertFile は記録しない）
 			com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
-			return new Result(true, false, outFile, "変換しました");
+			return new Result(true, false, outFile, "変換しました" + note);
 		} finally {
 			java.nio.file.Files.deleteIfExists(tmp.toPath());
 			if (backup != null) java.nio.file.Files.deleteIfExists(backup.toPath());
