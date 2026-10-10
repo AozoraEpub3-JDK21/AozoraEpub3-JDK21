@@ -266,6 +266,9 @@ The + button in the library header fetches a new work from its page URL. The boo
 its records and cache go into `.aozora` in the same folder. The first time, the library asks where the
 Web shelf is (only when the library was opened from the GUI or the CLI). A book taken from the web can
 be renamed with ✎ on its cover (the extension stays; fetching new chapters keeps working).
+"新着を確かめる" in the header reads only the table of contents of each book taken from the web and shows
+the number of new and revised episodes on its card (nothing is fetched; ⟳ fetches them; revisions are
+known only on sites whose table of contents shows a date per episode).
 
 > This is an approximation of screen size and fonts. Kindle, Kobo and Apple Books use their own
 > rendering engines, so the result will not match a real device exactly.
