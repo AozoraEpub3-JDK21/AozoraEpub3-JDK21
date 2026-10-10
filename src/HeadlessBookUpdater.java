@@ -72,6 +72,11 @@ public class HeadlessBookUpdater implements BookUpdater
 		if (isLocalOrPrivate(url) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
 			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + url);
 		}
+		//もう落としてある作品なら、取りに行かずに知らせる（Web 本棚の下のフォルダに整理してあっても。PR の codex）
+		Path existing = existingBook(shelfDir, url);
+		if (existing != null) {
+			return new Result(false, false, "もう Web 本棚にある本です: " + shelfDir.relativize(existing) + "（続きは本棚の ⟳ で取れます）");
+		}
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			Properties props = this.settings.get();
 			File shelf = shelfDir.toFile();
@@ -92,6 +97,46 @@ public class HeadlessBookUpdater implements BookUpdater
 			if (shelfCache.isDirectory() && holdsWork(shelfCache.toPath(), sourceUrl)) return shelfCache;
 		}
 		return cachePathOf(props, this.basePath);
+	}
+
+	/**
+	 * Web 本棚にもう落としてある、この作品の本（.aozora に台帳があり、その名前の本が Web 本棚のどこかにある）。無ければ null。
+	 * . で始まるフォルダ（.aozora の 1 つ前の版など）は見ない
+	 */
+	static Path existingBook(Path shelfDir, String sourceUrl)
+	{
+		Path shelfCache = shelfDir.resolve(SHELF_CACHE);
+		if (!java.nio.file.Files.isDirectory(shelfCache)) return null;
+		String identifier = com.github.hmdev.info.BookLedger.identifierFor(sourceUrl);
+		String name = null;
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfCache, 8)) {
+			name = files.filter(p -> p.getFileName().toString().equals(com.github.hmdev.info.BookLedger.FILE_NAME))
+				.map(p -> com.github.hmdev.info.BookLedger.load(p.getParent().toFile()))
+				.filter(l -> l != null && identifier.equals(l.identifier) && l.outputBaseName != null)
+				.map(l -> l.outputBaseName).findFirst().orElse(null);
+		} catch (java.io.IOException | java.io.UncheckedIOException e) {
+			return null;
+		}
+		if (name == null) return null;
+		String prefix = name + ".";
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfDir, com.github.hmdev.preview.LibraryScanner.DEFAULT_MAX_DEPTH)) {
+			return files.filter(p -> {
+				String file = p.getFileName().toString();
+				return file.startsWith(prefix) && file.toLowerCase(java.util.Locale.ROOT).endsWith(".epub")
+					&& !hiddenUnder(shelfDir, p);
+			}).findFirst().orElse(null);
+		} catch (java.io.IOException | java.io.UncheckedIOException e) {
+			return null;
+		}
+	}
+
+	/** shelfDir から p までに . で始まるフォルダがあるか */
+	private static boolean hiddenUnder(Path shelfDir, Path p)
+	{
+		for (Path part : shelfDir.relativize(p)) {
+			if (part.toString().startsWith(".")) return true;
+		}
+		return false;
 	}
 
 	/** .aozora の中に、この作品の台帳があるか（サイトと作品のフォルダの下。深さは URL の作りによる） */

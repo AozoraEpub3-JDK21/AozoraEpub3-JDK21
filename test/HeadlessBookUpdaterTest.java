@@ -213,6 +213,12 @@ public class HeadlessBookUpdaterTest {
 		BookUpdater.Result again = updater.update(base + "/novel/", moved.toPath());
 		assertTrue(again.message(), again.ok());
 		assertFalse(settingsCache.exists());
+
+		//整理した本と同じ作品をもう一度落とそうとしても、2 冊目を作らない（取りに行く前に断る。PR の codex）
+		BookUpdater.Result twice = updater.download(base + "/novel/", shelf.toPath());
+		assertFalse(twice.ok());
+		assertTrue(twice.message(), twice.message().contains("もう Web 本棚にある本です") && twice.message().contains("整理"));
+		org.junit.Assert.assertEquals(0, shelf.listFiles((d, n) -> n.endsWith(".epub")).length);
 	}
 
 	/** キャッシュの場所の相対パスは、基のフォルダから（CLI を別のフォルダから起こしても GUI と同じキャッシュ。PR #118 のゲート2） */
