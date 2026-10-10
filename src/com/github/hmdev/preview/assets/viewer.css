@@ -557,7 +557,8 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 @media (prefers-reduced-motion: reduce) { .book-slot.updating .book-update { animation: none; } }
 
 .book-update-status {
-	min-height: 1em;
+	/* 2 行ぶんを先に取っておく（状態が出たときにカードの背が変わって列が揃わなくならないように） */
+	min-height: calc(2em * 1.35);
 	font-size: 11px;
 	line-height: 1.35;
 	color: var(--text-sub);
@@ -568,7 +569,30 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	overflow: hidden;
 	overflow-wrap: anywhere;
 }
-.book-update-status[data-state="failed"] { color: var(--danger); }
+.book-update-status[data-state="failed"],
+.book-update-status[data-state="gone"],
+.book-update-status[data-state="shrunk"] { color: var(--danger); }
+
+/* 表紙の左上に重ねる（カードの下に足すと、そのカードだけ背が伸びて列が揃わない。PR のゲート2） */
+.book-update-anyway {
+	position: absolute;
+	top: 14px;
+	left: 12px;
+	max-width: calc(100% - 52px);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	box-shadow: 0 1px 4px var(--shadow);
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+.book-update-anyway:hover, .book-update-anyway:focus-visible { border-color: var(--accent); }
 
 .book-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--shadow); }
 .book-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

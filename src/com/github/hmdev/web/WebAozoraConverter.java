@@ -130,6 +130,31 @@ public class WebAozoraConverter
 	////////////////////////////////
 	//キャンセルリクエストされたらtrue
 	boolean canceled = false;
+
+	/**
+	 * 本棚の更新の守り（internal #11）。立てると、目次が取れないときにキャッシュの目次で続けず、
+	 * 目次の話数が台帳の話数より少ないときは書かずに止める。本棚の更新が鍵（WEB_LOCK）を持って立て、終わったら倒す
+	 */
+	public boolean updateGuard = false;
+	/** 本棚の更新の守りで、話数が減っていても続ける（利用者が「減ったまま更新」を選んだ） */
+	public boolean allowFewerEpisodes = false;
+	/** 本棚の更新で上書きする本。話数はこの本の記録と比べ、この本の記録に書く（PR #120 の codex） */
+	public File guardBook = null;
+	/** 結果: 目次を取れなかったときの HTTP の状態。取れたら 0、HTTP の応答が無かったら -1 */
+	public int listFailure = 0;
+	/** 結果: 取れなかったのは目次の 2 ページ目以降（作品が消えたのではない） */
+	public boolean listFailureOnLaterPage = false;
+	/** 結果: 守りで止めたときの、台帳の話数と今の目次の話数。止めていなければ -1 */
+	public int shrunkFrom = -1;
+	public int shrunkTo = -1;
+	/** 結果: 台帳に今の話数を書いたか、と書く前の台帳（本棚の更新で EPUB を作れなかったとき、話数を元に戻すため） */
+	public boolean episodesRecorded = false;
+	public BookLedger ledgerBeforeEpisodes = null;
+	/** txt を作り終えたら台帳に書く、作品の話数（上げるだけ）と今の目次の話数。書かないなら -1 */
+	private int pendingEpisodes = -1;
+	private int pendingLastEpisodes = -1;
+	/** 本棚の更新の守りで止めた。止めたら txt と update.txt を変換の前に戻す */
+	private boolean guardStopped = false;
 	//更新有りフラグ
 	boolean updated = false;
 
@@ -516,6 +541,15 @@ public class WebAozoraConverter
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
 	{
 		this.canceled = false;
+		this.listFailure = 0;
+		this.listFailureOnLaterPage = false;
+		this.shrunkFrom = -1;
+		this.shrunkTo = -1;
+		this.episodesRecorded = false;
+		this.ledgerBeforeEpisodes = null;
+		this.pendingEpisodes = -1;
+		this.pendingLastEpisodes = -1;
+		this.guardStopped = false;
 		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
@@ -627,6 +661,9 @@ public class WebAozoraConverter
 			if (e instanceof javax.net.ssl.SSLException && urlString.startsWith("https://")) {
 				LogAppender.println("サイトの https の証明書を確かめられませんでした。http:// で始まる URL で読めるか試してください");
 			}
+			this.listFailure = (e instanceof HttpStatusException h) ? h.status : -1;
+			//本棚の更新は、キャッシュの古い目次で作り直さない（掲載元で消えていても「更新しました」になる）
+			if (this.updateGuard) return null;
 			if (!cacheFile.exists()) return null;
 
 			LogAppender.println("キャッシュファイルを利用します。");
@@ -740,6 +777,12 @@ public class WebAozoraConverter
 			parentFile.delete();
 		}
 		parentFile.mkdirs();
+		//本棚の更新の守りは目次を読んでから効くので、txt は書き始めている。止めたら戻せるよう、前の txt を控える（PR のゲート2）
+		File guardBackup = null;
+		if (this.updateGuard && txtFile.isFile()) {
+			guardBackup = File.createTempFile(".guard.", ".txt.tmp", parentFile);
+			Files.copy(txtFile.toPath(), guardBackup.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		}
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(txtFile.toPath()), "UTF-8"));
 		try {
 			
@@ -899,6 +942,16 @@ public class WebAozoraConverter
 						docToAozoraText(bw, doc, false, null, null, null);
 					} else {
 						LogAppender.println("一覧のURLが取得できませんでした");
+						//本棚の更新で、前は話があった作品の一覧が空になった（全部消された、など）。話数が減ったとして止め、txt を戻す（PR の手元の codex）
+						if (this.updateGuard) {
+							this.guardStopped = true;
+							int previous = ledger == null ? -1
+								: this.guardBook != null ? ledger.episodesFor(this.guardBook) : ledger.episodes;
+							if (previous > 0) {
+								this.shrunkFrom = previous;
+								this.shrunkTo = 0;
+							}
+						}
 						return null;
 					}
 				}
@@ -956,10 +1009,22 @@ public class WebAozoraConverter
 										}
 									}
 								} catch (CloudflareChallengeException e) {
-									//目次の途中までで本を作らない（理由は cacheFile が出した）
+									//目次の途中までで本を作らない（理由は cacheFile が出した）。本棚の更新なら txt も戻す（PR #120 の codex）
+									if (this.updateGuard) {
+										this.listFailure = 403;
+										this.listFailureOnLaterPage = true;
+										this.guardStopped = true;
+									}
 									return null;
 								} catch (Exception e) {
 									LogAppender.println("目次ページ " + pageIdx + " 取得エラー: " + e.getMessage());
+									//本棚の更新は、目次の一部が欠けたまま作らない（話数が減ったように見える。PR のゲート2）
+									if (this.updateGuard) {
+										this.listFailure = (e instanceof HttpStatusException h) ? h.status : -1;
+										this.listFailureOnLaterPage = true;
+										this.guardStopped = true;
+										return null;
+									}
 								} finally {
 									tocPageFile.delete();
 								}
@@ -1022,6 +1087,31 @@ public class WebAozoraConverter
 				}
 			}
 
+			//目次の話数を台帳と比べる。減っていたら（掲載先で消された・要約版にされた・目次の 2 ページ目が取れなかった）、
+			//本棚の更新では書かずに止める（1 冊を上書きする方式で一番大きい事故＝読んだ話が消える、を防ぐ。internal #11）
+			//0 話になったとき（全部消された・目次の書き方が変わった）も比べる（PR の手元の codex）
+			//本棚の更新は、上書きする本の記録と比べる（無ければ作品の話数）
+			boolean bookGuard = this.updateGuard && this.guardBook != null;
+			int previous = ledger == null ? -1 : bookGuard ? ledger.episodesFor(this.guardBook) : ledger.episodes;
+			if (this.updateGuard && !this.allowFewerEpisodes && previous > chapterHrefs.size()) {
+				this.shrunkFrom = previous;
+				this.shrunkTo = chapterHrefs.size();
+				LogAppender.println("話数が減っています（前 "+previous+" 話 → 今 "+chapterHrefs.size()+" 話）。本は書き換えません");
+				this.guardStopped = true;
+				return null;
+			}
+			//台帳に書くのは txt を作り終えてから（途中で止まると、本と台帳の話数が食い違う。PR の手元の codex）。
+			//1 ページの作品（話の一覧が無い）は数えない
+			//守りの無い変換（GUI・CLI）は話数を上げるだけで下げない。下げると、本棚の本の守りが外れる
+			//（同じ作品を GUI で別のフォルダに変換しただけで、本棚の本が減った話数で上書きされる。PR のゲート2）
+			//作品の話数は、どの変換でも上げるだけ。今の話数は、本を書き終えたときにその本の話数になる（BookLedger.recordBookEpisodes）
+			int now = chapterHrefs.size();
+			if (ledger != null && (now > 0 || previous > 0)) {
+				if (now > ledger.episodes) this.pendingEpisodes = now;
+				if (now != ledger.lastEpisodes) this.pendingLastEpisodes = now;
+			}
+			boolean acceptedFewer = this.updateGuard && this.allowFewerEpisodes && previous > now;
+
 			List<String> failedHrefs = new ArrayList<>();
 			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
 			HashSet<String> failedReloads = new HashSet<>();
@@ -1029,8 +1119,9 @@ public class WebAozoraConverter
 			int selectedChapters = 0;
 			int writtenChapters = 0;
 			if (chapterHrefs.size() > 0) {
-				//全話で更新や追加があるかチェック
-				updated = false;
+				//全話で更新や追加があるかチェック。
+				//減ったまま更新すると選ばれたら、話が消えたこと自体が更新（残った話が変わっていなくても本を作り直す。PR の手元の codex）
+				updated = acceptedFewer;
 				
 				//追加更新対象の期限 これより大きければ追加更新
 				long expire = System.currentTimeMillis()-(long)(this.modifiedExpire*3600000);
@@ -1336,8 +1427,16 @@ public class WebAozoraConverter
 
 		} finally {
 			bw.close();
-			//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
-			writePendingUpdateInfo();
+			if (this.guardStopped) {
+				//守りで止めたら、txt も更新情報も変換の前のまま（キャッシュの txt から作り直しても、前の本になるように）。
+				//更新情報は書かない（下の else を通らない）
+				if (guardBackup != null) Files.move(guardBackup.toPath(), txtFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+				else Files.deleteIfExists(txtFile.toPath());
+			} else {
+				//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
+				writePendingUpdateInfo();
+			}
+			if (guardBackup != null) Files.deleteIfExists(guardBackup.toPath());
 		}
 
 		// ファイナライズ処理: 文章全体の後処理
@@ -1349,6 +1448,23 @@ public class WebAozoraConverter
 			LogAppender.println("警告: ファイナライズ処理中にエラーが発生しました: " + e.getMessage());
 			logger.warn("テキストファイナライズ処理に失敗（付加処理のため変換は継続）: {}", txtFile, e);
 			// エラーが発生してもファイルは返す（ファイナライズ処理は付加的な処理のため）
+		}
+
+		if (this.pendingEpisodes >= 0 || this.pendingLastEpisodes >= 0) {
+			//台帳は読み直す（変換の途中で名前などが書き足されていることがある）
+			BookLedger current = BookLedger.load(workDir);
+			if (current != null) {
+				BookLedger next = current;
+				if (this.pendingEpisodes >= 0) next = next.withEpisodes(this.pendingEpisodes);
+				if (this.pendingLastEpisodes >= 0) next = next.withLastEpisodes(this.pendingLastEpisodes);
+				try {
+					next.save(workDir);
+					this.ledgerBeforeEpisodes = current;
+					this.episodesRecorded = true;
+				} catch (IOException e) {
+					logger.warn("台帳に話数を書けませんでした: {}", this.dstPath, e);
+				}
+			}
 		}
 
 		this.canceled = false;
@@ -3173,7 +3289,7 @@ public class WebAozoraConverter
 					else LogAppender.println(e.getMessage());
 					throw e;
 				}
-				throw new IOException("Server returned HTTP response code: " + responseCode + " for URL: " + urlString);
+				throw new HttpStatusException(responseCode, urlString);
 			}
 
 			try (BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(cacheFile.toPath()))) {

@@ -130,7 +130,7 @@ public class PreviewServer implements AutoCloseable
 	static final int MAX_JOBS = 64;
 	private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
 
-	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed */
+	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed、守りで止めたら gone・shrunk */
 	static final class UpdateJob
 	{
 		final String id;
@@ -138,11 +138,14 @@ public class PreviewServer implements AutoCloseable
 		final long createdNanos = System.nanoTime();
 		volatile String state = "queued";
 		volatile String message = "";
+		/** 「減ったまま更新」で頼まれた仕事 */
+		final boolean allowFewer;
 
-		UpdateJob(String id, String bookId)
+		UpdateJob(String id, String bookId, boolean allowFewer)
 		{
 			this.id = id;
 			this.bookId = bookId;
+			this.allowFewer = allowFewer;
 		}
 
 		boolean active()
@@ -561,9 +564,17 @@ public class PreviewServer implements AutoCloseable
 			respondJsonStatus(exchange, 400, errorJson("Web から取った本ではないので、続きを取れません"));
 			return;
 		}
+		//利用者が「減ったまま更新」を選んだ（話数が減って止めた本を、それでも取り直す）
+		String query = exchange.getRequestURI().getRawQuery();
+		boolean allowFewer = query != null && java.util.Arrays.asList(query.split("&")).contains("allowFewer=1");
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
+			//「減ったまま更新」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
+			if (job != null && job.allowFewer != allowFewer) {
+				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから選び直してください"));
+				return;
+			}
 			if (job == null) {
 				forgetOldJobs();
 				//まだ終わっていない仕事でいっぱいなら断る（列が際限なく伸びないように。PR #118 の codex）
@@ -571,24 +582,27 @@ public class PreviewServer implements AutoCloseable
 					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
 					return;
 				}
-				job = new UpdateJob(newJobId(), bookId);
+				job = new UpdateJob(newJobId(), bookId, allowFewer);
 				this.jobs.put(job.id, job);
 				UpdateJob submitted = job;
-				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry));
+				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry, allowFewer));
 			}
 		}
 		respondJsonStatus(exchange, 202, jobJson(job));
 	}
 
-	private void runUpdate(UpdateJob job, BookUpdater updater, LibraryEntry entry)
+	private void runUpdate(UpdateJob job, BookUpdater updater, LibraryEntry entry, boolean allowFewer)
 	{
 		job.state = "running";
 		try {
-			BookUpdater.Result result = updater.update(entry.source(), entry.file());
+			BookUpdater.Result result = updater.update(entry.source(), entry.file(), allowFewer);
 			job.message = result.message() == null ? "" : result.message();
 			if (result.ok()) {
 				//上書きした本の題・表紙は、本棚の一覧（api/library）が読むたびに読み直すので、ここでは何もしない
 				job.state = "done";
+			} else if (result.stop() != null) {
+				//守りで止めた（"gone"・"shrunk"）。本棚の画面が理由ごとに出し分ける
+				job.state = result.stop();
 			} else {
 				job.state = result.noUpdate() ? "noUpdate" : "failed";
 			}

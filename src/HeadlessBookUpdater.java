@@ -38,6 +38,13 @@ public class HeadlessBookUpdater implements BookUpdater
 	@Override
 	public Result update(String sourceUrl, Path epubFile) throws Exception
 	{
+		return update(sourceUrl, epubFile, false);
+	}
+
+	/** 本棚の更新は、目次が取れないとき・話数が減ったときは書かずに止める（internal #11 の守り） */
+	@Override
+	public Result update(String sourceUrl, Path epubFile, boolean allowFewerEpisodes) throws Exception
+	{
 		if (isLocalOrPrivate(sourceUrl) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
 			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + sourceUrl);
 		}
@@ -46,8 +53,8 @@ public class HeadlessBookUpdater implements BookUpdater
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			Properties props = this.settings.get();
 			HeadlessWebConversion.Result r = this.conversions.apply(props)
-				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true);
-			return new Result(r.ok(), r.noUpdate(), r.message());
+				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true, true, allowFewerEpisodes);
+			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
 		}
 	}
 
