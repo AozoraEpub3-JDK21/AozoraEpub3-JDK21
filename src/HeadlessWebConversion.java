@@ -221,10 +221,11 @@ public class HeadlessWebConversion
 		com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(workDir);
 		if (ledger == null || ledger.outputBaseName != null || ledger.textBaseName == null) return;
 		String name = com.github.hmdev.info.ShelfNames.shortBaseName(ledger.textBaseName);
-		for (int n = 2; n < 100 && new File(shelfDir, name + outExt).exists(); n++) {
-			name = com.github.hmdev.info.ShelfNames.shortBaseName(ledger.textBaseName) + " (" + n + ")";
-		}
+		//空いているかは、実際に書く名前（深い場所では、さらに縮めた名前）で見る（PR の手元の codex）
 		try {
+			for (int n = 2; n < 100 && new File(shelfDir, AozoraEpub3.fittedTitleName(shelfDir, name, outExt) + outExt).exists(); n++) {
+				name = com.github.hmdev.info.ShelfNames.shortBaseName(ledger.textBaseName) + " (" + n + ")";
+			}
 			ledger.withOutputBaseName(name).save(workDir);
 		} catch (IOException e) {
 			logger.warn("台帳に短い名前を書けませんでした: {}", workDir, e);

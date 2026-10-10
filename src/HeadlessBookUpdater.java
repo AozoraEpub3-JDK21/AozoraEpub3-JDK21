@@ -57,7 +57,7 @@ public class HeadlessBookUpdater implements BookUpdater
 		//コメント）ので、その間に写すと一時的な値（別の作品の表紙など）が入る（PR #118 のゲート2）
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			Properties props = this.settings.get();
-			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile))
+			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl))
 				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true, true, allowFewerEpisodes);
 			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
 		}
@@ -81,16 +81,30 @@ public class HeadlessBookUpdater implements BookUpdater
 	}
 
 	/**
-	 * 本のキャッシュの場所。本のフォルダか、その上のフォルダに .aozora があれば（Web 本棚の本。下のフォルダに整理したときも）そこ、
-	 * 無ければ設定のキャッシュ（PR のゲート2）
+	 * 本のキャッシュの場所。本のフォルダか、その上のフォルダの .aozora に、この作品の台帳があれば（Web 本棚に落とした本。
+	 * 下のフォルダに整理したときも）そこ、無ければ設定のキャッシュ。台帳を確かめるのは、前から本のあるフォルダを Web 本棚にしたとき、
+	 * 前からの本まで .aozora に切り替わって、話数の記録（守り）と名前を失わないように（PR のゲート2・手元の codex）
 	 */
-	File cacheFor(Properties props, Path epubFile)
+	File cacheFor(Properties props, Path epubFile, String sourceUrl)
 	{
 		for (Path dir = epubFile.toAbsolutePath().getParent(); dir != null; dir = dir.getParent()) {
 			File shelfCache = new File(dir.toFile(), SHELF_CACHE);
-			if (shelfCache.isDirectory()) return shelfCache;
+			if (shelfCache.isDirectory() && holdsWork(shelfCache.toPath(), sourceUrl)) return shelfCache;
 		}
 		return cachePathOf(props, this.basePath);
+	}
+
+	/** .aozora の中に、この作品の台帳があるか（サイトと作品のフォルダの下。深さは URL の作りによる） */
+	static boolean holdsWork(Path shelfCache, String sourceUrl)
+	{
+		String identifier = com.github.hmdev.info.BookLedger.identifierFor(sourceUrl);
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfCache, 8)) {
+			return files.filter(p -> p.getFileName().toString().equals(com.github.hmdev.info.BookLedger.FILE_NAME))
+				.map(p -> com.github.hmdev.info.BookLedger.load(p.getParent().toFile()))
+				.anyMatch(l -> l != null && identifier.equals(l.identifier));
+		} catch (java.io.IOException | java.io.UncheckedIOException e) {
+			return false;
+		}
 	}
 
 	/**

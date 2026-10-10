@@ -731,6 +731,28 @@ public class HeadlessWebConversionTest {
 		assertEquals("[著者] 題 (2).epub", b.epub().getName());
 	}
 
+	/** 深い Web 本棚でさらに縮められる名前でも、同じ短い名前の別の作品は別の名前になる（PR の手元の codex） */
+	@Test
+	public void deepShelvesStillKeepSameShortNamesApart() throws Exception {
+		String basePath = serveAndBase();
+		File shelf = tempFolder.newFolder("deep");
+		//本の名前（35 文字ほど）が、フルパスの上限（250 文字）を超えて縮められる深さにする
+		String realRoot = shelf.toPath().toRealPath().toString();
+		while (realRoot.length() + 1 + 220 - realRoot.length() > 0 && shelf.toPath().toRealPath().toString().length() < 225) {
+			shelf = new File(shelf, "d".repeat(Math.min(40, 225 - shelf.toPath().toRealPath().toString().length())));
+			assertTrue(shelf.mkdirs() || shelf.isDirectory());
+		}
+		String longTitle = "あ".repeat(30);
+		workTitle = "【書籍化】" + longTitle + "～一部～";
+		HeadlessWebConversion.Result a = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		workTitle = "【書籍化】" + longTitle + "～二部～";
+		HeadlessWebConversion.Result b = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel2/", shelf);
+		assertTrue(a.message(), a.ok());
+		assertTrue(b.message(), b.ok());
+		assertFalse("名前は縮められている: " + a.epub().getName(), a.epub().getName().startsWith("[著者] " + longTitle + ".epub"));
+		assertFalse(a.epub().getName().equals(b.epub().getName()));
+	}
+
 	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */
 	@Test
 	public void aNewBookGetsAShortNameAndIsNotOverwritten() throws Exception {

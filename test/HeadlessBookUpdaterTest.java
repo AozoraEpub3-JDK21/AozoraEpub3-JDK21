@@ -245,4 +245,24 @@ public class HeadlessBookUpdaterTest {
 		}
 		assertTrue(held.get());
 	}
+
+	/**
+	 * .aozora を使うのは、その中にこの作品の台帳があるときだけ（前から本のあるフォルダを Web 本棚にしても、
+	 * 前からの本は設定のキャッシュのまま＝話数の記録と名前を失わない。PR の手元の codex）
+	 */
+	@Test
+	public void theShelfCacheIsUsedOnlyForItsOwnWorks() throws Exception {
+		File shelf = tempFolder.newFolder("mixed");
+		File work = new File(shelf, ".aozora/example.com/novel");
+		assertTrue(work.mkdirs());
+		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").save(work);
+		Properties props = new Properties();
+		File settingsCache = tempFolder.newFolder("settings-cache");
+		props.setProperty("CachePath", settingsCache.getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		File book = new File(shelf, "sub/book.epub");
+		org.junit.Assert.assertEquals(new File(shelf, ".aozora"), updater.cacheFor(props, book.toPath(), "https://example.com/novel/"));
+		org.junit.Assert.assertEquals("前からの別の作品は設定のキャッシュ", settingsCache,
+			updater.cacheFor(props, book.toPath(), "https://ncode.syosetu.com/n0000aa/"));
+	}
 }
