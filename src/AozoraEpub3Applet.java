@@ -6029,13 +6029,16 @@ public class AozoraEpub3Applet extends JPanel
 	static void saveWindowAndProperties(JFrame jFrame, AozoraEpub3Applet applet)
 	{
 		try {
-			//Window位置を割くに設定しておく
-			Point location = jFrame.getLocation();
-			Dimension size = jFrame.getSize();
-			applet.props.setProperty("PosX", ""+location.getX());
-			applet.props.setProperty("PosY", ""+location.getY());
-			applet.props.setProperty("SizeW", ""+size.getWidth());
-			applet.props.setProperty("SizeH", ""+size.getHeight());
+			//最小化中は位置が画面外の値（Windows では -32000）になりうるので、前に控えた位置・大きさを残す
+			if ((jFrame.getExtendedState() & JFrame.ICONIFIED) == 0) {
+				//Window位置を割くに設定しておく
+				Point location = jFrame.getLocation();
+				Dimension size = jFrame.getSize();
+				applet.props.setProperty("PosX", ""+location.getX());
+				applet.props.setProperty("PosY", ""+location.getY());
+				applet.props.setProperty("SizeW", ""+size.getWidth());
+				applet.props.setProperty("SizeH", ""+size.getHeight());
+			}
 			applet.saveProperties();
 		} catch (Throwable e) {
 			logger.error("設定の保存でエラー", e);
@@ -6090,7 +6093,8 @@ public class AozoraEpub3Applet extends JPanel
 			}
 			//窓が手前から外れたときにも保存する。Windows のサインアウト・シャットダウンでは windowClosing を通らずに
 			//プロセスが終わり、ini が保存されない（internal #28 で実測）。サインアウトするにはスタートメニューなどへ
-			//移るので、その時点で窓は手前から外れる。終わり方に頼らず、設定を変えたあとで保存しておく
+			//移るので、その時点で窓は手前から外れる。ただし窓が手前のまま終わる道（自動の再起動・shutdown コマンドを
+			//予約しておく等）では、最後に手前から外れたあとの変更は保存されない
 			@Override
 			public void windowDeactivated(WindowEvent evt) {
 				saveWindowAndProperties(jFrame, applet);
