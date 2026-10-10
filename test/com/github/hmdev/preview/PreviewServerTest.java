@@ -1379,8 +1379,8 @@ public class PreviewServerTest
 		HttpResponse<String> r = postText(base() + "api/webshelf", "  " + dir + "\n");
 		assertEquals(r.body(), 200, r.statusCode());
 		assertTrue("フォルダを作る", java.nio.file.Files.isDirectory(dir));
-		assertEquals(List.of(dir), web.set);
-		assertTrue(r.body(), r.body().contains("\"location\":" + Json.str(dir.toString())));
+		assertEquals(List.of(dir.toRealPath()), web.set);
+		assertTrue(r.body(), r.body().contains("\"location\":" + Json.str(dir.toRealPath().toString())));
 	}
 
 	/** 相対パス・空・読めないパスは断る。決めない */
@@ -1427,8 +1427,17 @@ public class PreviewServerTest
 		FakeWebShelf web = new FakeWebShelf();
 		this.server.setWebShelf(web);
 		assertEquals(409, postText(base() + "api/webshelf", temp.getRoot().toPath().resolve("elsewhere").toString()).statusCode());
+		assertFalse("断ったら、作ったフォルダを残さない", java.nio.file.Files.exists(temp.getRoot().toPath().resolve("elsewhere")));
+		//棚の中の場所は、別名のパス（シンボリックリンク）で書かれても棚の中（mac の /tmp と /private/tmp）
+		Path alias = temp.getRoot().toPath().resolve("alias");
+		try {
+			java.nio.file.Files.createSymbolicLink(alias, temp.getRoot().toPath().resolve("s1"));
+		} catch (UnsupportedOperationException | IOException e) {
+			alias = null;
+		}
+		if (alias != null) assertEquals(200, postText(base() + "api/webshelf", alias.resolve("Web").toString()).statusCode());
 		assertEquals(200, postText(base() + "api/webshelf", temp.getRoot().toPath().resolve("s0").resolve("Web").toString()).statusCode());
-		assertEquals(1, web.set.size());
+		assertTrue("実体のパスで渡す", web.set.stream().allMatch(p -> p.equals(p.toAbsolutePath().normalize())));
 	}
 
 	/** フォルダ選択は選んだパスか、選ばなかったことを返す。場所は決めない。同時に 2 つは出さない。出せなければ 501 */

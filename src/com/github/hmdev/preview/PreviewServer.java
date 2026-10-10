@@ -663,18 +663,33 @@ public class PreviewServer implements AutoCloseable
 				return;
 			}
 			dir = dir.normalize();
-			if (!coveredByShelf(dir) && this.session.getLibraryFolders().size() >= LibraryScanner.MAX_SHELVES) {
-				respondJsonStatus(exchange, 409, errorJson("棚は " + LibraryScanner.MAX_SHELVES + " 個までです。アプリの「プレビュー」タブで棚を減らしてください"));
-				return;
-			}
+			boolean existed = Files.exists(dir);
 			try {
 				Files.createDirectories(dir);
+				//実体のパスで比べる（mac の /tmp は /private/tmp。別名のままだと、棚の中の場所が別の棚に見える）
+				dir = dir.toRealPath();
 			} catch (IOException e) {
 				respondJsonStatus(exchange, 400, errorJson("フォルダを作れませんでした: " + dir));
 				return;
 			}
+			String refusal = null;
+			int status = 400;
 			if (!Files.isDirectory(dir) || !Files.isWritable(dir)) {
-				respondJsonStatus(exchange, 400, errorJson("このフォルダには書き込めません: " + dir));
+				refusal = "このフォルダには書き込めません: " + dir;
+			} else if (!coveredByShelf(dir) && this.session.getLibraryFolders().size() >= LibraryScanner.MAX_SHELVES) {
+				refusal = "棚は " + LibraryScanner.MAX_SHELVES + " 個までです。アプリの「プレビュー」タブで棚を減らしてください";
+				status = 409;
+			}
+			if (refusal != null) {
+				//断るなら、いま作った空のフォルダは消す
+				if (!existed) {
+					try {
+						Files.deleteIfExists(dir);
+					} catch (IOException e) {
+						/* 意図的: 空のフォルダが残るだけ */
+					}
+				}
+				respondJsonStatus(exchange, status, errorJson(refusal));
 				return;
 			}
 			try {
@@ -748,7 +763,13 @@ public class PreviewServer implements AutoCloseable
 	private boolean coveredByShelf(Path dir)
 	{
 		for (Path shelf : this.session.getLibraryFolders()) {
-			if (dir.startsWith(shelf.toAbsolutePath().normalize())) return true;
+			Path root = shelf.toAbsolutePath().normalize();
+			try {
+				root = root.toRealPath();
+			} catch (IOException e) {
+				/* 意図的: 棚が消えていれば、書いたままのパスで比べる */
+			}
+			if (dir.startsWith(root)) return true;
 		}
 		return false;
 	}
