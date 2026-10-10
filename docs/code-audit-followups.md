@@ -1415,7 +1415,7 @@ Content-Length どおりにボディが届かなければ HTTP サーバのス�
 （`aozora-preview-http` のスレッド枯渇 → プレビューが応答しなくなる）。
 変換機能そのものには影響しない。
 
-**修正方針（別 PR）**:
+**修正方針（別 PR）**（2026-10-11 注: 原因の見立てが誤っていたので、この方針は採らなかった。上の訂正を見ること）:
 
 - `readNBytes(n)` をやめ、Content-Length を見て**その分だけ**読む。
   上限超過（`> MAX_BYTES`）は読み切らずに 413 で切る
@@ -1425,7 +1425,7 @@ Content-Length どおりにボディが届かなければ HTTP サーバのス�
   `postFromAnotherOriginIsRejected` がそのまま回帰テストになる。
   加えて「Content-Length より短いボディ」ケースを足すと再発を確実に捕まえられる
 
-**当面の回避**: `gradlew test` を回すときは `PreviewServerTest` を除外する
+**当面の回避**（2026-10-11 注: 解消済み。いまは不要）: `gradlew test` を回すときは `PreviewServerTest` を除外する
 （init script で `filter { excludeTestsMatching "com.github.hmdev.preview.PreviewServerTest" }`）。
 除外した状態では 497 件すべて PASS することを確認済み。
 

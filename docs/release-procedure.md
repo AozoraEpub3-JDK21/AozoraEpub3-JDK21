@@ -160,24 +160,11 @@ ls build/launch4j/ 2>/dev/null
 
 **ゲート**: 失敗テストがあればここで停止。リリースに進まない。
 
-> **⚠️ `PreviewServerTest` がローカルでハングする間の回避**（`docs/code-audit-followups.md` 項目 31）
+> **`PreviewServerTest` のハングは解消済み**（2026-10-11、`docs/code-audit-followups.md` 項目 31）。
+> 古い JDK（Temurin 21.0.12+8 以前）で試験の HttpClient が止まっていたのを、client を HTTP/1.1 に固定して直した。
+> 以前ここにあった「PreviewServerTest を外してゲートを回す」手順は不要。
 >
-> `PreviewServerTest.settingsRoundTripThroughApi` が `HttpClient.send` でブロックし、
-> **フルテストが終わらない**（スレッドダンプで確認）。CI では全件 PASS するので、
-> ローカルでは当該クラスだけ外してゲートを回し、フルテストは CI の結果で担保する。
->
-> ```bash
-> # パッケージ指定でゲートを回す（PreviewServerTest 以外の preview テストは含める）
-> ./gradlew --no-daemon test --tests "com.github.hmdev.converter.*" --tests "com.github.hmdev.util.*" \
->   --tests "com.github.hmdev.epub.*" --tests "com.github.hmdev.writer.*" --tests "com.github.hmdev.config.*" \
->   --tests "com.github.hmdev.info.*" --tests "com.github.hmdev.io.*" --tests "com.github.hmdev.pipeline.*" \
->   --tests "com.github.hmdev.validator.*" --tests "com.github.hmdev.image.*" --tests "com.github.hmdev.web.*" \
->   --tests "com.github.hmdev.update.*" --tests "com.github.hmdev.preview.PreviewLibraryPrefsTest" \
->   --tests "com.github.hmdev.preview.PreviewSessionTest" --tests "com.github.hmdev.preview.PreviewSettingsStoreTest" \
->   --tests "AozoraEpub3SmokeTest" --tests "AozoraEpub3AutoPreviewTest" --tests "AozoraTextFinalizerTest"
-> ```
->
-> ハングしたら `jps -l` → `jstack <pid>` でブロック箇所を確認し、`taskkill //PID <pid> //F` で落とす。
+> それでも止まったら `jps -l` → `jstack <pid>` でブロック箇所を確認し、`taskkill //PID <pid> //F` で落とす。
 > **タグを打つ前に `gh run list --branch master` で CI が GREEN であることを必ず確認する。**
 
 ### 3.3 配布パッケージ生成
@@ -186,8 +173,8 @@ ls build/launch4j/ 2>/dev/null
 ./gradlew --no-daemon dist
 ```
 
-> `dist` → `build` → `check` → `test` と依存するので、上記のハングが解消するまでは
-> **`./gradlew --no-daemon dist -x test`** で回す（§3.2 のゲートは別に済ませてあること）。
+> `dist` → `build` → `check` → `test` と依存するので、§3.2 のゲートを済ませてあれば
+> **`./gradlew --no-daemon dist -x test`** で試験の二度回しを省いてよい。
 
 `dist` タスクは `[zipDistribution, tarDistribution]` に依存し、内部で以下が走る：
 
