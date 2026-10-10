@@ -219,6 +219,36 @@ public class HeadlessBookUpdaterTest {
 		assertFalse(twice.ok());
 		assertTrue(twice.message(), twice.message().contains("もう Web 本棚にある本です") && twice.message().contains("整理"));
 		org.junit.Assert.assertEquals(0, shelf.listFiles((d, n) -> n.endsWith(".epub")).length);
+
+		//名前を変える: 本・本ごとの話数・1 つ前の版・作品の名前が一緒に動き、そのまま続きを取れる（internal #11 の案 A）
+		File previousBefore = new File(work, HeadlessWebConversion.previousEpubName(work, moved));
+		assertTrue(previousBefore.isFile());
+		int ownBefore = com.github.hmdev.info.BookLedger.load(work).ownEpisodesFor(moved);
+		org.junit.Assert.assertEquals(3, ownBefore);
+		BookUpdater.Result renamed = updater.rename(base + "/novel/", moved.toPath(), "新しい名前");
+		assertTrue(renamed.message(), renamed.ok());
+		File renamedBook = new File(sub, "新しい名前.epub");
+		assertTrue(renamedBook.isFile());
+		assertFalse(moved.exists());
+		com.github.hmdev.info.BookLedger after = com.github.hmdev.info.BookLedger.load(work);
+		org.junit.Assert.assertEquals("新しい名前", after.outputBaseName);
+		org.junit.Assert.assertEquals(3, after.ownEpisodesFor(renamedBook));
+		org.junit.Assert.assertEquals(-1, after.ownEpisodesFor(moved));
+		assertFalse(previousBefore.exists());
+		assertTrue(new File(work, HeadlessWebConversion.previousEpubName(work, renamedBook)).isFile());
+		episodes += "<li><a href=\"/ep/4/\">第4話</a></li>";
+		BookUpdater.Result afterRename = updater.update(base + "/novel/", renamedBook.toPath());
+		assertTrue(afterRename.message(), afterRename.ok());
+		assertTrue("名前を変えた本を見つける", updater.download(base + "/novel/", shelf.toPath()).message().contains("新しい名前"));
+
+		//同じ名前の本がもうあれば変えない
+		File other = new File(sub, "ほかの本.epub");
+		Files.write(other.toPath(), new byte[]{1});
+		BookUpdater.Result clash = updater.rename(base + "/novel/", renamedBook.toPath(), "ほかの本");
+		assertFalse(clash.ok());
+		assertTrue(renamedBook.isFile());
+		org.junit.Assert.assertArrayEquals(new byte[]{1}, Files.readAllBytes(other.toPath()));
+		assertFalse("使えない名前", updater.rename(base + "/novel/", renamedBook.toPath(), "a/b").ok());
 	}
 
 	/** キャッシュの場所の相対パスは、基のフォルダから（CLI を別のフォルダから起こしても GUI と同じキャッシュ。PR #118 のゲート2） */

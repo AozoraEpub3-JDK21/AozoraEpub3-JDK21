@@ -403,7 +403,18 @@ function libraryCard(book)
 			event.stopPropagation();
 			startLibraryUpdate(book, true).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
 		});
-		slot.append(update, status, fewer);
+		//名前を変える (Web から取った本だけ。台帳も一緒に書き換えるので、続きを取るのはそのまま効く)
+		const rename = document.createElement('button');
+		rename.type = 'button';
+		rename.className = 'book-rename';
+		rename.textContent = '✎';
+		rename.title = '名前を変える';
+		rename.setAttribute('aria-label', '名前を変える: ' + (book.title || book.fileName));
+		rename.addEventListener('click', event => {
+			event.stopPropagation();
+			openRenameForm(slot, book);
+		});
+		slot.append(update, rename, status, fewer);
 		paintLibraryUpdate(slot, libraryUpdates.get(book.id));
 	} else {
 		slot.appendChild(status);
@@ -843,5 +854,64 @@ async function pickWebShelf()
 	} finally {
 		el.libraryShelfPick.disabled = false;
 	}
+}
+
+/*
+ * 名前を変える (internal #11 の案 A)
+ * カードの下に入力欄を出す。拡張子は変えない (アプリが元の拡張子を付ける)
+ */
+
+/** 本の名前から拡張子を除いた部分 */
+function baseNameOf(fileName)
+{
+	const lower = fileName.toLowerCase();
+	if (lower.endsWith('.kepub.epub')) return fileName.slice(0, -'.kepub.epub'.length);
+	const dot = fileName.lastIndexOf('.');
+	return dot > 0 ? fileName.slice(0, dot) : fileName;
+}
+
+function openRenameForm(slot, book)
+{
+	if (slot.querySelector('.book-rename-form')) return;
+	const form = document.createElement('form');
+	form.className = 'book-rename-form';
+	const input = document.createElement('input');
+	input.type = 'text';
+	input.value = baseNameOf(book.fileName);
+	input.setAttribute('aria-label', '新しい名前');
+	input.spellcheck = false;
+	const save = document.createElement('button');
+	save.type = 'submit';
+	save.textContent = '変える';
+	const cancel = document.createElement('button');
+	cancel.type = 'button';
+	cancel.textContent = '取消';
+	const note = document.createElement('div');
+	note.className = 'note';
+	note.setAttribute('aria-live', 'polite');
+	form.append(input, save, cancel, note);
+	// カードのキー操作 (Esc で本棚を閉じる) に食われないよう、ここで止める
+	form.addEventListener('keydown', event => {
+		event.stopPropagation();
+		if (event.key === 'Escape') form.remove();
+	});
+	cancel.addEventListener('click', () => form.remove());
+	form.addEventListener('submit', async event => {
+		event.preventDefault();
+		save.disabled = true;
+		note.textContent = '変えています…';
+		try {
+			const {response, json} = await postText('api/book/' + encodeURIComponent(book.id) + '/rename', input.value);
+			if (!response.ok) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+			form.remove();
+			await loadLibrary(true);
+		} catch (err) {
+			note.textContent = err.message;
+			save.disabled = false;
+		}
+	});
+	slot.appendChild(form);
+	input.focus();
+	input.select();
 }
 

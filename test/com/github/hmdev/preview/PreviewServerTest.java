@@ -1687,4 +1687,55 @@ public class PreviewServerTest
 		post(base() + "api/webshelf/pick");
 		assertEquals("提案の Web はまだ無いので、その上の棚から", List.of(shelf.toAbsolutePath().normalize()), initials);
 	}
+
+	// ---- 名前を変える（internal #11 の案 A） ----
+
+	@Test
+	public void renamingAWebBookRunsThroughTheUpdater() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		assertEquals(503, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
+		java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override public Result update(String sourceUrl, Path epubFile) { return new Result(true, false, "ok"); }
+			@Override public Result rename(String sourceUrl, Path epubFile, String name)
+			{
+				calls.add(epubFile.getFileName() + " -> " + name);
+				return "だめ".equals(name) ? new Result(false, false, "名前に使えない文字があります") : new Result(true, false, "名前を変えました: " + name);
+			}
+		});
+		java.util.List<Path> added = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setShelfAdder(added::add);
+		assertEquals(404, postText(base() + "api/book/nope/rename", "x").statusCode());
+		assertEquals("Web から取った本だけ", 400, postText(base() + "api/book/" + ids[1] + "/rename", "x").statusCode());
+		HttpResponse<String> ok = postText(base() + "api/book/" + ids[0] + "/rename", "新しい名前\n");
+		assertEquals(ok.body(), 200, ok.statusCode());
+		assertEquals(List.of("web.epub -> 新しい名前"), calls);
+		assertEquals("本棚を読み直す", 1, added.size());
+		HttpResponse<String> bad = postText(base() + "api/book/" + ids[0] + "/rename", "だめ");
+		assertEquals(400, bad.statusCode());
+		assertTrue(bad.body(), bad.body().contains("使えない文字"));
+		assertEquals(405, get(base() + "api/book/" + ids[0] + "/rename").statusCode());
+	}
+
+	/** 更新している最中の本の名前は変えない */
+	@Test
+	public void aBookBeingUpdatedIsNotRenamed() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override public Result update(String sourceUrl, Path epubFile) throws Exception
+			{
+				release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+				return new Result(true, false, "ok");
+			}
+			@Override public Result rename(String sourceUrl, Path epubFile, String name) { return new Result(true, false, "ok"); }
+		});
+		String job = post(base() + "api/book/" + ids[0] + "/update").body();
+		assertEquals(409, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
+		release.countDown();
+		waitForJob(job);
+		assertEquals(200, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
+	}
 }

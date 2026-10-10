@@ -293,8 +293,16 @@ public class HeadlessWebConversion
 
 		//新しく落とす本は、台帳の短い名前を使う（「出力ファイル名に表題利用」に依らない）。本棚の本を書き換えるときも、
 		//台帳に名前があればそれを使う（設定を切っていると長い名前になって、本棚の本と名前が合わずに断る。PR の手元の codex）
-		boolean autoFileName = this.newBookName || GuiConversionSettings.flag(this.props, "AutoFileName")
-			|| (expectedOutFile != null && bookInfo.outputBaseName != null);
+		boolean autoFileName = this.newBookName || GuiConversionSettings.flag(this.props, "AutoFileName");
+		//本棚の本を書き換えるときは、その本の名前で書く（本棚で名前を変えた本・同じ作品の別の名前の本も、そのまま更新できる。
+		//台帳の名前は作品に 1 つなので、本ごとの名前には使えない）。拡張子が設定と違えば、今までどおり名前が合わずに断る
+		if (expectedOutFile != null && expectedOutFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(outExt.toLowerCase(java.util.Locale.ROOT))) {
+			String expectedName = expectedOutFile.getName();
+			String bookBase = expectedName.substring(0, expectedName.length() - outExt.length());
+			//本の名前は台帳に記録しない（#116 のゲート2。作品の名前は、最初に変換したときのものを使い続ける）
+			bookInfo.outputBaseName = bookBase;
+			autoFileName = true;
+		}
 		//本棚の本と名前を照らすときは、照らす前に台帳へ名前を記録しない（違ったときに、違う名前が台帳に残る。#116 のゲート2）
 		File ledgerDir = bookInfo.ledgerDir;
 		if (expectedOutFile != null) bookInfo.ledgerDir = null;

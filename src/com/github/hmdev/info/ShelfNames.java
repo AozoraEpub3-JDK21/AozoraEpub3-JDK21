@@ -41,6 +41,27 @@ public final class ShelfNames
 		return cut(author + shortTitle, MAX_CHARS);
 	}
 
+	/**
+	 * 本棚で付け直す名前（拡張子なし）として使えないなら、その理由。使えるなら null。
+	 * ファイル名に使えない文字、. で始まる名前（本棚に並ばなくなる）、末尾の . と空白（Windows が落とす）、長すぎる名前を断る
+	 */
+	public static String invalidReason(String name)
+	{
+		if (name == null || name.isBlank()) return "名前を入れてください";
+		if (name.codePointCount(0, name.length()) > 200) return "名前が長すぎます（200 文字まで）";
+		if (name.startsWith(".")) return "名前を . で始めることはできません（本棚に並ばなくなります）";
+		if (name.endsWith(".") || name.endsWith(" ") || name.startsWith(" ")) return "名前の前後に空白や . は使えません";
+		for (int i = 0; i < name.length(); i++) {
+			char c = name.charAt(i);
+			if (c < 0x20 || "\\/:*?\"<>|".indexOf(c) >= 0) return "名前に使えない文字があります: " + (c < 0x20 ? "制御文字" : String.valueOf(c));
+		}
+		String upper = name.toUpperCase(java.util.Locale.ROOT);
+		int dot = upper.indexOf('.');
+		String stem = dot >= 0 ? upper.substring(0, dot) : upper;
+		if (stem.matches("CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]")) return "Windows で使えない名前です: " + name;
+		return null;
+	}
+
 	private static int indexOfAny(String s, char a, char b)
 	{
 		int i = s.indexOf(a);

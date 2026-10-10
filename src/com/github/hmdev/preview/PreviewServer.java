@@ -492,6 +492,11 @@ public class PreviewServer implements AutoCloseable
 				serveWebShelfPick(exchange, method);
 				return;
 			}
+			if (rest.startsWith("api/book/") && rest.endsWith("/rename")
+				&& rest.length() > "api/book/".length() + "/rename".length()) {
+				serveRename(exchange, method, rest.substring("api/book/".length(), rest.length() - "/rename".length()));
+				return;
+			}
 			if (rest.startsWith("api/book/") && rest.endsWith("/update")
 				&& rest.length() > "api/book/".length() + "/update".length()) {
 				//POST なので、下の read 判定より前に処理する（reveal と同じ）
@@ -851,6 +856,73 @@ public class PreviewServer implements AutoCloseable
 			}
 			if (p.equals(top)) return;
 		}
+	}
+
+	/**
+	 * 本棚の本の名前を変える（POST、本文は拡張子を除いた新しい名前。internal #11 の案 A）。Web から取った本だけ。
+	 * 更新している最中の本は断る。変えたら本棚を読み直す
+	 */
+	private void serveRename(HttpExchange exchange, String method, String bookId) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		BookUpdater updater = this.bookUpdater;
+		if (updater == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚からは名前を変えられません（アプリから本棚を開いてください）"));
+			return;
+		}
+		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		if (entry == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		if (entry.source() == null) {
+			respondJsonStatus(exchange, 400, errorJson("Web から取った本だけ名前を変えられます"));
+			return;
+		}
+		synchronized (this.jobs) {
+			if (this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active())) {
+				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから変えてください"));
+				return;
+			}
+		}
+		byte[] body = exchange.getRequestBody().readNBytes(MAX_PATH_BYTES + 1);
+		String name = new String(body, StandardCharsets.UTF_8).replaceAll("[\\r\\n]+$", "");
+		if (body.length > MAX_PATH_BYTES) {
+			respondJsonStatus(exchange, 400, errorJson("名前が長すぎます"));
+			return;
+		}
+		BookUpdater.Result result;
+		try {
+			result = updater.rename(entry.source(), entry.file(), name);
+		} catch (UnsupportedOperationException e) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚からは名前を変えられません"));
+			return;
+		} catch (Exception e) {
+			logger.warn("名前を変えられませんでした: {}", entry.file(), e);
+			respondJsonStatus(exchange, 500, errorJson("名前を変えられませんでした: " + e.getMessage()));
+			return;
+		}
+		if (!result.ok()) {
+			respondJsonStatus(exchange, 400, errorJson(result.message()));
+			return;
+		}
+		//本棚を読み直す（本の ID が変わる）
+		ShelfAdder adder = this.shelfAdder;
+		if (adder != null) {
+			try {
+				adder.add(entry.file().getParent());
+			} catch (IOException | RuntimeException e) {
+				logger.warn("名前を変えた本を本棚に出せませんでした: {}", entry.file(), e);
+			}
+		}
+		StringBuilder buf = new StringBuilder(128);
+		buf.append('{');
+		Json.prop(buf, "message", result.message());
+		buf.append('}');
+		respondJson(exchange, buf.toString());
 	}
 
 	/** 落とす URL として受け取る本文の上限（バイト） */

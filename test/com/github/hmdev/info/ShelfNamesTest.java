@@ -31,4 +31,16 @@ public class ShelfNamesTest {
 		String cut = ShelfNames.shortBaseName(emoji);
 		assertEquals("サロゲートペアを割らない", ShelfNames.MAX_CHARS, cut.codePointCount(0, cut.length()));
 	}
+
+	/** 本棚で付け直す名前として使えないもの */
+	@Test
+	public void badNamesAreRefused() {
+		org.junit.Assert.assertNull(ShelfNames.invalidReason("[作者] 題 第二部"));
+		for (String bad : new String[]{ "", "  ", ".hidden", "末尾が点.", "末尾が空白 ", " 先頭が空白", "a/b", "a\\b", "a:b", "a*b", "a?b", "a\"b", "a<b", "a>b", "a|b",
+				"tab\tin", "CON", "con.txt", "LPT1", "あ".repeat(201) }) {
+			org.junit.Assert.assertNotNull("断る: [" + bad + "]", ShelfNames.invalidReason(bad));
+		}
+		org.junit.Assert.assertNull("200 文字までは使える", ShelfNames.invalidReason("あ".repeat(200)));
+		org.junit.Assert.assertNull("CON で始まるだけの名前は使える", ShelfNames.invalidReason("CONTACT"));
+	}
 }

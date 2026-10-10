@@ -142,6 +142,13 @@ public final class BookLedger
 		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, other.episodes, other.lastEpisodes, other.bookEpisodes);
 	}
 
+	/** その本だけの話数の記録。無ければ -1 */
+	public int ownEpisodesFor(File epub)
+	{
+		Integer n = this.bookEpisodes.get(bookKey(epub));
+		return n != null ? n : -1;
+	}
+
 	/** 本棚の本の話数。その本の記録が無ければ作品の話数 */
 	public int episodesFor(File epub)
 	{
