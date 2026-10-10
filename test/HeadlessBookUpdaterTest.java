@@ -219,6 +219,36 @@ public class HeadlessBookUpdaterTest {
 		assertFalse(twice.ok());
 		assertTrue(twice.message(), twice.message().contains("もう Web 本棚にある本です") && twice.message().contains("整理"));
 		org.junit.Assert.assertEquals(0, shelf.listFiles((d, n) -> n.endsWith(".epub")).length);
+
+		//名前を変える: 本・本ごとの話数・1 つ前の版・作品の名前が一緒に動き、そのまま続きを取れる（internal #11 の案 A）
+		File previousBefore = new File(work, HeadlessWebConversion.previousEpubName(work, moved));
+		assertTrue(previousBefore.isFile());
+		int ownBefore = com.github.hmdev.info.BookLedger.load(work).ownEpisodesFor(moved);
+		org.junit.Assert.assertEquals(3, ownBefore);
+		BookUpdater.Result renamed = updater.rename(base + "/novel/", moved.toPath(), "新しい名前");
+		assertTrue(renamed.message(), renamed.ok());
+		File renamedBook = new File(sub, "新しい名前.epub");
+		assertTrue(renamedBook.isFile());
+		assertFalse(moved.exists());
+		com.github.hmdev.info.BookLedger after = com.github.hmdev.info.BookLedger.load(work);
+		org.junit.Assert.assertEquals("新しい名前", after.outputBaseName);
+		org.junit.Assert.assertEquals(3, after.ownEpisodesFor(renamedBook));
+		org.junit.Assert.assertEquals(-1, after.ownEpisodesFor(moved));
+		assertFalse(previousBefore.exists());
+		assertTrue(new File(work, HeadlessWebConversion.previousEpubName(work, renamedBook)).isFile());
+		episodes += "<li><a href=\"/ep/4/\">第4話</a></li>";
+		BookUpdater.Result afterRename = updater.update(base + "/novel/", renamedBook.toPath());
+		assertTrue(afterRename.message(), afterRename.ok());
+		assertTrue("名前を変えた本を見つける", updater.download(base + "/novel/", shelf.toPath()).message().contains("新しい名前"));
+
+		//同じ名前の本がもうあれば変えない
+		File other = new File(sub, "ほかの本.epub");
+		Files.write(other.toPath(), new byte[]{1});
+		BookUpdater.Result clash = updater.rename(base + "/novel/", renamedBook.toPath(), "ほかの本");
+		assertFalse(clash.ok());
+		assertTrue(renamedBook.isFile());
+		org.junit.Assert.assertArrayEquals(new byte[]{1}, Files.readAllBytes(other.toPath()));
+		assertFalse("使えない名前", updater.rename(base + "/novel/", renamedBook.toPath(), "a/b").ok());
 	}
 
 	/** キャッシュの場所の相対パスは、基のフォルダから（CLI を別のフォルダから起こしても GUI と同じキャッシュ。PR #118 のゲート2） */
@@ -270,5 +300,128 @@ public class HeadlessBookUpdaterTest {
 		org.junit.Assert.assertEquals(new File(shelf, ".aozora"), updater.cacheFor(props, book.toPath(), "https://example.com/novel/"));
 		org.junit.Assert.assertEquals("前からの別の作品は設定のキャッシュ", settingsCache,
 			updater.cacheFor(props, book.toPath(), "https://ncode.syosetu.com/n0000aa/"));
+	}
+
+	/** 深いフォルダで、更新のときに縮められる長さの名前には変えない（変えると続きを取れなくなる。PR の手元の codex） */
+	@Test
+	public void aNameTooLongForTheFolderIsRefused() throws Exception {
+		File dir = tempFolder.newFolder("deep");
+		while (dir.toPath().toRealPath().toString().length() < 120) {
+			dir = new File(dir, "d".repeat(20));
+			assertTrue(dir.mkdirs() || dir.isDirectory());
+		}
+		File book = new File(dir, "book.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		BookUpdater.Result r = updater.rename("https://example.com/novel/", book.toPath(), "x".repeat(180));
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("長すぎます"));
+		assertTrue(book.isFile());
+		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "short").ok());
+		org.junit.Assert.assertFalse(".epub の本を .kepub.epub に見せない", updater.rename("https://example.com/novel/", new File(dir, "short.epub").toPath(), "short.kepub").ok());
+	}
+
+	/** 名前を変えても本の形（.fxl.kepub.epub）を保つ。大文字と小文字だけの変更もできる。消えた本は更新しない（PR のゲート2） */
+	@Test
+	public void renamingKeepsTheFormatAndHandlesCaseOnlyChanges() throws Exception {
+		File dir = tempFolder.newFolder("books");
+		File book = new File(dir, "abc.fxl.kepub.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		//名前の末尾で本の形が変わって見える名前は断る（Kobo の本に .fxl を足すと固定レイアウトに見える）
+		File kobo = new File(dir, "kobo.kepub.epub");
+		Files.write(kobo.toPath(), new byte[]{2});
+		org.junit.Assert.assertFalse(updater.rename("https://example.com/novel/", kobo.toPath(), "kobo.fxl").ok());
+		assertTrue("同じ形のままなら付けてよい", updater.rename("https://example.com/novel/", book.toPath(), "abc.fxl").ok());
+		book = new File(dir, "abc.fxl.fxl.kepub.epub");
+		Files.delete(kobo.toPath());
+		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "def").ok());
+		File def = new File(dir, "def.fxl.kepub.epub");
+		assertTrue(def.isFile());
+		BookUpdater.Result cased = updater.rename("https://example.com/novel/", def.toPath(), "DEF");
+		assertTrue(cased.message(), cased.ok());
+		org.junit.Assert.assertEquals(java.util.List.of("DEF.fxl.kepub.epub"), java.util.Arrays.asList(dir.list()));
+		//消えた本（名前を変えた前の名前）は更新しない（更新の待ちの間に名前を変えたとき、前の名前の本を作り直さない）
+		BookUpdater.Result gone = updater.update("https://example.com/novel/", book.toPath());
+		assertFalse(gone.ok());
+		assertTrue(gone.message(), gone.message().contains("見つかりません"));
+	}
+
+	/** 設定のキャッシュの台帳（GUI で変換した作品）では、本の名前を変えても作品の名前は変えない（GUI の次の変換が 2 冊目を作らない） */
+	@Test
+	public void renamingAGuiBookKeepsTheWorkName() throws Exception {
+		//設定のキャッシュが .aozora という名前のフォルダの下にあっても、Web 本棚の記録と見なさない（PR の codex）
+		File cache = new File(tempFolder.newFolder("home"), ".aozora/cache");
+		assertTrue(cache.mkdirs());
+		File work = new File(cache, "example.com/novel");
+		assertTrue(work.mkdirs());
+		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").withOutputBaseName("[a] 題").save(work);
+		File dir = tempFolder.newFolder("gui-out");
+		File book = new File(dir, "[a] 題.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		Properties props = new Properties();
+		props.setProperty("CachePath", cache.getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "好きな名前").ok());
+		org.junit.Assert.assertEquals("[a] 題", com.github.hmdev.info.BookLedger.load(work).outputBaseName);
+	}
+
+	/**
+	 * 大文字小文字だけを変えても、本ごとの話数と 1 つ前の版が新しい名前に動く（古い印は動かす前に取る。
+	 * 動かした後では古い名前も新しい綴りに正規化される。win2 が Windows で実測。mac の APFS でも同じ）
+	 */
+	@Test
+	public void aCaseOnlyRenameMovesTheRecords() throws Exception {
+		File shelf = tempFolder.newFolder("caseshelf");
+		File work = new File(shelf, ".aozora/example.com/novel");
+		assertTrue(work.mkdirs());
+		File abc = new File(shelf, "abc.epub");
+		Files.write(abc.toPath(), new byte[]{1});
+		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").withOutputBaseName("abc")
+			.withBookEpisodes(abc, 7).save(work);
+		File previous = new File(work, HeadlessWebConversion.previousEpubName(work, abc));
+		Files.write(previous.toPath(), new byte[]{2});
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		assertTrue(updater.rename("https://example.com/novel/", abc.toPath(), "ABC").ok());
+		File upper = new File(shelf, "ABC.epub");
+		org.junit.Assert.assertEquals(java.util.List.of("ABC.epub"),
+			java.util.Arrays.stream(shelf.list()).filter(n -> n.endsWith(".epub")).toList());
+		com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(work);
+		org.junit.Assert.assertEquals(7, ledger.ownEpisodesFor(upper));
+		org.junit.Assert.assertEquals("ABC", ledger.outputBaseName);
+		long keys = Files.readAllLines(new File(work, com.github.hmdev.info.BookLedger.FILE_NAME).toPath()).stream()
+			.filter(l -> l.startsWith("episodes.")).count();
+		org.junit.Assert.assertEquals("古い印の記録を残さない", 1, keys);
+		File[] previousFiles = work.listFiles((d, n) -> n.startsWith("previous "));
+		org.junit.Assert.assertEquals(1, previousFiles.length);
+		org.junit.Assert.assertEquals(HeadlessWebConversion.previousEpubName(work, upper), previousFiles[0].getName());
+	}
+
+	/** 元の本を指すリンクの名前には変えない（大文字小文字の変更と見なして本を一時ファイルに残さない。PR の codex） */
+	@Test
+	public void aLinkToTheBookIsNotACaseRename() throws Exception {
+		File dir = tempFolder.newFolder("links");
+		File book = new File(dir, "book.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		java.nio.file.Path alias = dir.toPath().resolve("alias.epub");
+		try {
+			Files.createSymbolicLink(alias, book.toPath());
+		} catch (UnsupportedOperationException | java.io.IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		BookUpdater.Result r = updater.rename("https://example.com/novel/", book.toPath(), "alias");
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("同じ名前"));
+		assertTrue(book.isFile());
+		org.junit.Assert.assertEquals(0, dir.listFiles((d, n) -> n.startsWith(".rename.")).length);
 	}
 }

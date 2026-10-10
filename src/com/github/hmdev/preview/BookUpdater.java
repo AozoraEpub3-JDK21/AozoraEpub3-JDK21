@@ -46,4 +46,13 @@ public interface BookUpdater
 	{
 		throw new UnsupportedOperationException();
 	}
+
+	/**
+	 * 本棚の本の名前（拡張子なし）を変える。台帳の記録（本ごとの話数・1 つ前の版・作品の名前）も一緒に動かすので、
+	 * 続きを取るのはそのまま効く（internal #11 の案 A）。変えられない実装は {@link UnsupportedOperationException}
+	 */
+	default Result rename(String sourceUrl, Path epubFile, String newBaseName) throws Exception
+	{
+		throw new UnsupportedOperationException();
+	}
 }

@@ -142,6 +142,33 @@ public final class BookLedger
 		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, other.episodes, other.lastEpisodes, other.bookEpisodes);
 	}
 
+	/** その本だけの話数の記録。無ければ -1 */
+	public int ownEpisodesFor(File epub)
+	{
+		return ownEpisodesForKey(bookKey(epub));
+	}
+
+	/** 本の印（{@link #bookKey}）で引く、その本だけの話数の記録。無ければ -1 */
+	public int ownEpisodesForKey(String key)
+	{
+		Integer n = this.bookEpisodes.get(key);
+		return n != null ? n : -1;
+	}
+
+	/**
+	 * 本の印の記録を、別の本の記録に移す（名前を変えたとき。古い印は名前を変える前に取っておく。大文字小文字だけを変えると、
+	 * 変えた後では古い名前も新しい綴りに正規化されて、古い印を作れない＝win2 が Windows で実測）
+	 */
+	public BookLedger withBookEpisodesMoved(String fromKey, File to)
+	{
+		int own = ownEpisodesForKey(fromKey);
+		if (own < 0) return this;
+		java.util.Map<String, Integer> map = new java.util.TreeMap<>(this.bookEpisodes);
+		map.remove(fromKey);
+		map.put(bookKey(to), own);
+		return new BookLedger(this.sourceUrl, this.identifier, this.textBaseName, this.outputBaseName, this.episodes, this.lastEpisodes, map);
+	}
+
 	/** 本棚の本の話数。その本の記録が無ければ作品の話数 */
 	public int episodesFor(File epub)
 	{

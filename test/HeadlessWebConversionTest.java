@@ -18,6 +18,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import com.github.hmdev.preview.BookUpdater;
 import com.github.hmdev.util.VelocityTestUtils;
 import com.github.hmdev.writer.Epub3Writer;
 import com.sun.net.httpserver.HttpExchange;
@@ -160,25 +161,35 @@ public class HeadlessWebConversionTest {
 		assertEquals("取りに行く前に断る（取ってから断ると、次の更新で更新なしに見える）", 0, requests.get());
 	}
 
-	/** 本棚の本と違う名前に出力されるときは書かない（別の本として増えないように） */
+	/**
+	 * 本棚の本は、その本の名前で書き換える（本棚で名前を変えた本・同じ作品の別の名前の本も更新できる）。
+	 * 本の名前は台帳に記録しない（#116 のゲート2）。拡張子が設定と違えば、名前が合わずに書かない
+	 */
 	@Test
-	public void aDifferentNameFromTheBookIsNotWritten() throws Exception {
+	public void aShelfBookIsWrittenUnderItsOwnName() throws Exception {
 		String basePath = serveAndBase();
 		File dst = tempFolder.newFolder("out");
 		File book = new File(dst, "別の名前.epub");
 		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).convert("http://" + fqdn + "/novel/", dst, book, true);
-		assertFalse(r.ok());
-		assertTrue(r.message(), r.message().contains("違う名前"));
-		assertEquals(0, dst.list().length);
-		//違う名前を台帳に記録しない（記録すると、以後の変換がその名前になって本が 2 冊になる。#116 のゲート2）
+		assertTrue(r.message(), r.ok());
+		assertEquals(book.getCanonicalFile(), r.epub().getCanonicalFile());
+		assertEquals(java.util.List.of("別の名前.epub"), java.util.Arrays.asList(dst.list()));
 		com.github.hmdev.info.BookLedger ledger = ledgerOf();
 		assertNotNull(ledger);
-		assertEquals(null, ledger.outputBaseName);
+		assertEquals("本の名前を記録しない", null, ledger.outputBaseName);
 
-		//名前が合えば記録する
-		HeadlessWebConversion.Result ok = conversion(guiDefaults(), basePathOf()).convert("http://" + fqdn + "/novel/", dst, new File(dst, "[著者] 題.epub"), true);
-		assertTrue(ok.message(), ok.ok());
-		assertEquals("[著者] 題", ledgerOf().outputBaseName);
+		//設定が .epub で、本棚の本が .kepub.epub（本の形が違う。.epub で終わっていても上書きしない。PR のゲート2）
+		File kepub = new File(dst, "別の名前.kepub.epub");
+		Files.write(kepub.toPath(), new byte[]{9});
+		HeadlessWebConversion.Result kobo1 = conversion(guiDefaults(), basePathOf()).convert("http://" + fqdn + "/novel/", dst, kepub, true);
+		assertFalse(kobo1.ok());
+		org.junit.Assert.assertArrayEquals(new byte[]{9}, Files.readAllBytes(kepub.toPath()));
+		//設定が .kepub.epub で、本棚の本が .epub（拡張子が合わない）
+		Properties kobo = guiDefaults();
+		kobo.setProperty("Ext", ".kepub.epub");
+		HeadlessWebConversion.Result other = conversion(kobo, basePathOf()).convert("http://" + fqdn + "/novel/", dst, book, true);
+		assertFalse(other.ok());
+		assertTrue(other.message(), other.message().contains("違う名前"));
 	}
 
 	private String lastBasePath;
@@ -755,6 +766,14 @@ public class HeadlessWebConversionTest {
 		assertFalse(a.epub().getName().equals(b.epub().getName()));
 		//縮められた名前でも、もう落としてある作品だと分かる（PR の codex）
 		assertTrue(HeadlessBookUpdater.existingBook(shelf.toPath(), "http://" + fqdn + "/novel/") != null);
+		//縮められた名前の本の名前を変えても、作品の名前が変わり、もう一度落とすときに見つけられる（PR の手元の codex）
+		Properties props = guiDefaults();
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
+		BookUpdater.Result renamed = updater.rename("http://" + fqdn + "/novel/", a.epub().toPath(), "改名");
+		assertTrue(renamed.message(), renamed.ok());
+		java.nio.file.Path found = HeadlessBookUpdater.existingBook(shelf.toPath(), "http://" + fqdn + "/novel/");
+		assertNotNull(found);
+		assertEquals("改名.epub", found.getFileName().toString());
 	}
 
 	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */

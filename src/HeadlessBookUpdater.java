@@ -56,6 +56,8 @@ public class HeadlessBookUpdater implements BookUpdater
 		//設定は Web 変換の鍵を取ってから写す。GUI は Web 変換の間、画面の部品を一時的に書き換えている（表紙・文字コード・
 		//コメント）ので、その間に写すと一時的な値（別の作品の表紙など）が入る（PR #118 のゲート2）
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+			//待っている間に名前を変えられた・消された本は書かない（前の名前で本が増える。PR のゲート2）
+			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません（名前を変えたか、消しました）");
 			Properties props = this.settings.get();
 			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl))
 				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true, true, allowFewerEpisodes);
@@ -152,13 +154,126 @@ public class HeadlessBookUpdater implements BookUpdater
 	/** .aozora の中に、この作品の台帳があるか（サイトと作品のフォルダの下。深さは URL の作りによる） */
 	static boolean holdsWork(Path shelfCache, String sourceUrl)
 	{
+		return ledgerDirOf(shelfCache, sourceUrl) != null;
+	}
+
+	/** キャッシュの中の、この作品の台帳のフォルダ。無ければ null */
+	static Path ledgerDirOf(Path cache, String sourceUrl)
+	{
+		if (!java.nio.file.Files.isDirectory(cache)) return null;
 		String identifier = com.github.hmdev.info.BookLedger.identifierFor(sourceUrl);
-		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(shelfCache, 8)) {
+		try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(cache, 8)) {
 			return files.filter(p -> p.getFileName().toString().equals(com.github.hmdev.info.BookLedger.FILE_NAME))
-				.map(p -> com.github.hmdev.info.BookLedger.load(p.getParent().toFile()))
-				.anyMatch(l -> l != null && identifier.equals(l.identifier));
+				.filter(p -> {
+					com.github.hmdev.info.BookLedger l = com.github.hmdev.info.BookLedger.load(p.getParent().toFile());
+					return l != null && identifier.equals(l.identifier);
+				})
+				.map(Path::getParent).findFirst().orElse(null);
 		} catch (java.io.IOException | java.io.UncheckedIOException e) {
-			return false;
+			return null;
+		}
+	}
+
+	/**
+	 * 本棚の本の名前を変える。本の隣に同じ名前があれば断る。台帳があれば、本ごとの話数と 1 つ前の版を新しい名前に動かし、
+	 * 作品の名前がこの本の名前だったら（同じ作品の本が 1 冊のとき）作品の名前も変える（もう一度落とすときに見つけられるように）
+	 */
+	@Override
+	public Result rename(String sourceUrl, Path epubFile, String newBaseName) throws Exception
+	{
+		String reason = com.github.hmdev.info.ShelfNames.invalidReason(newBaseName);
+		if (reason != null) return new Result(false, false, reason);
+		String fileName = epubFile.getFileName().toString();
+		//本の形（.kepub.epub・.fxl.kepub.epub）を変えない（PR のゲート2）
+		String ext = com.github.hmdev.info.ShelfNames.extensionOf(fileName);
+		String oldBase = fileName.substring(0, fileName.length() - ext.length());
+		String newName = newBaseName + ext;
+		if (newName.equals(fileName)) return new Result(true, false, "名前は同じです");
+		//名前の末尾で本の形が変わって見えないこと（「題.kepub」に変えると .kepub.epub の本に見え、続きを取れなくなる。PR の手元の codex）
+		if (!com.github.hmdev.info.ShelfNames.extensionOf(newName).equalsIgnoreCase(ext)) {
+			return new Result(false, false, "名前の終わりに .kepub や .fxl は付けられません");
+		}
+		//その場所で作れる名前か（Linux は 255 バイト、Windows は 255 文字。実際に確かめる＝PathUtils.fitFileNameIn）。
+		//更新のときに縮められる長さの名前も使わない（縮めた名前が本の名前と合わず、続きを取れなくなる。PR の codex）
+		String extForFit = ext.isEmpty() ? ".epub" : ext;
+		File folder = epubFile.toAbsolutePath().getParent().toFile();
+		if (!com.github.hmdev.util.PathUtils.fitFileNameIn(folder, newBaseName, ext).equals(newBaseName)
+			|| !AozoraEpub3.fittedTitleName(folder, newBaseName, extForFit).equals(newBaseName)) {
+			return new Result(false, false, "このフォルダでは名前が長すぎます（短くしてください）");
+		}
+		Path target = epubFile.resolveSibling(newName);
+		//変換が本を書き換えている間に動かさない
+		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません");
+			//大文字小文字だけの違いで、同じファイルと見なされるとき（Windows・mac）。リンクで同じファイルを指す別の名前は、
+			//同じ名前の本として断る（PR の codex）
+			boolean sameFile = newName.equalsIgnoreCase(fileName)
+				&& java.nio.file.Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+				&& java.nio.file.Files.isSameFile(target, epubFile);
+			if (java.nio.file.Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS) && !sameFile) {
+				return new Result(false, false, "同じ名前の本がもうあります: " + target.getFileName());
+			}
+			//台帳の場所と、古い名前の印・1 つ前の版の名前は、動かす前に決める（動かした後では、大文字小文字だけの変更で
+			//古い名前も新しい綴りに正規化される。win2 が Windows で実測）
+			Properties props = this.settings.get();
+			File cache = cacheFor(props, epubFile, sourceUrl);
+			//Web 本棚の記録か（本の上の .aozora を選んだか）。設定のキャッシュなら作品の名前は変えない
+			boolean shelfLedger = !cache.equals(cachePathOf(props, this.basePath));
+			Path ledgerDir = ledgerDirOf(cache.toPath(), sourceUrl);
+			String fromKey = com.github.hmdev.info.BookLedger.bookKey(epubFile.toFile());
+			String fromPrevious = ledgerDir != null ? HeadlessWebConversion.previousEpubName(ledgerDir.toFile(), epubFile.toFile()) : null;
+			//大文字と小文字だけを変えるとき（同じファイルと見なす Windows・mac）は、いったん別の名前を経る（PR のゲート2）
+			if (sameFile) {
+				Path step = java.nio.file.Files.createTempFile(epubFile.toAbsolutePath().getParent(), ".rename.", ".tmp");
+				java.nio.file.Files.delete(step);
+				java.nio.file.Files.move(epubFile, step);
+				try {
+					java.nio.file.Files.move(step, target);
+				} catch (java.io.IOException e) {
+					//戻す（隠れた一時ファイルの名前に本を残さない）
+					java.nio.file.Files.move(step, epubFile);
+					throw e;
+				}
+			} else {
+				java.nio.file.Files.move(epubFile, target);
+			}
+			if (ledgerDir != null) moveRecords(ledgerDir, fromKey, fromPrevious, epubFile, target, oldBase, newBaseName, extForFit, shelfLedger);
+			return new Result(true, false, "名前を変えました: " + target.getFileName());
+		}
+	}
+
+	/**
+	 * 台帳の本ごとの記録を、新しい名前の本に動かす（失敗しても名前は変わっている。記録が古い名前のまま残るだけ）。
+	 * 1 つ前の版と台帳は別々に動かす（片方の失敗で、もう片方＝話数の守りが動かないことのないように。PR のゲート2）
+	 */
+	private static void moveRecords(Path ledgerDir, String fromKey, String fromPrevious, Path from, Path to, String oldBase, String newBase,
+		String ext, boolean shelfLedger)
+	{
+		File dir = ledgerDir.toFile();
+		org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(HeadlessBookUpdater.class);
+		try {
+			File previous = new File(dir, fromPrevious);
+			if (previous.isFile()) {
+				java.nio.file.Files.move(previous.toPath(), new File(dir, HeadlessWebConversion.previousEpubName(dir, to.toFile())).toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
+		} catch (java.io.IOException e) {
+			log.warn("1 つ前の版を新しい名前に動かせませんでした: {}", ledgerDir, e);
+		}
+		try {
+			com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(dir);
+			if (ledger == null) return;
+			com.github.hmdev.info.BookLedger next = ledger;
+			next = next.withBookEpisodesMoved(fromKey, to.toFile());
+			//作品の名前を変えるのは Web 本棚の記録（.aozora）だけ。設定のキャッシュの台帳（GUI で変換した作品）の名前を変えると、
+			//GUI の次の変換が新しい名前で 2 冊目を作る（PR のゲート2）。本の名前が作品の名前（深いフォルダでは縮めた名前）のときだけ
+			if (shelfLedger && ledger.outputBaseName != null && (oldBase.equals(ledger.outputBaseName)
+				|| oldBase.equals(AozoraEpub3.fittedTitleName(from.toAbsolutePath().getParent().toFile(), ledger.outputBaseName, ext)))) {
+				next = next.withOutputBaseName(newBase);
+			}
+			if (next != ledger) next.save(dir);
+		} catch (java.io.IOException e) {
+			log.warn("台帳の記録を新しい名前に動かせませんでした: {}", ledgerDir, e);
 		}
 	}
 
