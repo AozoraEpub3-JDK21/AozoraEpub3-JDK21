@@ -1,6 +1,7 @@
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -6013,7 +6014,6 @@ public class AozoraEpub3Applet extends JPanel
 		return UiThemeManager.Mode.fromIni(bootProps.getProperty(UiThemeManager.INI_KEY));
 	}
 
-	/** Jar実行用 */
 	/** 窓の位置と大きさ・設定を保存して終える（窓を閉じたときと、mac の Cmd+Q） */
 	static void saveAndExit(JFrame jFrame, AozoraEpub3Applet applet)
 	{
@@ -6036,6 +6036,7 @@ public class AozoraEpub3Applet extends JPanel
 		System.exit(0);
 	}
 
+	/** Jar実行用 */
 	public static void main(String args[])
 	{
 		// コマンドライン引数がある場合はCLIモード(AozoraEpub3)を起動
@@ -6082,10 +6083,10 @@ public class AozoraEpub3Applet extends JPanel
 				saveAndExit(jFrame, applet);
 			}
 		});
-		//mac の Cmd+Q（メニューの「終了」）も、窓を閉じるのと同じく設定を保存してから終える。
-		//無いと Cmd+Q は windowClosing を通らずに JVM を終え、ini が一切保存されない（internal #27）
-		if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.APP_QUIT_HANDLER)) {
-			java.awt.Desktop.getDesktop().setQuitHandler((event, response) -> saveAndExit(jFrame, applet));
+		//mac の Cmd+Q（メニューの「終了」）も、窓を閉じるのと同じ道（windowClosing）を通して設定を保存してから終える。
+		//既定では Cmd+Q は windowClosing を通らずに JVM を終え、ini が一切保存されない（internal #27）。終わる道は 1 つにする
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_STRATEGY)) {
+			Desktop.getDesktop().setQuitStrategy(java.awt.desktop.QuitStrategy.CLOSE_ALL_WINDOWS);
 		}
 		jFrame.add(applet);
 		jFrame.setVisible(true);
@@ -6179,8 +6180,18 @@ public class AozoraEpub3Applet extends JPanel
 			
 			//設定ファイル更新
 			if (this.jarPath != null && this.propFileName != null) {
-				try (OutputStream fos = Files.newOutputStream(Path.of(this.jarPath+this.propFileName))) {
-					this.props.store(fos, "AozoraEpub3 Parameters");
+				//一時ファイルに書いてから置き換える（Cmd+Q・ログアウトで途中で止められても、ini が空や書きかけにならない。
+				//ini がリンクならリンクの先を書き換える）
+				Path ini = Path.of(this.jarPath+this.propFileName);
+				if (Files.exists(ini)) ini = ini.toRealPath();
+				Path tmp = Files.createTempFile(ini.toAbsolutePath().getParent(), ini.getFileName().toString(), ".tmp");
+				try {
+					try (OutputStream fos = Files.newOutputStream(tmp)) {
+						this.props.store(fos, "AozoraEpub3 Parameters");
+					}
+					Files.move(tmp, ini, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				} finally {
+					Files.deleteIfExists(tmp);
 				}
 			}
 		} catch (Exception e) {
