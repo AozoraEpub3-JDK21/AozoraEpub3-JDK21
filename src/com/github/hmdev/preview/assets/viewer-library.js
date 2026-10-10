@@ -939,6 +939,12 @@ function openRenameForm(slot, book, focus = true)
 			if (job.state !== 'done') throw new Error(job.message || '名前を変えられませんでした');
 			form.remove();
 			await loadLibrary(true);
+			// 名前を変えたことを、その本のカードに出す (カードの書名は本の題なので、名前の変化は見えない。win2 の確認)
+			const renamed = (state.library && state.library.books || []).find(b => b.subFolder === book.subFolder && b.shelf === book.shelf
+				&& baseNameOf(b.fileName) === input.value);
+			const renamedSlot = renamed && el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(renamed.id) + '"]');
+			const line = renamedSlot && renamedSlot.querySelector('.book-update-status');
+			if (line) line.textContent = '名前を変えました: ' + renamed.fileName;
 		} catch (err) {
 			note.textContent = err.message;
 			save.disabled = false;

@@ -369,4 +369,37 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "好きな名前").ok());
 		org.junit.Assert.assertEquals("[a] 題", com.github.hmdev.info.BookLedger.load(work).outputBaseName);
 	}
+
+	/**
+	 * 大文字小文字だけを変えても、本ごとの話数と 1 つ前の版が新しい名前に動く（古い印は動かす前に取る。
+	 * 動かした後では古い名前も新しい綴りに正規化される。win2 が Windows で実測。mac の APFS でも同じ）
+	 */
+	@Test
+	public void aCaseOnlyRenameMovesTheRecords() throws Exception {
+		File shelf = tempFolder.newFolder("caseshelf");
+		File work = new File(shelf, ".aozora/example.com/novel");
+		assertTrue(work.mkdirs());
+		File abc = new File(shelf, "abc.epub");
+		Files.write(abc.toPath(), new byte[]{1});
+		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").withOutputBaseName("abc")
+			.withBookEpisodes(abc, 7).save(work);
+		File previous = new File(work, HeadlessWebConversion.previousEpubName(work, abc));
+		Files.write(previous.toPath(), new byte[]{2});
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		assertTrue(updater.rename("https://example.com/novel/", abc.toPath(), "ABC").ok());
+		File upper = new File(shelf, "ABC.epub");
+		org.junit.Assert.assertEquals(java.util.List.of("ABC.epub"),
+			java.util.Arrays.stream(shelf.list()).filter(n -> n.endsWith(".epub")).toList());
+		com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(work);
+		org.junit.Assert.assertEquals(7, ledger.ownEpisodesFor(upper));
+		org.junit.Assert.assertEquals("ABC", ledger.outputBaseName);
+		long keys = Files.readAllLines(new File(work, com.github.hmdev.info.BookLedger.FILE_NAME).toPath()).stream()
+			.filter(l -> l.startsWith("episodes.")).count();
+		org.junit.Assert.assertEquals("古い印の記録を残さない", 1, keys);
+		File[] previousFiles = work.listFiles((d, n) -> n.startsWith("previous "));
+		org.junit.Assert.assertEquals(1, previousFiles.length);
+		org.junit.Assert.assertEquals(HeadlessWebConversion.previousEpubName(work, upper), previousFiles[0].getName());
+	}
 }
