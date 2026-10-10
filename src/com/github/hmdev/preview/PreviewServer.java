@@ -897,6 +897,11 @@ public class PreviewServer implements AutoCloseable
 				return;
 			}
 			forgetOldJobs();
+			//まだ終わっていない仕事でいっぱいなら断る（更新・落とすと同じ。PR の codex）
+			if (this.jobs.values().stream().filter(UpdateJob::active).count() >= MAX_JOBS) {
+				respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
+				return;
+			}
 			job = new UpdateJob(newJobId(), bookId, false);
 			this.jobs.put(job.id, job);
 			UpdateJob submitted = job;

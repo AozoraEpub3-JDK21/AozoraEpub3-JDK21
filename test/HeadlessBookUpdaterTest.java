@@ -354,7 +354,9 @@ public class HeadlessBookUpdaterTest {
 	/** 設定のキャッシュの台帳（GUI で変換した作品）では、本の名前を変えても作品の名前は変えない（GUI の次の変換が 2 冊目を作らない） */
 	@Test
 	public void renamingAGuiBookKeepsTheWorkName() throws Exception {
-		File cache = tempFolder.newFolder("settings-cache");
+		//設定のキャッシュが .aozora という名前のフォルダの下にあっても、Web 本棚の記録と見なさない（PR の codex）
+		File cache = new File(tempFolder.newFolder("home"), ".aozora/cache");
+		assertTrue(cache.mkdirs());
 		File work = new File(cache, "example.com/novel");
 		assertTrue(work.mkdirs());
 		com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").withOutputBaseName("[a] 題").save(work);
