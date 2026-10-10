@@ -695,21 +695,25 @@ public class HeadlessWebConversionTest {
 	public void aNewBookIsTheWholeWorkWhateverTheSettings() throws Exception {
 		String basePath = serveAndBase();
 		episodes = 3;
-		Properties props = guiDefaults();
-		props.setProperty("WebBeforeChapter", "1");
-		props.setProperty("WebBeforeChapterCount", "1");
-		props.setProperty("WebModifiedOnly", "1");
-		props.setProperty("WebModifiedExpire", "0");
-		props.setProperty("WebConvertUpdated", "1");
+		//「最新 1 話」でも全話（「追加更新分のみ」と一緒だと「最新 N 話」は効かないので、別に見る）
+		Properties latest = guiDefaults();
+		latest.setProperty("WebBeforeChapter", "1");
+		latest.setProperty("WebBeforeChapterCount", "1");
 		File shelf = tempFolder.newFolder("webshelf");
-		HeadlessWebConversion.Result r = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		HeadlessWebConversion.Result r = conversion(latest, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
 		assertTrue(r.message(), r.ok());
 		String text = epubText(r.epub());
 		for (int i = 1; i <= 3; i++) assertTrue(i + " 話目がある", text.contains(marker(String.valueOf(i))));
-		//消してから落とし直せる（キャッシュが同じでも「更新はありません」にしない）
+		//消してから落とし直せる（キャッシュが同じでも「追加更新分はありません」「更新はありません」にしない）
 		Files.delete(r.epub().toPath());
-		HeadlessWebConversion.Result again = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		Properties updatesOnly = guiDefaults();
+		updatesOnly.setProperty("WebModifiedOnly", "1");
+		updatesOnly.setProperty("WebModifiedExpire", "0");
+		updatesOnly.setProperty("WebConvertUpdated", "1");
+		HeadlessWebConversion.Result again = conversion(updatesOnly, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
 		assertTrue(again.message(), again.ok());
+		String againText = epubText(again.epub());
+		for (int i = 1; i <= 3; i++) assertTrue(i + " 話目がある（落とし直し）", againText.contains(marker(String.valueOf(i))));
 	}
 
 	/** 違う作品が同じ短い名前になるときは、空いている名前にする（同じ名前の本があると落とせない。PR のゲート2） */
