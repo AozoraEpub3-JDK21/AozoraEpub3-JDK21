@@ -193,18 +193,22 @@ public class HeadlessBookUpdater implements BookUpdater
 		if (!com.github.hmdev.info.ShelfNames.extensionOf(newName).equalsIgnoreCase(ext)) {
 			return new Result(false, false, "名前の終わりに .kepub や .fxl は付けられません");
 		}
-		//1 つの名前は 255 バイトまで（Linux）。更新のときに縮められる長さの名前も使わない（縮めた名前が本の名前と合わず、
-		//続きを取れなくなる。PR の手元の codex）
+		//その場所で作れる名前か（Linux は 255 バイト、Windows は 255 文字。実際に確かめる＝PathUtils.fitFileNameIn）。
+		//更新のときに縮められる長さの名前も使わない（縮めた名前が本の名前と合わず、続きを取れなくなる。PR の codex）
 		String extForFit = ext.isEmpty() ? ".epub" : ext;
-		if (newName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 255
-			|| !AozoraEpub3.fittedTitleName(epubFile.toAbsolutePath().getParent().toFile(), newBaseName, extForFit).equals(newBaseName)) {
+		File folder = epubFile.toAbsolutePath().getParent().toFile();
+		if (!com.github.hmdev.util.PathUtils.fitFileNameIn(folder, newBaseName, ext).equals(newBaseName)
+			|| !AozoraEpub3.fittedTitleName(folder, newBaseName, extForFit).equals(newBaseName)) {
 			return new Result(false, false, "このフォルダでは名前が長すぎます（短くしてください）");
 		}
 		Path target = epubFile.resolveSibling(newName);
 		//変換が本を書き換えている間に動かさない
 		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
 			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません");
-			boolean sameFile = java.nio.file.Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+			//大文字小文字だけの違いで、同じファイルと見なされるとき（Windows・mac）。リンクで同じファイルを指す別の名前は、
+			//同じ名前の本として断る（PR の codex）
+			boolean sameFile = newName.equalsIgnoreCase(fileName)
+				&& java.nio.file.Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)
 				&& java.nio.file.Files.isSameFile(target, epubFile);
 			if (java.nio.file.Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS) && !sameFile) {
 				return new Result(false, false, "同じ名前の本がもうあります: " + target.getFileName());
@@ -223,7 +227,13 @@ public class HeadlessBookUpdater implements BookUpdater
 				Path step = java.nio.file.Files.createTempFile(epubFile.toAbsolutePath().getParent(), ".rename.", ".tmp");
 				java.nio.file.Files.delete(step);
 				java.nio.file.Files.move(epubFile, step);
-				java.nio.file.Files.move(step, target);
+				try {
+					java.nio.file.Files.move(step, target);
+				} catch (java.io.IOException e) {
+					//戻す（隠れた一時ファイルの名前に本を残さない）
+					java.nio.file.Files.move(step, epubFile);
+					throw e;
+				}
 			} else {
 				java.nio.file.Files.move(epubFile, target);
 			}

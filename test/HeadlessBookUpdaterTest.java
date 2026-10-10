@@ -402,4 +402,26 @@ public class HeadlessBookUpdaterTest {
 		org.junit.Assert.assertEquals(1, previousFiles.length);
 		org.junit.Assert.assertEquals(HeadlessWebConversion.previousEpubName(work, upper), previousFiles[0].getName());
 	}
+
+	/** 元の本を指すリンクの名前には変えない（大文字小文字の変更と見なして本を一時ファイルに残さない。PR の codex） */
+	@Test
+	public void aLinkToTheBookIsNotACaseRename() throws Exception {
+		File dir = tempFolder.newFolder("links");
+		File book = new File(dir, "book.epub");
+		Files.write(book.toPath(), new byte[]{1});
+		java.nio.file.Path alias = dir.toPath().resolve("alias.epub");
+		try {
+			Files.createSymbolicLink(alias, book.toPath());
+		} catch (UnsupportedOperationException | java.io.IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		Properties props = new Properties();
+		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		BookUpdater.Result r = updater.rename("https://example.com/novel/", book.toPath(), "alias");
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("同じ名前"));
+		assertTrue(book.isFile());
+		org.junit.Assert.assertEquals(0, dir.listFiles((d, n) -> n.startsWith(".rename.")).length);
+	}
 }
