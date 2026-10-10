@@ -189,6 +189,10 @@ public class HeadlessBookUpdater implements BookUpdater
 		String oldBase = fileName.substring(0, fileName.length() - ext.length());
 		String newName = newBaseName + ext;
 		if (newName.equals(fileName)) return new Result(true, false, "名前は同じです");
+		//名前の末尾で本の形が変わって見えないこと（「題.kepub」に変えると .kepub.epub の本に見え、続きを取れなくなる。PR の手元の codex）
+		if (!com.github.hmdev.info.ShelfNames.extensionOf(newName).equalsIgnoreCase(ext)) {
+			return new Result(false, false, "名前の終わりに .kepub や .fxl は付けられません");
+		}
 		//1 つの名前は 255 バイトまで（Linux）。更新のときに縮められる長さの名前も使わない（縮めた名前が本の名前と合わず、
 		//続きを取れなくなる。PR の手元の codex）
 		String extForFit = ext.isEmpty() ? ".epub" : ext;

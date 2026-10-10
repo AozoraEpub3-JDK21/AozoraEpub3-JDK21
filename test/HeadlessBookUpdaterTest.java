@@ -320,6 +320,7 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(r.message(), r.message().contains("長すぎます"));
 		assertTrue(book.isFile());
 		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "short").ok());
+		org.junit.Assert.assertFalse(".epub の本を .kepub.epub に見せない", updater.rename("https://example.com/novel/", new File(dir, "short.epub").toPath(), "short.kepub").ok());
 	}
 
 	/** 名前を変えても本の形（.fxl.kepub.epub）を保つ。大文字と小文字だけの変更もできる。消えた本は更新しない（PR のゲート2） */
@@ -331,6 +332,8 @@ public class HeadlessBookUpdaterTest {
 		Properties props = new Properties();
 		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+		//名前の末尾で本の形が変わって見える名前は断る
+		org.junit.Assert.assertFalse(updater.rename("https://example.com/novel/", book.toPath(), "abc.fxl").ok());
 		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "def").ok());
 		File def = new File(dir, "def.fxl.kepub.epub");
 		assertTrue(def.isFile());
