@@ -13,6 +13,10 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -134,7 +138,7 @@ final class NarouRanking
 
 	NarouRanking()
 	{
-		this(NarouRanking::httpGet);
+		this(uri -> httpGet(uri, DEADLINE));
 	}
 
 	NarouRanking(Fetcher fetcher)
@@ -173,29 +177,47 @@ final class NarouRanking
 		return body;
 	}
 
-	private static byte[] httpGet(URI uri) throws IOException, InterruptedException
+	/** 頼んでから本文を受け取り終えるまでの上限 */
+	static final Duration DEADLINE = Duration.ofSeconds(30);
+
+	/** 本文まで受け取る。deadline は試験で短くする */
+	static byte[] httpGet(URI uri, Duration deadline) throws IOException, InterruptedException
 	{
-		//毎回作って閉じる（UpdateChecker と同じ。閉じないとセレクタのスレッドが残る）
-		try (HttpClient client = HttpClient.newBuilder()
-				.connectTimeout(Duration.ofSeconds(10))
-				.followRedirects(HttpClient.Redirect.NORMAL)
-				//既定ではプロキシを見ない。-Dhttp.proxyHost 等が効くように渡す
-				.proxy(ProxySelector.getDefault())
-				.build()) {
+		HttpClient client = HttpClient.newBuilder()
+			.connectTimeout(Duration.ofSeconds(10))
+			.followRedirects(HttpClient.Redirect.NORMAL)
+			//既定ではプロキシを見ない。-Dhttp.proxyHost 等が効くように渡す
+			.proxy(ProxySelector.getDefault())
+			.build();
+		try {
 			HttpRequest request = HttpRequest.newBuilder(uri)
 				.header("User-Agent", "AozoraEpub3")
-				.timeout(Duration.ofSeconds(30))
+				.timeout(deadline)
 				.GET()
 				.build();
-			HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-			try (InputStream in = response.body()) {
-				byte[] raw = in.readNBytes(MAX_BYTES + 1);
-				if (response.statusCode() != 200) {
-					throw new IOException("なろうの API が HTTP " + response.statusCode() + " を返しました");
-				}
-				if (raw.length > MAX_BYTES) throw new IOException("なろうの API の応答が大きすぎます");
-				return gunzip(raw);
+			//request の timeout は見出しが届くまでしか効かない。本文の途中で止まると、
+			//プレビューの 4 本しかないスレッドを掴んだままになる（PR #127 の codex P2）。
+			//本文を受け取り終えるまでを 1 つの期限で囲む
+			CompletableFuture<HttpResponse<byte[]>> pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray());
+			HttpResponse<byte[]> response;
+			try {
+				response = pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
+			} catch (TimeoutException e) {
+				pending.cancel(true);
+				throw new IOException("なろうの API が " + deadline.toSeconds() + " 秒で応えませんでした");
+			} catch (ExecutionException e) {
+				Throwable cause = e.getCause();
+				throw (cause instanceof IOException io) ? io : new IOException(String.valueOf(cause), cause);
 			}
+			if (response.statusCode() != 200) {
+				throw new IOException("なろうの API が HTTP " + response.statusCode() + " を返しました");
+			}
+			byte[] raw = response.body();
+			if (raw.length > MAX_BYTES) throw new IOException("なろうの API の応答が大きすぎます");
+			return gunzip(raw);
+		} finally {
+			//close() は走っている要求の終わりを待つので、期限切れのときに止まってしまう。待たずに閉じる
+			client.shutdownNow();
 		}
 	}
 

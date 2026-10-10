@@ -102,6 +102,43 @@ public class NarouRankingTest
 		assertEquals("断った本文は覚えない", 2, asked.size());
 	}
 
+	/** 見出しの後で本文が止まっても、期限で戻る（PR #127 の codex P2）。見出しまでの timeout では戻らない形 */
+	@Test(timeout = 20_000)
+	public void aBodyThatStallsAfterTheHeadersHitsTheDeadline() throws Exception
+	{
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		com.sun.net.httpserver.HttpServer stall = com.sun.net.httpserver.HttpServer.create(
+			new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+		stall.createContext("/", exchange -> {
+			//長さを約束して頭だけ送り、残りは送らない
+			exchange.sendResponseHeaders(200, 1000);
+			exchange.getResponseBody().write('[');
+			exchange.getResponseBody().flush();
+			try {
+				release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.close();
+		});
+		stall.start();
+		try {
+			URI uri = URI.create("http://" + PreviewServer.urlHost(java.net.InetAddress.getLoopbackAddress()) + ":" + stall.getAddress().getPort() + "/");
+			long t0 = System.nanoTime();
+			try {
+				NarouRanking.httpGet(uri, java.time.Duration.ofSeconds(1));
+				fail("本文が届かないまま返ってはいけない");
+			} catch (IOException e) {
+				assertTrue(e.getMessage(), e.getMessage().contains("応えませんでした"));
+			}
+			long millis = (System.nanoTime() - t0) / 1_000_000L;
+			assertTrue("期限で戻る: " + millis + "ms", millis < 10_000);
+		} finally {
+			release.countDown();
+			stall.stop(0);
+		}
+	}
+
 	@Test
 	public void gzipBodiesAreUnpackedAndPlainOnesPassThrough() throws Exception
 	{
