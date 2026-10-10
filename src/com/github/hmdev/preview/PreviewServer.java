@@ -696,7 +696,7 @@ public class PreviewServer implements AutoCloseable
 			int status = 400;
 			if (!Files.isDirectory(real) || !Files.isWritable(real)) {
 				refusal = "このフォルダには書き込めません: " + dir;
-			} else if (inShelf == null && this.session.getLibraryFolders().size() >= LibraryScanner.MAX_SHELVES) {
+			} else if (inShelf == null && shelvesWith(real) > LibraryScanner.MAX_SHELVES) {
 				refusal = "棚は " + LibraryScanner.MAX_SHELVES + " 個までです。アプリの「プレビュー」タブで棚を減らしてください";
 				status = 409;
 			}
@@ -710,6 +710,8 @@ public class PreviewServer implements AutoCloseable
 			try {
 				shelf.setLocation(location);
 			} catch (IOException | RuntimeException e) {
+				//決められなかったなら、いま作ったフォルダは残さない（PR の codex）
+				removeCreated(dir, created);
 				logger.warn("Web 本棚を決められませんでした: {}", location, e);
 				respondJsonStatus(exchange, 500, errorJson("Web 本棚を決められませんでした: " + e.getMessage()));
 				return;
@@ -779,10 +781,34 @@ public class PreviewServer implements AutoCloseable
 		return buf.toString();
 	}
 
-	/** 提案の場所（今の棚の最初の下の Web、無ければ書類フォルダの下） */
+	/**
+	 * 提案の場所（今の棚の最初の下の Web、無ければ書類フォルダの下）。Web 本棚そのものは外す
+	 * （Web 本棚は先頭の棚になるので、外さないと「Web 本棚の中の Web」を提案する。win2 の確認）
+	 */
 	private Path webShelfSuggestion()
 	{
-		return WebShelfPrefs.suggest(this.session.getLibraryFolders(), Path.of(System.getProperty("user.home")));
+		WebShelf shelf = this.webShelf;
+		Path location = shelf != null ? shelf.location() : null;
+		java.util.List<Path> shelves = new java.util.ArrayList<>(this.session.getLibraryFolders());
+		if (location != null) shelves.removeIf(s -> s.toAbsolutePath().normalize().equals(location.toAbsolutePath().normalize()));
+		return WebShelfPrefs.suggest(shelves, Path.of(System.getProperty("user.home")));
+	}
+
+	/** その場所を足して入れ子を畳んだら、棚がいくつになるか（今の棚の親なら、子の棚は畳まれて減る。PR の codex） */
+	private int shelvesWith(Path real)
+	{
+		java.util.List<Path> folders = new java.util.ArrayList<>();
+		for (Path shelf : this.session.getLibraryFolders()) {
+			Path root = shelf.toAbsolutePath().normalize();
+			try {
+				root = root.toRealPath();
+			} catch (IOException e) {
+				/* 意図的: 棚が消えていれば、書いたままのパスで数える */
+			}
+			folders.add(root);
+		}
+		folders.add(real);
+		return PreviewLauncher.foldShelfFolders(folders).size();
 	}
 
 	/**

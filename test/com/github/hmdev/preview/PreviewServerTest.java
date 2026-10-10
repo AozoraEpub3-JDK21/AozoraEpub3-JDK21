@@ -1325,7 +1325,7 @@ public class PreviewServerTest
 	// ---- Web 本棚（internal #11 の案 A） ----
 
 	/** 試験用の Web 本棚。決めた場所と、選んだことにするフォルダを持つ */
-	private static final class FakeWebShelf implements WebShelf
+	private static class FakeWebShelf implements WebShelf
 	{
 		volatile Path location;
 		final java.util.List<Path> set = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -1535,5 +1535,49 @@ public class PreviewServerTest
 		Path outside2 = temp.getRoot().toPath().resolve("outside2");
 		assertEquals(200, postText(base() + "api/webshelf", outside2.toString()).statusCode());
 		assertEquals(List.of(outside2.toRealPath()), added);
+	}
+
+	/** 保存に失敗したら、いま作ったフォルダは残さない（PR の codex） */
+	@Test
+	public void aFailedSaveLeavesNoCreatedFolder() throws Exception
+	{
+		this.server.setWebShelf(new FakeWebShelf() {
+			@Override public void setLocation(Path dir) { throw new IllegalStateException("保存できない"); }
+		});
+		Path top = temp.getRoot().toPath().resolve("Fresh");
+		assertEquals(500, postText(base() + "api/webshelf", top.resolve("x").toString()).statusCode());
+		assertFalse(java.nio.file.Files.exists(top));
+	}
+
+	/** 棚が上限まであっても、今の棚の親なら決められる（子の棚は畳まれて、棚の数は増えない。PR の codex） */
+	@Test
+	public void aParentOfTheShelvesFitsTheLimit() throws Exception
+	{
+		Path parent = temp.getRoot().toPath().resolve("parent");
+		java.util.List<LibraryShelf> shelves = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES; i++) {
+			Path shelf = parent.resolve("c" + i);
+			java.nio.file.Files.createDirectories(shelf);
+			shelves.add(new LibraryShelf(shelf, List.of()));
+		}
+		this.session.setLibrary(shelves);
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		assertEquals(200, postText(base() + "api/webshelf", parent.toString()).statusCode());
+		assertEquals(1, web.set.size());
+	}
+
+	/** 提案の場所は、Web 本棚そのものからは作らない（Web 本棚の中の Web を提案しない。win2 の確認） */
+	@Test
+	public void theSuggestionSkipsTheWebShelfItself() throws Exception
+	{
+		Path webDir = temp.newFolder("myweb").toPath();
+		Path other = temp.newFolder("other").toPath();
+		this.session.setLibrary(List.of(new LibraryShelf(webDir, List.of()), new LibraryShelf(other, List.of())));
+		FakeWebShelf web = new FakeWebShelf();
+		web.location = webDir;
+		this.server.setWebShelf(web);
+		String json = get(base() + "api/webshelf").body();
+		assertTrue(json, json.contains("\"suggestion\":" + Json.str(other.toAbsolutePath().normalize().resolve("Web").toString())));
 	}
 }

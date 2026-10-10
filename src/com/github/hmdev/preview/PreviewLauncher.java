@@ -273,6 +273,20 @@ public class PreviewLauncher
 	 */
 	static List<Path> normalizeShelfFolders(List<Path> folders)
 	{
+		List<Path> roots = foldShelfFolders(folders);
+		// 上限は畳み終わってから掛ける。途中で打ち切ると、後ろに来た「親」で
+		// 畳めるはずの子が残ったまま数だけ埋まる
+		if (roots.size() > LibraryScanner.MAX_SHELVES) {
+			logger.warn("本棚のフォルダは {} 個までです。{} 個目以降は読み込みません",
+				LibraryScanner.MAX_SHELVES, LibraryScanner.MAX_SHELVES + 1);
+			return new ArrayList<>(roots.subList(0, LibraryScanner.MAX_SHELVES));
+		}
+		return roots;
+	}
+
+	/** 重複と入れ子を畳む（上限は掛けない。足したら棚がいくつになるかを数えるのにも使う） */
+	static List<Path> foldShelfFolders(List<Path> folders)
+	{
 		List<Path> roots = new ArrayList<>();
 		for (Path folder : folders) {
 			if (folder == null) continue;
@@ -288,13 +302,6 @@ public class PreviewLauncher
 			// 逆に、後から親を指定された場合は子を畳む
 			roots.removeIf(existing -> existing.startsWith(absolute));
 			roots.add(absolute);
-		}
-		// 上限は畳み終わってから掛ける。途中で打ち切ると、後ろに来た「親」で
-		// 畳めるはずの子が残ったまま数だけ埋まる
-		if (roots.size() > LibraryScanner.MAX_SHELVES) {
-			logger.warn("本棚のフォルダは {} 個までです。{} 個目以降は読み込みません",
-				LibraryScanner.MAX_SHELVES, LibraryScanner.MAX_SHELVES + 1);
-			return new ArrayList<>(roots.subList(0, LibraryScanner.MAX_SHELVES));
 		}
 		return roots;
 	}
