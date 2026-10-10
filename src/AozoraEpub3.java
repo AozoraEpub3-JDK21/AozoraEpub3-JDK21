@@ -625,10 +625,12 @@ public class AozoraEpub3
 	 */
 	static void registerBookUpdater(String jarPath, String iniFileName)
 	{
+		//-i で ini を指定されたら、それを使う（PR #118 のゲート2）
+		File ini = iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
+		//Web 本棚の場所も同じ ini に持つ（internal #11 の案 A）
+		com.github.hmdev.preview.PreviewLauncher.setWebShelf(new IniWebShelf(ini));
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(() -> {
 			Properties props = new Properties();
-			//-i で ini を指定されたら、それを使う（PR #118 のゲート2）
-			File ini = iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
 			try (java.io.InputStream in = Files.newInputStream(ini.toPath())) {
 				props.load(in);
 			} catch (Exception e) {
@@ -651,6 +653,10 @@ public class AozoraEpub3
 			folders.add(file.toPath());
 		}
 		if (folders.isEmpty()) return 1;
+		//決めてある Web 本棚も棚に加える（今の棚に含まれていれば、本棚を開くときに畳まれる）
+		File ini = iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
+		java.nio.file.Path webShelf = new IniWebShelf(ini).location();
+		if (webShelf != null && Files.isDirectory(webShelf)) folders.add(webShelf);
 		try {
 			String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(folders);
 			LogAppender.println("本棚を開きました : "+url);

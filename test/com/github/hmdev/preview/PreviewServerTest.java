@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -1319,5 +1320,128 @@ public class PreviewServerTest
 		assertEquals(PreviewServer.MAX_JOBS + 1, statuses.size());
 		assertEquals("上限までは積む", PreviewServer.MAX_JOBS, statuses.stream().filter(c -> c == 202).count());
 		assertEquals("上限を超えたら断る", Integer.valueOf(503), statuses.get(statuses.size() - 1));
+	}
+
+	// ---- Web 本棚（internal #11 の案 A） ----
+
+	/** 試験用の Web 本棚。決めた場所と、選んだことにするフォルダを持つ */
+	private static final class FakeWebShelf implements WebShelf
+	{
+		volatile Path location;
+		final java.util.List<Path> set = new java.util.concurrent.CopyOnWriteArrayList<>();
+		volatile Path toPick;
+		volatile boolean pickable = true;
+		volatile java.util.concurrent.CountDownLatch holdPick;
+		final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+		@Override public Path location() { return this.location; }
+		@Override public void setLocation(Path dir) { this.set.add(dir); this.location = dir; }
+		@Override public boolean canPick() { return this.pickable; }
+		@Override public Path pickFolder(Path initial) throws Exception
+		{
+			if (this.holdPick != null) {
+				this.entered.countDown();
+				this.holdPick.await(5, java.util.concurrent.TimeUnit.SECONDS);
+			}
+			return this.toPick;
+		}
+	}
+
+	private HttpResponse<String> postText(String path, String body) throws IOException, InterruptedException
+	{
+		HttpRequest request = HttpRequest.newBuilder(URI.create(path))
+			.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
+		return this.client.send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	public void webShelfNeedsTheApp() throws Exception
+	{
+		assertEquals(503, get(base() + "api/webshelf").statusCode());
+		assertEquals(503, postText(base() + "api/webshelf", "/tmp/x").statusCode());
+		assertEquals(501, post(base() + "api/webshelf/pick").statusCode());
+	}
+
+	/** 提案の場所は、最初の棚の下の Web。決めると、フォルダを作って開く側に渡す */
+	@Test
+	public void theWebShelfIsSuggestedAndSet() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("shelf1");
+		java.nio.file.Files.createDirectories(shelf);
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null))));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		String before = get(base() + "api/webshelf").body();
+		assertTrue(before, before.contains("\"suggestion\":" + Json.str(shelf.toAbsolutePath().normalize().resolve("Web").toString())));
+		assertFalse(before, before.contains("\"location\""));
+		assertTrue(before, before.contains("\"canPick\":true"));
+
+		Path dir = temp.getRoot().toPath().resolve("web shelf").resolve("深い");
+		HttpResponse<String> r = postText(base() + "api/webshelf", "  " + dir + "\n");
+		assertEquals(r.body(), 200, r.statusCode());
+		assertTrue("フォルダを作る", java.nio.file.Files.isDirectory(dir));
+		assertEquals(List.of(dir), web.set);
+		assertTrue(r.body(), r.body().contains("\"location\":" + Json.str(dir.toString())));
+	}
+
+	/** 相対パス・空・読めないパスは断る。決めない */
+	@Test
+	public void aBadWebShelfPathIsRefused() throws Exception
+	{
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		assertEquals(400, postText(base() + "api/webshelf", "relative/dir").statusCode());
+		assertEquals(400, postText(base() + "api/webshelf", "   ").statusCode());
+		Path file = temp.newFile("not-a-dir").toPath();
+		assertEquals("ファイルの場所はフォルダにできない", 400, postText(base() + "api/webshelf", file.toString()).statusCode());
+		assertEquals(400, postText(base() + "api/webshelf", "/" + "a".repeat(PreviewServer.MAX_PATH_BYTES + 10)).statusCode());
+		assertTrue(web.set.isEmpty());
+	}
+
+	/** 棚が上限まであるときは、今の棚に含まれる場所だけ決められる */
+	@Test
+	public void theWebShelfRespectsTheShelfLimit() throws Exception
+	{
+		java.util.List<LibraryShelf> shelves = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES; i++) {
+			Path shelf = temp.getRoot().toPath().resolve("s" + i);
+			java.nio.file.Files.createDirectories(shelf);
+			shelves.add(new LibraryShelf(shelf, List.of()));
+		}
+		this.session.setLibrary(shelves);
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		assertEquals(409, postText(base() + "api/webshelf", temp.getRoot().toPath().resolve("elsewhere").toString()).statusCode());
+		assertEquals(200, postText(base() + "api/webshelf", temp.getRoot().toPath().resolve("s0").resolve("Web").toString()).statusCode());
+		assertEquals(1, web.set.size());
+	}
+
+	/** フォルダ選択は選んだパスか、選ばなかったことを返す。場所は決めない。同時に 2 つは出さない。出せなければ 501 */
+	@Test
+	public void pickingAFolderReturnsItWithoutSettingIt() throws Exception
+	{
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		Path chosen = temp.newFolder("chosen").toPath();
+		web.toPick = chosen;
+		String picked = post(base() + "api/webshelf/pick").body();
+		assertTrue(picked, picked.contains("\"path\":" + Json.str(chosen.toAbsolutePath().normalize().toString())));
+		assertTrue("選んだだけでは決めない", web.set.isEmpty());
+
+		web.toPick = null;
+		assertTrue(post(base() + "api/webshelf/pick").body().contains("\"cancelled\":true"));
+
+		web.holdPick = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CompletableFuture<HttpResponse<String>> first = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+			try { return post(base() + "api/webshelf/pick"); } catch (Exception e) { throw new IllegalStateException(e); }
+		});
+		assertTrue("1 本目が選択画面を出した", web.entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+		int second = post(base() + "api/webshelf/pick").statusCode();
+		web.holdPick.countDown();
+		assertEquals("出している最中は断る", 409, second);
+		assertEquals(200, first.get().statusCode());
+		assertEquals(405, get(base() + "api/webshelf/pick").statusCode());
+
+		web.pickable = false;
+		assertEquals(501, post(base() + "api/webshelf/pick").statusCode());
 	}
 }

@@ -37,6 +37,16 @@ public class PreviewLauncher
 		if (current != null) current.server.setBookUpdater(updater);
 	}
 
+	/** Web 本棚の場所の読み書き。本棚を開く側（GUI・CLI）が渡す。後から起動するサーバにも渡す */
+	private static volatile WebShelf webShelf;
+
+	/** Web 本棚の場所の読み書きを渡す（internal #11 の案 A）。起動中のサーバにも、後で起動するサーバにも効く */
+	public static synchronized void setWebShelf(WebShelf shelf)
+	{
+		webShelf = shelf;
+		if (current != null) current.server.setWebShelf(shelf);
+	}
+
 	private final PreviewSession session;
 	private final PreviewServer server;
 	/** JVM 終了時の後始末。shutdown() で解除できるよう参照を保持する */
@@ -74,6 +84,7 @@ public class PreviewLauncher
 		try {
 			server = new PreviewServer(session);
 			server.setBookUpdater(bookUpdater);
+		server.setWebShelf(webShelf);
 			// 本を伴わない起動 (本棚だけを開く) を許す。既定の本が無い場合、
 			// ビューアーは本棚を開いた状態で始まる
 			if (epubFile != null) session.addBook(epubFile);
@@ -278,6 +289,19 @@ public class PreviewLauncher
 			return new ArrayList<>(roots.subList(0, LibraryScanner.MAX_SHELVES));
 		}
 		return roots;
+	}
+
+	/**
+	 * 起動中の本棚に棚を 1 つ足す（Web 本棚を決めたとき）。今の棚に含まれていれば、読み直すだけ。
+	 * 起動していなければ何もしない
+	 * @return 取り込んだ冊数。起動していなければ -1
+	 */
+	public static synchronized int addShelf(Path folder) throws IOException
+	{
+		if (current == null) return -1;
+		List<Path> folders = current.session.getLibraryFolders();
+		folders.add(folder);
+		return current.loadLibrary(folders);
 	}
 
 	/** 起動中のプレビューがあれば返す。無ければ null */
