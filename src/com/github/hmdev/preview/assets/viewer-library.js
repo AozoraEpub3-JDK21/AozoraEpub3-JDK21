@@ -787,6 +787,12 @@ async function postText(path, body)
 async function startDownload(url)
 {
 	if (!url || libraryDownloadJob || libraryDownloadPosting) return;
+	// Web 本棚の場所を聞いている間は、決めたら落とす URL が待っている。別の URL で上書きすると、
+	// 先に頼んだ作品 (ランキングの札など) が黙って消える (PR #127 の codex)
+	if (libraryPendingUrl && libraryPendingUrl !== url) {
+		el.libraryShelfNote.textContent = '先に Web 本棚の場所を決めてください (決めると、先に頼んだ作品を落とします)';
+		return;
+	}
 	libraryDownloadPosting = true;
 	let response, json;
 	try {
