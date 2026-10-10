@@ -67,6 +67,7 @@ const LIBRARY_UPDATE_LABELS = {
 	gone: '掲載元に作品がありません',
 	shrunk: '話数が減ったので止めました',
 	checked: '新着を確かめました',
+	checkFailed: '確かめられませんでした',
 };
 
 function bindLibraryEvents()
@@ -597,7 +598,7 @@ function paintLibraryUpdate(slot, update)
 	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
 	//守りで止めたとき・新着を確かめたときは、サーバの文 (N → M 話・HTTP の状態・n 話新着) をそのまま出す
 	if ((update.state === 'gone' || update.state === 'shrunk' || update.state === 'checked') && update.message) text = update.message;
-	else if (update.state === 'failed' && update.message) text += ': ' + update.message;
+	else if ((update.state === 'failed' || update.state === 'checkFailed') && update.message) text += ': ' + update.message;
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
 	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
@@ -994,14 +995,19 @@ async function checkAllBooks()
 		for (let i = 0; i < books.length; i++) {
 			const book = books[i];
 			el.libraryCheckAll.textContent = '確かめています… (' + (i + 1) + '/' + books.length + ')';
+			// ⟳ で更新している本は飛ばす (その結果を上書きしない。PR のゲート2)
+			const current = libraryUpdates.get(book.id);
+			if (current && (current.state === 'queued' || current.state === 'running')) continue;
 			setLibraryUpdate(book.id, {state: 'queued', message: ''});
 			try {
 				const job = await checkBook(book);
-				setLibraryUpdate(book.id, {state: job.state, message: job.message || '',
+				// 確かめるのに失敗したのを「更新できませんでした」と言わない
+				const state = job.state === 'failed' ? 'checkFailed' : job.state;
+				setLibraryUpdate(book.id, {state: state, message: job.message || '',
 					newEpisodes: job.newEpisodes, revisedEpisodes: job.revisedEpisodes});
 				if (job.state === 'checked' && (job.newEpisodes > 0 || job.revisedEpisodes > 0)) found++;
 			} catch (err) {
-				setLibraryUpdate(book.id, {state: 'failed', message: err.message});
+				setLibraryUpdate(book.id, {state: 'checkFailed', message: err.message});
 			}
 		}
 		showLibraryStatus(found ? '新着のある本: ' + found + ' 冊 (⟳ で取れます)' : '新着のある本はありません');

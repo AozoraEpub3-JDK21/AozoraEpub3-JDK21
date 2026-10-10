@@ -864,7 +864,8 @@ public class WebAozoraConverter
 					LogAppender.println("なろうAPI: あらすじ使用");
 				} else {
 					Element description = getExtractFirstElement(doc, this.queryMap.get(ExtractId.DESCRIPTION));
-					if (description != null) {
+					//確かめるだけのときは、あらすじも書き出さない（中の挿絵を取りに行かない。PR の手元の codex）
+					if (description != null && !this.checkOnly) {
 						if (!formatSettings.isIncludeTocUrl()) {
 							bw.append('\n');
 							bw.append("［＃区切り線］\n");
@@ -950,7 +951,11 @@ public class WebAozoraConverter
 					}
 				} else {
 					Elements contentDivs = getExtractElements(doc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
-					if (contentDivs != null) {
+					if (contentDivs != null && this.checkOnly) {
+						//1 ページの作品は話が無いので、確かめられない（本文も挿絵も取りに行かない。PR の手元の codex）
+						this.guardStopped = true;
+						return null;
+					} else if (contentDivs != null) {
 						//一覧のリンクはないが本文がある場合
 						docToAozoraText(bw, doc, false, null, null, null);
 					} else {
@@ -1139,9 +1144,13 @@ public class WebAozoraConverter
 						continue;
 					}
 					if (!chapterCacheFile.exists()) newCount++;
-					//目次の更新日が前に記録したものと違う話（更新日を出しているサイトだけ）
-					else if (noUpdateUrls != null && !noUpdateUrls.contains(chapterHref)) revisedCount++;
+					//目次の更新日が前に記録したものと違う話（更新日を出しているサイトで、前の記録＝update.txt があるときだけ。
+					//記録が無いと全部が改稿に見える。PR のゲート2）
+					else if (noUpdateUrls != null && updateInfoFile.exists() && !noUpdateUrls.contains(chapterHref)) revisedCount++;
 				}
+				//その本の話数（記録）より目次が多ければ、その分は本に入っていない（キャッシュにはあっても。更新で話は取れたが
+				//本を書けなかった・同じ作品を別に変換した、など。PR の手元の codex）
+				if (previous >= 0 && now - previous > newCount) newCount = now - previous;
 				this.checkedEpisodes = now;
 				this.checkedNew = newCount;
 				this.checkedRevised = revisedCount;

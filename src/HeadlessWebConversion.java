@@ -146,7 +146,8 @@ public class HeadlessWebConversion
 	{
 		//kindle は取りに行く前に断る（取ってから断ると、次の「更新分のみ」で更新なしに見える。#116 のゲート2）
 		String outExt = outExt();
-		if (outExt.startsWith(".mobi")) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
+		//確かめるだけなら、書き出しの形（kindle）を問わない（PR のゲート2）
+		if (outExt.startsWith(".mobi") && !this.checkMode) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
 		try {
 			//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、GUI の Web 変換とは 1 つずつ（WebAozoraConverter.WEB_LOCK）
 			File srcFile;
@@ -213,6 +214,9 @@ public class HeadlessWebConversion
 							}
 							if (web.shrunkFrom >= 0) {
 								return new Result(false, false, null, "話数が減ったので止めました (" + web.shrunkFrom + " → " + web.shrunkTo + " 話)", STOP_SHRUNK);
+							}
+							if (this.checkMode && web.listFailure == 0) {
+								return new Result(false, false, null, "この作品は確かめられません（話の一覧が無い 1 ページの作品です）");
 							}
 						}
 						if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");

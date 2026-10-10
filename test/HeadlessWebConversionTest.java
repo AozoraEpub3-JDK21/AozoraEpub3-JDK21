@@ -726,6 +726,48 @@ public class HeadlessWebConversionTest {
 		assertTrue(r.message(), r.message().contains("1 話新着・3 話改稿"));
 	}
 
+	/** 話がキャッシュにあっても、その本に入っていなければ新着として数える（更新で話は取れたが本を書けなかった、など。PR の手元の codex） */
+	@Test
+	public void episodesCachedButNotInTheBookAreNew() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		episodes = 5;
+		//同じ作品を別の場所に変換して、話をキャッシュに入れる（本棚の本は 3 話のまま）
+		shelfBook(basePath, tempFolder.newFolder("other"));
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		conv.check("http://" + fqdn + "/novel/", book);
+		assertEquals(2, conv.checkedNew);
+	}
+
+	/** 1 ページの作品は確かめられない（本文も取りに行かない） */
+	@Test
+	public void aOnePageWorkCannotBeChecked() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 0;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		episodeRequests.set(0);
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).check("http://" + fqdn + "/novel/", book);
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("確かめられません"));
+	}
+
+	/** 前の更新日の記録（update.txt）が無ければ、改稿は数えない（全部が改稿に見えるので。PR のゲート2）。kindle の設定でも確かめられる */
+	@Test
+	public void noUpdateRecordMeansNoRevisionsAndKindleCanCheck() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		Files.delete(new File(ledgerDir(), "update.txt").toPath());
+		upDate = "2026/04/04";
+		Properties kindle = guiDefaults();
+		kindle.setProperty("Ext", ".mobi");
+		HeadlessWebConversion conv = conversion(kindle, basePath);
+		HeadlessWebConversion.Result r = conv.check("http://" + fqdn + "/novel/", book);
+		assertTrue(r.message(), r.ok());
+		assertEquals(0, conv.checkedRevised);
+	}
+
 	/** 確かめるときも、話数が減った・作品が無いは更新と同じく知らせる */
 	@Test
 	public void checkingReportsFewerEpisodesAndMissingWorks() throws Exception {
