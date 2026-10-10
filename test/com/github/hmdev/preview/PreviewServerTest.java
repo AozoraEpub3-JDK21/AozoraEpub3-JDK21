@@ -1617,6 +1617,8 @@ public class PreviewServerTest
 		assertEquals(409, postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/").statusCode());
 	}
 
+	private volatile String lastJob;
+
 	/** 落とせたら、Web 本棚を本棚に出す（読み直す）。同じ URL は 1 つの仕事。落とせない本棚は失敗で知らせる */
 	@Test
 	public void aDownloadRunsAsAJobAndShowsTheShelf() throws Exception
@@ -1626,7 +1628,16 @@ public class PreviewServerTest
 		web.location = shelfDir;
 		this.server.setWebShelf(web);
 		java.util.List<Path> added = new java.util.concurrent.CopyOnWriteArrayList<>();
-		this.server.setShelfAdder(added::add);
+		java.util.List<String> stateWhileAdding = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setShelfAdder(folder -> {
+			added.add(folder);
+			//本棚に出している最中は、まだ「済んだ」と言わない
+			try {
+				stateWhileAdding.add(get(base() + "api/jobs/" + lastJob).body());
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			}
+		});
 		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
 		java.util.List<String> got = new java.util.concurrent.CopyOnWriteArrayList<>();
 		this.server.setBookUpdater(new BookUpdater() {
@@ -1646,11 +1657,14 @@ public class PreviewServerTest
 		assertTrue(first, a.find());
 		assertTrue(second, b.find());
 		assertEquals("同じ URL は同じ仕事", a.group(1), b.group(1));
+		lastJob = a.group(1);
 		release.countDown();
 		String done = waitForJob(first);
 		assertTrue(done, done.contains("\"state\":\"done\""));
 		assertEquals(List.of(url + " -> " + shelfDir), got);
 		assertEquals("落とした本を本棚に出す", List.of(shelfDir), added);
+		assertEquals(1, stateWhileAdding.size());
+		assertTrue(stateWhileAdding.get(0), stateWhileAdding.get(0).contains("\"state\":\"running\""));
 
 		this.server.setBookUpdater((u, f) -> new BookUpdater.Result(true, false, "ok"));
 		String unsupported = waitForJob(postText(base() + "api/download", "https://kakuyomu.jp/works/1").body());

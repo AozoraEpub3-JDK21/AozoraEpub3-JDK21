@@ -180,6 +180,8 @@ public class HeadlessBookUpdaterTest {
 		props.load(Files.newInputStream(new File(repo, "test_data/gui_default_settings.ini").toPath()));
 		File settingsCache = new File(root, "settings-cache");
 		props.setProperty("CachePath", settingsCache.getAbsolutePath());
+		//「出力ファイル名に表題利用」を切っていても、落とした本は短い名前で、その名前のまま続きを取れる（PR の手元の codex）
+		props.setProperty("AutoFileName", "");
 		System.setProperty(HeadlessBookUpdater.ALLOW_LOCAL_PROPERTY, "true");
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
 		updater.conversions = (p, cache) -> conversion(p, basePath, cache);
@@ -189,6 +191,7 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(r.message(), r.ok());
 		File[] books = shelf.listFiles((d, n) -> n.endsWith(".epub"));
 		org.junit.Assert.assertEquals("本は Web 本棚の直下", 1, books.length);
+		org.junit.Assert.assertEquals("[著者] 題.epub", books[0].getName());
 		File work = new File(shelf, ".aozora/" + fqdn.replace(':', '_') + "/novel");
 		assertTrue("記録は .aozora に", new File(work, com.github.hmdev.info.BookLedger.FILE_NAME).isFile());
 		assertFalse("設定のキャッシュは使わない", settingsCache.exists());

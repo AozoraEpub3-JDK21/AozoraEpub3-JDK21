@@ -280,8 +280,10 @@ public class HeadlessWebConversion
 			if (bookInfo.creator == null || bookInfo.creator.length() == 0) bookInfo.creator = titleCreator[1] == null ? "" : titleCreator[1];
 		}
 
-		//新しく落とす本は、台帳の短い名前を使う（「出力ファイル名に表題利用」に依らない）
-		boolean autoFileName = this.newBookName || GuiConversionSettings.flag(this.props, "AutoFileName");
+		//新しく落とす本は、台帳の短い名前を使う（「出力ファイル名に表題利用」に依らない）。本棚の本を書き換えるときも、
+		//台帳に名前があればそれを使う（設定を切っていると長い名前になって、本棚の本と名前が合わずに断る。PR の手元の codex）
+		boolean autoFileName = this.newBookName || GuiConversionSettings.flag(this.props, "AutoFileName")
+			|| (expectedOutFile != null && bookInfo.outputBaseName != null);
 		//本棚の本と名前を照らすときは、照らす前に台帳へ名前を記録しない（違ったときに、違う名前が台帳に残る。#116 のゲート2）
 		File ledgerDir = bookInfo.ledgerDir;
 		if (expectedOutFile != null) bookInfo.ledgerDir = null;

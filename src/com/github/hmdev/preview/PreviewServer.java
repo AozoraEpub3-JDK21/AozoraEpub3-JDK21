@@ -908,9 +908,7 @@ public class PreviewServer implements AutoCloseable
 		job.state = "running";
 		try {
 			BookUpdater.Result result = updater.download(url, location);
-			job.message = result.message() == null ? "" : result.message();
-			job.state = result.ok() ? "done" : "failed";
-			//落とした本を本棚に出す（Web 本棚を読み直す。本棚に無ければ棚として足す）
+			//落とした本を本棚に出してから「済んだ」にする（先に済んだにすると、画面が読み直す本棚にまだ出ていない。PR の手元の codex）
 			ShelfAdder adder = this.shelfAdder;
 			if (result.ok() && adder != null) {
 				try {
@@ -919,6 +917,8 @@ public class PreviewServer implements AutoCloseable
 					logger.warn("落とした本を本棚に出せませんでした: {}", location, e);
 				}
 			}
+			job.message = result.message() == null ? "" : result.message();
+			job.state = result.ok() ? "done" : "failed";
 		} catch (UnsupportedOperationException e) {
 			job.message = "この本棚からは落とせません";
 			job.state = "failed";
