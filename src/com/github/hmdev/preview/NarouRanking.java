@@ -46,6 +46,21 @@ final class NarouRanking
 	/** 覚えておく問い合わせの数（期間 6 × ジャンル 22 × 2 より少なく、使う組だけ残れば足りる） */
 	static final int CACHE_SIZE = 32;
 
+	/**
+	 * なろうへ同時に出す問い合わせの数。プレビューの HTTP のスレッドは 4 本で、問い合わせの間は 1 本を掴む。
+	 * 2 本を残して、本・仕事の状態・heartbeat が待たないようにする（PR #127 の codex）
+	 */
+	static final int MAX_UPSTREAM = 2;
+
+	/** 同時に出せる数を超えた（覚えている答えも無い） */
+	static final class BusyException extends IOException
+	{
+		BusyException()
+		{
+			super("ランキングの問い合わせが混んでいます。少ししてからもう一度選んでください");
+		}
+	}
+
 	/** 受け取る応答の上限（100 作のあらすじで 200KB ほど） */
 	static final int MAX_BYTES = 4 * 1024 * 1024;
 
@@ -110,7 +125,8 @@ final class NarouRanking
 		{
 			String[] p = PERIODS.get(this.period);
 			StringBuilder url = new StringBuilder(ENDPOINT);
-			url.append("?out=json&gzip=5&lim=").append(LIMIT);
+			//libtype=2: 数字だけの題・あらすじも文字列で返す（従来のライブラリは引用符を付けない）
+			url.append("?out=json&libtype=2&gzip=5&lim=").append(LIMIT);
 			url.append("&order=").append(p[0]);
 			//題・作品コード・作者・あらすじ・ジャンル・連載か・完結か・話数・期間の点数
 			url.append("&of=t-n-w-s-g-nt-e-ga-").append(p[1]);
@@ -132,6 +148,8 @@ final class NarouRanking
 	private record Cached(long fetchedNanos, byte[] body) { }
 
 	private final Fetcher fetcher;
+
+	private final java.util.concurrent.Semaphore upstream = new java.util.concurrent.Semaphore(MAX_UPSTREAM);
 
 	/** 古い順に捨てる。同期は自分で取る */
 	private final LinkedHashMap<Query, Cached> cache = new LinkedHashMap<>(16, 0.75f, true);
@@ -162,7 +180,14 @@ final class NarouRanking
 			Cached hit = this.cache.get(query);
 			if (hit != null && nowNanos - hit.fetchedNanos < CACHE_TTL.toNanos()) return hit.body;
 		}
-		byte[] body = this.fetcher.get(query.uri());
+		//覚えている答えは混んでいても返す。取りに行くのだけを数で抑える
+		if (!this.upstream.tryAcquire()) throw new BusyException();
+		byte[] body;
+		try {
+			body = this.fetcher.get(query.uri());
+		} finally {
+			this.upstream.release();
+		}
 		String head = new String(body, 0, Math.min(body.length, 200), StandardCharsets.UTF_8).strip();
 		if (!head.startsWith("[")) {
 			//「Error: …」のような本文。そのまま伝える（直すのはこちらの問い合わせの組み立て）

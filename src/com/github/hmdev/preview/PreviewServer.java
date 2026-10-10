@@ -1143,6 +1143,9 @@ public class PreviewServer implements AutoCloseable
 		byte[] body;
 		try {
 			body = this.narouRanking.fetch(query);
+		} catch (NarouRanking.BusyException e) {
+			respondJsonStatus(exchange, 503, errorJson(e.getMessage()));
+			return;
 		} catch (IOException e) {
 			logger.info("ランキングを取れませんでした: {}", e.getMessage());
 			respondJsonStatus(exchange, 502, errorJson("ランキングを取れませんでした: " + e.getMessage()));

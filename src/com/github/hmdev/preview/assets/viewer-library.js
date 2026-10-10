@@ -203,6 +203,8 @@ async function openLibrary()
 	el.libraryClose.hidden = !state.bookId;
 	// 開くたびに取り直す。変換し直した本の書名・表紙・更新日時を古いまま出さないため
 	await loadLibrary();
+	// ランキングを出したまま本棚を閉じていたら、開き直したときに頼み直す (古い順位を出したままにしない)
+	if (rankingOpen()) loadRanking();
 	el.libraryFilter.focus();
 }
 
@@ -708,6 +710,11 @@ async function switchBook(bookId)
 
 /** 落とす仕事の ID (問い合わせ中なら)。同時に 1 つだけ */
 let libraryDownloadJob = null;
+/**
+ * api/download へ POST している最中か。仕事の ID は POST が返ってからなので、その間は ID だけでは見張れない
+ * (＋ とランキングの札の両方から押せる。PR #127 の codex)
+ */
+let libraryDownloadPosting = false;
 /** Web 本棚の場所を聞いている間、決めたら続けて落とす URL */
 let libraryPendingUrl = null;
 
@@ -779,9 +786,16 @@ async function postText(path, body)
 
 async function startDownload(url)
 {
-	if (!url || libraryDownloadJob) return;
-	showDownloadStatus('頼んでいます…');
-	const {response, json} = await postText('api/download', url);
+	if (!url || libraryDownloadJob || libraryDownloadPosting) return;
+	libraryDownloadPosting = true;
+	let response, json;
+	try {
+		showDownloadStatus('頼んでいます…');
+		({response, json} = await postText('api/download', url));
+	} finally {
+		// ここから libraryDownloadJob を入れるまでに await は無いので、隙間はできない
+		libraryDownloadPosting = false;
+	}
 	if (response.status === 409 && json && json.needShelf) {
 		//Web 本棚がまだ無い。場所を決めたら、この URL を続けて落とす
 		libraryPendingUrl = url;

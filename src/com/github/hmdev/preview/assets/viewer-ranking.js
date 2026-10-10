@@ -154,8 +154,11 @@ async function fetchRanking()
 		return;
 	}
 	if (seq !== rankingLoadSeq) return;
-	// 先頭は {"allcount": n}。作品の行は ncode を持つ
-	rankingWorks = rows.filter(row => row && typeof row.ncode === 'string');
+	// 先頭は {"allcount": n}。作品の行は ncode を持つ。
+	// 題・作者・あらすじは文字列にそろえる (数字だけだと数で返ることがある。split で落ちる)
+	rankingWorks = rows.filter(row => row && typeof row.ncode === 'string').map(row => Object.assign({}, row, {
+		title: rankingText(row.title), writer: rankingText(row.writer), story: rankingText(row.story),
+	}));
 	el.rankingStatus.textContent = rankingWorks.length
 		? 'なろうの今のポイントで並べています (サイトのランキングのページと順番が少し違うことがあります)'
 		: '作品がありません';
@@ -179,6 +182,11 @@ function ncodeOfUrl(url)
 	if (!url) return null;
 	const match = /^https?:\/\/ncode\.syosetu\.com\/(n[0-9a-z]+)(?:\/|$)/i.exec(url);
 	return match ? match[1].toLowerCase() : null;
+}
+
+function rankingText(value)
+{
+	return (value === null || value === undefined) ? '' : String(value);
 }
 
 function rankingWorkUrl(work)
@@ -274,7 +282,7 @@ function remarkRanking()
 
 async function downloadFromRanking(button)
 {
-	if (libraryDownloadJob || rankingBusyNcode) {
+	if (libraryDownloadJob || libraryDownloadPosting || rankingBusyNcode) {
 		showDownloadStatus('ほかの作品を落としています。終わってから押してください');
 		el.libraryDownload.hidden = false;
 		el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');

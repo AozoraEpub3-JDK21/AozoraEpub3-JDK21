@@ -49,13 +49,15 @@ public class NarouRankingTest
 		//r だと連載中だけになり、完結した連載が抜ける
 		assertTrue(daily, daily.endsWith("&type=re"));
 		assertTrue(daily, daily.contains("gzip=5"));
+		assertTrue("数字だけの文字列も引用符付きで: " + daily, daily.contains("libtype=2"));
 		assertTrue(daily, daily.contains("lim=" + NarouRanking.LIMIT));
 
 		String all = NarouRanking.Query.parse("period=all&genre=0&serial=0").uri().toString();
 		assertTrue(all, all.contains("&order=hyoka&"));
 		assertTrue(all, all.contains("-gp"));
-		assertFalse("総合はジャンルで絞らない: " + all, all.contains("genre="));
-		assertFalse("短編も出す: " + all, all.contains("type="));
+		assertFalse("総合はジャンルで絞らない: " + all, all.contains("&genre="));
+		//libtype= と取り違えないよう & から見る
+		assertFalse("短編も出す: " + all, all.contains("&type="));
 
 		for (String[] p : new String[][]{ {"w", "weeklypoint", "wp"}, {"m", "monthlypoint", "mp"},
 				{"q", "quarterpoint", "qp"}, {"y", "yearlypoint", "yp"} }) {
@@ -79,6 +81,45 @@ public class NarouRankingTest
 		assertEquals("別の問い合わせは取る", 2, asked.size());
 		ranking.fetch(daily, t0 + NarouRanking.CACHE_TTL.toNanos());
 		assertEquals("古くなったら取り直す", 3, asked.size());
+	}
+
+	/** なろうへ同時に出すのは MAX_UPSTREAM 本まで。超えたら待たずに断る。覚えている答えは混んでいても返す */
+	@Test(timeout = 20_000)
+	public void onlyAFewQueriesGoToNarouAtOnce() throws Exception
+	{
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.atomic.AtomicInteger inside = new java.util.concurrent.atomic.AtomicInteger();
+		NarouRanking ranking = new NarouRanking(uri -> {
+			inside.incrementAndGet();
+			if (!uri.toString().contains("order=dailypoint")) release.await(15, java.util.concurrent.TimeUnit.SECONDS);
+			return LIST;
+		});
+		//覚えさせておく
+		ranking.fetch(NarouRanking.Query.parse("period=d"));
+		java.util.List<Thread> waiting = new java.util.ArrayList<>();
+		String[] slow = { "period=w", "period=m" };
+		for (String q : slow) {
+			Thread t = new Thread(() -> {
+				try {
+					ranking.fetch(NarouRanking.Query.parse(q));
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			});
+			t.start();
+			waiting.add(t);
+		}
+		while (inside.get() < 1 + slow.length) Thread.sleep(10);
+		try {
+			ranking.fetch(NarouRanking.Query.parse("period=q"));
+			fail("3 本目は断る");
+		} catch (NarouRanking.BusyException e) {
+			//待たずに断る
+		}
+		assertArrayEquals("覚えている答えは返す", LIST, ranking.fetch(NarouRanking.Query.parse("period=d")));
+		release.countDown();
+		for (Thread t : waiting) t.join();
+		assertArrayEquals("空いたら取れる", LIST, ranking.fetch(NarouRanking.Query.parse("period=q")));
 	}
 
 	@Test
