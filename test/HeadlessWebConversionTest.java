@@ -318,7 +318,7 @@ public class HeadlessWebConversionTest {
 		assertTrue(r.message(), r.message().contains("3 → 2 話"));
 		org.junit.Assert.assertArrayEquals("本棚の本はそのまま", before, Files.readAllBytes(book.toPath()));
 		assertEquals("台帳の話数を下げない（下げると、もう一度押すだけで通ってしまう）", 3, ledgerOf().episodesFor(book));
-		assertFalse("前の版も作らない", new File(ledgerDir(), HeadlessWebConversion.previousEpubName(book)).exists());
+		assertEquals("前の版も作らない（どの名前でも）", 0, ledgerDir().listFiles((d, n) -> n.startsWith("previous")).length);
 	}
 
 	/** 利用者が「減ったまま更新する」を選んだら取り直し、台帳の話数も今の数にする */
@@ -332,7 +332,7 @@ public class HeadlessWebConversionTest {
 		assertTrue(r.message(), r.ok());
 		assertEquals("その本の話数", 2, ledgerOf().episodesFor(book));
 		assertEquals("作品の話数は下げない", 3, ledgerOf().episodes);
-		assertTrue("前の版を残す", new File(ledgerDir(), HeadlessWebConversion.previousEpubName(book)).exists());
+		assertTrue("前の版を残す", new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), book)).exists());
 	}
 
 	/**
@@ -591,9 +591,35 @@ public class HeadlessWebConversionTest {
 		byte[] bBefore = Files.readAllBytes(b.toPath());
 		assertTrue(guardedUpdate(basePath, b, false).ok());
 		org.junit.Assert.assertArrayEquals("a の 1 つ前の版が残る", aBefore,
-			Files.readAllBytes(new File(ledgerDir(), HeadlessWebConversion.previousEpubName(a)).toPath()));
+			Files.readAllBytes(new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), a)).toPath()));
 		org.junit.Assert.assertArrayEquals(bBefore,
-			Files.readAllBytes(new File(ledgerDir(), HeadlessWebConversion.previousEpubName(b)).toPath()));
+			Files.readAllBytes(new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), b)).toPath()));
+	}
+
+	/** 更新に失敗しても、1 つ前の版は書き換えない（先に写すと、もっと前の版を失う。PR のゲート2） */
+	@Test
+	public void aFailedUpdateKeepsTheOlderPreviousVersion() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		byte[] v1 = Files.readAllBytes(book.toPath());
+		episodes = 2;
+		assertTrue(guardedUpdate(basePath, book, false).ok());
+		File previous = new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), book));
+		org.junit.Assert.assertArrayEquals(v1, Files.readAllBytes(previous.toPath()));
+		assertTrue("名前で本が分かる: " + previous.getName(), previous.getName().contains(book.getName().replace(".epub", "")));
+		episodes = 3;
+		Epub3Writer failing = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath("")) {
+			@Override
+			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
+					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
+				throw new IOException("書いている途中で失敗");
+			}
+		};
+		Epub3Writer imageWriter = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		assertFalse(new HeadlessWebConversion(guiDefaults(), basePath, lastCache, failing, imageWriter)
+			.convert("http://" + fqdn + "/novel/", book.getParentFile(), book, true, true, false).ok());
+		org.junit.Assert.assertArrayEquals("1 つ前の版は v1 のまま", v1, Files.readAllBytes(previous.toPath()));
 	}
 
 	/** EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新は前の話数と比べる。PR の手元の codex） */

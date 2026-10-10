@@ -37,9 +37,14 @@ public class HeadlessWebConversion
 	 * 上書きの前の本を残す名前（作品のフォルダの中）。本ごとに分ける: 同じ作品の本が本棚に 2 冊あると、
 	 * 片方の更新がもう片方の 1 つ前の版を消していた（PR #120 の win2 の確認）
 	 */
-	static String previousEpubName(File book)
+	static String previousEpubName(File workDir, File book)
 	{
-		return "previous." + com.github.hmdev.info.BookLedger.bookKey(book) + ".epub";
+		//どの本の版かが名前で分かるよう、本の名前を添える。同じ名前の本が別のフォルダにあることもあるので、本の印の頭 8 桁も付ける
+		//（PR のゲート2）。長い題は、その場所で作れる長さに切る
+		String name = book.getName();
+		int dot = name.toLowerCase(java.util.Locale.ROOT).endsWith(".kepub.epub") ? name.length() - ".kepub.epub".length() : name.lastIndexOf('.');
+		String base = "previous " + com.github.hmdev.info.BookLedger.bookKey(book).substring(0, 8) + " " + (dot > 0 ? name.substring(0, dot) : name);
+		return com.github.hmdev.util.PathUtils.fitFileNameIn(workDir, base, ".epub") + ".epub";
 	}
 
 	/** 守りで止めた理由: 掲載元で作品が見つからない（404・410） */
@@ -253,11 +258,6 @@ public class HeadlessWebConversion
 		}
 		if (outFile.exists() && !overwrite) return new Result(false, false, outFile, "ファイルが存在します: " + outFile.getName());
 
-		//上書きの前に、今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）
-		if (outFile.exists()) {
-			java.nio.file.Files.copy(outFile.toPath(), new File(srcFile.getAbsoluteFile().getParentFile(), previousEpubName(outFile)).toPath(),
-				java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-		}
 		LogAppender.println("画面なしで変換します : " + srcFile.getPath());
 		//同じフォルダの一時ファイルに書いてから置き換える。書き出しは失敗すると出力を消すので、直接書くと
 		//本棚の本が消える。途中で止まっても（本棚を閉じてプロセスが終わるなど）本棚の本は元のまま（PR #118 のゲート2）。
@@ -266,6 +266,13 @@ public class HeadlessWebConversion
 		try {
 			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
 			if (!ok) return new Result(false, false, outFile, "変換に失敗しました（本棚の本はそのまま）");
+			//置き換える前に、今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）。
+			//書けてから写す（先に写すと、更新に失敗したときに、もっと前の版を失う。PR のゲート2）
+			if (outFile.exists()) {
+				File workDir = srcFile.getAbsoluteFile().getParentFile();
+				java.nio.file.Files.copy(outFile.toPath(), new File(workDir, previousEpubName(workDir, outFile)).toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
 			//前の本の権限を引き継ぐ（一時ファイルの既定の権限にしない。PR #118 の codex）
 			if (outFile.exists()) {
 				try {
