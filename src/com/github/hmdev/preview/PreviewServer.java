@@ -680,7 +680,8 @@ public class PreviewServer implements AutoCloseable
 			dir = dir.normalize();
 			//断るときに消せるよう、いま作るフォルダのうち一番上を覚える（親から作ることもある。PR のゲート2）
 			Path created = null;
-			for (Path p = dir; p != null && !Files.exists(p); p = p.getParent()) created = p;
+			//リンクはたどらずに見る（壊れたリンクを「無い」と見なすと、断るときに利用者のリンクを消す。PR の codex）
+			for (Path p = dir; p != null && !Files.exists(p, java.nio.file.LinkOption.NOFOLLOW_LINKS); p = p.getParent()) created = p;
 			Path real;
 			try {
 				Files.createDirectories(dir);

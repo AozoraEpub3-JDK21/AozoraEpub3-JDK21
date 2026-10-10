@@ -1580,4 +1580,19 @@ public class PreviewServerTest
 		String json = get(base() + "api/webshelf").body();
 		assertTrue(json, json.contains("\"suggestion\":" + Json.str(other.toAbsolutePath().normalize().resolve("Web").toString())));
 	}
+
+	/** 既にある壊れたリンクの先を頼まれて断っても、そのリンクは消さない（PR の codex） */
+	@Test
+	public void aRefusalKeepsAnExistingDanglingLink() throws Exception
+	{
+		this.server.setWebShelf(new FakeWebShelf());
+		Path link = temp.getRoot().toPath().resolve("dangling");
+		try {
+			java.nio.file.Files.createSymbolicLink(link, temp.getRoot().toPath().resolve("gone"));
+		} catch (UnsupportedOperationException | IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		assertEquals(400, postText(base() + "api/webshelf", link.resolve("x").toString()).statusCode());
+		assertTrue("利用者のリンクは残る", java.nio.file.Files.isSymbolicLink(link));
+	}
 }
