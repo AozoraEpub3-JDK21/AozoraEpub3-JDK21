@@ -55,4 +55,16 @@ public interface BookUpdater
 	{
 		throw new UnsupportedOperationException();
 	}
+
+	/** 新着を確かめた結果。ok なら新しい話・改稿された話の数（目次の話数も）。stop は守りで止めた理由（減った・見つからない） */
+	record CheckResult(boolean ok, String message, int episodes, int newEpisodes, int revisedEpisodes, String stop) {}
+
+	/**
+	 * 本棚の本の新着を確かめる（目次だけを読む。話は取らず、本も書かない。internal #11）。確かめられない実装は
+	 * {@link UnsupportedOperationException}
+	 */
+	default CheckResult check(String sourceUrl, Path epubFile) throws Exception
+	{
+		throw new UnsupportedOperationException();
+	}
 }

@@ -66,6 +66,7 @@ const LIBRARY_UPDATE_LABELS = {
 	failed: '更新できませんでした',
 	gone: '掲載元に作品がありません',
 	shrunk: '話数が減ったので止めました',
+	checked: '新着を確かめました',
 };
 
 function bindLibraryEvents()
@@ -74,6 +75,9 @@ function bindLibraryEvents()
 	el.libraryClose.addEventListener('click', () => closeLibrary());
 
 	bindDownloadEvents();
+	el.libraryCheckAll.addEventListener('click', () => {
+		checkAllBooks().catch(err => showLibraryStatus('新着を確かめられませんでした: ' + err.message));
+	});
 
 	el.libraryReload.addEventListener('click', () => {
 		loadLibrary().catch(err => showLibraryStatus('本棚を読み込めませんでした: ' + err.message));
@@ -227,6 +231,7 @@ async function loadLibrary(keepView)
 	if (seq !== libraryLoadSeq) return;
 	state.library = library;
 	checkDownloadAvailable();
+	updateCheckAllButton();
 	state.libraryFolder = library.folderName || null;
 	state.libraryShelfCount = library.shelves ? library.shelves.length : state.libraryShelfCount;
 	state.libraryCount = library.count;
@@ -590,15 +595,15 @@ function paintLibraryUpdate(slot, update)
 	const fewer = slot.querySelector('.book-update-anyway');
 	if (fewer) fewer.hidden = update.state !== 'shrunk';
 	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
-	//守りで止めたときは、サーバの文 (N → M 話・HTTP の状態) をそのまま出す。どちらも本は書き換えていない
-	if ((update.state === 'gone' || update.state === 'shrunk') && update.message) text = update.message;
+	//守りで止めたとき・新着を確かめたときは、サーバの文 (N → M 話・HTTP の状態・n 話新着) をそのまま出す
+	if ((update.state === 'gone' || update.state === 'shrunk' || update.state === 'checked') && update.message) text = update.message;
 	else if (update.state === 'failed' && update.message) text += ': ' + update.message;
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
 	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
 	// 2 行に収まらないときのため、全文を title にも入れる
 	status.title = text + (update.message && !text.includes(update.message) ? '\n' + update.message : '');
-	status.dataset.state = update.state;
+	status.dataset.state = update.state === 'checked' && (update.newEpisodes > 0 || update.revisedEpisodes > 0) ? 'checked-new' : update.state;
 }
 
 /** 表紙が無い本の代わりに置く箱。書名の 1 文字目を出す */
@@ -736,6 +741,8 @@ async function checkDownloadAvailable()
 		const response = await fetch('api/webshelf', {cache: 'no-store'});
 		const info = response.ok ? await response.json() : null;
 		el.libraryDownloadToggle.hidden = !(info && info.canDownload);
+		libraryCanCheck = !!(info && info.canDownload);
+		updateCheckAllButton();
 	} catch (e) {
 		el.libraryDownloadToggle.hidden = true;
 		libraryDownloadChecked = false;
@@ -954,6 +961,72 @@ function openRenameForm(slot, book, focus = true)
 	if (focus) {
 		input.focus();
 		input.select();
+	}
+}
+
+/*
+ * 新着を確かめる (internal #11)
+ * Web から取った本の目次だけを読み、新しい話と改稿された話を数えてカードに出す。話は取らない (取るのは ⟳)。
+ * 1 冊ずつ順に頼む (アプリも 1 冊ずつ、間隔を空けて確かめる)
+ */
+
+/** アプリが確かめられるか (Web 本棚と同じく、アプリから開いた本棚だけ) */
+let libraryCanCheck = false;
+/** 確かめている最中か */
+let libraryChecking = false;
+
+function updateCheckAllButton()
+{
+	const books = (state.library && state.library.books) || [];
+	el.libraryCheckAll.hidden = !libraryCanCheck || !books.some(b => b.source);
+	el.libraryCheckAll.disabled = libraryChecking;
+}
+
+async function checkAllBooks()
+{
+	if (libraryChecking) return;
+	const books = ((state.library && state.library.books) || []).filter(b => b.source);
+	if (!books.length) return;
+	libraryChecking = true;
+	updateCheckAllButton();
+	let found = 0;
+	try {
+		for (let i = 0; i < books.length; i++) {
+			const book = books[i];
+			el.libraryCheckAll.textContent = '確かめています… (' + (i + 1) + '/' + books.length + ')';
+			setLibraryUpdate(book.id, {state: 'queued', message: ''});
+			try {
+				const job = await checkBook(book);
+				setLibraryUpdate(book.id, {state: job.state, message: job.message || '',
+					newEpisodes: job.newEpisodes, revisedEpisodes: job.revisedEpisodes});
+				if (job.state === 'checked' && (job.newEpisodes > 0 || job.revisedEpisodes > 0)) found++;
+			} catch (err) {
+				setLibraryUpdate(book.id, {state: 'failed', message: err.message});
+			}
+		}
+		showLibraryStatus(found ? '新着のある本: ' + found + ' 冊 (⟳ で取れます)' : '新着のある本はありません');
+	} finally {
+		libraryChecking = false;
+		el.libraryCheckAll.textContent = '新着を確かめる';
+		updateCheckAllButton();
+	}
+}
+
+/** 1 冊を確かめる仕事を頼み、終わるまで待つ。最後の状態を返す */
+async function checkBook(book)
+{
+	const {response, json} = await postText('api/book/' + encodeURIComponent(book.id) + '/check', '');
+	if (!response.ok || !json || !json.job) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
+	let misses = 0;
+	for (;;) {
+		await new Promise(resolve => setTimeout(resolve, 700));
+		try {
+			const job = await getJson('api/jobs/' + encodeURIComponent(json.job));
+			misses = 0;
+			if (job.state !== 'queued' && job.state !== 'running') return job;
+		} catch (e) {
+			if (++misses >= LIBRARY_UPDATE_MISSES) throw e;
+		}
 	}
 }
 

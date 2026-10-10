@@ -141,6 +141,10 @@ public class PreviewServer implements AutoCloseable
 		volatile String message = "";
 		/** 「減ったまま更新」で頼まれた仕事 */
 		final boolean allowFewer;
+		/** 新着を確かめた結果（目次の話数・新しい話・改稿された話）。確かめる仕事でなければ -1 */
+		volatile int episodes = -1;
+		volatile int newEpisodes = -1;
+		volatile int revisedEpisodes = -1;
 
 		UpdateJob(String id, String bookId, boolean allowFewer)
 		{
@@ -490,6 +494,11 @@ public class PreviewServer implements AutoCloseable
 			}
 			if (rest.equals("api/webshelf/pick")) {
 				serveWebShelfPick(exchange, method);
+				return;
+			}
+			if (rest.startsWith("api/book/") && rest.endsWith("/check")
+				&& rest.length() > "api/book/".length() + "/check".length()) {
+				serveCheck(exchange, method, rest.substring("api/book/".length(), rest.length() - "/check".length()));
 				return;
 			}
 			if (rest.startsWith("api/book/") && rest.endsWith("/rename")
@@ -937,6 +946,74 @@ public class PreviewServer implements AutoCloseable
 		}
 	}
 
+	/**
+	 * 本棚の本の新着を確かめる仕事を積む（POST。internal #11）。目次だけを読み、新しい話と改稿された話を数える。
+	 * 状態は checked（数えた）・shrunk・gone・failed。同じ本の確かめる仕事が終わっていなければ、その仕事を返す
+	 */
+	private void serveCheck(HttpExchange exchange, String method, String bookId) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		BookUpdater updater = this.bookUpdater;
+		if (updater == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚からは確かめられません（アプリから本棚を開いてください）"));
+			return;
+		}
+		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		if (entry == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		if (entry.source() == null) {
+			respondJsonStatus(exchange, 400, errorJson("Web から取った本ではないので、確かめられません"));
+			return;
+		}
+		String key = "check:" + bookId;
+		UpdateJob job;
+		synchronized (this.jobs) {
+			job = this.jobs.values().stream().filter(j -> j.bookId.equals(key) && j.active()).findFirst().orElse(null);
+			if (job == null) {
+				forgetOldJobs();
+				if (this.jobs.values().stream().filter(UpdateJob::active).count() >= MAX_JOBS) {
+					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
+					return;
+				}
+				job = new UpdateJob(newJobId(), key, false);
+				this.jobs.put(job.id, job);
+				UpdateJob submitted = job;
+				this.updateExecutor.submit(() -> runCheck(submitted, updater, entry));
+			}
+		}
+		respondJsonStatus(exchange, 202, jobJson(job));
+	}
+
+	private void runCheck(UpdateJob job, BookUpdater updater, LibraryEntry entry)
+	{
+		job.state = "running";
+		try {
+			BookUpdater.CheckResult result = updater.check(entry.source(), entry.file());
+			job.message = result.message() == null ? "" : result.message();
+			if (result.ok()) {
+				job.episodes = result.episodes();
+				job.newEpisodes = result.newEpisodes();
+				job.revisedEpisodes = result.revisedEpisodes();
+				job.state = "checked";
+			} else {
+				job.state = result.stop() != null ? result.stop() : "failed";
+			}
+		} catch (UnsupportedOperationException e) {
+			job.message = "この本棚からは確かめられません";
+			job.state = "failed";
+		} catch (Throwable e) {
+			logger.warn("新着を確かめられませんでした: {}", entry.file(), e);
+			job.message = String.valueOf(e.getMessage());
+			job.state = "failed";
+			if (e instanceof Error) throw (Error)e;
+		}
+	}
+
 	/** 落とす URL として受け取る本文の上限（バイト） */
 	static final int MAX_URL_BYTES = 2048;
 
@@ -1050,6 +1127,11 @@ public class PreviewServer implements AutoCloseable
 		Json.prop(buf, "bookId", job.bookId);
 		Json.prop(buf, "state", job.state);
 		Json.prop(buf, "message", job.message);
+		if (job.episodes >= 0) {
+			Json.prop(buf, "episodes", job.episodes);
+			Json.prop(buf, "newEpisodes", job.newEpisodes);
+			Json.prop(buf, "revisedEpisodes", job.revisedEpisodes);
+		}
 		buf.append('}');
 		return buf.toString();
 	}

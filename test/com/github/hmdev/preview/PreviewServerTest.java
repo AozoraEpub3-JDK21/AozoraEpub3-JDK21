@@ -1740,4 +1740,37 @@ public class PreviewServerTest
 		waitForJob(job);
 		assertEquals(202, postText(base() + "api/book/" + ids[0] + "/rename", "x").statusCode());
 	}
+
+	// ---- 新着を確かめる（internal #11） ----
+
+	@Test
+	public void checkingABookReportsItsCounts() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		assertEquals(503, post(base() + "api/book/" + ids[0] + "/check").statusCode());
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override public Result update(String sourceUrl, Path epubFile) { return new Result(true, false, "ok"); }
+			@Override public CheckResult check(String sourceUrl, Path epubFile)
+			{
+				return new CheckResult(true, "2 話新着・1 話改稿", 12, 2, 1, null);
+			}
+		});
+		assertEquals(400, post(base() + "api/book/" + ids[1] + "/check").statusCode());
+		assertEquals(404, post(base() + "api/book/nope/check").statusCode());
+		String done = waitForJob(post(base() + "api/book/" + ids[0] + "/check").body());
+		assertTrue(done, done.contains("\"state\":\"checked\""));
+		assertTrue(done, done.contains("\"newEpisodes\":2") && done.contains("\"revisedEpisodes\":1") && done.contains("\"episodes\":12"));
+		assertTrue(done, done.contains("2 話新着・1 話改稿"));
+
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override public Result update(String sourceUrl, Path epubFile) { return new Result(true, false, "ok"); }
+			@Override public CheckResult check(String sourceUrl, Path epubFile)
+			{
+				return new CheckResult(false, "話数が減ったので止めました (12 → 10 話)", -1, -1, -1, "shrunk");
+			}
+		});
+		String shrunk = waitForJob(post(base() + "api/book/" + ids[0] + "/check").body());
+		assertTrue(shrunk, shrunk.contains("\"state\":\"shrunk\""));
+		assertEquals(405, get(base() + "api/book/" + ids[0] + "/check").statusCode());
+	}
 }

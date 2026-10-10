@@ -96,6 +96,28 @@ public class HeadlessWebConversion
 
 	/** 新しく落とす本は、短い名前にする（convertNewBook の間だけ立てる） */
 	private boolean newBookName = false;
+	/** 新着を確かめるだけ（check の間だけ立てる） */
+	private boolean checkMode = false;
+	/** 守りで止めた理由: 新着を確かめた（本は書いていない） */
+	public static final String STOP_CHECKED = "checked";
+	/** 確かめた結果（目次の話数・新しい話・改稿された話）。check の後だけ */
+	int checkedEpisodes = -1;
+	int checkedNew = -1;
+	int checkedRevised = -1;
+
+	/**
+	 * 本棚の本の新着を確かめる（internal #11）。目次だけを読み、新しい話と改稿された話を数える。話は取らず、本も記録も書かない。
+	 * 目次が取れない・話数が減ったときは、更新と同じ止め方で知らせる
+	 */
+	public Result check(String url, File book)
+	{
+		this.checkMode = true;
+		try {
+			return convert(url, book.getAbsoluteFile().getParentFile(), book, true, true, false);
+		} finally {
+			this.checkMode = false;
+		}
+	}
 
 	/**
 	 * Web 本棚に新しく落とす（internal #11 の案 A）。名前は短い名前（{@link com.github.hmdev.info.ShelfNames}）を台帳に記録して使い、
@@ -135,6 +157,7 @@ public class HeadlessWebConversion
 				web.updateGuard = updateGuard;
 				web.allowFewerEpisodes = allowFewerEpisodes;
 				web.guardBook = updateGuard ? expectedOutFile : null;
+				web.checkOnly = this.checkMode;
 				try {
 					web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
 					web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
@@ -178,6 +201,16 @@ public class HeadlessWebConversion
 							if (status != 0) {
 								return new Result(false, false, null, "目次を取れませんでした" + (status > 0 ? " (HTTP " + status + ")" : ""));
 							}
+							if (this.checkMode && web.checkedEpisodes >= 0) {
+								this.checkedEpisodes = web.checkedEpisodes;
+								this.checkedNew = web.checkedNew;
+								this.checkedRevised = web.checkedRevised;
+								String what = web.checkedNew == 0 && web.checkedRevised == 0 ? "新着はありません"
+									: (web.checkedNew > 0 ? web.checkedNew + " 話新着" : "")
+									+ (web.checkedNew > 0 && web.checkedRevised > 0 ? "・" : "")
+									+ (web.checkedRevised > 0 ? web.checkedRevised + " 話改稿" : "");
+								return new Result(true, false, null, what, STOP_CHECKED);
+							}
 							if (web.shrunkFrom >= 0) {
 								return new Result(false, false, null, "話数が減ったので止めました (" + web.shrunkFrom + " → " + web.shrunkTo + " 話)", STOP_SHRUNK);
 							}
@@ -203,6 +236,7 @@ public class HeadlessWebConversion
 					web.updateGuard = false;
 					web.allowFewerEpisodes = false;
 					web.guardBook = null;
+					web.checkOnly = false;
 				}
 			}
 		} catch (Exception e) {

@@ -88,6 +88,34 @@ public class HeadlessBookUpdater implements BookUpdater
 	}
 
 	/**
+	 * 新着を確かめる。サイトに続けて頼まないよう、確かめる前に設定の間隔（1 秒以上）を空ける
+	 */
+	@Override
+	public CheckResult check(String sourceUrl, Path epubFile) throws Exception
+	{
+		if (isLocalOrPrivate(sourceUrl) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
+			return new CheckResult(false, "手元・内部の宛先は取りに行きません: " + sourceUrl, -1, -1, -1, null);
+		}
+		Properties props = this.settings.get();
+		long interval = 1000;
+		try {
+			interval = Math.max(1000, (long)(Float.parseFloat(props.getProperty("WebInterval", "1").trim()) * 1000));
+		} catch (NumberFormatException e) {
+			/* 意図的: 読めなければ 1 秒 */
+		}
+		Thread.sleep(Math.min(interval, 10_000));
+		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+			if (!java.nio.file.Files.isRegularFile(epubFile)) return new CheckResult(false, "本棚の本が見つかりません", -1, -1, -1, null);
+			props = this.settings.get();
+			HeadlessWebConversion conversion = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl));
+			HeadlessWebConversion.Result r = conversion.check(sourceUrl, epubFile.toFile());
+			boolean checked = HeadlessWebConversion.STOP_CHECKED.equals(r.stop());
+			return new CheckResult(checked, r.message(), conversion.checkedEpisodes, conversion.checkedNew, conversion.checkedRevised,
+				checked ? null : r.stop());
+		}
+	}
+
+	/**
 	 * 本のキャッシュの場所。本のフォルダか、その上のフォルダの .aozora に、この作品の台帳があれば（Web 本棚に落とした本。
 	 * 下のフォルダに整理したときも）そこ、無ければ設定のキャッシュ。台帳を確かめるのは、前から本のあるフォルダを Web 本棚にしたとき、
 	 * 前からの本まで .aozora に切り替わって、話数の記録（守り）と名前を失わないように（PR のゲート2・手元の codex）
