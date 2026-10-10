@@ -6014,6 +6014,28 @@ public class AozoraEpub3Applet extends JPanel
 	}
 
 	/** Jar実行用 */
+	/** 窓の位置と大きさ・設定を保存して終える（窓を閉じたときと、mac の Cmd+Q） */
+	static void saveAndExit(JFrame jFrame, AozoraEpub3Applet applet)
+	{
+		try {
+			//Window位置を割くに設定しておく
+			Point location = jFrame.getLocation();
+			Dimension size = jFrame.getSize();
+			applet.props.setProperty("PosX", ""+location.getX());
+			applet.props.setProperty("PosY", ""+location.getY());
+			applet.props.setProperty("SizeW", ""+size.getWidth());
+			applet.props.setProperty("SizeH", ""+size.getHeight());
+			//props保存と終了処理
+			//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
+			//ここが Object.finalize() (何もしない) を呼んだままになっていた。
+			//そのため終了時に AozoraEpub3.ini が一切保存されていない
+			applet.saveProperties();
+		} catch (Throwable e) {
+			logger.error("終了時の処理でエラー", e);
+		}
+		System.exit(0);
+	}
+
 	public static void main(String args[])
 	{
 		// コマンドライン引数がある場合はCLIモード(AozoraEpub3)を起動
@@ -6057,25 +6079,14 @@ public class AozoraEpub3Applet extends JPanel
 		jFrame.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent evt) {
-				try {
-					//Window位置を割くに設定しておく
-					Point location = jFrame.getLocation();
-					Dimension size = jFrame.getSize();
-					applet.props.setProperty("PosX", ""+location.getX());
-					applet.props.setProperty("PosY", ""+location.getY());
-					applet.props.setProperty("SizeW", ""+size.getWidth());
-					applet.props.setProperty("SizeH", ""+size.getHeight());
-					//props保存と終了処理
-					//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
-					//ここが Object.finalize() (何もしない) を呼んだままになっていた。
-					//そのため終了時に AozoraEpub3.ini が一切保存されていない
-					applet.saveProperties();
-				} catch (Throwable e) {
-					logger.error("ウィンドウクローズ時の終了処理でエラー", e);
-				}
-				System.exit(0);
+				saveAndExit(jFrame, applet);
 			}
 		});
+		//mac の Cmd+Q（メニューの「終了」）も、窓を閉じるのと同じく設定を保存してから終える。
+		//無いと Cmd+Q は windowClosing を通らずに JVM を終え、ini が一切保存されない（internal #27）
+		if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.APP_QUIT_HANDLER)) {
+			java.awt.Desktop.getDesktop().setQuitHandler((event, response) -> saveAndExit(jFrame, applet));
+		}
 		jFrame.add(applet);
 		jFrame.setVisible(true);
 		
