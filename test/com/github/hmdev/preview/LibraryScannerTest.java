@@ -26,6 +26,19 @@ public class LibraryScannerTest
 
 	private Path root() { return temp.getRoot().toPath(); }
 
+	/** . で始まるフォルダ（Web 本棚の .aozora など）は見ない。棚そのものが . で始まっていても見る（PR のゲート2） */
+	@Test
+	public void dotFoldersAreSkippedButADotShelfIsScanned() throws Exception
+	{
+		Path shelf = root().resolve(".dotshelf");
+		EpubFixture.standard().writeTo(shelf.resolve("book.epub"));
+		EpubFixture.standard().writeTo(shelf.resolve(".aozora").resolve("site").resolve("work").resolve("previous 1 book.epub"));
+		EpubFixture.standard().writeTo(shelf.resolve("sub").resolve(".hidden").resolve("x.epub"));
+		List<LibraryEntry> entries = LibraryScanner.scan(shelf, LibraryScanner.DEFAULT_MAX_DEPTH, null);
+		assertEquals(1, entries.size());
+		assertTrue(entries.get(0).file().toString().endsWith("book.epub"));
+	}
+
 	@Test
 	public void scansRecursivelyAndReadsMetadata() throws Exception
 	{

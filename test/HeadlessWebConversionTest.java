@@ -70,7 +70,7 @@ public class HeadlessWebConversionTest {
 		server.createContext("/", exchange -> {
 			requests.incrementAndGet();
 			String path = exchange.getRequestURI().getPath();
-			if (path.equals("/novel/")) {
+			if (path.equals("/novel/") || path.equals("/novel2/")) {
 				if (listStatus != 200) {
 					exchange.sendResponseHeaders(listStatus, -1);
 					exchange.close();
@@ -688,6 +688,43 @@ public class HeadlessWebConversionTest {
 		assertEquals(3, ledgerOf().episodesFor(book));
 		//次のふつうの更新は、前の話数（3）と比べて止まる
 		assertEquals(HeadlessWebConversion.STOP_SHRUNK, guardedUpdate(basePath, book, false).stop());
+	}
+
+	/** 新しく落とす本は、「最新 N 話」「追加更新分のみ」「更新分のみ」でも作品の全部で作る（落とし直しもできる。PR のゲート2） */
+	@Test
+	public void aNewBookIsTheWholeWorkWhateverTheSettings() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 3;
+		Properties props = guiDefaults();
+		props.setProperty("WebBeforeChapter", "1");
+		props.setProperty("WebBeforeChapterCount", "1");
+		props.setProperty("WebModifiedOnly", "1");
+		props.setProperty("WebModifiedExpire", "0");
+		props.setProperty("WebConvertUpdated", "1");
+		File shelf = tempFolder.newFolder("webshelf");
+		HeadlessWebConversion.Result r = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertTrue(r.message(), r.ok());
+		String text = epubText(r.epub());
+		for (int i = 1; i <= 3; i++) assertTrue(i + " 話目がある", text.contains(marker(String.valueOf(i))));
+		//消してから落とし直せる（キャッシュが同じでも「更新はありません」にしない）
+		Files.delete(r.epub().toPath());
+		HeadlessWebConversion.Result again = conversion(props, basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		assertTrue(again.message(), again.ok());
+	}
+
+	/** 違う作品が同じ短い名前になるときは、空いている名前にする（同じ名前の本があると落とせない。PR のゲート2） */
+	@Test
+	public void differentWorksWithTheSameShortNameDoNotCollide() throws Exception {
+		String basePath = serveAndBase();
+		File shelf = tempFolder.newFolder("webshelf");
+		workTitle = "【書籍化】題～一部～";
+		HeadlessWebConversion.Result a = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel/", shelf);
+		workTitle = "【書籍化】題～二部～";
+		HeadlessWebConversion.Result b = conversion(guiDefaults(), basePath).convertNewBook("http://" + fqdn + "/novel2/", shelf);
+		assertTrue(a.message(), a.ok());
+		assertTrue(b.message(), b.ok());
+		assertEquals("[著者] 題.epub", a.epub().getName());
+		assertEquals("[著者] 題 (2).epub", b.epub().getName());
 	}
 
 	/** Web 本棚に新しく落とす本は、短い名前（「出力ファイル名に表題利用」が切れていても）。同じ本はもう一度は書かない */

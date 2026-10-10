@@ -157,7 +157,8 @@ public class HeadlessBookUpdaterTest {
 		server.createContext("/", exchange -> {
 			String path = exchange.getRequestURI().getPath();
 			if (path.equals("/novel/")) {
-				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
+				//長い題（短い名前と違う名前になるように）
+				respond(exchange, "<html><body><h1>【書籍化】題～副題がある～</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
 			} else {
 				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + path + "の本文</p></div></body></html>");
 			}
@@ -201,6 +202,16 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(updated.message(), updated.ok());
 		assertTrue("続きも .aozora で（1 つ前の版がそこにできる）",
 			work.listFiles((d, n) -> n.startsWith("previous ")).length == 1);
+		assertFalse(settingsCache.exists());
+
+		//Web 本棚の下のフォルダに整理しても、上の .aozora を使う（PR のゲート2）
+		File sub = new File(shelf, "整理");
+		assertTrue(sub.mkdir());
+		File moved = new File(sub, books[0].getName());
+		Files.move(books[0].toPath(), moved.toPath());
+		episodes += "<li><a href=\"/ep/3/\">第3話</a></li>";
+		BookUpdater.Result again = updater.update(base + "/novel/", moved.toPath());
+		assertTrue(again.message(), again.ok());
 		assertFalse(settingsCache.exists());
 	}
 

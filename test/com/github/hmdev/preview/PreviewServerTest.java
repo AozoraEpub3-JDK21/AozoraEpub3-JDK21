@@ -1374,6 +1374,9 @@ public class PreviewServerTest
 		assertTrue(before, before.contains("\"suggestion\":" + Json.str(shelf.toAbsolutePath().normalize().resolve("Web").toString())));
 		assertFalse(before, before.contains("\"location\""));
 		assertTrue(before, before.contains("\"canPick\":true"));
+		assertTrue("変換するものが無ければ落とせない: " + before, before.contains("\"canDownload\":false"));
+		this.server.setBookUpdater((u, f) -> new BookUpdater.Result(true, false, "ok"));
+		assertTrue(get(base() + "api/webshelf").body().contains("\"canDownload\":true"));
 
 		Path dir = temp.getRoot().toPath().resolve("web shelf").resolve("深い");
 		HttpResponse<String> r = postText(base() + "api/webshelf", dir + "\r\n");

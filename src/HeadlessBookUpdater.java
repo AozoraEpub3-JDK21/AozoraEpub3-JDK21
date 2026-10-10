@@ -80,11 +80,17 @@ public class HeadlessBookUpdater implements BookUpdater
 		}
 	}
 
-	/** 本のキャッシュの場所。本の隣に .aozora があれば（Web 本棚の本）そこ、無ければ設定のキャッシュ */
+	/**
+	 * 本のキャッシュの場所。本のフォルダか、その上のフォルダに .aozora があれば（Web 本棚の本。下のフォルダに整理したときも）そこ、
+	 * 無ければ設定のキャッシュ（PR のゲート2）
+	 */
 	File cacheFor(Properties props, Path epubFile)
 	{
-		File shelfCache = new File(epubFile.toAbsolutePath().getParent().toFile(), SHELF_CACHE);
-		return shelfCache.isDirectory() ? shelfCache : cachePathOf(props, this.basePath);
+		for (Path dir = epubFile.toAbsolutePath().getParent(); dir != null; dir = dir.getParent()) {
+			File shelfCache = new File(dir.toFile(), SHELF_CACHE);
+			if (shelfCache.isDirectory()) return shelfCache;
+		}
+		return cachePathOf(props, this.basePath);
 	}
 
 	/**

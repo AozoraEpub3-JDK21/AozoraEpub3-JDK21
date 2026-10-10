@@ -782,6 +782,8 @@ public class PreviewServer implements AutoCloseable
 		if (location != null) Json.prop(buf, "location", location.toString());
 		Json.prop(buf, "suggestion", webShelfSuggestion().toString());
 		Json.prop(buf, "canPick", shelf.canPick());
+		//落とすには、変換をするもの（BookUpdater）も要る
+		Json.prop(buf, "canDownload", this.bookUpdater != null);
 		buf.append('}');
 		return buf.toString();
 	}

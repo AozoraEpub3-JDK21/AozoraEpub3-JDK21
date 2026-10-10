@@ -700,14 +700,21 @@ function bindDownloadEvents()
 	});
 }
 
-/** アプリから開いた本棚 (Web 本棚を使える) だけ、落とすボタンを出す */
+/** 落とせるかを確かめたか (本棚を読み直すたびに問い合わせない) */
+let libraryDownloadChecked = false;
+
+/** アプリから開いた本棚 (Web 本棚と変換を使える) だけ、落とすボタンを出す */
 async function checkDownloadAvailable()
 {
+	if (libraryDownloadChecked) return;
+	libraryDownloadChecked = true;
 	try {
 		const response = await fetch('api/webshelf', {cache: 'no-store'});
-		el.libraryDownloadToggle.hidden = !response.ok;
+		const info = response.ok ? await response.json() : null;
+		el.libraryDownloadToggle.hidden = !(info && info.canDownload);
 	} catch (e) {
 		el.libraryDownloadToggle.hidden = true;
+		libraryDownloadChecked = false;
 	}
 }
 
@@ -772,7 +779,12 @@ async function pollDownload(jobId)
 		showDownloadStatus(failed && job.message ? label + ': ' + job.message : label, failed);
 		if (job.state === 'done') {
 			el.libraryDownloadUrl.value = '';
-			await loadLibrary(true);
+			try {
+				await loadLibrary(true);
+			} catch (e) {
+				// 落とせている。本棚の読み直しだけが失敗した (PR のゲート2)
+				showDownloadStatus(label + ' (本棚に出せませんでした。⟳ 一覧を更新を押してください): ' + e.message, true);
+			}
 			return;
 		}
 		if (job.state !== 'queued' && job.state !== 'running') return;
