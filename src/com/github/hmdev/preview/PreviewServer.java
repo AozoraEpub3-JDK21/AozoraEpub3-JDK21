@@ -167,6 +167,19 @@ public class PreviewServer implements AutoCloseable
 		this.webShelf = webShelf;
 	}
 
+	/** 起動中の本棚に棚を足すもの（PreviewLauncher が渡す） */
+	interface ShelfAdder
+	{
+		void add(Path folder) throws IOException;
+	}
+
+	private volatile ShelfAdder shelfAdder;
+
+	void setShelfAdder(ShelfAdder shelfAdder)
+	{
+		this.shelfAdder = shelfAdder;
+	}
+
 	/** 本棚の「続きを取る」を行うものを渡す（null で外す） */
 	public void setBookUpdater(BookUpdater bookUpdater)
 	{
@@ -665,41 +678,51 @@ public class PreviewServer implements AutoCloseable
 				return;
 			}
 			dir = dir.normalize();
-			boolean existed = Files.exists(dir);
+			//断るときに消せるよう、いま作るフォルダのうち一番上を覚える（親から作ることもある。PR のゲート2）
+			Path created = null;
+			for (Path p = dir; p != null && !Files.exists(p); p = p.getParent()) created = p;
+			Path real;
 			try {
 				Files.createDirectories(dir);
 				//実体のパスで比べる（mac の /tmp は /private/tmp。別名のままだと、棚の中の場所が別の棚に見える）
-				dir = dir.toRealPath();
+				real = dir.toRealPath();
 			} catch (IOException e) {
+				removeCreated(dir, created);
 				respondJsonStatus(exchange, 400, errorJson("フォルダを作れませんでした: " + dir));
 				return;
 			}
+			Path inShelf = inShelf(real);
 			String refusal = null;
 			int status = 400;
-			if (!Files.isDirectory(dir) || !Files.isWritable(dir)) {
+			if (!Files.isDirectory(real) || !Files.isWritable(real)) {
 				refusal = "このフォルダには書き込めません: " + dir;
-			} else if (!coveredByShelf(dir) && this.session.getLibraryFolders().size() >= LibraryScanner.MAX_SHELVES) {
+			} else if (inShelf == null && this.session.getLibraryFolders().size() >= LibraryScanner.MAX_SHELVES) {
 				refusal = "棚は " + LibraryScanner.MAX_SHELVES + " 個までです。アプリの「プレビュー」タブで棚を減らしてください";
 				status = 409;
 			}
 			if (refusal != null) {
-				//断るなら、いま作った空のフォルダは消す
-				if (!existed) {
-					try {
-						Files.deleteIfExists(dir);
-					} catch (IOException e) {
-						/* 意図的: 空のフォルダが残るだけ */
-					}
-				}
+				removeCreated(dir, created);
 				respondJsonStatus(exchange, status, errorJson(refusal));
 				return;
 			}
+			//棚の中なら、棚の一覧に書かれた綴りで記録する（一覧の重複の見分けと、入れ子の棚の畳み込みが効くように。PR のゲート2）
+			Path location = inShelf != null ? inShelf : real;
 			try {
-				shelf.setLocation(dir);
+				shelf.setLocation(location);
 			} catch (IOException | RuntimeException e) {
-				logger.warn("Web 本棚を決められませんでした: {}", dir, e);
+				logger.warn("Web 本棚を決められませんでした: {}", location, e);
 				respondJsonStatus(exchange, 500, errorJson("Web 本棚を決められませんでした: " + e.getMessage()));
 				return;
+			}
+			//棚の外なら、起動中の本棚に棚を足す。今の棚の中なら、もう本棚に出ている（読み直さない）。
+			//足すのに失敗しても場所は決まっている（次に本棚を開いたときに出る）ので、失敗にしない
+			ShelfAdder adder = this.shelfAdder;
+			if (inShelf == null && adder != null) {
+				try {
+					adder.add(location);
+				} catch (IOException | RuntimeException e) {
+					logger.warn("Web 本棚を本棚に足せませんでした: {}", location, e);
+				}
 			}
 		}
 		respondJson(exchange, webShelfJson(shelf));
@@ -723,7 +746,8 @@ public class PreviewServer implements AutoCloseable
 		}
 		Path picked;
 		try {
-			Path initial = shelf.location() != null ? shelf.location() : webShelfSuggestion();
+			Path location = shelf.location();
+			Path initial = location != null ? location : webShelfSuggestion();
 			picked = shelf.pickFolder(initial != null && Files.isDirectory(initial) ? initial : null);
 		} catch (UnsupportedOperationException e) {
 			respondJsonStatus(exchange, 501, errorJson("フォルダ選択を出せません。パスを入力してください"));
@@ -761,19 +785,37 @@ public class PreviewServer implements AutoCloseable
 		return WebShelfPrefs.suggest(this.session.getLibraryFolders(), Path.of(System.getProperty("user.home")));
 	}
 
-	/** 今の棚のどれかに含まれるか（含まれるなら、棚の数は増えない） */
-	private boolean coveredByShelf(Path dir)
+	/**
+	 * 今の棚のどれかに含まれるなら、その棚の綴りで書いたパス（含まれるなら、棚の数は増えない）。含まれなければ null
+	 * @param real 実体のパス
+	 */
+	private Path inShelf(Path real)
 	{
 		for (Path shelf : this.session.getLibraryFolders()) {
-			Path root = shelf.toAbsolutePath().normalize();
+			Path listed = shelf.toAbsolutePath().normalize();
+			Path root = listed;
 			try {
-				root = root.toRealPath();
+				root = listed.toRealPath();
 			} catch (IOException e) {
 				/* 意図的: 棚が消えていれば、書いたままのパスで比べる */
 			}
-			if (dir.startsWith(root)) return true;
+			if (real.startsWith(root)) return listed.resolve(root.relativize(real));
 		}
-		return false;
+		return null;
+	}
+
+	/** dir から top まで、いま作った空のフォルダを消す */
+	private static void removeCreated(Path dir, Path top)
+	{
+		if (top == null) return;
+		for (Path p = dir; p != null; p = p.getParent()) {
+			try {
+				Files.deleteIfExists(p);
+			} catch (IOException e) {
+				return;
+			}
+			if (p.equals(top)) return;
+		}
 	}
 
 	/** 仕事の状態（GET api/jobs/{id}） */

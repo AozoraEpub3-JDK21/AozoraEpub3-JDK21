@@ -1482,4 +1482,58 @@ public class PreviewServerTest
 		web.pickable = false;
 		assertEquals(501, post(base() + "api/webshelf/pick").statusCode());
 	}
+
+	/** 断ったら、いま作ったフォルダは親まで残さない（PR のゲート2） */
+	@Test
+	public void aRefusedWebShelfLeavesNoCreatedParents() throws Exception
+	{
+		java.util.List<LibraryShelf> shelves = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES; i++) {
+			Path shelf = temp.getRoot().toPath().resolve("p" + i);
+			java.nio.file.Files.createDirectories(shelf);
+			shelves.add(new LibraryShelf(shelf, List.of()));
+		}
+		this.session.setLibrary(shelves);
+		this.server.setWebShelf(new FakeWebShelf());
+		Path top = temp.getRoot().toPath().resolve("NewRoot");
+		assertEquals(409, postText(base() + "api/webshelf", top.resolve("a").resolve("b").toString()).statusCode());
+		assertFalse("作った親も消す", java.nio.file.Files.exists(top));
+	}
+
+	/**
+	 * 棚の中の場所は、棚の一覧に書かれた綴りで記録する（実体のパスで書くと、一覧の重複の見分けや入れ子の畳み込みが効かない）。
+	 * 起動中の本棚に棚を足すのは、棚の外のときだけ。足すのに失敗しても場所は決まる（PR のゲート2）
+	 */
+	@Test
+	public void theWebShelfKeepsTheShelfSpellingAndAddsOnlyNewShelves() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("listed");
+		java.nio.file.Files.createDirectories(shelf);
+		Path alias = temp.getRoot().toPath().resolve("alias");
+		try {
+			java.nio.file.Files.createSymbolicLink(alias, shelf);
+		} catch (UnsupportedOperationException | IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		this.session.setLibrary(List.of(new LibraryShelf(alias, List.of())));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		java.util.List<Path> added = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setShelfAdder(added::add);
+
+		//実体のパスで頼んでも、棚の一覧の綴り（alias）で記録する。本棚には足さない
+		assertEquals(200, postText(base() + "api/webshelf", shelf.toRealPath().resolve("Web").toString()).statusCode());
+		assertEquals(alias.toAbsolutePath().normalize().resolve("Web"), web.set.get(0));
+		assertTrue("棚の中なら足さない", added.isEmpty());
+
+		//棚の外なら足す。足すのに失敗しても決まる
+		this.server.setShelfAdder(folder -> { throw new IOException("読み直せない"); });
+		Path outside = temp.getRoot().toPath().resolve("outside");
+		assertEquals(200, postText(base() + "api/webshelf", outside.toString()).statusCode());
+		assertEquals(outside.toRealPath(), web.location);
+		this.server.setShelfAdder(added::add);
+		Path outside2 = temp.getRoot().toPath().resolve("outside2");
+		assertEquals(200, postText(base() + "api/webshelf", outside2.toString()).statusCode());
+		assertEquals(List.of(outside2.toRealPath()), added);
+	}
 }

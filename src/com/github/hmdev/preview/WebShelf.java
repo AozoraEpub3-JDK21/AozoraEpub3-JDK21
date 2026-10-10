@@ -15,7 +15,8 @@ public interface WebShelf
 	Path location();
 
 	/**
-	 * 場所を決めて設定に保存し、棚の 1 つに登録する。フォルダはできていて、書き込めることを確かめてから呼ばれる
+	 * 場所を決めて設定に保存する（開く側の棚の一覧にも入れる）。フォルダはできていて、書き込めることを確かめてから呼ばれる。
+	 * 起動中の本棚に棚を足すのはサーバがする
 	 */
 	void setLocation(Path dir) throws IOException;
 

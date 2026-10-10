@@ -623,12 +623,30 @@ public class AozoraEpub3
 	 * ini は更新のたびに読み直す（本棚を開いたまま GUI で設定を変えて閉じても効くように）。
 	 * 本棚を開く CLI の道（-library だけ・本と一緒・変換の後）のすべてで呼ぶ（PR #118 の codex）
 	 */
+	/** -i で ini を指定されたら、それを使う（PR #118 のゲート2）。無ければ jar の隣の AozoraEpub3.ini */
+	static File iniFileOf(String jarPath, String iniFileName)
+	{
+		return iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
+	}
+
+	/** CLI で開いた本棚の Web 本棚（registerBookUpdater で決まる） */
+	private static volatile IniWebShelf cliWebShelf;
+
+	/** 決めてある Web 本棚を棚に加える（本棚を開く CLI のどの道でも。今の棚に含まれていれば、開くときに畳まれる） */
+	static void addWebShelf(java.util.List<java.nio.file.Path> folders)
+	{
+		IniWebShelf shelf = cliWebShelf;
+		if (shelf == null) return;
+		java.nio.file.Path location = shelf.location();
+		if (location != null && Files.isDirectory(location)) folders.add(location);
+	}
+
 	static void registerBookUpdater(String jarPath, String iniFileName)
 	{
-		//-i で ini を指定されたら、それを使う（PR #118 のゲート2）
-		File ini = iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
+		File ini = iniFileOf(jarPath, iniFileName);
 		//Web 本棚の場所も同じ ini に持つ（internal #11 の案 A）
-		com.github.hmdev.preview.PreviewLauncher.setWebShelf(new IniWebShelf(ini));
+		cliWebShelf = new IniWebShelf(ini);
+		com.github.hmdev.preview.PreviewLauncher.setWebShelf(cliWebShelf);
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(() -> {
 			Properties props = new Properties();
 			try (java.io.InputStream in = Files.newInputStream(ini.toPath())) {
@@ -653,10 +671,7 @@ public class AozoraEpub3
 			folders.add(file.toPath());
 		}
 		if (folders.isEmpty()) return 1;
-		//決めてある Web 本棚も棚に加える（今の棚に含まれていれば、本棚を開くときに畳まれる）
-		File ini = iniFileName != null ? new File(iniFileName) : resolveDefaultIniFile(jarPath, "AozoraEpub3.ini", null);
-		java.nio.file.Path webShelf = new IniWebShelf(ini).location();
-		if (webShelf != null && Files.isDirectory(webShelf)) folders.add(webShelf);
+		addWebShelf(folders);
 		try {
 			String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(folders);
 			LogAppender.println("本棚を開きました : "+url);
@@ -709,6 +724,7 @@ public class AozoraEpub3
 			folders.add(file.toPath());
 		}
 		if (folders.isEmpty()) return;
+		addWebShelf(folders);
 		try {
 			int count = com.github.hmdev.preview.PreviewLauncher.loadLibraryInto(folders);
 			LogAppender.println("本棚を読み込みました : "+count+" 冊");

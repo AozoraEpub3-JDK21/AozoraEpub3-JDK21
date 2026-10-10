@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import com.github.hmdev.preview.PreviewLauncher;
 import com.github.hmdev.preview.PreviewLibraryPrefs;
 import com.github.hmdev.preview.WebShelf;
 import com.github.hmdev.preview.WebShelfPrefs;
@@ -48,7 +47,6 @@ class IniWebShelf implements WebShelf
 		folders.add(dir.toString());
 		PreviewLibraryPrefs.store(props, folders);
 		write(props);
-		PreviewLauncher.addShelf(dir);
 	}
 
 	@Override

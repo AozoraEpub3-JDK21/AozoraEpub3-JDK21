@@ -2882,7 +2882,6 @@ public class AozoraEpub3Applet extends JPanel
 				} catch (java.lang.reflect.InvocationTargetException e) {
 					throw new IOException(e.getCause());
 				}
-				com.github.hmdev.preview.PreviewLauncher.addShelf(dir);
 			}
 			@Override
 			public boolean canPick()

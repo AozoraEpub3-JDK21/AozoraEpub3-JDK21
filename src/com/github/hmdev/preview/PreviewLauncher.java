@@ -96,6 +96,14 @@ public class PreviewLauncher
 			throw e;
 		}
 		PreviewLauncher launcher = new PreviewLauncher(session, server);
+		//Web 本棚を決めたとき、起動中の本棚に棚を足す（今の棚と合わせて読み直す）
+		server.setShelfAdder(folder -> {
+			synchronized (PreviewLauncher.class) {
+				List<Path> folders = launcher.session.getLibraryFolders();
+				folders.add(folder);
+				launcher.loadLibrary(folders);
+			}
+		});
 		launcher.shutdownHook = new Thread(() -> {
 			server.close();
 			session.close();
@@ -289,19 +297,6 @@ public class PreviewLauncher
 			return new ArrayList<>(roots.subList(0, LibraryScanner.MAX_SHELVES));
 		}
 		return roots;
-	}
-
-	/**
-	 * 起動中の本棚に棚を 1 つ足す（Web 本棚を決めたとき）。今の棚に含まれていれば、読み直すだけ。
-	 * 起動していなければ何もしない
-	 * @return 取り込んだ冊数。起動していなければ -1
-	 */
-	public static synchronized int addShelf(Path folder) throws IOException
-	{
-		if (current == null) return -1;
-		List<Path> folders = current.session.getLibraryFolders();
-		folders.add(folder);
-		return current.loadLibrary(folders);
 	}
 
 	/** 起動中のプレビューがあれば返す。無ければ null */
