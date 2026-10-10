@@ -6017,6 +6017,17 @@ public class AozoraEpub3Applet extends JPanel
 	/** 窓の位置と大きさ・設定を保存して終える（窓を閉じたときと、mac の Cmd+Q） */
 	static void saveAndExit(JFrame jFrame, AozoraEpub3Applet applet)
 	{
+		applet.convertCanceled = true;
+		//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
+		//ここが Object.finalize() (何もしない) を呼んだままになっていた。
+		//そのため終了時に AozoraEpub3.ini が一切保存されていない
+		saveWindowAndProperties(jFrame, applet);
+		System.exit(0);
+	}
+
+	/** 窓の位置と大きさ・設定を ini に書く。終えないし、変換も止めない */
+	static void saveWindowAndProperties(JFrame jFrame, AozoraEpub3Applet applet)
+	{
 		try {
 			//Window位置を割くに設定しておく
 			Point location = jFrame.getLocation();
@@ -6025,15 +6036,10 @@ public class AozoraEpub3Applet extends JPanel
 			applet.props.setProperty("PosY", ""+location.getY());
 			applet.props.setProperty("SizeW", ""+size.getWidth());
 			applet.props.setProperty("SizeH", ""+size.getHeight());
-			//props保存と終了処理
-			//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
-			//ここが Object.finalize() (何もしない) を呼んだままになっていた。
-			//そのため終了時に AozoraEpub3.ini が一切保存されていない
 			applet.saveProperties();
 		} catch (Throwable e) {
-			logger.error("終了時の処理でエラー", e);
+			logger.error("設定の保存でエラー", e);
 		}
-		System.exit(0);
 	}
 
 	/** Jar実行用 */
@@ -6082,6 +6088,13 @@ public class AozoraEpub3Applet extends JPanel
 			public void windowClosing(WindowEvent evt) {
 				saveAndExit(jFrame, applet);
 			}
+			//窓が手前から外れたときにも保存する。Windows のサインアウト・シャットダウンでは windowClosing を通らずに
+			//プロセスが終わり、ini が保存されない（internal #28 で実測）。サインアウトするにはスタートメニューなどへ
+			//移るので、その時点で窓は手前から外れる。終わり方に頼らず、設定を変えたあとで保存しておく
+			@Override
+			public void windowDeactivated(WindowEvent evt) {
+				saveWindowAndProperties(jFrame, applet);
+			}
 		});
 		//mac の Cmd+Q（メニューの「終了」）も、窓を閉じるのと同じ道（windowClosing）を通して設定を保存してから終える。
 		//既定では Cmd+Q は windowClosing を通らずに JVM を終え、ini が一切保存されない（internal #27）。終わる道は 1 つにする
@@ -6112,8 +6125,6 @@ public class AozoraEpub3Applet extends JPanel
 	void saveProperties()
 	{
 		try {
-			this.convertCanceled = true;
-			
 			/*
 			try {
 				//tmp削除
