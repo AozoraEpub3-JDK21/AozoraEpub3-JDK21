@@ -551,6 +551,8 @@ gh release edit v1.x.x-jdk21 --draft
 
 ## 9. 改訂履歴
 
+- 2026-10-11: `PreviewServerTest` のハングが解消した（試験の HttpClient を HTTP/1.1 に固定）ので、
+  §3.2 の `--tests` 列挙による回避を外し、§3.3 の `dist -x test` を「ゲート済みなら二度回しを省く」扱いに改めた。
 - 2026-08-27: v1.6.1-jdk21 リリース時の実施結果を反映。
   §3.2 に `PreviewServerTest` ハング時のゲートの回し方（`--tests` 列挙 + `jstack` での確認 +
   タグ前の CI GREEN 確認）、§3.3 に `dist -x test` を追記。
