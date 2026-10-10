@@ -6180,18 +6180,10 @@ public class AozoraEpub3Applet extends JPanel
 			
 			//設定ファイル更新
 			if (this.jarPath != null && this.propFileName != null) {
-				//一時ファイルに書いてから置き換える（Cmd+Q・ログアウトで途中で止められても、ini が空や書きかけにならない。
-				//ini がリンクならリンクの先を書き換える）
-				Path ini = Path.of(this.jarPath+this.propFileName);
-				if (Files.exists(ini)) ini = ini.toRealPath();
-				Path tmp = Files.createTempFile(ini.toAbsolutePath().getParent(), ini.getFileName().toString(), ".tmp");
-				try {
-					try (OutputStream fos = Files.newOutputStream(tmp)) {
-						this.props.store(fos, "AozoraEpub3 Parameters");
-					}
-					Files.move(tmp, ini, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-				} finally {
-					Files.deleteIfExists(tmp);
+				//その場で書く（一時ファイルから置き換えると、ini の権限が変わる・フォルダに書けない置き場で保存できない・
+				//先の無いリンクを置き換える、の後退が出た。PR #125 の codex）
+				try (OutputStream fos = Files.newOutputStream(Path.of(this.jarPath+this.propFileName))) {
+					this.props.store(fos, "AozoraEpub3 Parameters");
 				}
 			}
 		} catch (Exception e) {
