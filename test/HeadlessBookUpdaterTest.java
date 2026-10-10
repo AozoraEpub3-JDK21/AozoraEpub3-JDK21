@@ -332,8 +332,13 @@ public class HeadlessBookUpdaterTest {
 		Properties props = new Properties();
 		props.setProperty("CachePath", tempFolder.newFolder("c").getAbsolutePath());
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
-		//名前の末尾で本の形が変わって見える名前は断る
-		org.junit.Assert.assertFalse(updater.rename("https://example.com/novel/", book.toPath(), "abc.fxl").ok());
+		//名前の末尾で本の形が変わって見える名前は断る（Kobo の本に .fxl を足すと固定レイアウトに見える）
+		File kobo = new File(dir, "kobo.kepub.epub");
+		Files.write(kobo.toPath(), new byte[]{2});
+		org.junit.Assert.assertFalse(updater.rename("https://example.com/novel/", kobo.toPath(), "kobo.fxl").ok());
+		assertTrue("同じ形のままなら付けてよい", updater.rename("https://example.com/novel/", book.toPath(), "abc.fxl").ok());
+		book = new File(dir, "abc.fxl.fxl.kepub.epub");
+		Files.delete(kobo.toPath());
 		assertTrue(updater.rename("https://example.com/novel/", book.toPath(), "def").ok());
 		File def = new File(dir, "def.fxl.kepub.epub");
 		assertTrue(def.isFile());
