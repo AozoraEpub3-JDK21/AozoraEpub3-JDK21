@@ -263,15 +263,17 @@ public class HeadlessWebConversion
 		//本棚の本が消える。途中で止まっても（本棚を閉じてプロセスが終わるなど）本棚の本は元のまま（PR #118 のゲート2）。
 		//一時ファイルの名前は .epub で終わらせない（本棚に並ばないように）
 		File tmp = File.createTempFile("." + outFile.getName() + ".", ".tmp", outFile.getAbsoluteFile().getParentFile());
+		File workDir = srcFile.getAbsoluteFile().getParentFile();
+		File backup = null;
 		try {
 			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
 			if (!ok) return new Result(false, false, outFile, "変換に失敗しました（本棚の本はそのまま）");
-			//置き換える前に、今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）。
-			//書けてから写す（先に写すと、更新に失敗したときに、もっと前の版を失う。PR のゲート2）
+			//今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）。
+			//いったん控えに写し、本を置き換えられてから 1 つ前の版の名前にする（先に上書きすると、変換や置き換えに
+			//失敗したとき＝Windows で本が開かれていたときなど、本は元のままなのに、もっと前の版を失う。PR のゲート2・#121 の codex）
 			if (outFile.exists()) {
-				File workDir = srcFile.getAbsoluteFile().getParentFile();
-				java.nio.file.Files.copy(outFile.toPath(), new File(workDir, previousEpubName(workDir, outFile)).toPath(),
-					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				backup = File.createTempFile(".previous.", ".tmp", workDir);
+				java.nio.file.Files.copy(outFile.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
 			//前の本の権限を引き継ぐ（一時ファイルの既定の権限にしない。PR #118 の codex）
 			if (outFile.exists()) {
@@ -287,11 +289,16 @@ public class HeadlessWebConversion
 			} catch (java.nio.file.AtomicMoveNotSupportedException e) {
 				java.nio.file.Files.move(tmp.toPath(), outFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
+			if (backup != null) {
+				java.nio.file.Files.move(backup.toPath(), new File(workDir, previousEpubName(workDir, outFile)).toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
 			//置き換えた本の話数を記録する（書き出しは一時ファイルなので convertFile は記録しない）
 			com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
 			return new Result(true, false, outFile, "変換しました");
 		} finally {
 			java.nio.file.Files.deleteIfExists(tmp.toPath());
+			if (backup != null) java.nio.file.Files.deleteIfExists(backup.toPath());
 		}
 	}
 
