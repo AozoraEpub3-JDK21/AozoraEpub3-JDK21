@@ -579,11 +579,14 @@ public class HeadlessWebConversionTest {
 	@Test
 	public void eachBookKeepsItsOwnPreviousVersion() throws Exception {
 		String basePath = serveAndBase();
+		//2 冊の中身を変える（同じ中身だと、どちらの 1 つ前の版かを見分けられない）
 		episodes = 1;
 		File a = shelfBook(basePath, tempFolder.newFolder("a"));
-		File b = shelfBook(basePath, tempFolder.newFolder("b"));
 		episodes = 2;
+		File b = shelfBook(basePath, tempFolder.newFolder("b"));
+		episodes = 3;
 		byte[] aBefore = Files.readAllBytes(a.toPath());
+		assertFalse(java.util.Arrays.equals(aBefore, Files.readAllBytes(b.toPath())));
 		assertTrue(guardedUpdate(basePath, a, false).ok());
 		byte[] bBefore = Files.readAllBytes(b.toPath());
 		assertTrue(guardedUpdate(basePath, b, false).ok());
