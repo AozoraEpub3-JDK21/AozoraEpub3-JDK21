@@ -7,6 +7,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -152,6 +153,31 @@ public class PreviewServer implements AutoCloseable
 		{
 			return "queued".equals(this.state) || "running".equals(this.state);
 		}
+	}
+
+	/** Web 本棚の場所の読み書き（開く側が渡す。無ければ Web 本棚は使えない） */
+	private volatile WebShelf webShelf;
+	/** フォルダ選択を出している最中か（同時に 2 つ出さない） */
+	private final java.util.concurrent.atomic.AtomicBoolean picking = new java.util.concurrent.atomic.AtomicBoolean();
+	/** Web 本棚のパスとして受け取る本文の上限（バイト） */
+	static final int MAX_PATH_BYTES = 4096;
+
+	public void setWebShelf(WebShelf webShelf)
+	{
+		this.webShelf = webShelf;
+	}
+
+	/** 起動中の本棚に棚を足すもの（PreviewLauncher が渡す） */
+	interface ShelfAdder
+	{
+		void add(Path folder) throws IOException;
+	}
+
+	private volatile ShelfAdder shelfAdder;
+
+	void setShelfAdder(ShelfAdder shelfAdder)
+	{
+		this.shelfAdder = shelfAdder;
 	}
 
 	/** 本棚の「続きを取る」を行うものを渡す（null で外す） */
@@ -454,6 +480,14 @@ public class PreviewServer implements AutoCloseable
 					rest.substring("api/book/".length(), rest.length() - "/reveal".length()));
 				return;
 			}
+			if (rest.equals("api/webshelf")) {
+				serveWebShelf(exchange, method);
+				return;
+			}
+			if (rest.equals("api/webshelf/pick")) {
+				serveWebShelfPick(exchange, method);
+				return;
+			}
 			if (rest.startsWith("api/book/") && rest.endsWith("/update")
 				&& rest.length() > "api/book/".length() + "/update".length()) {
 				//POST なので、下の read 判定より前に処理する（reveal と同じ）
@@ -612,6 +646,202 @@ public class PreviewServer implements AutoCloseable
 			job.message = String.valueOf(e.getMessage());
 			job.state = "failed";
 			if (e instanceof Error) throw (Error)e;
+		}
+	}
+
+	/**
+	 * Web 本棚（internal #11 の案 A）。GET は今の場所・提案の場所・フォルダ選択を出せるか。
+	 * POST は本文のパスに決める: 絶対パスで、フォルダにでき、書き込めること。棚の上限（{@link LibraryScanner#MAX_SHELVES}）を超えるなら断る
+	 */
+	private void serveWebShelf(HttpExchange exchange, String method) throws IOException
+	{
+		WebShelf shelf = this.webShelf;
+		if (shelf == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚では Web 本棚を使えません（アプリから本棚を開いてください）"));
+			return;
+		}
+		if ("POST".equals(method)) {
+			byte[] body = exchange.getRequestBody().readNBytes(MAX_PATH_BYTES + 1);
+			//末尾の改行だけを落とす。前後の空白は落とさない（末尾が空白のフォルダ名もある。PR の手元の codex）
+			String text = new String(body, StandardCharsets.UTF_8).replaceAll("[\\r\\n]+$", "");
+			if (text.isBlank()) text = "";
+			Path dir;
+			try {
+				if (body.length > MAX_PATH_BYTES || text.isEmpty()) throw new InvalidPathException(text, "empty or too long");
+				dir = Path.of(text);
+			} catch (InvalidPathException e) {
+				respondJsonStatus(exchange, 400, errorJson("フォルダのパスとして読めません"));
+				return;
+			}
+			if (!dir.isAbsolute()) {
+				respondJsonStatus(exchange, 400, errorJson("フォルダは絶対パスで指定してください（例 " + webShelfSuggestion() + "）"));
+				return;
+			}
+			dir = dir.normalize();
+			//断るときに消せるよう、いま作るフォルダのうち一番上を覚える（親から作ることもある。PR のゲート2）
+			Path created = null;
+			//リンクはたどらずに見る（壊れたリンクを「無い」と見なすと、断るときに利用者のリンクを消す。PR の codex）
+			for (Path p = dir; p != null && !Files.exists(p, java.nio.file.LinkOption.NOFOLLOW_LINKS); p = p.getParent()) created = p;
+			Path real;
+			try {
+				Files.createDirectories(dir);
+				//実体のパスで比べる（mac の /tmp は /private/tmp。別名のままだと、棚の中の場所が別の棚に見える）
+				real = dir.toRealPath();
+			} catch (IOException e) {
+				removeCreated(dir, created);
+				respondJsonStatus(exchange, 400, errorJson("フォルダを作れませんでした: " + dir));
+				return;
+			}
+			Path inShelf = inShelf(real);
+			String refusal = null;
+			int status = 400;
+			if (!Files.isDirectory(real) || !Files.isWritable(real)) {
+				refusal = "このフォルダには書き込めません: " + dir;
+			} else if (inShelf == null && shelvesWith(real) > LibraryScanner.MAX_SHELVES) {
+				refusal = "棚は " + LibraryScanner.MAX_SHELVES + " 個までです。アプリの「プレビュー」タブで棚を減らしてください";
+				status = 409;
+			}
+			if (refusal != null) {
+				removeCreated(dir, created);
+				respondJsonStatus(exchange, status, errorJson(refusal));
+				return;
+			}
+			//棚の中なら、棚の一覧に書かれた綴りで記録する（一覧の重複の見分けと、入れ子の棚の畳み込みが効くように。PR のゲート2）
+			Path location = inShelf != null ? inShelf : real;
+			try {
+				shelf.setLocation(location);
+			} catch (IOException | RuntimeException e) {
+				//決められなかったなら、いま作ったフォルダは残さない（PR の codex）
+				removeCreated(dir, created);
+				logger.warn("Web 本棚を決められませんでした: {}", location, e);
+				respondJsonStatus(exchange, 500, errorJson("Web 本棚を決められませんでした: " + e.getMessage()));
+				return;
+			}
+			//棚の外なら、起動中の本棚に棚を足す。今の棚の中なら、もう本棚に出ている（読み直さない）。
+			//足すのに失敗しても場所は決まっている（次に本棚を開いたときに出る）ので、失敗にしない
+			ShelfAdder adder = this.shelfAdder;
+			if (inShelf == null && adder != null) {
+				try {
+					adder.add(location);
+				} catch (IOException | RuntimeException e) {
+					logger.warn("Web 本棚を本棚に足せませんでした: {}", location, e);
+				}
+			}
+		}
+		respondJson(exchange, webShelfJson(shelf));
+	}
+
+	/** フォルダ選択を出す（POST）。選んだパスか、選ばなかったことを返す。結果は場所として決めない（画面が確かめてから POST api/webshelf） */
+	private void serveWebShelfPick(HttpExchange exchange, String method) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		WebShelf shelf = this.webShelf;
+		if (shelf == null || !shelf.canPick()) {
+			respondJsonStatus(exchange, 501, errorJson("フォルダ選択を出せません。パスを入力してください"));
+			return;
+		}
+		if (!this.picking.compareAndSet(false, true)) {
+			respondJsonStatus(exchange, 409, errorJson("フォルダ選択はもう開いています（ブラウザの外の窓を見てください）"));
+			return;
+		}
+		Path picked;
+		try {
+			Path location = shelf.location();
+			Path initial = location != null ? location : webShelfSuggestion();
+			picked = shelf.pickFolder(initial != null && Files.isDirectory(initial) ? initial : null);
+		} catch (UnsupportedOperationException e) {
+			respondJsonStatus(exchange, 501, errorJson("フォルダ選択を出せません。パスを入力してください"));
+			return;
+		} catch (Exception e) {
+			logger.warn("フォルダ選択に失敗しました", e);
+			respondJsonStatus(exchange, 500, errorJson("フォルダ選択に失敗しました: " + e.getMessage()));
+			return;
+		} finally {
+			this.picking.set(false);
+		}
+		StringBuilder buf = new StringBuilder(128);
+		buf.append('{');
+		if (picked != null) Json.prop(buf, "path", picked.toAbsolutePath().normalize().toString());
+		else Json.prop(buf, "cancelled", true);
+		buf.append('}');
+		respondJson(exchange, buf.toString());
+	}
+
+	private String webShelfJson(WebShelf shelf)
+	{
+		StringBuilder buf = new StringBuilder(256);
+		buf.append('{');
+		Path location = shelf.location();
+		if (location != null) Json.prop(buf, "location", location.toString());
+		Json.prop(buf, "suggestion", webShelfSuggestion().toString());
+		Json.prop(buf, "canPick", shelf.canPick());
+		buf.append('}');
+		return buf.toString();
+	}
+
+	/**
+	 * 提案の場所（今の棚の最初の下の Web、無ければ書類フォルダの下）。Web 本棚そのものは外す
+	 * （Web 本棚は先頭の棚になるので、外さないと「Web 本棚の中の Web」を提案する。win2 の確認）
+	 */
+	private Path webShelfSuggestion()
+	{
+		WebShelf shelf = this.webShelf;
+		Path location = shelf != null ? shelf.location() : null;
+		java.util.List<Path> shelves = new java.util.ArrayList<>(this.session.getLibraryFolders());
+		if (location != null) shelves.removeIf(s -> s.toAbsolutePath().normalize().equals(location.toAbsolutePath().normalize()));
+		return WebShelfPrefs.suggest(shelves, Path.of(System.getProperty("user.home")));
+	}
+
+	/** その場所を足して入れ子を畳んだら、棚がいくつになるか（今の棚の親なら、子の棚は畳まれて減る。PR の codex） */
+	private int shelvesWith(Path real)
+	{
+		java.util.List<Path> folders = new java.util.ArrayList<>();
+		for (Path shelf : this.session.getLibraryFolders()) {
+			Path root = shelf.toAbsolutePath().normalize();
+			try {
+				root = root.toRealPath();
+			} catch (IOException e) {
+				/* 意図的: 棚が消えていれば、書いたままのパスで数える */
+			}
+			folders.add(root);
+		}
+		folders.add(real);
+		return PreviewLauncher.foldShelfFolders(folders).size();
+	}
+
+	/**
+	 * 今の棚のどれかに含まれるなら、その棚の綴りで書いたパス（含まれるなら、棚の数は増えない）。含まれなければ null
+	 * @param real 実体のパス
+	 */
+	private Path inShelf(Path real)
+	{
+		for (Path shelf : this.session.getLibraryFolders()) {
+			Path listed = shelf.toAbsolutePath().normalize();
+			Path root = listed;
+			try {
+				root = listed.toRealPath();
+			} catch (IOException e) {
+				/* 意図的: 棚が消えていれば、書いたままのパスで比べる */
+			}
+			if (real.startsWith(root)) return listed.resolve(root.relativize(real));
+		}
+		return null;
+	}
+
+	/** dir から top まで、いま作った空のフォルダを消す */
+	private static void removeCreated(Path dir, Path top)
+	{
+		if (top == null) return;
+		for (Path p = dir; p != null; p = p.getParent()) {
+			try {
+				Files.deleteIfExists(p);
+			} catch (IOException e) {
+				return;
+			}
+			if (p.equals(top)) return;
 		}
 	}
 

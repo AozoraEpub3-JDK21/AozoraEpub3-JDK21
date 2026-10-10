@@ -2864,6 +2864,36 @@ public class AozoraEpub3Applet extends JPanel
 		//本棚の「続きを取る」は、画面の今の設定で、画面を使わずに変換する（internal #11）。
 		//設定は更新のたびに画面から写す（ini は終了するまで書かれないので、ini を読むと古い）
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(this::snapshotSettings, this.jarPath));
+		//Web 本棚の場所は画面の設定（全体設定）に持ち、棚の一覧にも足す（internal #11 の案 A）。ini は終了するときに書かれる
+		com.github.hmdev.preview.PreviewLauncher.setWebShelf(new com.github.hmdev.preview.WebShelf() {
+			@Override
+			public java.nio.file.Path location()
+			{
+				return com.github.hmdev.preview.WebShelfPrefs.load(AozoraEpub3Applet.this.props);
+			}
+			@Override
+			public void setLocation(java.nio.file.Path dir) throws IOException
+			{
+				try {
+					SwingUtilities.invokeAndWait(() -> AozoraEpub3Applet.this.recordWebShelf(dir));
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					throw new IOException(e);
+				} catch (java.lang.reflect.InvocationTargetException e) {
+					throw new IOException(e.getCause());
+				}
+			}
+			@Override
+			public boolean canPick()
+			{
+				return FolderPicker.available();
+			}
+			@Override
+			public java.nio.file.Path pickFolder(java.nio.file.Path initial) throws Exception
+			{
+				return FolderPicker.pick(initial, "Web 本棚の場所");
+			}
+		});
 		
 		////////////////////////////////////////////////////////////////
 		//ログ出力先を設定
@@ -5182,9 +5212,32 @@ public class AozoraEpub3Applet extends JPanel
 		boolean busy = this.libraryOpening || this.isRunning();
 		this.jButtonLibraryAdd.setEnabled(!busy && this.libraryDirsModel.size() < LibraryScanner.MAX_SHELVES);
 		this.jButtonLibraryRemove.setEnabled(!busy && this.jListLibraryDirs.getSelectedIndex() >= 0);
-		//棚が 1 つも無ければ開いても何も出ない
-		this.jButtonOpenLibrary.setEnabled(!busy && !this.libraryDirsModel.isEmpty());
+		//棚が 1 つも無ければ開いても何も出ない（Web 本棚が決まっていれば、それを開ける。PR の codex）
+		this.jButtonOpenLibrary.setEnabled(!busy && (!this.libraryDirsModel.isEmpty() || this.webShelfDir() != null));
 	}
+	/** 決めてある Web 本棚（フォルダが無ければ null） */
+	private Path webShelfDir()
+	{
+		Path dir = com.github.hmdev.preview.WebShelfPrefs.load(this.props);
+		return dir != null && Files.isDirectory(dir) ? dir : null;
+	}
+
+	/** Web 本棚の場所を設定に入れ、棚の一覧に足す（EDT で呼ぶ）。設定は終了するときに ini に書かれる */
+	private void recordWebShelf(java.nio.file.Path dir)
+	{
+		com.github.hmdev.preview.WebShelfPrefs.store(this.props, dir);
+		if (this.libraryDirsModel == null) return;
+		//一覧に入らなくても、Web 本棚があれば「本棚を開く」を押せる
+		this.updateLibraryButtons();
+		String key = PreviewLibraryPrefs.dedupeKey(dir.toString());
+		for (String existing : this.getLibraryFolders()) {
+			if (key.equals(PreviewLibraryPrefs.dedupeKey(existing))) return;
+		}
+		if (this.libraryDirsModel.size() >= LibraryScanner.MAX_SHELVES) return;
+		this.libraryDirsModel.addElement(dir.toString());
+		this.updateLibraryButtons();
+	}
+
 	/** 棚にするフォルダを選んで一覧に追加する */
 	private void addLibraryFolder()
 	{
@@ -5221,7 +5274,7 @@ public class AozoraEpub3Applet extends JPanel
 	private void openLibrary()
 	{
 		List<String> folders = this.getLibraryFolders();
-		if (folders.isEmpty()) {
+		if (folders.isEmpty() && this.webShelfDir() == null) {
 			JOptionPane.showMessageDialog(this, I18n.t("ui.library.noFolder"),
 				I18n.t("ui.error"), JOptionPane.WARNING_MESSAGE);
 			return;
@@ -5235,6 +5288,11 @@ public class AozoraEpub3Applet extends JPanel
 				logger.warn("本棚のフォルダとして扱えないパスを飛ばします: {}", folder, e);
 			}
 		}
+		//決めてある Web 本棚もいつも加える（棚の一覧がいっぱいで一覧に入らなかったときも、本棚に出す。PR の手元の codex）。
+		//先頭に置く（棚が上限を超えると後ろから落ちるので。落とした本を置く場所なので、ほかの棚より先に出す）。
+		//今の棚に含まれていれば、本棚を開くときに畳まれる
+		Path webShelf = this.webShelfDir();
+		if (webShelf != null) paths.add(0, webShelf);
 		//初回スキャンは冊数に比例して重い (1 冊ずつ ZIP を開いて OPF を読む)。
 		//2 回目以降は LibraryIndexCache が効いて stat だけになる
 		this.libraryOpening = true;

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -1319,5 +1320,279 @@ public class PreviewServerTest
 		assertEquals(PreviewServer.MAX_JOBS + 1, statuses.size());
 		assertEquals("上限までは積む", PreviewServer.MAX_JOBS, statuses.stream().filter(c -> c == 202).count());
 		assertEquals("上限を超えたら断る", Integer.valueOf(503), statuses.get(statuses.size() - 1));
+	}
+
+	// ---- Web 本棚（internal #11 の案 A） ----
+
+	/** 試験用の Web 本棚。決めた場所と、選んだことにするフォルダを持つ */
+	private static class FakeWebShelf implements WebShelf
+	{
+		volatile Path location;
+		final java.util.List<Path> set = new java.util.concurrent.CopyOnWriteArrayList<>();
+		volatile Path toPick;
+		volatile boolean pickable = true;
+		volatile java.util.concurrent.CountDownLatch holdPick;
+		final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+		@Override public Path location() { return this.location; }
+		@Override public void setLocation(Path dir) { this.set.add(dir); this.location = dir; }
+		@Override public boolean canPick() { return this.pickable; }
+		@Override public Path pickFolder(Path initial) throws Exception
+		{
+			if (this.holdPick != null) {
+				this.entered.countDown();
+				this.holdPick.await(5, java.util.concurrent.TimeUnit.SECONDS);
+			}
+			return this.toPick;
+		}
+	}
+
+	private HttpResponse<String> postText(String path, String body) throws IOException, InterruptedException
+	{
+		HttpRequest request = HttpRequest.newBuilder(URI.create(path))
+			.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
+		return this.client.send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	public void webShelfNeedsTheApp() throws Exception
+	{
+		assertEquals(503, get(base() + "api/webshelf").statusCode());
+		assertEquals(503, postText(base() + "api/webshelf", "/tmp/x").statusCode());
+		assertEquals(501, post(base() + "api/webshelf/pick").statusCode());
+	}
+
+	/** 提案の場所は、最初の棚の下の Web。決めると、フォルダを作って開く側に渡す */
+	@Test
+	public void theWebShelfIsSuggestedAndSet() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("shelf1");
+		java.nio.file.Files.createDirectories(shelf);
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null))));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		String before = get(base() + "api/webshelf").body();
+		assertTrue(before, before.contains("\"suggestion\":" + Json.str(shelf.toAbsolutePath().normalize().resolve("Web").toString())));
+		assertFalse(before, before.contains("\"location\""));
+		assertTrue(before, before.contains("\"canPick\":true"));
+
+		Path dir = temp.getRoot().toPath().resolve("web shelf").resolve("深い");
+		HttpResponse<String> r = postText(base() + "api/webshelf", dir + "\r\n");
+		assertEquals(r.body(), 200, r.statusCode());
+		assertTrue("フォルダを作る", java.nio.file.Files.isDirectory(dir));
+		assertEquals(List.of(dir.toRealPath()), web.set);
+		assertTrue(r.body(), r.body().contains("\"location\":" + Json.str(dir.toRealPath().toString())));
+	}
+
+	/** 相対パス・空・読めないパスは断る。決めない */
+	@Test
+	public void aBadWebShelfPathIsRefused() throws Exception
+	{
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		assertEquals(400, postText(base() + "api/webshelf", "relative/dir").statusCode());
+		assertEquals(400, postText(base() + "api/webshelf", "   ").statusCode());
+		Path file = temp.newFile("not-a-dir").toPath();
+		assertEquals("ファイルの場所はフォルダにできない", 400, postText(base() + "api/webshelf", file.toString()).statusCode());
+		assertEquals(400, postText(base() + "api/webshelf", "/" + "a".repeat(PreviewServer.MAX_PATH_BYTES + 10)).statusCode());
+		assertTrue(web.set.isEmpty());
+	}
+
+	/** 末尾が空白のフォルダ名はそのまま使う（落とすと別のフォルダになる。PR の手元の codex） */
+	@Test
+	public void aTrailingSpaceInTheWebShelfNameIsKept() throws Exception
+	{
+		org.junit.Assume.assumeFalse("Windows のフォルダ名は末尾の空白を持てない", System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		Path dir = temp.getRoot().toPath().resolve("ends with space ");
+		assertEquals(200, postText(base() + "api/webshelf", dir.toString()).statusCode());
+		assertTrue(java.nio.file.Files.isDirectory(dir));
+		assertEquals(dir.toRealPath(), web.set.get(0));
+	}
+
+	/** 書き込めないフォルダは断る（落とした本を置けない） */
+	@Test
+	public void anUnwritableWebShelfIsRefused() throws Exception
+	{
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		java.io.File locked = temp.newFolder("locked");
+		org.junit.Assume.assumeTrue("書き込みを禁じられない環境（root・Windows）では飛ばす", locked.setWritable(false) && !java.nio.file.Files.isWritable(locked.toPath()));
+		try {
+			assertEquals(400, postText(base() + "api/webshelf", locked.getAbsolutePath()).statusCode());
+			assertTrue(web.set.isEmpty());
+		} finally {
+			locked.setWritable(true);
+		}
+	}
+
+	/** 棚が上限まであるときは、今の棚に含まれる場所だけ決められる */
+	@Test
+	public void theWebShelfRespectsTheShelfLimit() throws Exception
+	{
+		java.util.List<LibraryShelf> shelves = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES; i++) {
+			Path shelf = temp.getRoot().toPath().resolve("s" + i);
+			java.nio.file.Files.createDirectories(shelf);
+			shelves.add(new LibraryShelf(shelf, List.of()));
+		}
+		this.session.setLibrary(shelves);
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		assertEquals(409, postText(base() + "api/webshelf", temp.getRoot().toPath().resolve("elsewhere").toString()).statusCode());
+		assertFalse("断ったら、作ったフォルダを残さない", java.nio.file.Files.exists(temp.getRoot().toPath().resolve("elsewhere")));
+		//棚の中の場所は、別名のパス（シンボリックリンク）で書かれても棚の中（mac の /tmp と /private/tmp）
+		Path alias = temp.getRoot().toPath().resolve("alias");
+		try {
+			java.nio.file.Files.createSymbolicLink(alias, temp.getRoot().toPath().resolve("s1"));
+		} catch (UnsupportedOperationException | IOException e) {
+			alias = null;
+		}
+		if (alias != null) assertEquals(200, postText(base() + "api/webshelf", alias.resolve("Web").toString()).statusCode());
+		assertEquals(200, postText(base() + "api/webshelf", temp.getRoot().toPath().resolve("s0").resolve("Web").toString()).statusCode());
+		assertTrue("実体のパスで渡す", web.set.stream().allMatch(p -> p.equals(p.toAbsolutePath().normalize())));
+	}
+
+	/** フォルダ選択は選んだパスか、選ばなかったことを返す。場所は決めない。同時に 2 つは出さない。出せなければ 501 */
+	@Test
+	public void pickingAFolderReturnsItWithoutSettingIt() throws Exception
+	{
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		Path chosen = temp.newFolder("chosen").toPath();
+		web.toPick = chosen;
+		String picked = post(base() + "api/webshelf/pick").body();
+		assertTrue(picked, picked.contains("\"path\":" + Json.str(chosen.toAbsolutePath().normalize().toString())));
+		assertTrue("選んだだけでは決めない", web.set.isEmpty());
+
+		web.toPick = null;
+		assertTrue(post(base() + "api/webshelf/pick").body().contains("\"cancelled\":true"));
+
+		web.holdPick = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CompletableFuture<HttpResponse<String>> first = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+			try { return post(base() + "api/webshelf/pick"); } catch (Exception e) { throw new IllegalStateException(e); }
+		});
+		assertTrue("1 本目が選択画面を出した", web.entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+		int second = post(base() + "api/webshelf/pick").statusCode();
+		web.holdPick.countDown();
+		assertEquals("出している最中は断る", 409, second);
+		assertEquals(200, first.get().statusCode());
+		assertEquals(405, get(base() + "api/webshelf/pick").statusCode());
+
+		web.pickable = false;
+		assertEquals(501, post(base() + "api/webshelf/pick").statusCode());
+	}
+
+	/** 断ったら、いま作ったフォルダは親まで残さない（PR のゲート2） */
+	@Test
+	public void aRefusedWebShelfLeavesNoCreatedParents() throws Exception
+	{
+		java.util.List<LibraryShelf> shelves = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES; i++) {
+			Path shelf = temp.getRoot().toPath().resolve("p" + i);
+			java.nio.file.Files.createDirectories(shelf);
+			shelves.add(new LibraryShelf(shelf, List.of()));
+		}
+		this.session.setLibrary(shelves);
+		this.server.setWebShelf(new FakeWebShelf());
+		Path top = temp.getRoot().toPath().resolve("NewRoot");
+		assertEquals(409, postText(base() + "api/webshelf", top.resolve("a").resolve("b").toString()).statusCode());
+		assertFalse("作った親も消す", java.nio.file.Files.exists(top));
+	}
+
+	/**
+	 * 棚の中の場所は、棚の一覧に書かれた綴りで記録する（実体のパスで書くと、一覧の重複の見分けや入れ子の畳み込みが効かない）。
+	 * 起動中の本棚に棚を足すのは、棚の外のときだけ。足すのに失敗しても場所は決まる（PR のゲート2）
+	 */
+	@Test
+	public void theWebShelfKeepsTheShelfSpellingAndAddsOnlyNewShelves() throws Exception
+	{
+		Path shelf = temp.getRoot().toPath().resolve("listed");
+		java.nio.file.Files.createDirectories(shelf);
+		Path alias = temp.getRoot().toPath().resolve("alias");
+		try {
+			java.nio.file.Files.createSymbolicLink(alias, shelf);
+		} catch (UnsupportedOperationException | IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		this.session.setLibrary(List.of(new LibraryShelf(alias, List.of())));
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		java.util.List<Path> added = new java.util.concurrent.CopyOnWriteArrayList<>();
+		this.server.setShelfAdder(added::add);
+
+		//実体のパスで頼んでも、棚の一覧の綴り（alias）で記録する。本棚には足さない
+		assertEquals(200, postText(base() + "api/webshelf", shelf.toRealPath().resolve("Web").toString()).statusCode());
+		assertEquals(alias.toAbsolutePath().normalize().resolve("Web"), web.set.get(0));
+		assertTrue("棚の中なら足さない", added.isEmpty());
+
+		//棚の外なら足す。足すのに失敗しても決まる
+		this.server.setShelfAdder(folder -> { throw new IOException("読み直せない"); });
+		Path outside = temp.getRoot().toPath().resolve("outside");
+		assertEquals(200, postText(base() + "api/webshelf", outside.toString()).statusCode());
+		assertEquals(outside.toRealPath(), web.location);
+		this.server.setShelfAdder(added::add);
+		Path outside2 = temp.getRoot().toPath().resolve("outside2");
+		assertEquals(200, postText(base() + "api/webshelf", outside2.toString()).statusCode());
+		assertEquals(List.of(outside2.toRealPath()), added);
+	}
+
+	/** 保存に失敗したら、いま作ったフォルダは残さない（PR の codex） */
+	@Test
+	public void aFailedSaveLeavesNoCreatedFolder() throws Exception
+	{
+		this.server.setWebShelf(new FakeWebShelf() {
+			@Override public void setLocation(Path dir) { throw new IllegalStateException("保存できない"); }
+		});
+		Path top = temp.getRoot().toPath().resolve("Fresh");
+		assertEquals(500, postText(base() + "api/webshelf", top.resolve("x").toString()).statusCode());
+		assertFalse(java.nio.file.Files.exists(top));
+	}
+
+	/** 棚が上限まであっても、今の棚の親なら決められる（子の棚は畳まれて、棚の数は増えない。PR の codex） */
+	@Test
+	public void aParentOfTheShelvesFitsTheLimit() throws Exception
+	{
+		Path parent = temp.getRoot().toPath().resolve("parent");
+		java.util.List<LibraryShelf> shelves = new java.util.ArrayList<>();
+		for (int i = 0; i < LibraryScanner.MAX_SHELVES; i++) {
+			Path shelf = parent.resolve("c" + i);
+			java.nio.file.Files.createDirectories(shelf);
+			shelves.add(new LibraryShelf(shelf, List.of()));
+		}
+		this.session.setLibrary(shelves);
+		FakeWebShelf web = new FakeWebShelf();
+		this.server.setWebShelf(web);
+		assertEquals(200, postText(base() + "api/webshelf", parent.toString()).statusCode());
+		assertEquals(1, web.set.size());
+	}
+
+	/** 提案の場所は、Web 本棚そのものからは作らない（Web 本棚の中の Web を提案しない。win2 の確認） */
+	@Test
+	public void theSuggestionSkipsTheWebShelfItself() throws Exception
+	{
+		Path webDir = temp.newFolder("myweb").toPath();
+		Path other = temp.newFolder("other").toPath();
+		this.session.setLibrary(List.of(new LibraryShelf(webDir, List.of()), new LibraryShelf(other, List.of())));
+		FakeWebShelf web = new FakeWebShelf();
+		web.location = webDir;
+		this.server.setWebShelf(web);
+		String json = get(base() + "api/webshelf").body();
+		assertTrue(json, json.contains("\"suggestion\":" + Json.str(other.toAbsolutePath().normalize().resolve("Web").toString())));
+	}
+
+	/** 既にある壊れたリンクの先を頼まれて断っても、そのリンクは消さない（PR の codex） */
+	@Test
+	public void aRefusalKeepsAnExistingDanglingLink() throws Exception
+	{
+		this.server.setWebShelf(new FakeWebShelf());
+		Path link = temp.getRoot().toPath().resolve("dangling");
+		try {
+			java.nio.file.Files.createSymbolicLink(link, temp.getRoot().toPath().resolve("gone"));
+		} catch (UnsupportedOperationException | IOException e) {
+			org.junit.Assume.assumeNoException("シンボリックリンクを作れない環境", e);
+		}
+		assertEquals(400, postText(base() + "api/webshelf", link.resolve("x").toString()).statusCode());
+		assertTrue("利用者のリンクは残る", java.nio.file.Files.isSymbolicLink(link));
 	}
 }

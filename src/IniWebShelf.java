@@ -1,0 +1,102 @@
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+
+import com.github.hmdev.preview.PreviewLibraryPrefs;
+import com.github.hmdev.preview.WebShelf;
+import com.github.hmdev.preview.WebShelfPrefs;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * CLI で開いた本棚の Web 本棚（internal #11 の案 A）。場所は ini（GUI と同じもの）に書き、棚の一覧にも足す
+ * （GUI で開いたときにも棚として出るように）。GUI を開いたまま CLI で決めると、GUI が終わるときに ini を書いて消える
+ */
+class IniWebShelf implements WebShelf
+{
+	static final Logger logger = LoggerFactory.getLogger(IniWebShelf.class);
+
+	private final File iniFile;
+
+	IniWebShelf(File iniFile)
+	{
+		this.iniFile = iniFile;
+	}
+
+	@Override
+	public Path location()
+	{
+		return WebShelfPrefs.load(read());
+	}
+
+	@Override
+	public void setLocation(Path dir) throws IOException
+	{
+		//書く前に読めなければ書かない（読めなかった設定を空のまま書き戻すと、ほかの設定が消える。PR の手元の codex）
+		Properties props = new Properties();
+		if (this.iniFile.isFile()) {
+			try (InputStream in = Files.newInputStream(this.iniFile.toPath())) {
+				props.load(in);
+			} catch (IllegalArgumentException e) {
+				throw new IOException("設定ファイルを読めないため、Web 本棚を保存しませんでした: " + this.iniFile, e);
+			}
+		}
+		WebShelfPrefs.store(props, dir);
+		//同じ棚は store が畳み、上限を超えた分は落とす
+		List<String> folders = new ArrayList<>(PreviewLibraryPrefs.load(props));
+		folders.add(dir.toString());
+		PreviewLibraryPrefs.store(props, folders);
+		write(props);
+	}
+
+	@Override
+	public boolean canPick()
+	{
+		return FolderPicker.available();
+	}
+
+	@Override
+	public Path pickFolder(Path initial) throws Exception
+	{
+		return FolderPicker.pick(initial, "Web 本棚の場所");
+	}
+
+	private Properties read()
+	{
+		Properties props = new Properties();
+		if (!this.iniFile.isFile()) return props;
+		try (InputStream in = Files.newInputStream(this.iniFile.toPath())) {
+			props.load(in);
+		} catch (IOException | IllegalArgumentException e) {
+			logger.warn("設定ファイルを読めませんでした: {}", this.iniFile, e);
+		}
+		return props;
+	}
+
+	/** 一時ファイルに書いてから置き換える（途中で止まっても ini が壊れない） */
+	private void write(Properties props) throws IOException
+	{
+		//ini がリンクなら、リンクの先を書き換える（リンクを普通のファイルに置き換えない。PR の codex）
+		Path target = this.iniFile.toPath();
+		if (Files.exists(target)) target = target.toRealPath();
+		Path dir = target.toAbsolutePath().getParent();
+		Files.createDirectories(dir);
+		Path tmp = Files.createTempFile(dir, target.getFileName().toString(), ".tmp");
+		try {
+			try (OutputStream out = Files.newOutputStream(tmp)) {
+				props.store(out, "AozoraEpub3 Parameters");
+			}
+			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+		} finally {
+			Files.deleteIfExists(tmp);
+		}
+	}
+}
