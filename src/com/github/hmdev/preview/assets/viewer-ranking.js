@@ -29,6 +29,19 @@ let rankingLoadSeq = 0;
 /** いま出している作品 (API の行)。本棚の印を付け直すときに使う */
 let rankingWorks = [];
 
+/**
+ * 問い合わせはタブごとに 1 本ずつ。選択を矢印キーで送ると change が続けて来るので、
+ * 少し待ってから、走っている問い合わせが終わってから、最後の選択だけを頼む。
+ * 1 本ごとにサーバの 4 本しかないスレッドを掴んで、なろうの API を待つため (PR #127 のゲート2)
+ */
+const RANKING_DELAY = 250;
+let rankingTimer = 0;
+let rankingInFlight = false;
+let rankingWanted = false;
+
+/** ランキングから落としている作品のコード (小文字)。押した瞬間から持つ (startDownload が仕事を持つのは POST の返り以降) */
+let rankingBusyNcode = null;
+
 function bindRankingEvents()
 {
 	const genre = el.rankingGenre;
@@ -46,6 +59,14 @@ function bindRankingEvents()
 	el.libraryRankingToggle.addEventListener('click', () => toggleRanking());
 	for (const control of [el.rankingPeriod, el.rankingGenre, el.rankingSerial]) {
 		control.addEventListener('change', () => loadRanking());
+	}
+	// 本棚の見出しの操作は本の一覧に効く。ランキングを出したままだと結果が見えないので、しまう
+	el.libraryFilter.addEventListener('input', () => toggleRanking(false));
+	for (const control of [el.librarySort, el.libraryShelfSelect]) {
+		control.addEventListener('change', () => toggleRanking(false));
+	}
+	for (const control of [el.libraryReload, el.libraryCheckAll]) {
+		control.addEventListener('click', () => toggleRanking(false));
 	}
 	el.rankingList.addEventListener('click', event => {
 		const button = event.target.closest('button.ranking-get');
@@ -79,14 +100,36 @@ function closeRankingIfOpen()
 	return true;
 }
 
-async function loadRanking()
+/** ランキングを頼む (少し待ち、1 本ずつ) */
+function loadRanking()
+{
+	el.rankingStatus.textContent = '読み込み中…';
+	el.rankingStatus.dataset.state = '';
+	rankingWanted = true;
+	clearTimeout(rankingTimer);
+	rankingTimer = setTimeout(pumpRanking, RANKING_DELAY);
+}
+
+async function pumpRanking()
+{
+	if (rankingInFlight || !rankingWanted) return;
+	rankingWanted = false;
+	rankingInFlight = true;
+	try {
+		await fetchRanking();
+	} finally {
+		rankingInFlight = false;
+	}
+	// 待っている間に選択が変わっていたら、最後の選択で頼み直す
+	if (rankingWanted) pumpRanking();
+}
+
+async function fetchRanking()
 {
 	const seq = ++rankingLoadSeq;
 	const query = 'period=' + encodeURIComponent(el.rankingPeriod.value)
 		+ '&genre=' + encodeURIComponent(el.rankingGenre.value)
 		+ '&serial=' + (el.rankingSerial.checked ? '1' : '0');
-	el.rankingStatus.textContent = '読み込み中…';
-	el.rankingStatus.dataset.state = '';
 	let rows;
 	try {
 		const response = await fetch('api/ranking?' + query, {cache: 'no-store'});
@@ -189,7 +232,9 @@ function rankingCard(work, rank, point, owned)
 	const action = document.createElement('button');
 	action.type = 'button';
 	action.className = 'ranking-get';
-	paintRankingButton(action, owned.has(item.dataset.ncode));
+	// 期間を変えて描き直しても、落としている最中の札は「落としています…」のまま
+	if (item.dataset.ncode === rankingBusyNcode) paintRankingBusy(action);
+	else paintRankingButton(action, owned.has(item.dataset.ncode));
 	item.appendChild(action);
 	return item;
 }
@@ -201,19 +246,28 @@ function paintRankingButton(button, owned)
 	button.dataset.state = owned ? 'owned' : '';
 }
 
+function paintRankingBusy(button)
+{
+	button.disabled = true;
+	button.textContent = '落としています…';
+	button.dataset.state = 'busy';
+}
+
 /** 本棚を読み込み直すたびに、本棚の印だけ付け直す (開いたあらすじはそのまま) */
 function remarkRanking()
 {
+	// 本棚を読み込めなかった (state.library が null) ときは、印を消さない。消すと本棚にある作品をまた落とせる
+	if (!state.library) return;
 	const owned = shelfNcodes();
 	for (const item of el.rankingList.children) {
 		const button = item.querySelector('button.ranking-get');
-		if (button && button.dataset.state !== 'busy') paintRankingButton(button, owned.has(item.dataset.ncode));
+		if (button && item.dataset.ncode !== rankingBusyNcode) paintRankingButton(button, owned.has(item.dataset.ncode));
 	}
 }
 
 async function downloadFromRanking(button)
 {
-	if (libraryDownloadJob) {
+	if (libraryDownloadJob || rankingBusyNcode) {
 		showDownloadStatus('ほかの作品を落としています。終わってから押してください');
 		el.libraryDownload.hidden = false;
 		return;
@@ -225,15 +279,20 @@ async function downloadFromRanking(button)
 	el.libraryDownload.hidden = false;
 	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
 	el.libraryDownloadUrl.value = rankingWorkUrl(work);
-	button.disabled = true;
-	button.dataset.state = 'busy';
-	button.textContent = '落としています…';
+	rankingBusyNcode = item.dataset.ncode;
+	paintRankingBusy(button);
 	try {
 		await startDownload(rankingWorkUrl(work));
 	} finally {
-		// 落とせたときの印は、本棚の読み直し (loadLibrary) が付ける。ここは押せる形に戻すだけ
-		button.dataset.state = '';
-		remarkRanking();
+		// 落とせたときの印は、本棚の読み直し (loadLibrary) が付ける。ここは押せる形に戻すだけ。
+		// 描き直されていれば button はもう画面に無いので、今の札を探して塗る
+		rankingBusyNcode = null;
+		const owned = state.library ? shelfNcodes() : null;
+		for (const current of el.rankingList.querySelectorAll('.ranking-card')) {
+			if (current.dataset.ncode !== item.dataset.ncode) continue;
+			const now = current.querySelector('button.ranking-get');
+			if (now) paintRankingButton(now, owned ? owned.has(current.dataset.ncode) : false);
+		}
 	}
 }
 
@@ -264,5 +323,7 @@ function firstLine(text)
 {
 	// 行頭の字下げ (全角の空白) は畳んだ 1 行では邪魔になる。trim は U+3000 も落とす
 	const line = (text.split(/\r?\n/).find(l => l.trim()) || '').trim();
-	return line.length > 80 ? line.slice(0, 80) + '…' : line;
+	// 字数はコードポイントで数える (UTF-16 で切ると、絵文字や第 2 面の漢字が割れる)
+	const chars = Array.from(line);
+	return chars.length > 80 ? chars.slice(0, 80).join('') + '…' : line;
 }
