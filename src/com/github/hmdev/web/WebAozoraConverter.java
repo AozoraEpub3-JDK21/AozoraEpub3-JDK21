@@ -246,6 +246,7 @@ public class WebAozoraConverter
 	WebAozoraConverter(String fqdn, File configPath) throws IOException
 	{
 		String siteDirName = siteDirName(fqdn, configPath);
+		this.chukiNotesSite = AOZORA_SITE_DIR.equals(siteDirName);
 		if (configPath.isDirectory()) {
 			for (File file : configPath.listFiles()) {
 				if (file.isDirectory() && file.getName().equals(siteDirName)) {
@@ -1935,6 +1936,10 @@ public class WebAozoraConverter
 	Node startElement = null;
 	Node endElement = null;
 	boolean noHr = false;
+	/** 青空文庫のサイト定義のフォルダ名 */
+	static final String AOZORA_SITE_DIR = "www.aozora.gr.jp";
+	/** span.notes の中身を注記として通すサイト（青空文庫。注記を <span class="notes">［＃…］</span> の文字で置く） */
+	boolean chukiNotesSite = false;
 	/** 青空文庫の HTML の注記（span.notes）の中を出力している間 true。中の「［＃」を逃がさない */
 	boolean inChukiNotes = false;
 	/** ノードを出力 子ノード内のテキストも出力 */
@@ -1968,7 +1973,7 @@ public class WebAozoraConverter
 			if (node instanceof TextNode) printBodyText(bw, ((TextNode)node).getWholeText());
 			else if (node instanceof Element) {
 				Element elem = (Element)node;
-				if ("span".equals(elem.tagName()) && elem.hasClass("notes") && !this.inChukiNotes) {
+				if (this.chukiNotesSite && "span".equals(elem.tagName()) && elem.hasClass("notes") && !this.inChukiNotes) {
 					//青空文庫の HTML は、底本との違いなどの注記を <span class="notes">［＃…］</span> の文字で置く。注記として読ませる（本文に出さない）
 					this.inChukiNotes = true;
 					try {
@@ -2887,6 +2892,8 @@ public class WebAozoraConverter
 	private static final char PH_BRACKET_CLOSE = '\uE001';
 	private static final char PH_HASH = '\uE002';
 	private static final char PH_KOME = '\uE003';
+	/** \u9003\u304C\u3057\u305F\u300C\uFF3B\u300D\uFF08\u203B\uFF3B\uFF03\u59CB\u3081\u89D2\u62EC\u5F27\u30011-1-46\uFF3D\uFF09\u3002\u6570\u5B57\u30FB\u8A18\u53F7\u306E\u5909\u63DB\u3088\u308A\u524D\u306B\u7F6E\u304F\u306E\u3067\u3001\u6CE8\u8A18\u306E\u4E2D\u8EAB\u304C\u5909\u63DB\u3055\u308C\u306A\u3044\u3088\u3046 1 \u5B57\u3067\u6301\u3064 */
+	private static final char PH_ESCAPED_BRACKET = '\uE004';
 
 	static String phChuki(String content) {
 		return String.valueOf(PH_BRACKET_OPEN) + PH_HASH + content +
@@ -2897,7 +2904,8 @@ public class WebAozoraConverter
 		return text.replace(PH_BRACKET_OPEN, '［')
 		           .replace(PH_BRACKET_CLOSE, '］')
 		           .replace(PH_HASH, '＃')
-		           .replace(PH_KOME, '※');
+		           .replace(PH_KOME, '※')
+		           .replace(String.valueOf(PH_ESCAPED_BRACKET), "※［＃始め角括弧、1-1-46］");
 	}
 
 	/** 中間テキスト先頭のシリーズ名・表題を出力
@@ -2919,28 +2927,31 @@ public class WebAozoraConverter
 	enum ChukiEscape {
 		/** 全部逃がす。作品名・章題・話の題・著者名など。題名に注記を書く作者はいないうえ、柱に入ると閉じを飲み込んで柱が閉じない */
 		ALL,
-		/** 中が数字だけのもの（［＃１］・［＃一］）だけ逃がす。本文・あらすじ。
+		/** サイトの文字のまま中がアラビア数字だけのもの（[#1]・［＃１］・［＃1,000］）だけ逃がす。本文・ルビ・あらすじ。
 		 * 作者が本文に書いた注記（［＃改ページ］など）は narou.rb と同じく注記として効かせる。
-		 * 数字だけの注記は青空文庫の書式に無く、[#1] のような番号（記号を全角にすると［＃１］）が消えるのを防ぐ */
+		 * 漢数字の［＃一］〜［＃四］は返り点の注記なので逃がさない。数字を漢数字にする前のサイトの文字で見るので、番号の [#1] と返り点を取り違えない */
 		NUMBER_ONLY,
 		/** 逃がさない。青空文庫の HTML の span.notes（中身が注記そのもの） */
 		NONE
 	}
 
-	/** chars[i] の「［」が「［＃」の始まりで、chukiEscape の範囲なら true */
-	static boolean escapesChukiOpen(char[] chars, int i, ChukiEscape chukiEscape)
+	/** 本文の番号の「［＃」の「［」。半角の「[」「#」は記号を全角にする設定のときだけ「［＃」になる */
+	private static final Pattern NUMBER_CHUKI_OPEN = Pattern.compile("([［\\[])(?=([＃#])[0-9０-９][0-9０-９,，.．・\\-－]*[］\\]])");
+
+	/** 本文の番号の「［＃数字］」の「［」を、逃がした「［」の PH_ESCAPED_BRACKET に置き換える。数字の変換より前に呼ぶ */
+	String escapeNumberChukiOpen(String text)
 	{
-		if (chukiEscape == ChukiEscape.NONE || i+1 >= chars.length || chars[i+1] != '＃') return false;
-		if (chukiEscape == ChukiEscape.ALL) return true;
-		//数字だけ（区切りの ・－，． を挟んでもよい）で「］」が閉じる
-		int j = i+2;
-		if (j >= chars.length || !isChukiNumber(chars[j])) return false;
-		while (j < chars.length && (isChukiNumber(chars[j]) || "・－，．".indexOf(chars[j]) >= 0)) j++;
-		return j < chars.length && chars[j] == '］';
-	}
-	private static boolean isChukiNumber(char ch)
-	{
-		return (ch >= '0' && ch <= '9') || (ch >= '０' && ch <= '９') || "〇一二三四五六七八九十百千万".indexOf(ch) >= 0;
+		if (text.indexOf('［') < 0 && text.indexOf('[') < 0) return text;
+		boolean zenkaku = formatSettings.isEnableConvertSymbolsToZenkaku();
+		Matcher m = NUMBER_CHUKI_OPEN.matcher(text);
+		StringBuilder sb = new StringBuilder();
+		while (m.find()) {
+			//変換の後に「［＃」の形になるものだけ（全角にしない設定なら半角の [ と # は注記にならない）
+			boolean forms = (m.group(1).equals("［") || zenkaku) && (m.group(2).equals("＃") || zenkaku);
+			m.appendReplacement(sb, Matcher.quoteReplacement(forms ? String.valueOf(PH_ESCAPED_BRACKET) : m.group(1)));
+		}
+		m.appendTail(sb);
+		return sb.toString();
 	}
 
 	/** 文字を出力 特殊文字は注記に変換。題名など（「［＃」は全部逃がす） */
@@ -2954,7 +2965,7 @@ public class WebAozoraConverter
 		printText(bw, text, isSubtitle, ChukiEscape.ALL);
 	}
 
-	/** 本文の文字を出力（「［＃」は数字だけのものを逃がす。span.notes の中は逃がさない） */
+	/** 本文の文字を出力（「［＃」はアラビア数字だけのものを逃がす。span.notes の中は逃がさない） */
 	private void printBodyText(BufferedWriter bw, String text) throws IOException
 	{
 		printText(bw, text, false, this.inChukiNotes ? ChukiEscape.NONE : ChukiEscape.NUMBER_ONLY);
@@ -2963,6 +2974,7 @@ public class WebAozoraConverter
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle, ChukiEscape chukiEscape) throws IOException
 	{
 		text = text.replaceAll("[\r\n]+", "");
+		if (chukiEscape == ChukiEscape.NUMBER_ONLY) text = escapeNumberChukiOpen(text);
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
 		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
 		if (formatSettings.isEnableNarouTag()) text = convertNarouTags(text);
@@ -2986,9 +2998,9 @@ public class WebAozoraConverter
 		for (int i = 0; i < chars.length; i++) {
 			char ch = chars[i];
 			switch (ch) {
-			//サイトの文字の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・字が消える。internal #38）。
-			//逃がすときは「［」を外字の注記で書き、ただの文字にする。変換が足す注記は PH_* で書いてあり、ここより後で戻すので逃がさない
-			case '［': sb.append(escapesChukiOpen(chars, i, chukiEscape) ? "※［＃始め角括弧、1-1-46］" : "［"); break;
+			//題名の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・字が消える。internal #38）。
+			//「［」を外字の注記で書き、ただの文字にする。変換が足す注記は PH_* で書いてあり、ここより後で戻すので逃がさない
+			case '［': sb.append(chukiEscape == ChukiEscape.ALL && i+1 < chars.length && chars[i+1] == '＃' ? "※［＃始め角括弧、1-1-46］" : "［"); break;
 			case '《': sb.append("※［＃始め二重山括弧］"); break;
 			case '》': sb.append("※［＃終わり二重山括弧］"); break;
 			case '※': sb.append("※［＃米印、1-2-8］"); break;

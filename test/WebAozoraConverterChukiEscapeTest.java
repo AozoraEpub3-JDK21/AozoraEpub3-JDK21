@@ -116,11 +116,19 @@ public class WebAozoraConverterChukiEscapeTest {
 	}
 
 	@Test
-	public void numberOnlyBracketsInTheBodyAreEscaped() throws Exception {
-		//数字を漢数字にすると［＃一］にもなる。どれも番号なので文字に残す
-		String out = episode("作品", null, "<p id=\"L1\">［＃２］ と ［＃一〇］ と ［＃1・2］ と ［＃12］ の番号。</p>");
-		assertFalse("番号が注記のまま残った: " + out, out.matches("(?s).*(?<!※)［＃[0-9０-９〇一二三四五六七八九十百千万・]+］.*"));
-		assertEquals("4 つとも逃がす: " + out, 4, out.split("始め角括弧", -1).length - 1);
+	public void arabicNumberBracketsInTheBodyAreEscaped() throws Exception {
+		//サイトの文字のまま中がアラビア数字だけのものは番号。漢数字にしてからでは返り点（［＃一］）と見分けられないので、その前に逃がす
+		//（［＃1,000］ は、カンマ区切りの数字が［＃半角数字＝…］になって消える別の不具合に当たるので、ここでは使わない）
+		String out = episode("作品", null, "<p id=\"L1\">［＃２］ と ［＃1・2］ と ［＃12］ と ［＃3－4］ の番号。</p>");
+		assertEquals("4 つとも逃がす: " + out, 4, out.split("始め角括弧、1-1-46", -1).length - 1);
+	}
+
+	@Test
+	public void kaeritenInTheBodyStayAnnotations() throws Exception {
+		//返り点（［＃一］〜［＃四］・［＃レ］・［＃上］など。chuki_tag.txt）は漢数字だけでも注記。漢数字の番号も逃がさない
+		String out = episode("作品", null, "<p id=\"L1\">学［＃二］而時習［＃一］之 と ［＃一〇］</p>");
+		assertTrue(out, out.contains("学［＃二］而時習［＃一］之"));
+		assertFalse(out, out.contains("始め角括弧"));
 	}
 
 	@Test
@@ -131,6 +139,10 @@ public class WebAozoraConverterChukiEscapeTest {
 			settings.setEnableConvertSymbolsToZenkaku(true);
 			String out = episode("作品", null, "<p id=\"L1\">[#1] 出会い</p>");
 			assertTrue(out, out.matches("(?s).*" + java.util.regex.Pattern.quote(ESCAPED) + "[1１一]］ 出会い.*"));
+			//全角にしない設定なら [#1] は注記にならないので、そのまま
+			settings.setEnableConvertSymbolsToZenkaku(false);
+			out = episode("作品", null, "<p id=\"L1\">[#1] 出会い ［#2］</p>");
+			assertFalse(out, out.contains("始め角括弧"));
 		} finally {
 			settings.setEnableConvertSymbolsToZenkaku(saved);
 		}
@@ -174,19 +186,37 @@ public class WebAozoraConverterChukiEscapeTest {
 	@Test
 	public void aozoraNotesStayAnnotations() throws Exception {
 		//青空文庫の HTML: <span class="notes">［＃…］</span> は注記として読ませる（本文に出さない）。数字だけでも逃がさない
-		String out = episode("作品", null, "<p id=\"L1\">措しい<span class=\"notes\">［＃「措しい」はママ］［＃１］</span>事を［＃１］する</p>");
+		String html = "<p>措しい<span class=\"notes\">［＃「措しい」はママ］［＃１］</span>事を［＃１］する</p>";
+		String out = printNode("https://www.aozora.gr.jp/cards/000148/files/789_14547.html", html);
 		assertTrue("span.notes の中は注記のまま: " + out, out.contains("措しい［＃「措しい」はママ］［＃１］事を"));
 		assertTrue("span.notes を出た後は本文として逃がす: " + out, out.contains("事を" + ESCAPED + "１］する"));
+		//青空文庫でないサイトの span.notes は、ただの本文
+		out = printNode("https://ncode.syosetu.com/n0000xx/1/", html);
+		assertTrue("青空文庫でないサイト: " + out, out.contains("［＃「措しい」はママ］" + ESCAPED + "１］事を"));
+	}
+
+	/** そのサイトの converter で、本文の要素を出力する（printNode） */
+	private String printNode(String url, String bodyHtml) throws Exception {
+		WebAozoraConverter site = WebAozoraConverter.createWebAozoraConverter(url, new File("web"));
+		assertNotNull(site);
+		Method m = WebAozoraConverter.class.getDeclaredMethod("printNode", BufferedWriter.class, org.jsoup.nodes.Node.class, boolean.class);
+		m.setAccessible(true);
+		StringWriter sw = new StringWriter();
+		try (BufferedWriter bw = new BufferedWriter(sw)) {
+			m.invoke(site, bw, Jsoup.parseBodyFragment(bodyHtml, url).body(), false);
+		}
+		return sw.toString();
 	}
 
 	@Test
 	public void escapedTextConvertsToTheLiteralCharacters() throws Exception {
 		//中間テキストを変換して、柱が閉じ、題名と本文の番号に「［＃」がそのまま出て、目次の章の名前にも残ることを見る
-		String text = "作品\n作者\n\n" + episode("作［＃品", "章［＃題", "<p id=\"L1\">［＃１］はじまり。</p>");
+		String text = "作品\n作者\n\n" + episode("作［＃品", "章［＃題", "<p id=\"L1\">［＃１］はじまり。</p><p id=\"L2\">学［＃二］而時習［＃一］之</p>");
 		String xhtml = convert(text);
 		assertTrue("柱が閉じていない・作品名が欠けた:\n" + xhtml, xhtml.contains("<div class=\"running_head yoko\">作［＃品</div>"));
 		assertTrue("章題の「［＃」が消えた:\n" + xhtml, xhtml.contains("章［＃題"));
 		assertTrue("本文の番号が消えた:\n" + xhtml, xhtml.matches("(?s).*<p>［＃[１一]］はじまり。</p>.*"));
+		assertTrue("返り点が注記として効いていない:\n" + xhtml, xhtml.contains("学<span class=\"sub\">二</span>而時習<span class=\"sub\">一</span>之"));
 		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains("<text>章［＃題</text>"));
 	}
 
