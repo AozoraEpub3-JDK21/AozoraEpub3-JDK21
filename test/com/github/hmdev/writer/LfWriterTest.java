@@ -43,12 +43,30 @@ public class LfWriterTest
 	}
 
 	@Test
-	public void closingDoesNotCloseTheUnderlyingWriter() throws Exception
+	public void writesWithAnOffsetUseOnlyThatRange() throws Exception
 	{
 		StringWriter sw = new StringWriter();
-		new LfWriter(sw).close();
-		sw.write("続き");
-		assertEquals("続き", sw.toString());
+		try (LfWriter w = new LfWriter(sw)) {
+			w.write("xa\r\nby", 1, 4);
+			w.write("za\rbz".toCharArray(), 1, 3);
+		}
+		assertEquals("a\nba\nb", sw.toString());
+	}
+
+	@Test
+	public void closingDoesNotCloseTheUnderlyingWriter() throws Exception
+	{
+		//閉じると以後の書き込みで例外を投げる Writer で確かめる（StringWriter.close() は何もしないので確かめにならない）
+		java.io.CharArrayWriter buf = new java.io.CharArrayWriter();
+		java.io.Writer closable = new java.io.FilterWriter(buf) {
+			boolean closed = false;
+			@Override public void write(int c) throws java.io.IOException { if (closed) throw new java.io.IOException("closed"); super.write(c); }
+			@Override public void write(String s, int off, int len) throws java.io.IOException { if (closed) throw new java.io.IOException("closed"); super.write(s, off, len); }
+			@Override public void close() { closed = true; }
+		};
+		new LfWriter(closable).close();
+		closable.write("続き");
+		assertEquals("続き", buf.toString());
 	}
 
 	@Test
@@ -56,5 +74,8 @@ public class LfWriterTest
 	{
 		byte[] in = "<?xml?>\r\n<a>日本語\r</a>\n".getBytes(StandardCharsets.UTF_8);
 		assertArrayEquals("<?xml?>\n<a>日本語\n</a>\n".getBytes(StandardCharsets.UTF_8), Epub3Writer.toLf(in));
+		//末尾が CRLF・CR でも LF 1 つにする
+		assertArrayEquals("a\n".getBytes(StandardCharsets.UTF_8), Epub3Writer.toLf("a\r\n".getBytes(StandardCharsets.UTF_8)));
+		assertArrayEquals("a\n".getBytes(StandardCharsets.UTF_8), Epub3Writer.toLf("a\r".getBytes(StandardCharsets.UTF_8)));
 	}
 }
