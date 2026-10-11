@@ -277,6 +277,9 @@
 ここで枠囲み終わり	</div>		1
 ここから破線枠囲み	<div class="dashed_border">		1
 ここで破線枠囲み終わり	</div>		1
+##柱（narou.rb の章の扉ページが作品名を置く。narou.rb の preset/custom_chuki_tag.txt と同じ。目次の章の名前には使わない）
+ここから柱	<div class="running_head yoko">		1
+ここで柱終わり	</div>		1
 
 ####文字サイズ
 １段階大きな文字	<span class="font1">

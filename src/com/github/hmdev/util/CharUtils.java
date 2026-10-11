@@ -411,13 +411,17 @@ public class CharUtils
 		return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 	}
 	
+	/** 1 行の中の柱の区間（閉じが無ければ行の終わりまで） */
+	static final java.util.regex.Pattern HASHIRA_SPAN = java.util.regex.Pattern.compile("［＃ここから柱］.*?(?:［＃ここで柱終わり］|$)");
+
 	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は内部エスケープ（{@link #ESCAPE}）
 	 * @param maxLength 文字制限 これより大きい文字は短くして...をつける
 	 * @prram 記号文字を短縮する */
 	static public String getChapterName(String line, int maxLength, boolean reduce)
 	{
+		//柱（narou.rb の章の扉ページの作品名）は中身ごと外す。章の名前・表題にしない（監査項目 20）
 		//内部エスケープの印は注記を外した後で外す（先に外すと ［※［＃井げた］…］ が注記に見える）
-		String name = removeEscape(line.replaceAll("［＃.+?］", ""))//注記除去
+		String name = removeEscape(HASHIRA_SPAN.matcher(line).replaceAll("").replaceAll("［＃.+?］", ""))//注記除去
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
 		if (reduce) name = reduceSymbols(name);//連続する記号は1つに
 		//タグはimgとaを削除
