@@ -1049,7 +1049,8 @@ public class AozoraEpub3
 				//プレビュー対象として最後の出力を覚えておく (CLI の --preview / GUI のプレビューボタン用)
 				if (outFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".epub")) {
 					lastOutputFile = outFile;
-					//Web から取った本なら、その本の話数を台帳に書く（本棚の更新が比べる元。一時ファイルへの書き出しは .epub で終わらないので外れる）
+					//Web から取った本なら、その本の話数を台帳に書く（本棚の更新が比べる元）。後で別の名前へ動かす一時ファイルは、
+					//呼び手が recordLedger=false を渡し、動かした後で本当の名前で記録する（internal #25）
 					if (recordLedger) com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
 				}
 			}

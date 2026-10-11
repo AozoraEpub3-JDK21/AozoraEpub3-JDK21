@@ -216,10 +216,12 @@ public class AozoraEpub3BookLedgerTest {
 		File real = new File(out, "本.epub");
 		assertTrue(AozoraEpub3.convertFile(txt, "txt", tmp, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0, false));
 		assertEquals("一時ファイルの名前で記録しない", -1, BookLedger.load(dir).ownEpisodesFor(tmp));
+		//書き終えたときの話数を控える。動かすまでの間に同じ作品の txt が更新されても（話数 3 → 4）、この本は 3 話
+		int episodes = BookLedger.episodesToRecord(bookInfo);
+		BookLedger.load(dir).withLastEpisodes(4).save(dir);
 		Files.move(tmp.toPath(), real.toPath());
-		BookLedger.recordBookEpisodes(bookInfo, real);
-		assertEquals("本当の名前で、最後に作った txt の話数を記録する", 3, BookLedger.load(dir).ownEpisodesFor(real));
-		assertEquals("一時ファイルの鍵は残らない", -1, BookLedger.load(dir).ownEpisodesFor(tmp));
+		BookLedger.recordBookEpisodes(bookInfo, real, episodes);
+		assertEquals("本当の名前で、書き終えたときの話数を記録する", 3, BookLedger.load(dir).ownEpisodesFor(real));
 	}
 
 	/** 対照: 記録する指定（既定）では、書き出した名前で記録する */

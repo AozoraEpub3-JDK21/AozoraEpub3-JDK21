@@ -361,7 +361,8 @@ public class HeadlessWebConversion
 		File workDir = srcFile.getAbsoluteFile().getParentFile();
 		File backup = null;
 		try {
-			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0);
+			//一時ファイルの名前では記録しない。置き換えた後で本当の名前で記録する
+			boolean ok = AozoraEpub3.convertFile(srcFile, "txt", tmp, converter, this.writer, "UTF-8", bookInfo, imageInfoReader, 0, false);
 			if (!ok) return new Result(false, false, outFile, "変換に失敗しました（本棚の本はそのまま）");
 			//今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）。
 			//いったん控えに写し、本を置き換えられてから 1 つ前の版の名前にする（先に上書きすると、変換や置き換えに

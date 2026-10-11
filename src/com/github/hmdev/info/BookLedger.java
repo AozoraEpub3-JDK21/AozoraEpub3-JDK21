@@ -116,12 +116,27 @@ public final class BookLedger
 	 */
 	public static void recordBookEpisodes(BookInfo bookInfo, File epub)
 	{
-		if (bookInfo == null || bookInfo.ledgerDir == null) return;
+		recordBookEpisodes(bookInfo, epub, episodesToRecord(bookInfo));
+	}
+
+	/** 今書き終えた本に記録する話数（最後に作った txt の話数）。台帳が無い・Web から取った本でなければ -1。
+	 * 書き終えてから記録するまでに間がある呼び手（kindlegen の後で本当の名前へ動かす GUI）は、書き終えたときにこれを控えておく */
+	public static int episodesToRecord(BookInfo bookInfo)
+	{
+		if (bookInfo == null || bookInfo.ledgerDir == null) return -1;
 		BookLedger ledger = load(bookInfo.ledgerDir);
-		if (ledger == null || ledger.lastEpisodes < 0 || ledger.episodesFor(epub) == ledger.lastEpisodes
+		return ledger == null ? -1 : ledger.lastEpisodes;
+	}
+
+	/** 書き終えた本に、控えておいた話数 episodes を記録する（{@link #episodesToRecord} の値。負なら何もしない） */
+	public static void recordBookEpisodes(BookInfo bookInfo, File epub, int episodes)
+	{
+		if (bookInfo == null || bookInfo.ledgerDir == null || episodes < 0) return;
+		BookLedger ledger = load(bookInfo.ledgerDir);
+		if (ledger == null || ledger.episodesFor(epub) == episodes
 			&& ledger.bookEpisodes.containsKey(bookKey(epub))) return;
 		try {
-			ledger.withBookEpisodes(epub, ledger.lastEpisodes).save(bookInfo.ledgerDir);
+			ledger.withBookEpisodes(epub, episodes).save(bookInfo.ledgerDir);
 		} catch (IOException e) {
 			logger.warn("台帳に本の話数を書けませんでした: {}", bookInfo.ledgerDir, e);
 		}
