@@ -1008,6 +1008,16 @@ public class AozoraEpub3
 	static public boolean convertFile(File srcFile, String ext, File outFile, AozoraEpub3Converter aozoraConverter, Epub3Writer epubWriter,
 			String encType, BookInfo bookInfo, ImageInfoReader imageInfoReader, int txtIdx)
 	{
+		return convertFile(srcFile, ext, outFile, aozoraConverter, epubWriter, encType, bookInfo, imageInfoReader, txtIdx, true);
+	}
+
+	/** ファイルを変換
+	 * @param recordLedger 書き終えた本の話数を台帳に書くか。outFile が後で別の名前へ動かす一時ファイルなら false にして、
+	 *   動かした後で呼び手が {@link com.github.hmdev.info.BookLedger#recordBookEpisodes(BookInfo, File)} を呼ぶ（一時ファイルの名前で記録しない。internal #25）
+	 * @return 変換に成功したら true。失敗時は false（出力途中の EPUB は削除済み） */
+	static public boolean convertFile(File srcFile, String ext, File outFile, AozoraEpub3Converter aozoraConverter, Epub3Writer epubWriter,
+			String encType, BookInfo bookInfo, ImageInfoReader imageInfoReader, int txtIdx, boolean recordLedger)
+	{
 		try {
 			long time = System.currentTimeMillis();
 			LogAppender.append("変換開始 : ");
@@ -1025,6 +1035,8 @@ public class AozoraEpub3
 				src = new BufferedReader(new InputStreamReader(is, encType));
 			}
 			
+			//本文を読み始める今の台帳の話数を、この本の話数として控える（getBookInfo の後、GUI の確認画面の間などに txt が更新されても、書く本文と合う）
+			com.github.hmdev.info.BookLedger.captureEpisodes(bookInfo);
 			//ePub書き出し srcは中でクローズされる
 			epubWriter.write(aozoraConverter, src, srcFile, ext, outFile, bookInfo, imageInfoReader);
 
@@ -1039,8 +1051,9 @@ public class AozoraEpub3
 				//プレビュー対象として最後の出力を覚えておく (CLI の --preview / GUI のプレビューボタン用)
 				if (outFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".epub")) {
 					lastOutputFile = outFile;
-					//Web から取った本なら、その本の話数を台帳に書く（本棚の更新が比べる元。一時ファイルへの書き出しは .epub で終わらないので外れる）
-					com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
+					//Web から取った本なら、その本の話数を台帳に書く（本棚の更新が比べる元）。後で別の名前へ動かす一時ファイルは、
+					//呼び手が recordLedger=false を渡し、動かした後で本当の名前で記録する（internal #25）
+					if (recordLedger) com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);
 				}
 			}
 

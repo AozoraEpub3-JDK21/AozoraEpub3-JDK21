@@ -1141,7 +1141,7 @@ public class WebAozoraConverter
 			//1 ページの作品（話の一覧が無い）は数えない
 			//守りの無い変換（GUI・CLI）は話数を上げるだけで下げない。下げると、本棚の本の守りが外れる
 			//（同じ作品を GUI で別のフォルダに変換しただけで、本棚の本が減った話数で上書きされる。PR のゲート2）
-			//作品の話数は、どの変換でも上げるだけ。今の話数は、本を書き終えたときにその本の話数になる（BookLedger.recordBookEpisodes）
+			//作品の話数は、どの変換でも上げるだけ。今の話数は、本文を読み始めるときに控え、書き終えたときにその本の話数になる（BookLedger.captureEpisodes / recordBookEpisodes）
 			int now = chapterHrefs.size();
 			if (ledger != null && (now > 0 || previous > 0)) {
 				if (now > ledger.episodes) this.pendingEpisodes = now;
