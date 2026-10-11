@@ -375,13 +375,11 @@ public class CharUtils
 		else if (ch[idx] == GAIJI_CLOSE_BRACKET) ch[idx] = '］';
 	}
 
-	/** getChapterName を通した名前に、連続する記号を 1 つにまとめて長さを切る（getChapterName の reduce と最後と同じ。注記の除去はしない） */
+	/** getChapterName を通した名前に、連続する記号を 1 つにまとめて長さを切る（注記の除去はしない。もう一度 getChapterName を通すと、外字の［］に戻した ［＃…］ が消える） */
 	static public String truncateName(String name, int maxLength)
 	{
 		if (name == null) return null;
-		name = name.replaceAll("(=|＝|-|―|─)+", "$1");
-		if (maxLength == 0) return name;
-		return name.length()>maxLength ? name.substring(0, maxLength)+"..." : name;
+		return cutName(reduceSymbols(name), maxLength);
 	}
 
 	/** 前に内部エスケープの印（{@link #ESCAPE}）を付ける特殊文字ならtrue
@@ -421,12 +419,24 @@ public class CharUtils
 		//内部エスケープの印は注記を外した後で外す（先に外すと ［※［＃井げた］…］ が注記に見える）
 		String name = removeEscape(line.replaceAll("［＃.+?］", ""))//注記除去
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
-		if (reduce) name = name.replaceAll("(=|＝|-|―|─)+", "$1");//連続する記号は1つに
+		if (reduce) name = reduceSymbols(name);//連続する記号は1つに
 		//タグはimgとaを削除
 		name = chapterTagOpenPattern.matcher(name).replaceAll("");
 		name = chapterTagClosePattern.matcher(name).replaceAll("");
 		
-		if (maxLength == 0) return name;
+		return cutName(name, maxLength);
+	}
+
+	/** 連続する記号は1つに（getChapterName の reduce） */
+	static public String reduceSymbols(String name)
+	{
+		return name.replaceAll("(=|＝|-|―|─)+", "$1");
+	}
+
+	/** maxLength より長い名前は短くして...をつける。0 なら切らない（getChapterName の最後） */
+	static public String cutName(String name, int maxLength)
+	{
+		if (name == null || maxLength == 0) return name;
 		return name.length()>maxLength ? name.substring(0, maxLength)+"..." : name;
 	}
 	/** imgとaタグ除去用のパターン */

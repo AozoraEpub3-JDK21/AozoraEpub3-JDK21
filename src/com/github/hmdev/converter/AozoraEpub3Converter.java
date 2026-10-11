@@ -1516,7 +1516,7 @@ public class AozoraEpub3Converter
 	
 	/** 文字列内の外字を変換
 	 * ・外字はUTF-16文字列に変換
-	 * ・特殊文字のうち※《》｜＃ は文字の前に内部エスケープの印（CharUtils.ESCAPE）をつけてエスケープ
+	 * ・特殊文字のうち※《》｜＃ は文字の前に内部エスケープの印（CharUtils.ESCAPE）をつけてエスケープ。［］ は代わりの文字（CharUtils.GAIJI_OPEN_BRACKET/GAIJI_CLOSE_BRACKET）に置き換える
 	 * @param line 行文字列
 	 * @param escape ※での特殊文字のエスケープをするならtrue
 	 * @return 外字変換済の行文字列 */
