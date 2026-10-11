@@ -353,7 +353,7 @@ public class Epub3Writer
 	}
 
 	/** テンプレートをマージして Writer に出力。改行は LF にそろえる（テンプレートの改行は置き場や git の設定で変わるため） */
-	private void mergeTemplate(String templateFilePath, BufferedWriter out) throws IOException {
+	protected void mergeTemplate(String templateFilePath, BufferedWriter out) throws IOException {
 		LfWriter bw = new LfWriter(out);
 		try {
 			if (this.velocityEngine != null) {

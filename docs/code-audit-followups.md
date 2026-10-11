@@ -53,6 +53,7 @@
 | 38 | 🔴 高 | 前方参照注記の直後のルビが閉じていないと `replaceChukiSufTag` の `indexOf("》")` が -1 になり、変換全体が異常終了する | ✅ 対応済 | — |
 | 42 | 🟡 中 | GUI の設定が Windows のサインアウト・シャットダウンで保存されない / ini を書く途中で殺されると壊れる | 🔶 一部対応（窓が手前から外れたときにも保存）。窓が手前のまま終わる道、書きかけの ini、GUI と CLI の上書きは未対応 | — |
 | 43 | 🟡 中 | EPUB の改行がテンプレートの置き場・git の設定・ビルドした台で変わり、1 冊の中でも CRLF と LF が混ざる | ✅ 対応済（出力を LF にそろえる）。.NET ポートは後追い | — |
+| 44 | 🔴 高 | 画像だけの本（画像の zip など）を CLI で変換すると、テンプレートが見つからずに失敗する（v1.6.1 でも） | ✅ 対応済（`Epub3ImageWriter` も `mergeTemplate` を通す） | — |
 
 ---
 
@@ -1957,6 +1958,7 @@ Windows の clone（`core.autocrlf=true`）では全部 CRLF になる。結果�
 読む側は CRLF と CR を LF に読み替える（XML 1.0 §2.11）。表示は変わらない。
 
 **直し**: `Epub3Writer.mergeTemplate` が `LfWriter` を通して書き、`writeFile`（container.xml・固定の CSS）も `toLf` を通す。
+画像だけの本（`Epub3ImageWriter`）も、テンプレートを直接読まずに `mergeTemplate` を通すようにした（項目 44 も同時に直る）。
 テンプレートの改行や git の設定に左右されない。`chuki_*.txt`・ini はメモ帳で開くので CRLF のまま（出力には入らない）。
 
 **確かめたこと**: master と同じ入力 24 冊（青空文庫 `aozora_1567_14913`（走れメロス、MS932）・カクヨム・なろうの 5 作品をお手本と同じ設定で、
@@ -1965,6 +1967,18 @@ Windows の clone（`core.autocrlf=true`）では全部 CRLF になる。結果�
 
 **.NET ポート（後追い）**: .NET は `Epub3Writer.cs:299` で出力を CRLF にそろえている（以前の Java に合わせたもの）。
 Java に合わせて LF にする。`java-port-back-guide.md` の A7「Java は既に CRLF（対応不要）」も書き直す
+
+### 44. 画像だけの本（画像の zip など）を CLI で変換すると、テンプレートが見つからずに失敗する — ✅ 対応済（2026-10-11）
+
+**発見**: 項目 43 のレビューで。`test_data/test_png.zip` を CLI で変換すると
+`unable to find resource 'template/OPS/xhtml/xhtml_header.vm'` → `EPUB 変換に失敗` になる。
+配布中の v1.6.1（jar の横に `template/` がある置き方）でも、リポジトリから動かしても同じ。
+
+**原因**: `Epub3ImageWriter` の `startImageSection` / `printSvgImageSection` が `Velocity.getTemplate(templatePath+…)` を直接呼んでいた。
+テキストの本が通る `Epub3Writer.mergeTemplate` には、外のフォルダと jar の中のテンプレートを探し分ける道があるが、そこを通っていなかった。
+
+**直し**: 2 か所とも `mergeTemplate` を呼ぶ（`protected` にした）。直した後は、どちらの置き方でも変換でき、改行も LF になる（29 エントリ、テキスト 17 本に CR なし）。
+GUI から画像だけの本を変換したときの振る舞いは確かめていない
 
 ---
 

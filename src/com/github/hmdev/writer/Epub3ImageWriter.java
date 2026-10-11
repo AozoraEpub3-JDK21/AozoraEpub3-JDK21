@@ -14,7 +14,6 @@ import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.velocity.app.Velocity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -194,7 +193,8 @@ public class Epub3ImageWriter extends Epub3Writer
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(super.zos, "UTF-8"));
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
-		Velocity.getTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM).merge(this.velocityContext, bw);
+		//テキストの本と同じ mergeTemplate を通す。jar の中のテンプレートも探せ、改行も LF にそろう（監査項目 43・44）
+		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, bw);
 		bw.flush();
 	}
 	
@@ -217,7 +217,7 @@ public class Epub3ImageWriter extends Epub3Writer
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
 		this.velocityContext.put("imageInfo", imageInfo);
-		Velocity.getTemplate(this.templatePath+OPS_PATH+XHTML_PATH+SVG_IMAGE_VM).merge(this.velocityContext, bw);
+		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+SVG_IMAGE_VM, bw);
 		bw.flush();
 	}
 	
