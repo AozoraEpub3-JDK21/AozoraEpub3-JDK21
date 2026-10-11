@@ -5165,8 +5165,10 @@ public class AozoraEpub3Applet extends JPanel
 		this.updatePreviewButton();
 		Thread worker = new Thread(() -> {
 			try {
-				String url = com.github.hmdev.preview.PreviewLauncher.preview(target);
-				SwingUtilities.invokeLater(() -> LogAppender.println(I18n.t("ui.preview.opened")+" : "+url));
+				com.github.hmdev.preview.PreviewLauncher.Opened opened = com.github.hmdev.preview.PreviewLauncher.preview(target);
+				//開いているタブに出したときは新しいタブが出ないので、どこに出たかを言う
+				String key = opened.reused() ? "ui.preview.reused" : "ui.preview.opened";
+				SwingUtilities.invokeLater(() -> LogAppender.println(I18n.t(key)+" : "+opened.url()));
 			} catch (IOException | RuntimeException e) {
 				//InvalidPathException など非検査例外もここで受ける。
 				//取りこぼすとダイアログが出ず「押しても何も起きない」ように見える
@@ -5300,8 +5302,9 @@ public class AozoraEpub3Applet extends JPanel
 		this.updateLibraryButtons();
 		Thread worker = new Thread(() -> {
 			try {
-				String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(paths);
-				SwingUtilities.invokeLater(() -> LogAppender.println(I18n.t("ui.library.opened")+" : "+url));
+				com.github.hmdev.preview.PreviewLauncher.Opened opened = com.github.hmdev.preview.PreviewLauncher.previewLibrary(paths);
+				String key = opened.reused() ? "ui.library.reused" : "ui.library.opened";
+				SwingUtilities.invokeLater(() -> LogAppender.println(I18n.t(key)+" : "+opened.url()));
 			} catch (IOException | RuntimeException e) {
 				logger.error("本棚の起動に失敗", e);
 				String detail = (e.getMessage() != null) ? e.getMessage() : e.toString();

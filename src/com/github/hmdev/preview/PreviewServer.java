@@ -118,6 +118,44 @@ public class PreviewServer implements AutoCloseable
 	 */
 	private final Map<String, Long> clients = new ConcurrentHashMap<>();
 
+	/*
+	 * 開いているタブを使い回す（本や本棚を開くたびに新しいタブを足さない）。
+	 *
+	 * 見えているタブ（ウィンドウの手前のタブで、ブラウザが隠されていない）は、受け箱（api/inbox）を
+	 * 1 秒ごとに見に来る。見えていないタブは来ない。2026-10-11 の spike（Safari・Chrome、mac）で、
+	 * 別のアプリの窓に覆われたタブも visible のまま、隠したブラウザや奥のタブは hidden になると確かめた。
+	 * 開く側は、最近見に来たタブの受け箱に URL を入れて、取りに来るのを少し待つ。来なければ
+	 * 今までどおり新しいタブを開く。ページからタブを手前に出すことはブラウザが許さないので、前には出ない
+	 */
+
+	/** 見えているタブが受け箱を見に来る間隔（ビューアーの INBOX_POLL と合わせる） */
+	static final long INBOX_POLL_MILLIS = 1_000L;
+
+	/** この間に見に来たタブを「見えている」とみなす */
+	static final long INBOX_FRESH_MILLIS = 3_000L;
+
+	/** 受け箱に入れてから、取りに来るのを待つ間 */
+	static final long INBOX_WAIT_MILLIS = 2_500L;
+
+	/** タブが受け箱を最後に見に来た時刻（nanoTime）と、そのときウィンドウがフォーカスを持っていたか */
+	private record InboxVisit(long nanos, boolean focused) { }
+
+	private final Map<String, InboxVisit> inboxVisits = new ConcurrentHashMap<>();
+
+	/**
+	 * 受け箱に入っている、開いてほしい URL。state は 0＝待ち・1＝渡した・3＝受け取ったと返事が来た・2＝下げた。
+	 * 移るのは compareAndSet だけで、取るのと下げるのが重なっても、どちらか一方だけが勝つ（PR #129 の codex）。
+	 * 「使い回した」と言えるのは 3 だけ。渡した応答がタブに届かない（閉じた・切れた）こともあるので、
+	 * タブが移る前に返事（ack）をもらう。返事が来なければ新しいタブを開く（何も出ないより、2 つ出る方がよい）
+	 */
+	private record Delivery(String id, String url, java.util.concurrent.atomic.AtomicInteger state,
+		java.util.concurrent.CountDownLatch acked) { }
+
+	private final Map<String, Delivery> inbox = new ConcurrentHashMap<>();
+
+	/** 渡して返事を待っている受け渡し。鍵は Delivery.id */
+	private final Map<String, Delivery> awaitingAck = new ConcurrentHashMap<>();
+
 	/** 本棚の「続きを取る」を行うもの。本棚を開く側（GUI・CLI）が渡す。null なら更新できない */
 	private volatile BookUpdater bookUpdater;
 	/** 更新は 1 冊ずつ（サイトへの負担と、変換の静的な状態を共有しないため） */
@@ -347,6 +385,24 @@ public class PreviewServer implements AutoCloseable
 		return "default";
 	}
 
+	/** 問い合わせの name の値（無ければ null。値はそのまま） */
+	static String queryValue(HttpExchange exchange, String name)
+	{
+		String query = exchange.getRequestURI().getRawQuery();
+		if (query == null) return null;
+		for (String part : query.split("&")) {
+			if (part.startsWith(name + "=") && part.length() > name.length() + 1) return part.substring(name.length() + 1);
+		}
+		return null;
+	}
+
+	/** 問い合わせに {@code flag}（例: {@code focus=1}）がそのまま入っているか */
+	static boolean hasQueryFlag(HttpExchange exchange, String flag)
+	{
+		String query = exchange.getRequestURI().getRawQuery();
+		return query != null && java.util.Arrays.asList(query.split("&")).contains(flag);
+	}
+
 	/** タブが生きていることを記録する */
 	void noteClientAlive(String clientId)
 	{
@@ -362,6 +418,8 @@ public class PreviewServer implements AutoCloseable
 	{
 		long limitNanos = IDLE_TIMEOUT_MILLIS * 1_000_000L;
 		this.clients.values().removeIf(seen -> nowNanos - seen >= limitNanos);
+		//忘れたタブの受け箱の記録も捨てる（タブ ID は開くたびに増える）
+		this.inboxVisits.keySet().retainAll(this.clients.keySet());
 	}
 
 	/**
@@ -371,6 +429,7 @@ public class PreviewServer implements AutoCloseable
 	void noteClientGone(String clientId)
 	{
 		this.clients.remove(clientId);
+		this.inboxVisits.remove(clientId);
 		this.closeNotified = this.clients.isEmpty();
 	}
 
@@ -470,6 +529,10 @@ public class PreviewServer implements AutoCloseable
 				// タブを閉じたときの sendBeacon。猶予を待たずに終了できるようにする
 				noteClientGone(clientIdOf(exchange));
 				respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+				return;
+			}
+			if (rest.equals("api/inbox")) {
+				serveInbox(exchange, method);
 				return;
 			}
 			if (rest.equals("api/settings")) {
@@ -620,8 +683,7 @@ public class PreviewServer implements AutoCloseable
 			return;
 		}
 		//利用者が「減ったまま更新」を選んだ（話数が減って止めた本を、それでも取り直す）
-		String query = exchange.getRequestURI().getRawQuery();
-		boolean allowFewer = query != null && java.util.Arrays.asList(query.split("&")).contains("allowFewer=1");
+		boolean allowFewer = hasQueryFlag(exchange, "allowFewer=1");
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
@@ -1115,6 +1177,115 @@ public class PreviewServer implements AutoCloseable
 		} catch (java.net.URISyntaxException e) {
 			return false;
 		}
+	}
+
+	/**
+	 * 受け箱（POST api/inbox?tab=…&focus=0|1）。見えているタブが 1 秒ごとに見に来る。
+	 * 入っていれば {"open": URL} を返して空にする。無ければ 204。取ると状態が変わるので POST
+	 */
+	private void serveInbox(HttpExchange exchange, String method) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		String tab = clientIdOf(exchange);
+		//奥へ回った・隠れたタブの知らせ。見えているタブの候補から外す（外さないと、3 秒の間は来ないタブを待つ）
+		if (hasQueryFlag(exchange, "hidden=1")) {
+			this.inboxVisits.remove(tab);
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		//受け取ったという返事。タブはこれを送ってから移る
+		String ack = queryValue(exchange, "ack");
+		if (ack != null) {
+			Delivery acked = this.awaitingAck.remove(ack);
+			if (acked != null && acked.state.compareAndSet(1, 3)) acked.acked.countDown();
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		//生きているタブの登録は heartbeat だけがする。ここで登録し直すと、bye の後に遅れて届いた
+		//見回りが閉じたタブを生き返らせ、CLI が 5 分終わらなくなる（PR #129 の codex）
+		if (!this.clients.containsKey(tab)) {
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		boolean focused = hasQueryFlag(exchange, "focus=1");
+		this.inboxVisits.put(tab, new InboxVisit(System.nanoTime(), focused));
+		Delivery delivery = this.inbox.remove(tab);
+		if (delivery == null || !delivery.state.compareAndSet(0, 1)) {
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		//取ったタブは移る（読み込み直すと別のタブ ID で来る）。候補から外す
+		this.inboxVisits.remove(tab);
+		this.awaitingAck.put(delivery.id, delivery);
+		StringBuilder buf = new StringBuilder(96);
+		buf.append('{');
+		Json.prop(buf, "open", delivery.url);
+		Json.prop(buf, "ack", delivery.id);
+		buf.append('}');
+		respondJson(exchange, buf.toString());
+	}
+
+	/**
+	 * 見えているタブに URL を開いてもらう。フォーカスを持つタブ、無ければ最後に見に来たタブ。
+	 * 取りに来るまで待つ（呼ぶのは画面のスレッド以外から）。
+	 * @return 取りに来た。false なら誰にも渡していない（新しいタブを開くこと）
+	 */
+	public boolean offerToVisibleTab(String url) throws InterruptedException
+	{
+		return offerToVisibleTab(url, INBOX_WAIT_MILLIS);
+	}
+
+	/** 渡すのは 1 つずつ（同じタブの受け箱に 2 つ入れると、先の 1 つが上書きされて待ちぼうけになる） */
+	private final Object offering = new Object();
+
+	boolean offerToVisibleTab(String url, long waitMillis) throws InterruptedException
+	{
+		synchronized (this.offering) {
+			return offerOnce(url, waitMillis);
+		}
+	}
+
+	private boolean offerOnce(String url, long waitMillis) throws InterruptedException
+	{
+		long now = System.nanoTime();
+		long fresh = INBOX_FRESH_MILLIS * 1_000_000L;
+		String best = null;
+		InboxVisit bestVisit = null;
+		for (Map.Entry<String, InboxVisit> e : this.inboxVisits.entrySet()) {
+			InboxVisit v = e.getValue();
+			if (now - v.nanos > fresh || !this.clients.containsKey(e.getKey())) continue;
+			if (bestVisit == null || (v.focused && !bestVisit.focused)
+				|| (v.focused == bestVisit.focused && v.nanos > bestVisit.nanos)) {
+				best = e.getKey();
+				bestVisit = v;
+			}
+		}
+		if (best == null) return false;
+		//タブへは道（/p/…/?book=…）だけを渡す。タブは自分のオリジンで解決する。
+		//localhost で開き直したタブに 127.0.0.1 の URL を渡すと、別のオリジンとして捨てられる（PR #129 の codex）
+		Delivery delivery = new Delivery(newJobId(), pathOf(url), new java.util.concurrent.atomic.AtomicInteger(),
+			new java.util.concurrent.CountDownLatch(1));
+		this.inbox.put(best, delivery);
+		try {
+			delivery.acked.await(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+		} finally {
+			//取りに来なかった（奥へ回った・凍った）なら下げる。入れたままにすると、後で見に来たときに古い本へ飛ぶ。
+			//渡したのに返事が来なければ、遅れた返事を受け付けない（新しいタブを開くので）
+			if (delivery.state.compareAndSet(0, 2)) this.inbox.remove(best, delivery);
+			if (delivery.state.compareAndSet(1, 2)) this.awaitingAck.remove(delivery.id, delivery);
+		}
+		return delivery.state.get() == 3;
+	}
+
+	/** URL の道と問い合わせ（スキームとホストを落とす） */
+	static String pathOf(String url)
+	{
+		java.net.URI uri = java.net.URI.create(url);
+		String path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
+		return uri.getRawQuery() == null ? path : path + "?" + uri.getRawQuery();
 	}
 
 	/** 本棚のランキング（なろう）。試験では差し替える */

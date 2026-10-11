@@ -51,6 +51,11 @@ public class PreviewLauncher
 	private final PreviewServer server;
 	/** JVM 終了時の後始末。shutdown() で解除できるよう参照を保持する */
 	private Thread shutdownHook;
+	/**
+	 * このセッションで本や本棚を開いた回数（クラスの鍵の中で増やす）。開くのに失敗したとき、
+	 * 作った呼び出しのほかに使い始めた呼び出しがあれば止めない（PR #129 の codex）
+	 */
+	private int opens;
 
 	private PreviewLauncher(PreviewSession session, PreviewServer server)
 	{
@@ -119,7 +124,47 @@ public class PreviewLauncher
 	 * @return 開いた URL
 	 * @throws IOException 起動に失敗した場合
 	 */
-	public static synchronized String preview(File epubFile) throws IOException
+	public static Opened preview(File epubFile) throws IOException
+	{
+		Prepared prepared = preparePreview(epubFile);
+		return deliver(prepared);
+	}
+
+	/**
+	 * 開いた結果。
+	 * @param url 開いた URL
+	 * @param reused 新しいタブを開かず、開いているタブに出した
+	 */
+	public record Opened(String url, boolean reused) { }
+
+	/** 開く URL と、このセッションを今作ったか（今作ったなら開いているタブは無い） */
+	private record Prepared(PreviewLauncher launcher, String url, boolean createdSession) { }
+
+	/**
+	 * 見えているタブがあればそこに出し、無ければ新しいタブを開く。
+	 * タブが取りに来るのを待つので、クラスの鍵（synchronized）の外で呼ぶ。待つ間にほかの操作を止めない
+	 */
+	private static Opened deliver(Prepared prepared) throws IOException
+	{
+		if (!prepared.createdSession) {
+			try {
+				if (prepared.launcher.server.offerToVisibleTab(prepared.url)) return new Opened(prepared.url, true);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+		try {
+			openInBrowser(prepared.url);
+		} catch (IOException | RuntimeException e) {
+			// このセッションを今作ったのなら、失敗として片付ける。
+			// 鍵の外にいる間にほかの呼び出しがこのセッションへ本を足したかもしれないので、まだ同じセッションのときだけ
+			if (prepared.createdSession) shutdownIfOnlyUser(prepared.launcher);
+			throw e;
+		}
+		return new Opened(prepared.url, false);
+	}
+
+	private static synchronized Prepared preparePreview(File epubFile) throws IOException
 	{
 		if (epubFile == null || !epubFile.isFile()) {
 			throw new IOException("EPUB が見つかりません: " + epubFile);
@@ -133,9 +178,8 @@ public class PreviewLauncher
 			// 遅延展開のままだとブラウザが本文を要求するまで失敗が分からず、
 			// 壊れた EPUB でも「開けた」と報告してしまう
 			current.session.ensureExtracted(bookId);
-			String url = current.getUrl(bookId);
-			openInBrowser(url);
-			return url;
+			current.opens++;
+			return new Prepared(current, current.getUrl(bookId), createdSession);
 		} catch (IOException | RuntimeException e) {
 			// このセッションを今作ったのなら、失敗として片付ける
 			if (createdSession) shutdown();
@@ -152,21 +196,20 @@ public class PreviewLauncher
 	 * @return 開いた URL
 	 * @throws IOException 起動に失敗した場合、または 1 つも棚を読めなかった場合
 	 */
-	public static synchronized String previewLibrary(List<Path> folders) throws IOException
+	public static Opened previewLibrary(List<Path> folders) throws IOException
+	{
+		return deliver(prepareLibrary(folders));
+	}
+
+	private static synchronized Prepared prepareLibrary(List<Path> folders) throws IOException
 	{
 		if (folders == null || folders.isEmpty()) throw new IOException("本棚のフォルダが指定されていません");
 		// 「このセッションを今作ったか」は棚を読み込む前に決める。
 		// 既に開いているセッション (別のタブで閲覧中かもしれない) を巻き添えで落とさない
 		boolean createdSession = (current == null);
 		loadLibraryInto(folders);
-		try {
-			String url = current.getUrl();
-			openInBrowser(url);
-			return url;
-		} catch (IOException | RuntimeException e) {
-			if (createdSession) shutdown();
-			throw e;
-		}
+		current.opens++;
+		return new Prepared(current, current.getUrl(), createdSession);
 	}
 
 	/**
@@ -308,6 +351,12 @@ public class PreviewLauncher
 
 	/** 起動中のプレビューがあれば返す。無ければ null */
 	public static synchronized PreviewLauncher getCurrent() { return current; }
+
+	/** 起動中のプレビューが launcher で、ほかに開いた呼び出しが無いときだけ止める */
+	private static synchronized void shutdownIfOnlyUser(PreviewLauncher launcher)
+	{
+		if (current == launcher && launcher.opens <= 1) shutdown();
+	}
 
 	/** 起動中のプレビューを停止する */
 	public static synchronized void shutdown()

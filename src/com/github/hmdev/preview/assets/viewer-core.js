@@ -120,6 +120,8 @@ function startHeartbeat()
 	window.addEventListener('pageshow', beat);
 	window.addEventListener('focus', beat);
 
+	startInbox(tab);
+
 	// タブを閉じたことを明示的に伝える。これで待たずに終了できる。
 	// bfcache への退避でも発火するが、復帰時は pageshow の beat で登録し直される
 	window.addEventListener('pagehide', () => {
@@ -129,6 +131,48 @@ function startHeartbeat()
 			/* sendBeacon が使えなければ猶予切れによる終了に任せる */
 		}
 	});
+}
+
+/** 見えている間、受け箱を見に行く間隔 (サーバの INBOX_POLL_MILLIS と合わせる) */
+const INBOX_POLL = 1000;
+
+/**
+ * 受け箱を見に行く (PreviewServer#serveInbox)。アプリで本や本棚を開いたとき、見えているタブがあれば
+ * 新しいタブを開かずにここへ URL が届く。見えていない間は行かない (行くこと自体が「見えている」の知らせ)
+ */
+function startInbox(tab)
+{
+	const check = () => {
+		if (document.hidden) return;
+		const focus = document.hasFocus() ? '&focus=1' : '&focus=0';
+		fetch('api/inbox?' + tab + focus, {method: 'POST', cache: 'no-store'})
+			.then(response => (response.status === 200) ? response.json() : null)
+			.then(json => {
+				if (!json || typeof json.open !== 'string') return;
+				// 同じサーバの URL だけを開く
+				const target = new URL(json.open, location.href);
+				if (target.origin !== location.origin) return;
+				// 受け取ったと返事をしてから移る。返事が届かなければ、アプリは新しいタブを開く
+				const ack = (typeof json.ack === 'string') ? json.ack : '';
+				fetch('api/inbox?' + tab + '&ack=' + encodeURIComponent(ack), {method: 'POST', cache: 'no-store', keepalive: true})
+					.catch(() => { /* 返事が届かなくても移る (アプリは新しいタブも開く) */ })
+					.finally(() => location.assign(target.href));
+			})
+			.catch(() => {
+				/* サーバが既に終了している場合は何もしない */
+			});
+	};
+	setInterval(check, INBOX_POLL);
+	// 手前に戻ったらすぐに見に行く。奥へ回ったら、候補から外してもらう (外さないと、来ないタブを数秒待たせる)
+	document.addEventListener('visibilitychange', () => {
+		if (!document.hidden) {
+			check();
+			return;
+		}
+		fetch('api/inbox?' + tab + '&hidden=1', {method: 'POST', cache: 'no-store', keepalive: true})
+			.catch(() => { /* サーバが既に終了している */ });
+	});
+	check();
 }
 
 /** タブを識別する ID を作る。crypto が使えない環境でも動くようフォールバックする */
