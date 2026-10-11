@@ -152,7 +152,11 @@ function startInbox(tab)
 				// 同じサーバの URL だけを開く
 				const target = new URL(json.open, location.href);
 				if (target.origin !== location.origin) return;
-				location.assign(target.href);
+				// 受け取ったと返事をしてから移る。返事が届かなければ、アプリは新しいタブを開く
+				const ack = (typeof json.ack === 'string') ? json.ack : '';
+				fetch('api/inbox?' + tab + '&ack=' + encodeURIComponent(ack), {method: 'POST', cache: 'no-store', keepalive: true})
+					.catch(() => { /* 返事が届かなくても移る (アプリは新しいタブも開く) */ })
+					.finally(() => location.assign(target.href));
 			})
 			.catch(() => {
 				/* サーバが既に終了している場合は何もしない */

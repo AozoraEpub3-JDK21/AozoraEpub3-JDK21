@@ -143,13 +143,18 @@ public class PreviewServer implements AutoCloseable
 	private final Map<String, InboxVisit> inboxVisits = new ConcurrentHashMap<>();
 
 	/**
-	 * 受け箱に入っている、開いてほしい URL。state は 0＝待ち・1＝取られた・2＝下げた。
-	 * 取るのと下げるのが重なっても、どちらか一方だけが勝つ（両方のタブで開かない。PR #129 の codex）
+	 * 受け箱に入っている、開いてほしい URL。state は 0＝待ち・1＝渡した・3＝受け取ったと返事が来た・2＝下げた。
+	 * 移るのは compareAndSet だけで、取るのと下げるのが重なっても、どちらか一方だけが勝つ（PR #129 の codex）。
+	 * 「使い回した」と言えるのは 3 だけ。渡した応答がタブに届かない（閉じた・切れた）こともあるので、
+	 * タブが移る前に返事（ack）をもらう。返事が来なければ新しいタブを開く（何も出ないより、2 つ出る方がよい）
 	 */
-	private record Delivery(String url, java.util.concurrent.atomic.AtomicInteger state,
-		java.util.concurrent.CountDownLatch taken) { }
+	private record Delivery(String id, String url, java.util.concurrent.atomic.AtomicInteger state,
+		java.util.concurrent.CountDownLatch acked) { }
 
 	private final Map<String, Delivery> inbox = new ConcurrentHashMap<>();
+
+	/** 渡して返事を待っている受け渡し。鍵は Delivery.id */
+	private final Map<String, Delivery> awaitingAck = new ConcurrentHashMap<>();
 
 	/** 本棚の「続きを取る」を行うもの。本棚を開く側（GUI・CLI）が渡す。null なら更新できない */
 	private volatile BookUpdater bookUpdater;
@@ -378,6 +383,17 @@ public class PreviewServer implements AutoCloseable
 		}
 		// タブ ID を送ってこないクライアントは 1 つのタブとして扱う
 		return "default";
+	}
+
+	/** 問い合わせの name の値（無ければ null。値はそのまま） */
+	static String queryValue(HttpExchange exchange, String name)
+	{
+		String query = exchange.getRequestURI().getRawQuery();
+		if (query == null) return null;
+		for (String part : query.split("&")) {
+			if (part.startsWith(name + "=") && part.length() > name.length() + 1) return part.substring(name.length() + 1);
+		}
+		return null;
 	}
 
 	/** 問い合わせに {@code flag}（例: {@code focus=1}）がそのまま入っているか */
@@ -1180,9 +1196,21 @@ public class PreviewServer implements AutoCloseable
 			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
 			return;
 		}
+		//受け取ったという返事。タブはこれを送ってから移る
+		String ack = queryValue(exchange, "ack");
+		if (ack != null) {
+			Delivery acked = this.awaitingAck.remove(ack);
+			if (acked != null && acked.state.compareAndSet(1, 3)) acked.acked.countDown();
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		//生きているタブの登録は heartbeat だけがする。ここで登録し直すと、bye の後に遅れて届いた
+		//見回りが閉じたタブを生き返らせ、CLI が 5 分終わらなくなる（PR #129 の codex）
+		if (!this.clients.containsKey(tab)) {
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
 		boolean focused = hasQueryFlag(exchange, "focus=1");
-		//見に来た＝生きている。記録はその後（noteClientAlive の掃除は、まだ生きているタブに無い記録を捨てる）
-		noteClientAlive(tab);
 		this.inboxVisits.put(tab, new InboxVisit(System.nanoTime(), focused));
 		Delivery delivery = this.inbox.remove(tab);
 		if (delivery == null || !delivery.state.compareAndSet(0, 1)) {
@@ -1191,10 +1219,11 @@ public class PreviewServer implements AutoCloseable
 		}
 		//取ったタブは移る（読み込み直すと別のタブ ID で来る）。候補から外す
 		this.inboxVisits.remove(tab);
-		delivery.taken.countDown();
-		StringBuilder buf = new StringBuilder(64);
+		this.awaitingAck.put(delivery.id, delivery);
+		StringBuilder buf = new StringBuilder(96);
 		buf.append('{');
 		Json.prop(buf, "open", delivery.url);
+		Json.prop(buf, "ack", delivery.id);
 		buf.append('}');
 		respondJson(exchange, buf.toString());
 	}
@@ -1237,17 +1266,18 @@ public class PreviewServer implements AutoCloseable
 		if (best == null) return false;
 		//タブへは道（/p/…/?book=…）だけを渡す。タブは自分のオリジンで解決する。
 		//localhost で開き直したタブに 127.0.0.1 の URL を渡すと、別のオリジンとして捨てられる（PR #129 の codex）
-		Delivery delivery = new Delivery(pathOf(url), new java.util.concurrent.atomic.AtomicInteger(),
+		Delivery delivery = new Delivery(newJobId(), pathOf(url), new java.util.concurrent.atomic.AtomicInteger(),
 			new java.util.concurrent.CountDownLatch(1));
 		this.inbox.put(best, delivery);
 		try {
-			if (delivery.taken.await(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS)) return true;
+			delivery.acked.await(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
 		} finally {
 			//取りに来なかった（奥へ回った・凍った）なら下げる。入れたままにすると、後で見に来たときに古い本へ飛ぶ。
-			//下げられなかったら、その間に取られている
+			//渡したのに返事が来なければ、遅れた返事を受け付けない（新しいタブを開くので）
 			if (delivery.state.compareAndSet(0, 2)) this.inbox.remove(best, delivery);
+			if (delivery.state.compareAndSet(1, 2)) this.awaitingAck.remove(delivery.id, delivery);
 		}
-		return delivery.state.get() == 1;
+		return delivery.state.get() == 3;
 	}
 
 	/** URL の道と問い合わせ（スキームとホストを落とす） */

@@ -51,6 +51,11 @@ public class PreviewLauncher
 	private final PreviewServer server;
 	/** JVM 終了時の後始末。shutdown() で解除できるよう参照を保持する */
 	private Thread shutdownHook;
+	/**
+	 * このセッションで本や本棚を開いた回数（クラスの鍵の中で増やす）。開くのに失敗したとき、
+	 * 作った呼び出しのほかに使い始めた呼び出しがあれば止めない（PR #129 の codex）
+	 */
+	private int opens;
 
 	private PreviewLauncher(PreviewSession session, PreviewServer server)
 	{
@@ -153,7 +158,7 @@ public class PreviewLauncher
 		} catch (IOException | RuntimeException e) {
 			// このセッションを今作ったのなら、失敗として片付ける。
 			// 鍵の外にいる間にほかの呼び出しがこのセッションへ本を足したかもしれないので、まだ同じセッションのときだけ
-			if (prepared.createdSession) shutdownIfCurrent(prepared.launcher);
+			if (prepared.createdSession) shutdownIfOnlyUser(prepared.launcher);
 			throw e;
 		}
 		return new Opened(prepared.url, false);
@@ -173,6 +178,7 @@ public class PreviewLauncher
 			// 遅延展開のままだとブラウザが本文を要求するまで失敗が分からず、
 			// 壊れた EPUB でも「開けた」と報告してしまう
 			current.session.ensureExtracted(bookId);
+			current.opens++;
 			return new Prepared(current, current.getUrl(bookId), createdSession);
 		} catch (IOException | RuntimeException e) {
 			// このセッションを今作ったのなら、失敗として片付ける
@@ -202,6 +208,7 @@ public class PreviewLauncher
 		// 既に開いているセッション (別のタブで閲覧中かもしれない) を巻き添えで落とさない
 		boolean createdSession = (current == null);
 		loadLibraryInto(folders);
+		current.opens++;
 		return new Prepared(current, current.getUrl(), createdSession);
 	}
 
@@ -345,10 +352,10 @@ public class PreviewLauncher
 	/** 起動中のプレビューがあれば返す。無ければ null */
 	public static synchronized PreviewLauncher getCurrent() { return current; }
 
-	/** 起動中のプレビューが launcher のときだけ止める */
-	private static synchronized void shutdownIfCurrent(PreviewLauncher launcher)
+	/** 起動中のプレビューが launcher で、ほかに開いた呼び出しが無いときだけ止める */
+	private static synchronized void shutdownIfOnlyUser(PreviewLauncher launcher)
 	{
-		if (current == launcher) shutdown();
+		if (current == launcher && launcher.opens <= 1) shutdown();
 	}
 
 	/** 起動中のプレビューを停止する */

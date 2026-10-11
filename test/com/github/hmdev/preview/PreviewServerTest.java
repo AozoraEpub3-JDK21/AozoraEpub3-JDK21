@@ -1628,6 +1628,10 @@ public class PreviewServerTest
 	{
 		assertFalse("見に来たタブが無い", this.server.offerToVisibleTab("http://x/1", 200));
 		assertEquals(405, get(base() + "api/inbox?tab=a").statusCode());
+		//heartbeat で登録していないタブの見回りは候補にしない（bye の後の遅れた見回りが閉じたタブを生き返らせない）
+		assertEquals(204, postText(base() + "api/inbox?tab=a&focus=0", "").statusCode());
+		assertFalse("登録していないタブ", this.server.offerToVisibleTab("http://x/1", 200));
+		beat("a");
 		assertEquals(204, postText(base() + "api/inbox?tab=a&focus=0", "").statusCode());
 		java.util.concurrent.atomic.AtomicBoolean taken = new java.util.concurrent.atomic.AtomicBoolean();
 		Thread offer = new Thread(() -> {
@@ -1647,6 +1651,7 @@ public class PreviewServerTest
 		assertEquals(200, got.statusCode());
 		//タブには道だけを渡す（localhost で開いたタブでも、自分のオリジンで解決できる）
 		assertTrue(got.body(), got.body().contains("\"open\":\"/p/t/?book=b2\""));
+		ackOf(got);
 		offer.join();
 		assertTrue("取りに来たと分かる", taken.get());
 		assertEquals("取ったら空", 204, postText(base() + "api/inbox?tab=a&focus=0", "").statusCode());
@@ -1656,6 +1661,7 @@ public class PreviewServerTest
 	@Test(timeout = 20_000)
 	public void anUnclaimedUrlIsWithdrawn() throws Exception
 	{
+		beat("a");
 		assertEquals(204, postText(base() + "api/inbox?tab=a", "").statusCode());
 		assertFalse(this.server.offerToVisibleTab("http://x/old", 200));
 		assertEquals(204, postText(base() + "api/inbox?tab=a", "").statusCode());
@@ -1665,6 +1671,8 @@ public class PreviewServerTest
 	@Test(timeout = 20_000)
 	public void aHiddenTabAndATabThatTookAUrlAreNotOffered() throws Exception
 	{
+		beat("h");
+		beat("t");
 		assertEquals(204, postText(base() + "api/inbox?tab=h&focus=1", "").statusCode());
 		assertEquals(204, postText(base() + "api/inbox?tab=h&hidden=1", "").statusCode());
 		//候補が無ければ待たずに返る（候補に残っていると、来ないタブを 2 秒待ってから false になる。どちらも false なので時間で分ける）
@@ -1683,6 +1691,8 @@ public class PreviewServerTest
 	@Test(timeout = 20_000)
 	public void theFocusedTabIsPreferredAndAClosedTabIsSkipped() throws Exception
 	{
+		beat("focused");
+		beat("later");
 		assertEquals(204, postText(base() + "api/inbox?tab=focused&focus=1", "").statusCode());
 		assertEquals(204, postText(base() + "api/inbox?tab=later&focus=0", "").statusCode());
 		assertEquals("フォーカスを持つ方", "focused", claimWhileOffering("http://x/1", "focused", "later"));
@@ -1690,6 +1700,61 @@ public class PreviewServerTest
 		assertEquals(204, postText(base() + "api/inbox?tab=focused&focus=1", "").statusCode());
 		assertEquals(204, postText(base() + "api/bye?tab=focused", "").statusCode());
 		assertEquals("閉じたタブには渡さない", "later", claimWhileOffering("http://x/2", "focused", "later"));
+	}
+
+	/** 渡したのに返事が来なければ、使い回したとは言わない（新しいタブを開く）。遅れた返事は受け付けない */
+	@Test(timeout = 20_000)
+	public void aTakenUrlWithoutAnAcknowledgementIsNotReuse() throws Exception
+	{
+		beat("a");
+		assertEquals(204, postText(base() + "api/inbox?tab=a", "").statusCode());
+		java.util.concurrent.atomic.AtomicBoolean reused = new java.util.concurrent.atomic.AtomicBoolean(true);
+		Thread offer = new Thread(() -> {
+			try {
+				reused.set(this.server.offerToVisibleTab("http://x/9", 1_000));
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		offer.start();
+		HttpResponse<String> got = null;
+		for (int i = 0; i < 40; i++) {
+			got = postText(base() + "api/inbox?tab=a", "");
+			if (got.statusCode() == 200) break;
+			Thread.sleep(20);
+		}
+		assertEquals(200, got.statusCode());
+		//返事をしない（応答がタブに届かなかった）
+		offer.join();
+		assertFalse("返事が無ければ新しいタブを開く", reused.get());
+		ackOf(got);
+	}
+
+	/** bye の後に遅れて届いた見回りは、閉じたタブを生き返らせない（CLI が閉じた通知の猶予で終われる） */
+	@Test(timeout = 20_000)
+	public void aLateInboxVisitAfterByeDoesNotReviveTheTab() throws Exception
+	{
+		beat("gone");
+		assertEquals(204, postText(base() + "api/bye?tab=gone", "").statusCode());
+		assertTrue(this.server.isCloseNotified());
+		assertEquals(204, postText(base() + "api/inbox?tab=gone&focus=1", "").statusCode());
+		assertTrue("閉じた通知が残る", this.server.isCloseNotified());
+		long t0 = System.nanoTime();
+		assertFalse(this.server.offerToVisibleTab("http://x/1", 2_000));
+		assertTrue("閉じたタブを待たない", (System.nanoTime() - t0) / 1_000_000L < 1_000);
+	}
+
+	private void beat(String tab) throws Exception
+	{
+		assertEquals(204, postText(base() + "api/heartbeat?tab=" + tab, "").statusCode());
+	}
+
+	/** 受け取ったと返事をする */
+	private void ackOf(HttpResponse<String> taken) throws Exception
+	{
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"ack\":\"([0-9a-f]+)\"").matcher(taken.body());
+		assertTrue(taken.body(), m.find());
+		assertEquals(204, postText(base() + "api/inbox?tab=x&ack=" + m.group(1), "").statusCode());
 	}
 
 	/** 渡すのを待つ間、両方のタブが見に来る。取ったタブの名前を返す */
@@ -1713,6 +1778,7 @@ public class PreviewServerTest
 				HttpResponse<String> r = postText(base() + "api/inbox?tab=" + tab + (tab.equals("focused") ? "&focus=1" : "&focus=0"), "");
 				if (r.statusCode() == 200) {
 					assertTrue(r.body(), r.body().contains(PreviewServer.pathOf(url)));
+					ackOf(r);
 					claimed = tab;
 					break;
 				}
