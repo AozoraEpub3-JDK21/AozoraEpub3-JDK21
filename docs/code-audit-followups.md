@@ -52,6 +52,9 @@
 | 37 | 🔴 高 | 前方参照注記の対象がエスケープ済みの `》` で終わると `getTargetStart` が -1 を返し、`StringIndexOutOfBoundsException` で変換全体が異常終了する | ✅ 対応済 | — |
 | 38 | 🔴 高 | 前方参照注記の直後のルビが閉じていないと `replaceChukiSufTag` の `indexOf("》")` が -1 になり、変換全体が異常終了する | ✅ 対応済 | — |
 | 42 | 🟡 中 | GUI の設定が Windows のサインアウト・シャットダウンで保存されない / ini を書く途中で殺されると壊れる | 🔶 一部対応（窓が手前から外れたときにも保存）。窓が手前のまま終わる道、書きかけの ini、GUI と CLI の上書きは未対応 | — |
+| 43 | 🟡 中 | EPUB の改行がテンプレートの置き場・git の設定・ビルドした台で変わり、1 冊の中でも CRLF と LF が混ざる | ✅ 対応済（出力を LF にそろえる）。.NET ポートは後追い | — |
+| 44 | 🔴 高 | 画像だけの本（画像の zip など）を変換すると、テンプレートが見つからずに失敗する（v1.6.1 の CLI で確認。GUI も同じ経路） | ✅ 対応済（`Epub3ImageWriter` も `mergeTemplate` を通す） | — |
+| 45 | 🟡 中 | サイト定義を「ホスト名:ポート」のフォルダで探すため、Windows ではポート付きのサイトを定義できず、Web 変換の結合テスト 59 件が走らない | ✅ 対応済（ホスト名で探す）。.NET ポートは後追い | — |
 
 ---
 
@@ -1941,6 +1944,68 @@ Windows 11 の実機で、junction・8.3 の短い名前・親が junction の�
   根の直しは、一時的な値を画面に書かず、変換に渡す設定だけを差し替える形
 - 最小化中は位置・大きさを書かない（最小化したまま窓が切り替わっても、位置が -32000 にならないことは実測済み）。
   そのため、窓を動かしてすぐ最小化し、そのまま終わると、動かした位置は残らない
+
+## 出力の改行（2026-10-11 追加）
+
+### 43. EPUB の改行がテンプレートの置き場・git の設定・ビルドした台で変わっていた — ✅ 対応済（2026-10-11、internal #29）
+
+**何が起きていたか**: 本文は変換処理が LF で書くが、テンプレート（`template/**/*.vm`）と、そのまま格納する
+`container.xml`・固定の CSS は、ファイルの改行のまま EPUB に出ていた。テンプレートは git の中で CRLF 20 本・LF 6 本と混ざっており、
+Windows の clone（`core.autocrlf=true`）では全部 CRLF になる。結果、どの台で作っても 1 冊の中に CRLF と LF が混ざり、
+しかも混ざり方が台で違った（配布物を作る Windows と、CI の Linux で出力が違う）。
+`VerticalMiddleLayoutTest` が Windows でだけ落ちていたのはこのため。
+
+**決めたこと（利用者の判断）**: 出力の改行は LF にそろえる。EPUB 3.3 は改行を決めておらず、XHTML・OPF は XML なので、
+読む側は CRLF と CR を LF に読み替える（XML 1.0 §2.11）。表示は変わらない。
+
+**直し**: `Epub3Writer.mergeTemplate` が `LfWriter` を通して書き、`writeFile`（container.xml・固定の CSS）も `toLf` を通す。
+画像だけの本（`Epub3ImageWriter`）も、テンプレートを直接読まずに `mergeTemplate` を通すようにした（項目 44 も同時に直る）。
+テンプレートの改行や git の設定に左右されない。`chuki_*.txt`・ini はメモ帳で開くので CRLF のまま（出力には入らない）。
+
+**確かめたこと**: master と同じ入力 24 冊（青空文庫 `aozora_1567_14913`（走れメロス、MS932）・カクヨム・なろうの 5 作品をお手本と同じ設定で、
+`test_data/*.txt` 19 本を既定の設定で）を変換し、master 側の改行を LF にそろえて全エントリを比べた。改行以外の差は 0
+（更新日時・UUID は除く）。master の出力はテキストのエントリ 567 個すべてに CR を含み、直した後は 0 個。
+
+**.NET ポート（後追い）**: .NET は `Epub3Writer.cs:299` で出力を CRLF にそろえている（以前の Java に合わせたもの）。
+Java に合わせて LF にする。`java-port-back-guide.md` の A7「Java は既に CRLF（対応不要）」も書き直す。
+なお .NET の比較テスト（`JavaComparisonTests.cs` の `NormalizeEpubText`）は CRLF を LF にそろえてから比べるので、
+リリース手順の「.NET 5/5 PASS」の確認はこの変更では落ちない
+
+### 44. 画像だけの本（画像の zip など）を変換すると、テンプレートが見つからずに失敗する — ✅ 対応済（2026-10-11）
+
+**発見**: 項目 43 のレビューで。`test_data/test_png.zip` を CLI で変換すると
+`unable to find resource 'template/OPS/xhtml/xhtml_header.vm'` → `EPUB 変換に失敗` になる。
+配布中の v1.6.1（jar の横に `template/` がある置き方）でも、リポジトリから動かしても同じ。
+
+**原因**: `Epub3ImageWriter` の `startImageSection` / `printSvgImageSection` が `Velocity.getTemplate(templatePath+…)` を直接呼んでいた。
+テキストの本が通る `Epub3Writer.mergeTemplate` には、外のフォルダと jar の中のテンプレートを探し分ける道があるが、そこを通っていなかった。
+
+**直し**: 2 か所とも `mergeTemplate` を呼ぶ（`protected` にした）。直した後は、どちらの置き方でも変換でき、改行も LF になる（29 エントリ、テキスト 17 本に CR なし）。
+GUI も同じ `Epub3ImageWriter`（`AozoraEpub3Applet.java` の `new Epub3ImageWriter(jarPath+"template/")`）を通るので、同じ不具合と同じ直しの範囲に入るとみている。
+GUI での実際の変換は確かめていない
+
+## Windows でのテスト（2026-10-11 追加）
+
+### 45. サイト定義を「ホスト名:ポート」のフォルダで探していたため、Windows では Web 変換の結合テストが走らなかった — ✅ 対応済（2026-10-11、internal #29）
+
+**何が起きていたか**: `WebAozoraConverter` は URL の「ホスト名:ポート」と同じ名前のフォルダ（`web/127.0.0.1:8080/`）でサイト定義を探していた。
+Windows はフォルダ名に `:` を使えないので、ポート付きのサイトは Windows では定義を置けない。本物のサイトにポートは無いので利用者は困っていなかったが、
+テストの偽サイトが `127.0.0.1:<port>` のため、Web 変換の結合テスト 59 件が Windows では一度も走っていなかった（いちばん利用者の多い OS で）。
+
+**決めたこと（利用者の判断）**: サイト定義は URL のホスト名で探し、ポート番号は見ない（`WebAozoraConverter.siteDirName`）。
+以前の「ホスト名:ポート」のフォルダが置いてあればそちらを使う（置ける OS で作った定義を壊さない）。キャッシュの置き場は以前から `:` を `_` に替えていて変わらない。
+テストは `web/127.0.0.1/` を作る。直した後、Windows で飛ばされるのは OS の都合（シンボリックリンクの特権・POSIX の権限・末尾空白・`:` の名前）のものだけ。
+
+**あわせて**:
+- `WebShelfPrefsTest` の「末尾の空白を残す」は、Windows にその名前が無いので別のテストに分けて Windows では飛ばす（`PreviewServerTest` の同じ趣旨の升と同じ）
+- `JavaAozoraVsReferenceTest` は通常のテスト一式から外した（`-DreferenceCompare=true` を付けたときだけ走る）。
+  お手本は Java が作った物で、Java の正しさは確かめられない。意味があるのは .NET ポートとの差を見ることだけで、.NET は Java に後追いで合わせる（2026-10-08 利用者判断）。
+  いま落ちるのは #96 の CSS がお手本に入っていないため（比べる前に CRLF を LF にそろえるので、改行の違いでは落ちない）
+
+**.NET ポート（後追い）**:
+- .NET の `WebAozoraConverter.cs` もサイト定義を「ホスト名:ポート」のフォルダで探している（194 行あたり）。ホスト名で探すように合わせる
+- 別件: .NET は HTML キャッシュのフォルダにも「ホスト名:ポート」をそのまま使う（1521 行あたり、`Path.Combine(root, fqdn)`）。
+  Java は `escapeUrlToFile` で `:` を `_` に替えているので、Windows でポート付きの URL を取ると .NET だけ失敗する見込み（未確認）
 
 ---
 
