@@ -868,6 +868,9 @@ public class AozoraEpub3Converter
 			//BOM除去 本文の経路 (convertTextToEpub3) と揃える
 			//除かないと表題の頭に U+FEFF が付き、dc:title と出力ファイル名に入る (本家 #5)
 			if (this.lineNum == 0) line = CharUtils.removeBOM(line);
+			//柱（章の扉ページの作品名）は出力では running_head にするが、前走査では無いものとして見る。
+			//目次の章の名前・表題・自動の章の判定・左右中央の数えに作品名を使わない（監査項目 20）
+			line = CharUtils.removeHashira(line);
 			
 			//見出し等の取得のため前方参照注記は変換 外字文字は置換
 			String spacedLine = this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false));
@@ -2242,6 +2245,11 @@ public class AozoraEpub3Converter
 	void convertTextLineToEpub3(BufferedWriter out, String line, int lineNum, boolean noBr, boolean noImage) throws IOException
 	{
 		StringBuilder buf = new StringBuilder();
+		
+		//柱の印は 1 行の中で対にする。対にならない印は外す（注記の表で div にしているので、残すと XHTML の開閉が崩れる。監査項目 20）
+		String balanced = CharUtils.balanceHashira(line);
+		if (balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
+		line = balanced;
 		
 		//外字変換後に前方参照注記変換
 		line = this.replaceChukiSufTag(this.convertGaijiChuki(line, true));

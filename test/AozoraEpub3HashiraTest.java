@@ -26,13 +26,20 @@ public class AozoraEpub3HashiraTest {
 
 	private String allXhtml;
 	private String toc;
+	private final java.util.List<String> pages = new java.util.ArrayList<>();
 
 	private void convert(String text) throws Exception {
+		convert(text, "");
+	}
+
+	private void convert(String text, String iniText) throws Exception {
 		File src = tempFolder.newFolder();
 		File dst = tempFolder.newFolder();
 		File txt = new File(src, "book.txt");
 		Files.write(txt.toPath(), text.getBytes(StandardCharsets.UTF_8));
 		File ini = tempFolder.newFile();
+		Files.write(ini.toPath(), iniText.getBytes(StandardCharsets.UTF_8));
+		pages.clear();
 		String orgClassPath = System.getProperty("java.class.path");
 		PrintStream orgOut = System.out;
 		try {
@@ -50,6 +57,7 @@ public class AozoraEpub3HashiraTest {
 				String body = new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8);
 				if (e.getName().endsWith("toc.ncx")) toc = body;
 				else if (e.getName().endsWith(".xhtml") && !e.getName().endsWith("nav.xhtml") && !e.getName().endsWith("title.xhtml")) xhtml.append(body);
+				if (e.getName().endsWith(".xhtml")) pages.add(body);
 			}
 		}
 		//<head> の <title>（本の題名）は柱ではない
@@ -67,7 +75,9 @@ public class AozoraEpub3HashiraTest {
 		assertTrue("目次の章のラベルが章の名前でない:\n" + toc, toc.contains("<text>日本編</text>"));
 		//本文のページを指す目次の項目（表題ページの項目を除く）に作品名は出ない
 		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<text>([^<]*)</text>\\s*</navLabel>\\s*<content src=\"xhtml/0").matcher(toc);
-		while (m.find()) assertFalse("目次のラベルが作品名:\n" + toc, m.group(1).contains("作品タイトル"));
+		int found = 0;
+		while (m.find()) { found++; assertFalse("目次のラベルが作品名:\n" + toc, m.group(1).contains("作品タイトル")); }
+		assertTrue("本文のページを指す目次の項目が無い:\n" + toc, found >= 2);
 	}
 
 	/** 柱の中の注記（Web 変換は外字・縦中横を入れうる）も、目次の章のラベルに出ない */
@@ -85,5 +95,33 @@ public class AozoraEpub3HashiraTest {
 		assertTrue(allXhtml, allXhtml.contains("二行目の柱"));
 		assertTrue(allXhtml, allXhtml.contains("本文一。"));
 		assertTrue(allXhtml, allXhtml.contains("本文二") && allXhtml.contains("続き"));
+		//対にならない印は外したので、XHTML の開閉は崩れない
+		assertWellFormed();
+	}
+
+	/** 作品名が章の名前の形（1 始まり… のような数字と区切り）でも、自動の章の判定に使わない（目次に空の行を作らない） */
+	@Test
+	public void aTitleThatLooksLikeAChapterIsNotAnAutoChapter() throws Exception {
+		convert("1 始まりの物語\n作者\n\n［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］1 始まりの物語［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n［＃改ページ］\n本文です。\n", "AutoChapterNumTitle=1\nAutoChapterNumOnly=1\n");
+		assertFalse("目次に空の項目:\n" + toc, toc.contains("<text></text>"));
+		assertTrue(toc, toc.contains("<text>日本編</text>"));
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<text>([^<]*)</text>\\s*</navLabel>\\s*<content src=\"xhtml/0").matcher(toc);
+		while (m.find()) assertFalse("柱の作品名が章になった:\n" + toc, m.group(1).contains("始まりの物語"));
+		assertWellFormed();
+	}
+
+	/** 長い作品名の柱は、章の扉ページの左右中央の数えに入れない（ページの隅に出るので列を取らない。監査項目 34 の表に落ちない） */
+	@Test
+	public void aLongTitleInTheHashiraDoesNotForceTheTableLayout() throws Exception {
+		String title = "とても長い作品の名前がここに入って二十字を超えてしまう場合";
+		convert(title + "\n作者\n\n［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］" + title + "［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n［＃改ページ］\n本文です。\n");
+		assertFalse("表の左右中央になった:\n" + allXhtml, allXhtml.contains("<table"));
+		assertWellFormed();
+	}
+
+	private void assertWellFormed() throws Exception {
+		javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+		f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+		for (String page : pages) f.newDocumentBuilder().parse(new java.io.ByteArrayInputStream(page.getBytes(StandardCharsets.UTF_8)));
 	}
 }
