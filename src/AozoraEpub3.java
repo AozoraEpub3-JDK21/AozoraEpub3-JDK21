@@ -475,7 +475,17 @@ public class AozoraEpub3
 						}
 					}
 					
-					File outFile = getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
+					//出力先を断られた本は、その本だけ失敗として数えて次の本へ進む（GUI と同じ。internal #20）。
+					//深いフォルダで名前を切れずに断るのは題の長い本だけなので、同じ一括の短い題の本は変換できる
+					File outFile;
+					try {
+						outFile = getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
+					} catch (IOException e) {
+						LogAppender.error("出力パスエラー: " + e.getMessage());
+						LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+						errorCount++;
+						continue;
+					}
 					if (!AozoraEpub3.convertFile(
 							srcFile, ext, outFile,
 							aozoraConverter, writer,
