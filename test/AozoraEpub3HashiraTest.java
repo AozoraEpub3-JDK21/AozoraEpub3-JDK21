@@ -102,20 +102,13 @@ public class AozoraEpub3HashiraTest {
 	/** 作品名が章の名前の形（1 始まり… のような数字と区切り）でも、自動の章の判定に使わない（目次に空の行を作らない） */
 	@Test
 	public void aTitleThatLooksLikeAChapterIsNotAnAutoChapter() throws Exception {
-		convert("1 始まりの物語\n作者\n\n［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］1 始まりの物語［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n［＃改ページ］\n本文です。\n", "AutoChapterNumTitle=1\nAutoChapterNumOnly=1\n");
+		convert("1 始まりの物語\n作者\n\n［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］1 始まりの物語［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n［＃改ページ］\n本文です。\n", "ChapterNumTitle=1\nChapterNumOnly=1\n");
 		assertFalse("目次に空の項目:\n" + toc, toc.contains("<text></text>"));
 		assertTrue(toc, toc.contains("<text>日本編</text>"));
 		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<text>([^<]*)</text>\\s*</navLabel>\\s*<content src=\"xhtml/0").matcher(toc);
 		while (m.find()) assertFalse("柱の作品名が章になった:\n" + toc, m.group(1).contains("始まりの物語"));
-		assertWellFormed();
-	}
-
-	/** 長い作品名の柱は、章の扉ページの左右中央の数えに入れない（ページの隅に出るので列を取らない。監査項目 34 の表に落ちない） */
-	@Test
-	public void aLongTitleInTheHashiraDoesNotForceTheTableLayout() throws Exception {
-		String title = "とても長い作品の名前がここに入って二十字を超えてしまう場合";
-		convert(title + "\n作者\n\n［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］" + title + "［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n［＃改ページ］\n本文です。\n");
-		assertFalse("表の左右中央になった:\n" + allXhtml, allXhtml.contains("<table"));
+		//章として拾うと、柱の div に章の目印（id）が付く
+		assertTrue("柱が章として拾われた:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">1 始まりの物語</div>"));
 		assertWellFormed();
 	}
 

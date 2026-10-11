@@ -412,8 +412,6 @@ public class CharUtils
 		return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 	}
 	
-	static final String HASHIRA_START = "［＃ここから柱］";
-	static final String HASHIRA_END = "［＃ここで柱終わり］";
 	/** 1 行の中で閉じた柱（中に柱の印を含まない） */
 	static final Pattern HASHIRA_SPAN = Pattern.compile("［＃ここから柱］((?:(?!［＃ここ(?:から柱|で柱終わり)］).)*)［＃ここで柱終わり］", Pattern.DOTALL);
 	static final Pattern HASHIRA_MARK = Pattern.compile("［＃ここ(?:から柱|で柱終わり)］");
@@ -424,7 +422,7 @@ public class CharUtils
 	 */
 	static public String balanceHashira(String line)
 	{
-		if (line.indexOf("柱") < 0) return line;
+		if (line.indexOf("柱］") < 0 && line.indexOf("柱終わり］") < 0) return line;
 		StringBuilder out = new StringBuilder();
 		Matcher m = HASHIRA_SPAN.matcher(line);
 		int last = 0;
@@ -437,10 +435,10 @@ public class CharUtils
 		return out.toString();
 	}
 
-	/** 柱を中身ごと外した行（目次の章の名前・表題・左右中央の数えに柱を使わない。監査項目 20）。対にならない印は印だけ外す */
+	/** 柱を中身ごと外した行（目次の章の名前・表題・自動の章の判定に柱を使わない。監査項目 20）。対にならない印は印だけ外す */
 	static public String removeHashira(String line)
 	{
-		if (line.indexOf("柱") < 0) return line;
+		if (line.indexOf("柱］") < 0 && line.indexOf("柱終わり］") < 0) return line;
 		return HASHIRA_MARK.matcher(HASHIRA_SPAN.matcher(line).replaceAll("")).replaceAll("");
 	}
 
@@ -449,8 +447,9 @@ public class CharUtils
 	 * @prram 記号文字を短縮する */
 	static public String getChapterName(String line, int maxLength, boolean reduce)
 	{
+		//柱（narou.rb の章の扉ページの作品名）は中身ごと外す。本文には見えるが、章の名前・表題にはしない（監査項目 20）
 		//内部エスケープの印は注記を外した後で外す（先に外すと ［※［＃井げた］…］ が注記に見える）
-		String name = removeEscape(line.replaceAll("［＃.+?］", ""))//注記除去
+		String name = removeEscape(removeHashira(line).replaceAll("［＃.+?］", ""))//注記除去
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
 		if (reduce) name = reduceSymbols(name);//連続する記号は1つに
 		//タグはimgとaを削除

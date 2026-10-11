@@ -868,9 +868,6 @@ public class AozoraEpub3Converter
 			//BOM除去 本文の経路 (convertTextToEpub3) と揃える
 			//除かないと表題の頭に U+FEFF が付き、dc:title と出力ファイル名に入る (本家 #5)
 			if (this.lineNum == 0) line = CharUtils.removeBOM(line);
-			//柱（章の扉ページの作品名）は出力では running_head にするが、前走査では無いものとして見る。
-			//目次の章の名前・表題・自動の章の判定・左右中央の数えに作品名を使わない（監査項目 20）
-			line = CharUtils.removeHashira(line);
 			
 			//見出し等の取得のため前方参照注記は変換 外字文字は置換
 			String spacedLine = this.replaceChukiSufTag(this.convertGaijiChuki(line, true, false));
@@ -1018,7 +1015,8 @@ public class AozoraEpub3Converter
 			//TODO パターンと目次レベルは設定可能にする 空行指定の場合はpreLines利用
 			if (autoChapter && bookInfo.getChapterLevel(lineNum) == 0) {
 				//文字列から注記と前の空白を除去
-				String noChukiLine = CharUtils.removeSpace(CharUtils.removeTag(noRubyLine));
+				//柱（章の扉ページの作品名）は自動の章の判定に使わない（作品名が「1 …」のような形でも章にしない。監査項目 20）
+				String noChukiLine = CharUtils.removeSpace(CharUtils.removeTag(CharUtils.removeHashira(noRubyLine)));
 				
 				//その他パターン
 				if (this.chapterPattern != null) {
@@ -2248,7 +2246,8 @@ public class AozoraEpub3Converter
 		
 		//柱の印は 1 行の中で対にする。対にならない印は外す（注記の表で div にしているので、残すと XHTML の開閉が崩れる。監査項目 20）
 		String balanced = CharUtils.balanceHashira(line);
-		if (balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
+		//表題より前の行は 2 回通る（out が null の下見と、表題の後の書き出し）ので、警告は書き出すときだけ
+		if (out != null && balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
 		line = balanced;
 		
 		//外字変換後に前方参照注記変換

@@ -30,6 +30,9 @@ public class CharUtilsHashiraTest
 		//開始が 2 つ続くと、後ろの開始と閉じが対になる
 		assertEquals("a［＃ここから柱］b［＃ここで柱終わり］c", CharUtils.balanceHashira("［＃ここから柱］a［＃ここから柱］b［＃ここで柱終わり］c"));
 		assertEquals("ac", CharUtils.removeHashira("［＃ここから柱］a［＃ここから柱］b［＃ここで柱終わり］c"));
+		//閉じが 2 つ続くと、前の閉じと開始が対になり、後ろの閉じは外す（行末までを 1 つの柱にしない）
+		assertEquals("［＃ここから柱］a［＃ここで柱終わり］b", CharUtils.balanceHashira("［＃ここから柱］a［＃ここで柱終わり］b［＃ここで柱終わり］"));
+		assertEquals("b", CharUtils.removeHashira("［＃ここから柱］a［＃ここで柱終わり］b［＃ここで柱終わり］"));
 		//閉じた柱は出力にそのまま残す
 		assertEquals("［＃ここから柱］作品［＃ここで柱終わり］", CharUtils.balanceHashira("［＃ここから柱］作品［＃ここで柱終わり］"));
 	}
