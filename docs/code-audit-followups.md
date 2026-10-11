@@ -53,7 +53,7 @@
 | 38 | 🔴 高 | 前方参照注記の直後のルビが閉じていないと `replaceChukiSufTag` の `indexOf("》")` が -1 になり、変換全体が異常終了する | ✅ 対応済 | — |
 | 42 | 🟡 中 | GUI の設定が Windows のサインアウト・シャットダウンで保存されない / ini を書く途中で殺されると壊れる | 🔶 一部対応（窓が手前から外れたときにも保存）。窓が手前のまま終わる道、書きかけの ini、GUI と CLI の上書きは未対応 | — |
 | 43 | 🟡 中 | EPUB の改行がテンプレートの置き場・git の設定・ビルドした台で変わり、1 冊の中でも CRLF と LF が混ざる | ✅ 対応済（出力を LF にそろえる）。.NET ポートは後追い | — |
-| 44 | 🔴 高 | 画像だけの本（画像の zip など）を CLI で変換すると、テンプレートが見つからずに失敗する（v1.6.1 でも） | ✅ 対応済（`Epub3ImageWriter` も `mergeTemplate` を通す） | — |
+| 44 | 🔴 高 | 画像だけの本（画像の zip など）を変換すると、テンプレートが見つからずに失敗する（v1.6.1 の CLI で確認。GUI も同じ経路） | ✅ 対応済（`Epub3ImageWriter` も `mergeTemplate` を通す） | — |
 
 ---
 
@@ -1966,9 +1966,11 @@ Windows の clone（`core.autocrlf=true`）では全部 CRLF になる。結果�
 （更新日時・UUID は除く）。master の出力はテキストのエントリ 567 個すべてに CR を含み、直した後は 0 個。
 
 **.NET ポート（後追い）**: .NET は `Epub3Writer.cs:299` で出力を CRLF にそろえている（以前の Java に合わせたもの）。
-Java に合わせて LF にする。`java-port-back-guide.md` の A7「Java は既に CRLF（対応不要）」も書き直す
+Java に合わせて LF にする。`java-port-back-guide.md` の A7「Java は既に CRLF（対応不要）」も書き直す。
+なお .NET の比較テスト（`JavaComparisonTests.cs` の `NormalizeEpubText`）は CRLF を LF にそろえてから比べるので、
+リリース手順の「.NET 5/5 PASS」の確認はこの変更では落ちない
 
-### 44. 画像だけの本（画像の zip など）を CLI で変換すると、テンプレートが見つからずに失敗する — ✅ 対応済（2026-10-11）
+### 44. 画像だけの本（画像の zip など）を変換すると、テンプレートが見つからずに失敗する — ✅ 対応済（2026-10-11）
 
 **発見**: 項目 43 のレビューで。`test_data/test_png.zip` を CLI で変換すると
 `unable to find resource 'template/OPS/xhtml/xhtml_header.vm'` → `EPUB 変換に失敗` になる。
@@ -1978,7 +1980,8 @@ Java に合わせて LF にする。`java-port-back-guide.md` の A7「Java は�
 テキストの本が通る `Epub3Writer.mergeTemplate` には、外のフォルダと jar の中のテンプレートを探し分ける道があるが、そこを通っていなかった。
 
 **直し**: 2 か所とも `mergeTemplate` を呼ぶ（`protected` にした）。直した後は、どちらの置き方でも変換でき、改行も LF になる（29 エントリ、テキスト 17 本に CR なし）。
-GUI から画像だけの本を変換したときの振る舞いは確かめていない
+GUI も同じ `Epub3ImageWriter`（`AozoraEpub3Applet.java` の `new Epub3ImageWriter(jarPath+"template/")`）を通るので、同じ不具合と同じ直しの範囲に入るとみている。
+GUI での実際の変換は確かめていない
 
 ---
 

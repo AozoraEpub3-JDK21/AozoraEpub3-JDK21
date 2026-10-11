@@ -354,7 +354,13 @@ public class Epub3Writer
 
 	/** テンプレートをマージして Writer に出力。改行は LF にそろえる（テンプレートの改行は置き場や git の設定で変わるため） */
 	protected void mergeTemplate(String templateFilePath, BufferedWriter out) throws IOException {
-		LfWriter bw = new LfWriter(out);
+		LfWriter lf = new LfWriter(out);
+		mergeTemplateTo(templateFilePath, lf);
+		//例外のときは流さない（流すときの失敗で、元の「Failed to merge template」が隠れないように）
+		lf.flush();
+	}
+
+	private void mergeTemplateTo(String templateFilePath, java.io.Writer bw) throws IOException {
 		try {
 			if (this.velocityEngine != null) {
 				String resourceName = templateFilePath;
@@ -402,8 +408,6 @@ public class Epub3Writer
 			}
 		} catch (Exception e) {
 			throw new IOException("Failed to merge template: " + templateFilePath, e);
-		} finally {
-			bw.flush();
 		}
 	}
 	/** プログレスバー設定 */
