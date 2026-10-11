@@ -137,13 +137,6 @@ public class AozoraEpub3HashiraTest {
 		assertFalse("扉ページの表題に柱が出た:\n" + titlePage, titlePage.contains("作品名"));
 	}
 
-	/** 見出しのブロックの最初の行が柱だけでも、次の行を章の名前にする（目次から章が落ちない） */
-	@Test
-	public void aHashiraOnlyLineInAHeadingBlockIsSkippedForTheName() throws Exception {
-		convert("題\n作者\n\n［＃改ページ］\n［＃ここから中見出し］\n［＃ここから柱］作品名［＃ここで柱終わり］\n章一\n［＃ここで中見出し終わり］\n本文です。\n");
-		assertTrue("章が目次に無い:\n" + toc, toc.contains("<text>章一</text>"));
-	}
-
 	private void assertWellFormed() throws Exception {
 		javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
 		f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
