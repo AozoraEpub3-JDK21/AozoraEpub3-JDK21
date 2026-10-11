@@ -1330,7 +1330,8 @@ public class Epub3Writer
 		//読まれたときなど）。そのまま閉じると zip の項目が無いまま書いて変換全体が落ちていたので、空の節を開く（監査 35）
 		if (this.sectionIndex == 0) {
 			//空の本を黙って作らない
-			LogAppender.println("[WARN] 本文がありませんでした。表題の後に空行が無いと、先頭の数行は表題・著者として読まれます");
+			LogAppender.println("[WARN] 本文がありませんでした。表題の後に空行が無いと、先頭の数行は表題・著者として読まれます。"
+				+"本文に残すには、表題・著者の行の後に空行を 1 行入れてください（表題が先の本なら、画面の「表題: 本文内」を「表題+著者のみ(2行)」に、CLI では -t 4 にしてもよい）");
 			this.startSection(0, PageBreakType.PAGE_NORMAL, PageBreakType.IMAGE_PAGE_NONE, null);
 		}
 		this.endSection();

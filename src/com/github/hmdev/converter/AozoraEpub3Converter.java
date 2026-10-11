@@ -1173,6 +1173,7 @@ public class AozoraEpub3Converter
 		
 		//表題と著者を先頭行から設定
 		bookInfo.setMetaInfo(titleType, pubFirst, firstLines, firstLineStart, firstCommentLineNum);
+		if (bookInfo.titleBlockRunOnLine != -1) LogAppender.warn(bookInfo.titleBlockRunOnLine, "表題・著者の後に空行がありません", bookInfo.titleBlockRunOnDesc);
 		//bookInfo.preTitlePageBreak = preTitlePageBreak; //タイトルがあればタイトル前の改ページ状況を設定
 		
 		//タイトルのChapter追加
