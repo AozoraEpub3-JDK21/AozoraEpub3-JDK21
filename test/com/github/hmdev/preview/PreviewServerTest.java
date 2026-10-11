@@ -1632,7 +1632,7 @@ public class PreviewServerTest
 		java.util.concurrent.atomic.AtomicBoolean taken = new java.util.concurrent.atomic.AtomicBoolean();
 		Thread offer = new Thread(() -> {
 			try {
-				taken.set(this.server.offerToVisibleTab("http://x/book?book=b2", 5_000));
+				taken.set(this.server.offerToVisibleTab("http://127.0.0.1:1/p/t/?book=b2", 5_000));
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
@@ -1645,7 +1645,8 @@ public class PreviewServerTest
 			Thread.sleep(20);
 		}
 		assertEquals(200, got.statusCode());
-		assertTrue(got.body(), got.body().contains("\"open\":\"http://x/book?book=b2\""));
+		//タブには道だけを渡す（localhost で開いたタブでも、自分のオリジンで解決できる）
+		assertTrue(got.body(), got.body().contains("\"open\":\"/p/t/?book=b2\""));
 		offer.join();
 		assertTrue("取りに来たと分かる", taken.get());
 		assertEquals("取ったら空", 204, postText(base() + "api/inbox?tab=a&focus=0", "").statusCode());
@@ -1691,7 +1692,7 @@ public class PreviewServerTest
 				if (tab.equals("focused") && url.endsWith("/2")) continue;
 				HttpResponse<String> r = postText(base() + "api/inbox?tab=" + tab + (tab.equals("focused") ? "&focus=1" : "&focus=0"), "");
 				if (r.statusCode() == 200) {
-					assertTrue(r.body(), r.body().contains(url));
+					assertTrue(r.body(), r.body().contains(PreviewServer.pathOf(url)));
 					claimed = tab;
 					break;
 				}

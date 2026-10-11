@@ -142,8 +142,12 @@ public class PreviewServer implements AutoCloseable
 
 	private final Map<String, InboxVisit> inboxVisits = new ConcurrentHashMap<>();
 
-	/** 受け箱に入っている、開いてほしい URL。取られたら taken が落ちる */
-	private record Delivery(String url, java.util.concurrent.CountDownLatch taken) { }
+	/**
+	 * 受け箱に入っている、開いてほしい URL。state は 0＝待ち・1＝取られた・2＝下げた。
+	 * 取るのと下げるのが重なっても、どちらか一方だけが勝つ（両方のタブで開かない。PR #129 の codex）
+	 */
+	private record Delivery(String url, java.util.concurrent.atomic.AtomicInteger state,
+		java.util.concurrent.CountDownLatch taken) { }
 
 	private final Map<String, Delivery> inbox = new ConcurrentHashMap<>();
 
@@ -1170,7 +1174,7 @@ public class PreviewServer implements AutoCloseable
 		noteClientAlive(tab);
 		this.inboxVisits.put(tab, new InboxVisit(System.nanoTime(), focused));
 		Delivery delivery = this.inbox.remove(tab);
-		if (delivery == null) {
+		if (delivery == null || !delivery.state.compareAndSet(0, 1)) {
 			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
 			return;
 		}
@@ -1208,13 +1212,27 @@ public class PreviewServer implements AutoCloseable
 			}
 		}
 		if (best == null) return false;
-		Delivery delivery = new Delivery(url, new java.util.concurrent.CountDownLatch(1));
+		//タブへは道（/p/…/?book=…）だけを渡す。タブは自分のオリジンで解決する。
+		//localhost で開き直したタブに 127.0.0.1 の URL を渡すと、別のオリジンとして捨てられる（PR #129 の codex）
+		Delivery delivery = new Delivery(pathOf(url), new java.util.concurrent.atomic.AtomicInteger(),
+			new java.util.concurrent.CountDownLatch(1));
 		this.inbox.put(best, delivery);
-		if (delivery.taken.await(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS)) return true;
-		//取りに来なかった（奥へ回った・凍った）。入れたままにすると、後で見に来たときに古い本へ飛ぶ
-		this.inbox.remove(best, delivery);
-		//remove と取りに来るのが重なったら、取られている
-		return delivery.taken.getCount() == 0;
+		try {
+			if (delivery.taken.await(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS)) return true;
+		} finally {
+			//取りに来なかった（奥へ回った・凍った）なら下げる。入れたままにすると、後で見に来たときに古い本へ飛ぶ。
+			//下げられなかったら、その間に取られている
+			if (delivery.state.compareAndSet(0, 2)) this.inbox.remove(best, delivery);
+		}
+		return delivery.state.get() == 1;
+	}
+
+	/** URL の道と問い合わせ（スキームとホストを落とす） */
+	static String pathOf(String url)
+	{
+		java.net.URI uri = java.net.URI.create(url);
+		String path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
+		return uri.getRawQuery() == null ? path : path + "?" + uri.getRawQuery();
 	}
 
 	/** 本棚のランキング（なろう）。試験では差し替える */
