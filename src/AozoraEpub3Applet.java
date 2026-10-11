@@ -2863,9 +2863,9 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsSelected(this.jCheckConfirm, props, "ChkConfirm");
 
 		//本棚の「続きを取る」は、画面の今の設定で、画面を使わずに変換する（internal #11）。
-		//設定は更新のたびに画面から写す（ini は終了するまで書かれないので、ini を読むと古い）
+		//設定は更新のたびに画面から写す（ini は終了するときと窓が手前から外れたときにしか書かれないので、ini を読むと古いことがある）
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(this::snapshotSettings, this.jarPath));
-		//Web 本棚の場所は画面の設定（全体設定）に持ち、棚の一覧にも足す（internal #11 の案 A）。ini は終了するときに書かれる
+		//Web 本棚の場所は画面の設定（全体設定）に持ち、棚の一覧にも足す（internal #11 の案 A）。ini は終了するときと窓が手前から外れたときに書かれる
 		com.github.hmdev.preview.PreviewLauncher.setWebShelf(new com.github.hmdev.preview.WebShelf() {
 			@Override
 			public java.nio.file.Path location()
@@ -4732,15 +4732,17 @@ public class AozoraEpub3Applet extends JPanel
 					if (jComboCover.getSelectedIndex() == 0 || jComboCover.getSelectedIndex() == 1) jComboCover.setSelectedIndex(1);
 				
 					//変換処理実行
-					convertFiles(new File[]{srcFile}, dstPath);
-				
-					//設定を戻す
-					jComboEncType.setSelectedItem(encType);
-					jComboTitle.setSelectedIndex(titleTypeIdx);
-					jCheckUseFileName.setSelected(checkUseFileName);
-					jCheckCommentPrint.setSelected(commentPrint);
-					jCheckCommentConvert.setSelected(commentConvert);
-					jComboCover.setSelectedItem(coverItem);
+					try {
+						convertFiles(new File[]{srcFile}, dstPath);
+					} finally {
+						//設定を戻す。例外で抜けても戻す（戻さないと、窓が手前から外れたときの保存で一時的な値が ini に残る）
+						jComboEncType.setSelectedItem(encType);
+						jComboTitle.setSelectedIndex(titleTypeIdx);
+						jCheckUseFileName.setSelected(checkUseFileName);
+						jCheckCommentPrint.setSelected(commentPrint);
+						jCheckCommentConvert.setSelected(commentConvert);
+						jComboCover.setSelectedItem(coverItem);
+					}
 				}
 				
 			} catch (Exception e) {
@@ -5225,7 +5227,7 @@ public class AozoraEpub3Applet extends JPanel
 		return dir != null && Files.isDirectory(dir) ? dir : null;
 	}
 
-	/** Web 本棚の場所を設定に入れ、棚の一覧に足す（EDT で呼ぶ）。設定は終了するときに ini に書かれる */
+	/** Web 本棚の場所を設定に入れ、棚の一覧に足す（EDT で呼ぶ）。設定は終了するときと窓が手前から外れたときに ini に書かれる */
 	private void recordWebShelf(java.nio.file.Path dir)
 	{
 		com.github.hmdev.preview.WebShelfPrefs.store(this.props, dir);
@@ -6020,23 +6022,32 @@ public class AozoraEpub3Applet extends JPanel
 	/** 窓の位置と大きさ・設定を保存して終える（窓を閉じたときと、mac の Cmd+Q） */
 	static void saveAndExit(JFrame jFrame, AozoraEpub3Applet applet)
 	{
+		applet.convertCanceled = true;
+		//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
+		//ここが Object.finalize() (何もしない) を呼んだままになっていた。
+		//そのため終了時に AozoraEpub3.ini が一切保存されていない
+		saveWindowAndProperties(jFrame, applet);
+		System.exit(0);
+	}
+
+	/** 窓の位置と大きさ・設定を ini に書く。終えないし、変換も止めない */
+	static void saveWindowAndProperties(JFrame jFrame, AozoraEpub3Applet applet)
+	{
 		try {
-			//Window位置を割くに設定しておく
-			Point location = jFrame.getLocation();
-			Dimension size = jFrame.getSize();
-			applet.props.setProperty("PosX", ""+location.getX());
-			applet.props.setProperty("PosY", ""+location.getY());
-			applet.props.setProperty("SizeW", ""+size.getWidth());
-			applet.props.setProperty("SizeH", ""+size.getHeight());
-			//props保存と終了処理
-			//26057a0 (JDK21 対応) で finalize() を saveProperties() にリネームした際、
-			//ここが Object.finalize() (何もしない) を呼んだままになっていた。
-			//そのため終了時に AozoraEpub3.ini が一切保存されていない
+			//最小化中は位置が画面外の値（Windows では -32000）になりうるので、前に控えた位置・大きさを残す
+			if ((jFrame.getExtendedState() & JFrame.ICONIFIED) == 0) {
+				//Window位置を割くに設定しておく
+				Point location = jFrame.getLocation();
+				Dimension size = jFrame.getSize();
+				applet.props.setProperty("PosX", ""+location.getX());
+				applet.props.setProperty("PosY", ""+location.getY());
+				applet.props.setProperty("SizeW", ""+size.getWidth());
+				applet.props.setProperty("SizeH", ""+size.getHeight());
+			}
 			applet.saveProperties();
 		} catch (Throwable e) {
-			logger.error("終了時の処理でエラー", e);
+			logger.error("設定の保存でエラー", e);
 		}
-		System.exit(0);
 	}
 
 	/** Jar実行用 */
@@ -6085,6 +6096,17 @@ public class AozoraEpub3Applet extends JPanel
 			public void windowClosing(WindowEvent evt) {
 				saveAndExit(jFrame, applet);
 			}
+			//窓が手前から外れたときにも保存する。Windows のサインアウト・シャットダウンでは windowClosing を通らずに
+			//プロセスが終わり、ini が保存されない（internal #28 で実測）。サインアウトするにはスタートメニューなどへ
+			//移るので、その時点で窓は手前から外れる。ただし窓が手前のまま終わる道（自動の再起動・shutdown コマンドを
+			//予約しておく等）では、最後に手前から外れたあとの変更は保存されない
+			@Override
+			public void windowDeactivated(WindowEvent evt) {
+				//変換中は保存しない。Web 変換は文字コードなどの画面の設定を変換の間だけ書き換えて、終わってから戻す。
+				//変換前確認のダイアログでも窓は手前から外れるので、ここで書くと一時的な値が ini に残る（PR #130 の codex）
+				if (applet.isRunning()) return;
+				saveWindowAndProperties(jFrame, applet);
+			}
 		});
 		//mac の Cmd+Q（メニューの「終了」）も、窓を閉じるのと同じ道（windowClosing）を通して設定を保存してから終える。
 		//既定では Cmd+Q は windowClosing を通らずに JVM を終え、ini が一切保存されない（internal #27）。終わる道は 1 つにする
@@ -6110,13 +6132,10 @@ public class AozoraEpub3Applet extends JPanel
 		applet.jTabbedPane.requestFocus();
 	}
 	
-	/** アプレット終了時の処理
-	 * 設定ファイルを保存 */
+	/** 設定ファイルを保存する。終了時と、窓が手前から外れたときに呼ばれる */
 	void saveProperties()
 	{
 		try {
-			this.convertCanceled = true;
-			
 			/*
 			try {
 				//tmp削除
@@ -6190,7 +6209,7 @@ public class AozoraEpub3Applet extends JPanel
 				}
 			}
 		} catch (Exception e) {
-			logger.error("終了時のプロパティファイル保存でエラー", e);
+			logger.error("プロパティファイル保存でエラー", e);
 		}
 	}
 	

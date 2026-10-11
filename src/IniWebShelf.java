@@ -18,7 +18,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * CLI で開いた本棚の Web 本棚（internal #11 の案 A）。場所は ini（GUI と同じもの）に書き、棚の一覧にも足す
- * （GUI で開いたときにも棚として出るように）。GUI を開いたまま CLI で決めると、GUI が終わるときに ini を書いて消える
+ * （GUI で開いたときにも棚として出るように）。GUI を開いたまま CLI で決めると、GUI が次に ini を書くとき
+ * （終わるとき・窓が手前から外れたとき）に消える
  */
 class IniWebShelf implements WebShelf
 {
