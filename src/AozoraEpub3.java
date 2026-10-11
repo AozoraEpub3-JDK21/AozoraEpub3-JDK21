@@ -376,7 +376,7 @@ public class AozoraEpub3
 					} catch (Exception e) {
 						//junrar の RarException（壊れた書庫・RAR5）は IOException ではない。画像のみに倒すと同じ書庫を読み直して
 						//同じ失敗をくり返すので、ここでその本を飛ばす（受けないと一括全体が止まる）
-						logger.error("RAR を読み込めませんでした: {}", srcFile, e);
+						logger.warn("RAR を読み込めませんでした: {} ({})", srcFile, e.toString()); //壊れた書庫は想定内の失敗なので、トレースは出さない
 						LogAppender.error("書庫が読み込めませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
 						LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 						errorCount++;
@@ -439,7 +439,7 @@ public class AozoraEpub3
 									imageInfoReader.loadZipImageInfos(srcFile, imageOnly);
 								}
 							} catch (Exception e) {
-								logger.error("アーカイブ画像情報の読み込みに失敗: {}", srcFile, e);
+								logger.warn("アーカイブ画像情報の読み込みに失敗: {} ({})", srcFile, e.toString()); //壊れた書庫は想定内の失敗なので、トレースは出さない
 								LogAppender.error("書庫が読み込めませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
 								LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 								errorCount++;
