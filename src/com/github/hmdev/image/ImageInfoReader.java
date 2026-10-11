@@ -391,6 +391,8 @@ public class ImageInfoReader
 			if (!Files.isRegularFile(file)) {
 				//拡張子修正
 				srcImageFileName = this.correctExt(srcImageFileName);
+				//見つからなければ null が返る（そのまま足すと「…/null」というパスを探してしまう）
+				if (srcImageFileName == null) return null;
 				file = Path.of(this.srcParentPath+srcImageFileName);
 				if (!Files.isRegularFile(file)) return null;
 			}

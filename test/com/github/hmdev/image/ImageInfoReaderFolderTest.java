@@ -55,4 +55,15 @@ public class ImageInfoReaderFolderTest
 		//拡張子を直して探すときも、フォルダは見つかったことにしない
 		assertNull(reader.correctExt("pic.png"));
 	}
+
+	@Test
+	public void anImageNotFoundAfterFixingTheExtensionIsNotLookedUpAsNull() throws Exception
+	{
+		//correctExt は見つからなければ null を返す。それを名前に足して「null」というフォルダ（やファイル）を探さない
+		File dir = temp.getRoot();
+		new File(dir, "pic.png").mkdirs();
+		new File(dir, "null").mkdirs();
+		ImageInfoReader reader = readerFor(dir);
+		assertNull(reader.getImage("pic.png"));
+	}
 }
