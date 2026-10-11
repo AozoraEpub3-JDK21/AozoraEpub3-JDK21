@@ -119,6 +119,9 @@ public class AozoraEpub3ImagePageTextTest {
 			assertEquals(page.getKey(), body.split("<span", -1).length - 1, body.split("</span>", -1).length - 1);
 		}
 		assertTrue(log.toString(), log.toString().contains("タグ内のため画像単ページ化できません"));
+		//画像は本文の中（前・２と同じページ）に出る
+		boolean together = pages.values().stream().anyMatch(b -> b.contains("前") && b.contains("２") && b.contains("<img"));
+		assertTrue(String.join("\n----\n", pages.values()), together);
 	}
 
 	/** 改ページの注記で行の途中から書き出しても、横組みの中の数字は縦中横にしない（抑止の位置を書き出した分だけずらす。internal #34） */
@@ -129,5 +132,22 @@ public class AozoraEpub3ImagePageTextTest {
 		String all = String.join("", pages.values());
 		assertFalse("横組みの中の 12 を縦中横にした:\n" + all, all.contains("<span>12</span>"));
 		assertTrue("横組みの外の 34 は縦中横:\n" + all, all.contains("<span>34</span>"));
+	}
+
+	/** 横組みを閉じた後の改ページの続きは、抑止しない（開始と終わりの数ではなく、変換と同じ切り替えでたどる） */
+	@Test
+	public void autoTcyIsOnAgainAfterAClosedRangeAndAFlush() throws Exception {
+		java.util.Map<String, String> pages = convert("x［＃横組み］ab［＃横組み終わり］cd［＃改ページ］12です", new StringBuilder(), "AutoYoko=1\n");
+		String all = String.join("", pages.values());
+		assertTrue("横組みの外の 12 は縦中横:\n" + all, all.contains("<span>12</span>"));
+	}
+
+	/** 前の行の改ページの注記で tagLevel がマイナスになっていても、開いたタグの中の挿絵は単ページに分けない */
+	@Test
+	public void aNegativeTagLevelDoesNotHideAnOpenTag() throws Exception {
+		StringBuilder log = new StringBuilder();
+		java.util.Map<String, String> pages = convert("［＃縦中横］1［＃改ページ］2［＃縦中横終わり］\n前［＃縦中横］１［＃挿絵（fig.png）入る］２［＃縦中横終わり］", log);
+		boolean together = pages.values().stream().anyMatch(b -> b.contains("前") && b.contains("２") && b.contains("<img"));
+		assertTrue(String.join("\n----\n", pages.values()), together);
 	}
 }

@@ -2830,24 +2830,28 @@ public class AozoraEpub3Converter
 	private void flushPendingLine(BufferedWriter out, StringBuilder buf, int lineNum) throws IOException
 	{
 		int flushed = buf.length();
-		//書き出す範囲の終わりで抑えている途中か（開始が終わりより多い）
-		int open = 0;
-		for (int p : this.noTcyStart) if (p < flushed) open++;
-		for (int p : this.noTcyEnd) if (p <= flushed) open--;
+		//書き出す範囲の終わりで抑えている途中か。convertRubyText と同じ切り替え（抑えていないときの開始・抑えているときの終わりだけが効く）でたどる
+		boolean open = false;
+		for (int i=0; i<flushed; i++) {
+			if (!open && this.noTcyStart.contains(i)) open = true;
+			else if (open && this.noTcyEnd.contains(i)) open = false;
+		}
 		StringBuilder converted = this.convertRubyText(buf.toString());
 		buf.setLength(0);
-		java.util.Set<Integer> starts = new java.util.HashSet<>();
-		java.util.Set<Integer> ends = new java.util.HashSet<>();
+		HashSet<Integer> starts = new HashSet<Integer>();
+		HashSet<Integer> ends = new HashSet<Integer>();
 		for (int p : this.noTcyStart) if (p >= flushed) starts.add(p - flushed);
-		for (int p : this.noTcyEnd) if (p > flushed) ends.add(p - flushed);
-		if (open > 0) starts.add(0);
+		for (int p : this.noTcyEnd) if (p >= flushed) ends.add(p - flushed);
+		//書き出した位置ちょうどで抑止が終わるなら、続きの先頭は抑止しない（開始と終わりを先頭に並べると開始が勝ってしまう）
+		if (open && ends.remove(0)) open = false;
+		if (open) starts.add(0);
 		this.noTcyStart.clear(); this.noTcyStart.addAll(starts);
 		this.noTcyEnd.clear(); this.noTcyEnd.addAll(ends);
 		this.printLineBuffer(out, converted, lineNum, true);
 	}
 
-	/** 行の中で開いたまま閉じていないタグの数（printLineBuffer と同じ数え方。&lt;… /&gt; は開いて閉じる） */
-	static int openTagCount(CharSequence line)
+	/** 行の中のタグの深さの増減（開いた数−閉じた数。printLineBuffer と同じ数え方。&lt;… /&gt; は開いて閉じる。前の行のタグを閉じればマイナス） */
+	static int tagDepth(CharSequence line)
 	{
 		int tagStart = 0, tagEnd = 0;
 		boolean inTag = false;
@@ -2862,20 +2866,23 @@ public class AozoraEpub3Converter
 				inTag = true;
 			}
 		}
-		return Math.max(0, tagStart - tagEnd);
+		return tagStart - tagEnd;
 	}
 
 	/** 画像タグを出力
 	 * @return 単ページ出力ならtrue */
 	private boolean printImageChuki(BufferedWriter out, StringBuilder buf, String srcFileName, String dstFileName, boolean hasCaption, int lineNum) throws IOException
 	{
-		//サイズを取得して画面サイズとの%を指定
-		//単ページにするのはタグの外だけ。tagLevel は書き出した行のタグしか数えないので、この行の中でまだ閉じていないタグも足す
-		//（数えないと、開いた <span> を前のページへ、閉じタグを次のページへ書いて、両方の XHTML が壊れる。internal #34）
-		int imagePageType = this.writer.getImagePageType(srcFileName, this.tagLevel + openTagCount(buf), lineNum, hasCaption);
-		
 		//サイズを%で指定 倍率指定が無効または画像が小さいなら0
 		double ratio = this.writer.getImageWidthRatio(srcFileName, hasCaption);
+		//サイズを取得して画面サイズとの%を指定
+		//単ページにするのはタグの外だけ。tagLevel は書き出した行のタグしか数えないので、この行の中で開いたタグ（閉じたタグは引く）も足す
+		//（数えないと、開いた <span> を前のページへ、閉じタグを次のページへ書いて、両方の XHTML が壊れる。internal #34）。
+		//tagLevel は行の途中の改ページで 0 に戻され、閉じタグでマイナスになることがあるので、マイナスは 0 とみなす。
+		//浮かせる単ページ（imageFloatPage）は本文を書き出さずページも分けないので、行の中のタグは数えない（前と同じ）
+		int level = Math.max(0, this.tagLevel);
+		if (!(ratio != -1 && this.imageFloatPage)) level = Math.max(0, level + tagDepth(buf));
+		int imagePageType = this.writer.getImagePageType(srcFileName, level, lineNum, hasCaption);
 		
 		if (imagePageType == PageBreakType.IMAGE_INLINE_W) {
 			if (ratio <= 0) buf.append(String.format(chukiMap.get("画像横")[0], dstFileName));
