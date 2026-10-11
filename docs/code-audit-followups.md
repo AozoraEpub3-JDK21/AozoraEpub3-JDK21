@@ -1959,9 +1959,12 @@ Windows はフォルダ名に `:` を使えないので、ポート付きのサ�
 - `WebShelfPrefsTest` の「末尾の空白を残す」は、Windows にその名前が無いので別のテストに分けて Windows では飛ばす（`PreviewServerTest` の同じ趣旨の升と同じ）
 - `JavaAozoraVsReferenceTest` は通常のテスト一式から外した（`-DreferenceCompare=true` を付けたときだけ走る）。
   お手本は Java が作った物で、Java の正しさは確かめられない。意味があるのは .NET ポートとの差を見ることだけで、.NET は Java に後追いで合わせる（2026-10-08 利用者判断）。
-  いま落ちるのは #96 の CSS と、項目 43 の改行（LF）が .NET に入っていないため
+  いま落ちるのは #96 の CSS がお手本に入っていないため（比べる前に CRLF を LF にそろえるので、改行の違いでは落ちない）
 
-**.NET ポート（後追い）**: .NET の `WebAozoraConverter.cs` も同じく「ホスト名:ポート」でフォルダを探している（194・1521・1600 行あたり）。ホスト名で探すように合わせる
+**.NET ポート（後追い）**:
+- .NET の `WebAozoraConverter.cs` もサイト定義を「ホスト名:ポート」のフォルダで探している（194 行あたり）。ホスト名で探すように合わせる
+- 別件: .NET は HTML キャッシュのフォルダにも「ホスト名:ポート」をそのまま使う（1521 行あたり、`Path.Combine(root, fqdn)`）。
+  Java は `escapeUrlToFile` で `:` を `_` に替えているので、Windows でポート付きの URL を取ると .NET だけ失敗する見込み（未確認）
 
 ---
 

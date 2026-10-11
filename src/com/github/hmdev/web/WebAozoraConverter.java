@@ -213,7 +213,7 @@ public class WebAozoraConverter
 		if (converter == null) {
 			converter = new WebAozoraConverter(fqdn, configPath);
 			if (!converter.isValid()) {
-				LogAppender.println("サイトの定義がありません: "+configPath.getName()+"/"+fqdn);
+				LogAppender.println("サイトの定義がありません: "+configPath.getName()+"/"+siteDirName(fqdn, configPath));
 				return null;
 			}
 			converters.put(fqdn, converter);
