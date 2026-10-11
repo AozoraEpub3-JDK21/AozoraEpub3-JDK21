@@ -100,7 +100,7 @@
 			<option value="creator">著者順</option>
 		</select>
 		<!-- アプリから開いた本棚だけ viewer-library.js が hidden を外す -->
-		<button id="libraryRankingToggle" type="button" title="小説家になろうのランキングから落とす" aria-pressed="false" hidden>ランキング</button>
+		<button id="libraryRankingToggle" type="button" title="小説家になろう・カクヨムのランキングから落とす" aria-pressed="false" hidden>ランキング</button>
 		<button id="libraryDownloadToggle" class="icon" type="button" title="URL から作品を落とす" aria-label="URL から作品を落とす" aria-expanded="false" hidden>＋</button>
 		<!-- Web から取った本があって、アプリから開いた本棚だけ viewer-library.js が hidden を外す -->
 		<button id="libraryCheckAll" type="button" title="Web から取った本の目次を見て、新しい話と改稿された話を数える（話は取らない）" hidden>新着を確かめる</button>
@@ -130,14 +130,8 @@
 				<option value="narou">小説家になろう</option>
 				<option value="kakuyomu">カクヨム</option>
 			</select>
-			<select id="rankingPeriod" title="期間">
-				<option value="d">日間</option>
-				<option value="w">週間</option>
-				<option value="m">月間</option>
-				<option value="q">四半期</option>
-				<option value="y">年間</option>
-				<option value="all">累計</option>
-			</select>
+			<!-- 期間とジャンルの選択肢は、サイトに合わせて viewer-ranking.js が作る -->
+			<select id="rankingPeriod" title="期間"></select>
 			<select id="rankingGenre" title="ジャンル">
 				<option value="0">総合</option>
 			</select>

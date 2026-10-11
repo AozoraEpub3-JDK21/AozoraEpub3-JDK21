@@ -90,11 +90,6 @@ final class KakuyomuRanking
 
 	private final RankingFetch fetch;
 
-	KakuyomuRanking()
-	{
-		this(RankingFetch.newUpstream());
-	}
-
 	/** @param upstream サイトへ同時に出す数の枠（なろうと同じものを渡す） */
 	KakuyomuRanking(Semaphore upstream)
 	{

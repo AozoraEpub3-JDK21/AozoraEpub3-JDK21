@@ -1292,8 +1292,7 @@ public class PreviewServer implements AutoCloseable
 	private final java.util.concurrent.Semaphore rankingUpstream = RankingFetch.newUpstream();
 
 	/** 本棚のランキング（なろう）。試験では差し替える */
-	private volatile NarouRanking narouRanking = new NarouRanking(
-		uri -> RankingFetch.httpGet(uri, RankingFetch.DEADLINE, NarouRanking.SITE, false), this.rankingUpstream);
+	private volatile NarouRanking narouRanking = new NarouRanking(this.rankingUpstream);
 
 	/** 本棚のランキング（カクヨム）。試験では差し替える */
 	private volatile KakuyomuRanking kakuyomuRanking = new KakuyomuRanking(this.rankingUpstream);

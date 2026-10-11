@@ -1896,7 +1896,8 @@ Windows 11 の実機で、junction・8.3 の短い名前・親が junction の�
 - 同じ問い合わせが同時に 2 つ来ると、両方がなろうへ行く（覚えるのは取り終えてから）。取りかけの `CompletableFuture` を問い合わせごとに共有すれば 1 本で済む
 - 長さを名乗らない応答（chunked）は、期限までは上限を超えても溜める
 - 毎回 `HttpClient` を作って捨てる（TLS をつなぎ直す）。`NarouApiClient` と、なろうの API の道が 2 つある（あちらは JSON を手で走査し、本文の期限が無い）
-- ジャンル・期間の表が、Java（`NarouRanking.GENRES`/`PERIODS`）・JS（`RANKING_GENRES`/`RANKING_POINTS`）・`viewer.html` の 3 か所にある。ずれると 400 になる（黙って違う結果にはならない）
+- ジャンル・期間の表が、Java（`NarouRanking.GENRES`/`PERIODS`、`KakuyomuRanking.GENRES`/`PERIODS`）と JS（`RANKING_GENRES`/`RANKING_POINTS`、`KAKUYOMU_GENRES`/`KAKUYOMU_PERIODS`/`RANKING_SITES`）の 2 か所にある（`viewer.html` の期間は 2026-10-11 のカクヨムの PR で JS へ移した）。ずれると 400 になる（黙って違う結果にはならない）
+- カクヨムはページの `__NEXT_DATA__` を丸ごと（1 件 350KB ほど）覚えて渡す。32 件まで覚えると 11MB ほど。要る所だけに削るなら JSON の読み手が要る（プレビューは持たない方針）
 - 本棚の読み直しが失敗したとき（`state.library` が null）、落とした札は「落とす」に戻る（サーバがもうある作品を断るので二重には落ちない）
 
 ### 42. GUI の設定の保存が、終わり方によっては漏れる・途中で切れる — 🔶 一部対応（2026-10-11、internal #28）

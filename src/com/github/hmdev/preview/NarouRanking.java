@@ -107,9 +107,10 @@ final class NarouRanking
 
 	private final RankingFetch fetch;
 
-	NarouRanking()
+	/** @param upstream サイトへ同時に出す数の枠（カクヨムと同じものを渡す） */
+	NarouRanking(java.util.concurrent.Semaphore upstream)
 	{
-		this(uri -> RankingFetch.httpGet(uri, RankingFetch.DEADLINE, SITE, false), RankingFetch.newUpstream());
+		this(uri -> RankingFetch.httpGet(uri, RankingFetch.DEADLINE, SITE, false), upstream);
 	}
 
 	NarouRanking(RankingFetch.Fetcher fetcher)

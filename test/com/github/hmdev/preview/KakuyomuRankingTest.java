@@ -82,6 +82,16 @@ public class KakuyomuRankingTest
 		}
 	}
 
+	/** 文言の主語: 英字で終わる名前だけ、後ろの仮名との間に空白を入れる */
+	@Test
+	public void errorMessagesKeepTheSpaceAfterAnAsciiName()
+	{
+		assertEquals("なろうの API ", RankingFetch.subject(NarouRanking.SITE));
+		assertEquals("カクヨム", RankingFetch.subject(SITE_KAKUYOMU));
+	}
+
+	private static final String SITE_KAKUYOMU = KakuyomuRanking.SITE;
+
 	@Test
 	public void remembersAPageForAWhile() throws Exception
 	{

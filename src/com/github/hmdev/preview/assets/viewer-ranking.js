@@ -103,7 +103,8 @@ function fillRankingChoices()
 {
 	const site = RANKING_SITES[el.rankingSite.value] ? el.rankingSite.value : 'narou';
 	const config = RANKING_SITES[site];
-	const period = el.rankingPeriod.value;
+	// 最初は日間 (まだ選択肢が無い)
+	const period = el.rankingPeriod.value || 'd';
 	el.rankingPeriod.replaceChildren(...config.periods.map(code => rankingOption(code, RANKING_PERIOD_NAMES[code])));
 	el.rankingPeriod.value = config.periods.includes(period) ? period : 'm';
 	const genre = el.rankingGenre;
@@ -189,10 +190,12 @@ async function fetchRanking()
 	const seq = rankingLoadSeq;
 	const site = el.rankingSite.value;
 	const period = el.rankingPeriod.value;
+	const genre = el.rankingGenre.value;
+	const serial = el.rankingSerial.checked;
 	const query = 'site=' + encodeURIComponent(site)
 		+ '&period=' + encodeURIComponent(period)
-		+ '&genre=' + encodeURIComponent(el.rankingGenre.value)
-		+ '&serial=' + (el.rankingSerial.checked ? '1' : '0');
+		+ '&genre=' + encodeURIComponent(genre)
+		+ '&serial=' + (serial ? '1' : '0');
 	let works;
 	try {
 		const response = await fetch('api/ranking?' + query, {cache: 'no-store'});
@@ -201,7 +204,9 @@ async function fetchRanking()
 		if (!response.ok || !json || (json.error && !Array.isArray(json))) {
 			throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
 		}
-		works = (site === 'kakuyomu') ? kakuyomuWorks(json) : narouWorks(json, period);
+		works = (site === 'kakuyomu')
+			? kakuyomuWorks(json, period, genre, serial)
+			: narouWorks(json, period);
 	} catch (e) {
 		if (seq !== rankingLoadSeq) return;
 		rankingWorks = [];
@@ -246,11 +251,11 @@ function narouWorks(rows, period)
  * カクヨムのページの __NEXT_DATA__ をそろえる。順位の並びは ROOT_QUERY の rankedWorks(…) の nodes にあり、
  * 作品と作者は Apollo の控えの Work:… と UserAccount:… を引く (2026-10-11 のページの作り)
  */
-function kakuyomuWorks(data)
+function kakuyomuWorks(data, period, genre, longOnly)
 {
 	const apollo = data && data.props && data.props.pageProps && data.props.pageProps.__APOLLO_STATE__;
 	const root = apollo && apollo.ROOT_QUERY;
-	const key = root && Object.keys(root).find(k => k.startsWith('rankedWorks('));
+	const key = root && Object.keys(root).find(k => kakuyomuRankedWorksFor(k, period, genre, longOnly));
 	const nodes = key && root[key] && root[key].nodes;
 	if (!Array.isArray(nodes)) throw new Error('カクヨムのページにランキングが見つかりません (ページの作りが変わったかもしれません)');
 	const works = [];
@@ -267,12 +272,31 @@ function kakuyomuWorks(data)
 			writer: rankingText(work.alternateAuthorName) || rankingText(author.activityName) || rankingText(author.name),
 			genre: kakuyomuGenreName(work.genre),
 			kind: kakuyomuKind(work),
-			points: rankingPoints(work.totalReviewPoint, '', '★ '),
+			// 期間の点数はページに無い。出すのは累計の★ (並びの理由ではないので「累計」と書く)
+			points: rankingPoints(work.totalReviewPoint, '', '累計 ★ '),
 			summary: firstLine(rankingText(work.catchphrase) || intro),
 			story: intro,
 		});
 	}
 	return works;
+}
+
+/** カクヨムの期間 (なろうと同じ印) → ページの rankedWorks の period */
+const KAKUYOMU_PERIODS = {d: 'DAILY', w: 'WEEKLY', m: 'MONTHLY', y: 'YEARLY', all: 'ENTIRE'};
+
+/**
+ * ROOT_QUERY の鍵 rankedWorks({...}) が、頼んだ期間・ジャンル・長編だけかどうかと合うか。
+ * ページの控えに別の一覧が混ざっても、先に見つかった方を黙って出さない (PR のゲート2)
+ */
+function kakuyomuRankedWorksFor(key, period, genre, longOnly)
+{
+	if (!key.startsWith('rankedWorks(') || !key.endsWith(')')) return false;
+	let args;
+	try { args = JSON.parse(key.slice('rankedWorks('.length, -1)); } catch (e) { return false; }
+	const wantGenre = (genre === '0') ? null : String(genre).toUpperCase();
+	return args && args.period === KAKUYOMU_PERIODS[period]
+		&& (args.genre === undefined ? null : args.genre) === wantGenre
+		&& args.workVariation === (longOnly ? 'LONG' : 'ALL');
 }
 
 /** 本棚にある作品の印 (dc:source の URL から取る) */
@@ -335,14 +359,15 @@ function rankingCard(work, rank, owned)
 	meta.textContent = [work.writer, work.genre, work.kind, work.points].filter(Boolean).join(' ・ ');
 	body.appendChild(meta);
 
-	if (work.story) {
+	// カクヨムはキャッチコピーだけでイントロが空のことがある。そのときも 1 行は出す
+	if (work.story || work.summary) {
 		const story = document.createElement('details');
 		story.className = 'story';
 		const summary = document.createElement('summary');
 		summary.textContent = work.summary || firstLine(work.story);
 		story.appendChild(summary);
 		const full = document.createElement('div');
-		full.textContent = work.story;
+		full.textContent = work.story || work.summary;
 		story.appendChild(full);
 		body.appendChild(story);
 	}
@@ -441,7 +466,7 @@ function rankingKind(work)
 	return episodes ? progress + ' ' + episodes : progress;
 }
 
-/** 点数 (数のときだけ)。なろうは期間の点数 (… pt)、カクヨムは累計の★ (★ …) */
+/** 点数 (数のときだけ)。なろうは期間の点数 (… pt)、カクヨムは累計の★ (累計 ★ …) */
 function rankingPoints(value, suffix, prefix)
 {
 	return (typeof value === 'number') ? (prefix || '') + value.toLocaleString('ja-JP') + suffix : '';

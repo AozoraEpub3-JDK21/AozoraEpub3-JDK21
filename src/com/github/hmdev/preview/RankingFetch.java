@@ -79,6 +79,16 @@ final class RankingFetch
 		this.upstream = upstream;
 	}
 
+	/**
+	 * 文言の主語。英字で終わる名前（「なろうの API」）は、後ろの仮名との間に空白を入れる
+	 * （「なろうの API につながりません」「カクヨムにつながりません」）
+	 */
+	static String subject(String site)
+	{
+		char last = site.isEmpty() ? ' ' : site.charAt(site.length() - 1);
+		return (last < 0x80 && Character.isLetterOrDigit(last)) ? site + " " : site;
+	}
+
 	static Semaphore newUpstream()
 	{
 		return new Semaphore(MAX_UPSTREAM);
@@ -119,6 +129,7 @@ final class RankingFetch
 	 */
 	static byte[] httpGet(URI uri, Duration deadline, String site, boolean acceptGzip) throws IOException, InterruptedException
 	{
+		String who = subject(site);
 		HttpClient client = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(10))
 			.followRedirects(HttpClient.Redirect.NORMAL)
@@ -139,7 +150,7 @@ final class RankingFetch
 			//長さを名乗らない応答は、期限までしか受け取らない
 			HttpResponse.BodyHandler<byte[]> handler = info -> {
 				long length = info.headers().firstValueAsLong("Content-Length").orElse(-1L);
-				if (length > MAX_BYTES) throw new java.io.UncheckedIOException(new IOException(site + "の応答が大きすぎます"));
+				if (length > MAX_BYTES) throw new java.io.UncheckedIOException(new IOException(who + "の応答が大きすぎます"));
 				return HttpResponse.BodySubscribers.ofByteArray();
 			};
 			CompletableFuture<HttpResponse<byte[]>> pending = client.sendAsync(request, handler);
@@ -148,20 +159,20 @@ final class RankingFetch
 				response = pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
 			} catch (TimeoutException e) {
 				pending.cancel(true);
-				throw new IOException(site + "が " + deadline.toSeconds() + " 秒で応えませんでした");
+				throw new IOException(who + "が " + deadline.toSeconds() + " 秒で応えませんでした");
 			} catch (ExecutionException e) {
 				//つながらないときの ConnectException は文言が null のことがある。画面に「null」と出さない
 				Throwable cause = e.getCause();
 				if (cause instanceof java.io.UncheckedIOException unchecked) throw unchecked.getCause();
 				String why = (cause != null && cause.getMessage() != null) ? cause.getMessage()
 					: (cause != null ? cause.getClass().getSimpleName() : "不明");
-				throw new IOException(site + "につながりません (" + why + ")", cause);
+				throw new IOException(who + "につながりません (" + why + ")", cause);
 			}
 			if (response.statusCode() != 200) {
-				throw new IOException(site + "が HTTP " + response.statusCode() + " を返しました");
+				throw new IOException(who + "が HTTP " + response.statusCode() + " を返しました");
 			}
 			byte[] raw = response.body();
-			if (raw.length > MAX_BYTES) throw new IOException(site + "の応答が大きすぎます");
+			if (raw.length > MAX_BYTES) throw new IOException(who + "の応答が大きすぎます");
 			return gunzip(raw, site);
 		} finally {
 			//close() は走っている要求の終わりを待つので、期限切れのときに止まってしまう。待たずに閉じる
@@ -175,7 +186,7 @@ final class RankingFetch
 		if (raw.length < 2 || (raw[0] & 0xff) != 0x1f || (raw[1] & 0xff) != 0x8b) return raw;
 		try (InputStream in = new GZIPInputStream(new ByteArrayInputStream(raw))) {
 			byte[] body = in.readNBytes(MAX_BYTES + 1);
-			if (body.length > MAX_BYTES) throw new IOException(site + "の応答が大きすぎます");
+			if (body.length > MAX_BYTES) throw new IOException(subject(site) + "の応答が大きすぎます");
 			return body;
 		}
 	}
