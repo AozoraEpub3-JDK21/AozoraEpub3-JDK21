@@ -1323,6 +1323,11 @@ public class Epub3Writer
 		//ePub3変換して出力
 		//改ページ時にnextSection() を、画像出力時にgetImageFilePath() 呼び出し
 		converter.vertical = bookInfo.vertical;
+		//表題の後に空行が無く、本文の先頭が表題の塊に飲まれた（監査 35）。読み方は変えずに、直し方を添えて知らせる。
+		//表題ページの設定と確認画面での読み直しが済んだここで見る（塊が本文に残る設定なら何も消えていない）
+		if (bookInfo.titleBlockRunOnLine != -1 && bookInfo.titleBlockLeavesBody()) {
+			LogAppender.warn(bookInfo.titleBlockRunOnLine, "表題・著者の後に空行がありません", bookInfo.titleBlockRunOnDesc());
+		}
 		converter.convertTextToEpub3(bw, src, bookInfo);
 		bw.flush();
 		
@@ -1330,8 +1335,7 @@ public class Epub3Writer
 		//読まれたときなど）。そのまま閉じると zip の項目が無いまま書いて変換全体が落ちていたので、空の節を開く（監査 35）
 		if (this.sectionIndex == 0) {
 			//空の本を黙って作らない
-			LogAppender.println("[WARN] 本文がありませんでした。表題の後に空行が無いと、先頭の数行は表題・著者として読まれます。"
-				+"本文に残すには、表題・著者の行の後に空行を 1 行入れてください（表題が先の本なら、画面の「表題: 本文内」を「表題+著者のみ(2行)」に、CLI では -t 4 にしてもよい）");
+			LogAppender.println("[WARN] 本文がありませんでした。表題の後に空行が無いと、先頭の数行は表題・著者として読まれます。"+BookInfo.TITLE_BLOCK_ADVICE);
 			this.startSection(0, PageBreakType.PAGE_NORMAL, PageBreakType.IMAGE_PAGE_NONE, null);
 		}
 		this.endSection();
