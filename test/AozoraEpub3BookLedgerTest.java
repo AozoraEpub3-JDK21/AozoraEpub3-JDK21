@@ -48,7 +48,7 @@ public class AozoraEpub3BookLedgerTest {
 		assertTrue(AozoraEpub3.convertFile(txt, "txt", epub, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0));
 		try (ZipFile zf = new ZipFile(epub)) {
 			String opf = new String(zf.getInputStream(zf.getEntry("OPS/package.opf")).readAllBytes(), StandardCharsets.UTF_8);
-			return new String[]{ epub.getName(), opf };
+			return new String[]{ epub.getName(), opf, epub.getPath() };
 		}
 	}
 
@@ -196,5 +196,39 @@ public class AozoraEpub3BookLedgerTest {
 		assertEquals("その本は 7 話", 7, ledger.episodesFor(epub));
 		assertEquals("作品の話数はそのまま", 9, ledger.episodes);
 		assertEquals("ほかの本は作品の話数", 9, ledger.episodesFor(new File(dir, "other.epub")));
+	}
+
+	/** 後で別の名前へ動かす一時ファイル（GUI の .mobi+.epub 出力の kindle*.epub）は、その名前で話数を記録しない。
+	 * 動かした後で本当の名前で記録する（internal #25。一時ファイルの名前で記録すると、本当の EPUB に本の話数が無く、本棚の更新が作品の話数と比べて誤って止まる） */
+	@Test
+	public void aTemporaryEpubIsNotRecordedUnderItsOwnName() throws Exception {
+		File dir = tempFolder.newFolder();
+		File txt = txt(dir, "題\n著者\n\n本文\n");
+		BookLedger.create(URL, "in").withEpisodes(5).withLastEpisodes(3).save(dir);
+		String templatePath = VelocityTestUtils.templateDir() + File.separator;
+		Epub3Writer writer = new Epub3Writer(templatePath, VelocityTestUtils.engineForTemplateSubpath(""));
+		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
+		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt);
+		BookInfo bookInfo = AozoraEpub3.getBookInfo(txt, "txt", 0, imageInfoReader, converter, "UTF-8",
+			BookInfo.TitleType.TITLE_AUTHOR, false);
+		File out = tempFolder.newFolder();
+		File tmp = File.createTempFile("kindle", ".epub", out);
+		File real = new File(out, "本.epub");
+		assertTrue(AozoraEpub3.convertFile(txt, "txt", tmp, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0, false));
+		assertEquals("一時ファイルの名前で記録しない", -1, BookLedger.load(dir).ownEpisodesFor(tmp));
+		Files.move(tmp.toPath(), real.toPath());
+		BookLedger.recordBookEpisodes(bookInfo, real);
+		assertEquals("本当の名前で、最後に作った txt の話数を記録する", 3, BookLedger.load(dir).ownEpisodesFor(real));
+		assertEquals("一時ファイルの鍵は残らない", -1, BookLedger.load(dir).ownEpisodesFor(tmp));
+	}
+
+	/** 対照: 記録する指定（既定）では、書き出した名前で記録する */
+	@Test
+	public void theDefaultRecordsUnderTheWrittenName() throws Exception {
+		File dir = tempFolder.newFolder();
+		File txt = txt(dir, "題\n著者\n\n本文\n");
+		BookLedger.create(URL, "in").withEpisodes(5).withLastEpisodes(3).save(dir);
+		String[] r = convert(txt);
+		assertEquals(3, BookLedger.load(dir).ownEpisodesFor(new File(r[2])));
 	}
 }
