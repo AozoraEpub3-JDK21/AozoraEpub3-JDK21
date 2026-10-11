@@ -677,7 +677,8 @@ public class AozoraEpub3
 		addWebShelf(folders);
 		if (folders.isEmpty()) return 1;
 		try {
-			String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(folders);
+			//CLI は起動のたびに新しいサーバなので、使い回すタブは無い（いつも新しいタブ）
+			String url = com.github.hmdev.preview.PreviewLauncher.previewLibrary(folders).url();
 			LogAppender.println("本棚を開きました : "+url);
 		} catch (IOException e) {
 			logger.error("本棚の起動に失敗: {}", folders, e);
@@ -702,7 +703,7 @@ public class AozoraEpub3
 	{
 		try {
 			if (libraryDirs != null && libraryDirs.length > 0) loadLibraryBeforeOpen(libraryDirs);
-			String url = com.github.hmdev.preview.PreviewLauncher.preview(epubFile);
+			String url = com.github.hmdev.preview.PreviewLauncher.preview(epubFile).url();
 			LogAppender.println("プレビューを開きました : "+url);
 			return true;
 		} catch (IOException e) {
