@@ -1177,7 +1177,8 @@ public class AozoraEpub3Converter
 		
 		//タイトルのChapter追加
 		if (bookInfo.titleLine > -1) {
-			String name = this.getChapterName(bookInfo.title);
+			//表題は setMetaInfo で getChapterName を通してある。もう一度通すと、外字の［］に戻した文字が注記に見えて消える。ここでは長さだけ切る
+			String name = CharUtils.truncateName(bookInfo.title, this.maxChapterNameLength);
 			ChapterLineInfo chapterLineInfo = bookInfo.getChapterLineInfo(bookInfo.titleLine);
 			if (chapterLineInfo == null) bookInfo.addChapterLineInfo(new ChapterLineInfo(bookInfo.titleLine, ChapterLineInfo.TYPE_TITLE, true, 0, false, name));
 			else { chapterLineInfo.type = ChapterLineInfo.TYPE_TITLE; chapterLineInfo.level = 0; }
@@ -1536,6 +1537,9 @@ public class AozoraEpub3Converter
 		}
 		for (int i=0; i<gaiji.length(); i++) {
 			char c = gaiji.charAt(i);
+			//［］は注記の正規表現に拾われないよう、代わりの文字にする（出力で戻す）
+			if (c == '［') { buf.append(CharUtils.GAIJI_OPEN_BRACKET); continue; }
+			if (c == '］') { buf.append(CharUtils.GAIJI_CLOSE_BRACKET); continue; }
 			if (CharUtils.isEscapableChar(c)) buf.append(CharUtils.ESCAPE);
 			buf.append(c);
 		}
@@ -1543,7 +1547,7 @@ public class AozoraEpub3Converter
 	public String convertGaijiChuki(String line, boolean escape, boolean logged)
 	{
 		//本文に内部エスケープの印（制御文字）があれば落とす。残すとエスケープと読まれる（XML にも書けない文字）
-		line = CharUtils.removeEscape(line);
+		line = CharUtils.stripInternalChars(line);
 		/*
 		・外字
 		 ※の場合は外字に変換
@@ -2266,7 +2270,7 @@ public class AozoraEpub3Converter
 		if (this.forceIndent && ch.length > charStart+1) {
 			switch (ch[charStart]) {
 			//印（外字の特殊文字の前）は、前の ※ と同じく字下げしない（出力を変えない）
-			case '　': case '「': case '『':  case '（': case '”': case '〈': case '【': case '〔': case '［': case '※': case CharUtils.ESCAPE:
+			case '　': case '「': case '『':  case '（': case '”': case '〈': case '【': case '〔': case '［': case '※': case CharUtils.ESCAPE: case CharUtils.GAIJI_OPEN_BRACKET:
 				break;
 			case ' ': case ' ':
 				char c1 = ch[charStart+1];
@@ -3141,6 +3145,8 @@ public class AozoraEpub3Converter
 	private void convertTcyText(StringBuilder buf, char[] ch, int begin, int end, boolean noTcy) throws IOException
 	{
 		for (int i=begin; i<end; i++) {
+			//外字の［］の代わりの文字は、文字を見て決める処理（外字の水準・置換表）より前に［］へ戻す
+			CharUtils.restoreGaijiBracket(ch, i);
 
 			String gaijiFileName = null;
 			//4バイト文字
@@ -3641,6 +3647,8 @@ public class AozoraEpub3Converter
 	{
 		//NULL文字なら何も出力しない
 		if (ch[idx] == '\0') return;
+		//外字の［］の代わりの文字は、文字を見て決める処理（外字の水準・置換表・2文字置換の前の文字）より前に［］へ戻す
+		CharUtils.restoreGaijiBracket(ch, idx);
 
 		//端末で表示できない可能性が高い水準なら記号に置き換える (docs/gaiji-fallback-plan.md 機能1)
 		//convertTcyText を通らずここに直接来る経路(同じ長さのルビを1文字ずつ振る場合など)の受け皿。
