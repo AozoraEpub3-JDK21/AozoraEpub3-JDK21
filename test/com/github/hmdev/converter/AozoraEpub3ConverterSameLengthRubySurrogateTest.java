@@ -135,7 +135,9 @@ public class AozoraEpub3ConverterSameLengthRubySurrogateTest
 	@Test
 	public void aReversedRubyRangeDoesNotStopTheConversion() throws Exception
 	{
-		String out = convertLine("漢《あ｜字》");
+		//読みが同じ字の繰り返し（｜｜）なので、1 字ずつの判定まで届き、範囲が逆のまま字の区切りを作ろうとする
+		String out = convertLine("漢《｜｜》");
 		org.junit.Assert.assertTrue(out, out.contains("漢"));
+		org.junit.Assert.assertTrue(convertLine("漢《あ｜字》").contains("漢"));
 	}
 }
