@@ -116,6 +116,10 @@ public class Epub3ImageWriter extends Epub3Writer
 					//アーカイブ内のサブフォルダは除外
 					String entryName = Epub3Writer.sanitizeArchiveEntryName(rawName);
 					String srcImageFileName = entryName.substring(pathLength);
+					//使う画像（writeArchiveImage が書くもの）だけ開く。ほかの項目は展開しない
+					//（暗号化や未対応の圧縮の項目を開くと、前は素通りしていたのに失敗する）
+					ImageInfo imageInfo = this.imageInfoReader.getImageInfo(this.imageInfoReader.correctExt(srcImageFileName));
+					if (imageInfo == null || imageInfo.getId() == null) return !this.canceled;
 					try (java.io.InputStream is = opener.open()) {
 						this.writeArchiveImage(srcImageFileName, is);
 					}
