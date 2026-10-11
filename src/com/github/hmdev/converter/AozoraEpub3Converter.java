@@ -3859,7 +3859,8 @@ public class AozoraEpub3Converter
 			logger.warn("変換されていない本文が出力に来ました（{} 行目）。内部エスケープの印を外します", lineNum+1);
 			line = CharUtils.removeEscape(line);
 		}
-		int length = buf.length();
+		//印を外したときは line が短くなるので、長さは line から取る（buf から取ると走査が line の外へ出る）
+		int length = line.length();
 		//すべて空白は空行にする
 		if (CharUtils.isSpace(line)) { line = ""; length = 0; }
 		
