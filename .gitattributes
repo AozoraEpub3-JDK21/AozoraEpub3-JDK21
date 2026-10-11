@@ -1,8 +1,9 @@
 # AozoraEpub3 line ending policy
 #
 # PR-1: Java ソースのみ LF 正規化（モダン化計画 ステージ 0B 前提整備）
-# - chuki_*.txt / presets/*.ini / template/*.vm / *.css は EPUB 出力に影響するため
-#   PR-2/PR-3 で個別検証（.NET ポート JavaComparisonTests 5/5 ゲート）してから正規化する
+# - template/*.vm / *.css の改行は、EPUB 出力に影響しなくなった（Epub3Writer が出力を LF にそろえる。
+#   docs/code-audit-followups.md 項目 43）。ファイルの改行は今のまま（git の中で CRLF と LF が混ざっている）
+# - chuki_*.txt / presets/*.ini は利用者がメモ帳で開くので CRLF のまま（docs/release-procedure.md §6.6）
 
 # Java sources: LF in index regardless of platform
 *.java text eol=lf
