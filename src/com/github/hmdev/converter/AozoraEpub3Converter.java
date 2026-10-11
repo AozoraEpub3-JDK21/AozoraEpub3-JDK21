@@ -2862,7 +2862,13 @@ public class AozoraEpub3Converter
 			} else {
 				//単ページ出力 タグの外のみ
 				//改ページの前に文字があれば前のページに出力
-				if (buf.length() > 0) this.printLineBuffer(out, buf, lineNum, true);
+				//buf は convertEscapedText のままで、ルビ・文字の変換（convertRubyText）がまだ。行の終わりと同じく通してから出す
+				//（通さないと内部エスケープの印 \u0001 が XHTML に出て XML として壊れ、ルビも記号のまま出る）
+				if (buf.length() > 0) {
+					StringBuilder converted = this.convertRubyText(buf.toString());
+					buf.setLength(0);
+					this.printLineBuffer(out, converted, lineNum, true);
+				}
 				buf.append(String.format(chukiMap.get("画像")[0], dstFileName));
 				buf.append(chukiMap.get("画像終わり")[0]);
 				//単ページ出力
@@ -3847,7 +3853,14 @@ public class AozoraEpub3Converter
 	private void printLineBuffer(BufferedWriter out, StringBuilder buf, int lineNum, boolean noBr) throws IOException
 	{
 		String line = buf.toString();
-		int length = buf.length();
+		//内部エスケープの印は convertRubyText で消えているはず。残っていれば変換を通っていない道があるので、
+		//XHTML を壊さないよう外し、開発用のログに残す（XML 1.0 は制御文字を許さない）
+		if (line.indexOf(CharUtils.ESCAPE) >= 0) {
+			logger.warn("変換されていない本文が出力に来ました（{} 行目）。内部エスケープの印を外します", lineNum+1);
+			line = CharUtils.removeEscape(line);
+		}
+		//印を外したときは line が短くなるので、長さは line から取る（buf から取ると走査が line の外へ出る）
+		int length = line.length();
 		//すべて空白は空行にする
 		if (CharUtils.isSpace(line)) { line = ""; length = 0; }
 		
