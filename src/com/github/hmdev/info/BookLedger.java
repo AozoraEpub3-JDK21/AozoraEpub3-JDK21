@@ -63,7 +63,7 @@ public final class BookLedger
 	 * もう片方の守りを外さないように（PR #120 の codex）
 	 */
 	final java.util.Map<String, Integer> bookEpisodes;
-	/** 最後に作った txt の目次の話数（上げ下げとも）。本を書き終えたとき、その本の話数として記録する。まだなら -1 */
+	/** 最後に作った txt の目次の話数（上げ下げとも）。本文を読み始めるときに控え、書き終えたらその本の話数として記録する。まだなら -1 */
 	public final int lastEpisodes;
 
 	BookLedger(String sourceUrl, String identifier, String textBaseName, String outputBaseName)
@@ -110,18 +110,20 @@ public final class BookLedger
 	}
 
 	/**
-	 * 書き終えた本に、最後に作った txt の話数を記録する（GUI・CLI・本棚の更新のどれで作った本も。本棚の更新は、
+	 * 書き終えた本に、その本文を読み始めたときに控えた話数（{@link #captureEpisodes}）を記録する（GUI・CLI・本棚の更新のどれで作った本も。本棚の更新は、
 	 * その本の話数と比べる。作品の話数と比べると、違う時期に作った本どうしで誤って止まる。PR #120 の codex）。
 	 * Web から取った txt から作った本でなければ何もしない
 	 */
 	public static void recordBookEpisodes(BookInfo bookInfo, File epub)
 	{
+		//記録するのは本文を読み始めたときに控えた話数。今の台帳の話数ではない
 		if (bookInfo == null || bookInfo.ledgerDir == null) return;
+		int episodes = bookInfo.ledgerEpisodes;
+		if (episodes < 0) return;
 		BookLedger ledger = load(bookInfo.ledgerDir);
-		if (ledger == null || ledger.lastEpisodes < 0 || ledger.episodesFor(epub) == ledger.lastEpisodes
-			&& ledger.bookEpisodes.containsKey(bookKey(epub))) return;
+		if (ledger == null || ledger.ownEpisodesFor(epub) == episodes) return;
 		try {
-			ledger.withBookEpisodes(epub, ledger.lastEpisodes).save(bookInfo.ledgerDir);
+			ledger.withBookEpisodes(epub, episodes).save(bookInfo.ledgerDir);
 		} catch (IOException e) {
 			logger.warn("台帳に本の話数を書けませんでした: {}", bookInfo.ledgerDir, e);
 		}
@@ -338,6 +340,18 @@ public final class BookLedger
 		bookInfo.identifier = ledger.identifier;
 		bookInfo.outputBaseName = ledger.outputBaseName;
 		bookInfo.ledgerDir = workDir;
+		bookInfo.ledgerEpisodes = ledger.lastEpisodes;
+	}
+
+	/**
+	 * 本文を読み始めるときの台帳の最後の話数を、この本の話数として控える（convertFile が txt を読み直す直前に呼ぶ）。
+	 * 書き終えた後・動かすまで（kindlegen）の間に同じ作品の txt と台帳が更新されても、記録するのは書いた本文の話数
+	 */
+	public static void captureEpisodes(BookInfo bookInfo)
+	{
+		if (bookInfo == null || bookInfo.ledgerDir == null) return;
+		BookLedger ledger = load(bookInfo.ledgerDir);
+		bookInfo.ledgerEpisodes = ledger == null ? -1 : ledger.lastEpisodes;
 	}
 
 	/**
