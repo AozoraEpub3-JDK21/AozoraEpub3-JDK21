@@ -352,8 +352,9 @@ public class Epub3Writer
 		this.velocityEngine = velocityEngine;
 	}
 
-	/** テンプレートをマージして Writer に出力 */
-	private void mergeTemplate(String templateFilePath, BufferedWriter bw) throws IOException {
+	/** テンプレートをマージして Writer に出力。改行は LF にそろえる（テンプレートの改行は置き場や git の設定で変わるため） */
+	private void mergeTemplate(String templateFilePath, BufferedWriter out) throws IOException {
+		LfWriter bw = new LfWriter(out);
 		try {
 			if (this.velocityEngine != null) {
 				String resourceName = templateFilePath;
@@ -401,6 +402,8 @@ public class Epub3Writer
 			}
 		} catch (Exception e) {
 			throw new IOException("Failed to merge template: " + templateFilePath, e);
+		} finally {
+			bw.flush();
 		}
 	}
 	/** プログレスバー設定 */
@@ -512,17 +515,29 @@ public class Epub3Writer
 		return stream;
 	}
 	
+	/** テンプレートのテキストファイル（container.xml・固定の CSS）をそのまま格納する。改行は LF にそろえる */
 	private void writeFile(ZipArchiveOutputStream zos, String fileName) throws IOException
 	{
 		zos.putArchiveEntry(new ZipArchiveEntry(fileName));
 		try (InputStream is = getTemplateInputStream(fileName)) {
-			byte[] buf = new byte[8192];
-			int len;
-			while ((len = is.read(buf)) > 0) {
-				zos.write(buf, 0, len);
-			}
+			zos.write(toLf(is.readAllBytes()));
 		}
 		zos.closeArchiveEntry();
+	}
+
+	/** CRLF と単独の CR を LF にする（CR・LF は UTF-8 の多バイト文字の中には現れないのでバイトのまま扱える） */
+	static byte[] toLf(byte[] b)
+	{
+		ByteArrayOutputStream out = new ByteArrayOutputStream(b.length);
+		for (int i = 0; i < b.length; i++) {
+			if (b[i] == '\r') {
+				out.write('\n');
+				if (i + 1 < b.length && b[i + 1] == '\n') i++;
+			} else {
+				out.write(b[i]);
+			}
+		}
+		return out.toByteArray();
 	}
 	
 	/** epubファイルを出力
