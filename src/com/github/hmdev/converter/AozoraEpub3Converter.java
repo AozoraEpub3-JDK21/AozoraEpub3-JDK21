@@ -2862,7 +2862,13 @@ public class AozoraEpub3Converter
 			} else {
 				//単ページ出力 タグの外のみ
 				//改ページの前に文字があれば前のページに出力
-				if (buf.length() > 0) this.printLineBuffer(out, buf, lineNum, true);
+				//buf は convertEscapedText のままで、ルビ・文字の変換（convertRubyText）がまだ。行の終わりと同じく通してから出す
+				//（通さないと内部エスケープの印 \u0001 が XHTML に出て XML として壊れ、ルビも記号のまま出る）
+				if (buf.length() > 0) {
+					StringBuilder converted = this.convertRubyText(buf.toString());
+					buf.setLength(0);
+					this.printLineBuffer(out, converted, lineNum, true);
+				}
 				buf.append(String.format(chukiMap.get("画像")[0], dstFileName));
 				buf.append(chukiMap.get("画像終わり")[0]);
 				//単ページ出力
