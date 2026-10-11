@@ -3038,10 +3038,12 @@ public class AozoraEpub3Converter
 							//親文字か読みに内部エスケープの印があれば使わない（印も1文字に数え、読みが空の親文字に付く）
 							//親文字は char ではなく字で数える（4バイト文字の対と、後ろの異体字セレクタを基底字ごと 1 字にまとめる。監査項目 33）
 							//読みは同じ BMP の字の繰り返しに限る
-							int[] rubyUnits = rubyBaseUnits(ch, rubyStart, rubyTopStart);
-							if (rubyUnits != null && rubyUnits.length-1 == i-rubyTopStart-1 && CharUtils.isSameChars(ch, rubyTopStart+1, i)
-									&& !Character.isSurrogate(ch[rubyTopStart+1])
-									&& !CharUtils.hasEscape(ch, rubyStart, i)) {
+							//安い判定（読みが同じ字の繰り返しか）を先に。ほとんどのルビはここで外れるので、字の区切りを作らない
+							//（読みが空の ｜《》 も前と同じくこの分岐を通る。出力を変えないため）
+							int[] rubyUnits = (CharUtils.isSameChars(ch, rubyTopStart+1, i)
+									&& (rubyTopStart+1 >= i || !Character.isSurrogate(ch[rubyTopStart+1])) && !CharUtils.hasEscape(ch, rubyStart, i))
+									? rubyBaseUnits(ch, rubyStart, rubyTopStart) : null;
+							if (rubyUnits != null && rubyUnits.length-1 == i-rubyTopStart-1) {
 								if (buf.indexOf(rubyEndChuki, buf.length()-rubyEndChuki.length()) == -1) {
 									buf.append(rubyStartChuki);
 								} else {
@@ -3163,12 +3165,17 @@ public class AozoraEpub3Converter
 	 * @return 各字の先頭の位置と、最後に end を並べた配列。単独のサロゲート・基底字の無いセレクタがあれば null（1 字ずつ振らない） */
 	static int[] rubyBaseUnits(char[] ch, int begin, int end)
 	{
+		//崩れたルビ（漢《あ｜字》など）では｜で親文字の始まりだけが動き、範囲が逆になる。1 字ずつは振らない
+		if (end < begin) return null;
 		int[] units = new int[end-begin+1];
 		int count = 0;
 		int k = begin;
 		while (k < end) {
 			char c = ch[k];
-			if (Character.isLowSurrogate(c) || (c >= 0xFE00 && c <= 0xFE0F) || c == 0xDB40) return null;
+			//字の頭に、基底字の無いセレクタや下位サロゲートが来たら 1 字ずつは振らない
+			if (Character.isLowSurrogate(c) || (c >= 0xFE00 && c <= 0xFE0F)) return null;
+			if (c == 0xDB40 && k+1 < end && Character.isLowSurrogate(ch[k+1])
+					&& com.github.hmdev.util.JisLevelUtil.isVariationSelector(Character.toCodePoint(c, ch[k+1]))) return null;
 			int next = k+1;
 			if (Character.isHighSurrogate(c)) {
 				if (next >= end || !Character.isLowSurrogate(ch[next])) return null;
@@ -3178,7 +3185,8 @@ public class AozoraEpub3Converter
 			if (next < end && ch[next] >= 0xFE00 && ch[next] <= 0xFE0F) {
 				if (c == '\0') return null;
 				next++;
-			} else if (next+1 < end && ch[next] == 0xDB40 && Character.isLowSurrogate(ch[next+1])) {
+			} else if (next+1 < end && ch[next] == 0xDB40 && Character.isLowSurrogate(ch[next+1])
+					&& com.github.hmdev.util.JisLevelUtil.isVariationSelector(Character.toCodePoint(ch[next], ch[next+1]))) {
 				if (c == '\0') return null;
 				next += 2;
 			}

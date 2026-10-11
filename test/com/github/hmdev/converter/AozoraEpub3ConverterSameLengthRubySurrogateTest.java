@@ -18,9 +18,9 @@ public class AozoraEpub3ConverterSameLengthRubySurrogateTest
 {
 	/** 𠀋 U+2000B */
 	static final String SIP = "𠀋";
-	static final String VS1 = "︀";
+	static final String VS1 = "\uFE00";
 	/** U+E0100 */
-	static final String IVS17 = "󠄀";
+	static final String IVS17 = "\uDB40\uDD00";
 
 	AozoraEpub3Converter converter;
 
@@ -129,5 +129,13 @@ public class AozoraEpub3ConverterSameLengthRubySurrogateTest
 		assertNull(AozoraEpub3Converter.rubyBaseUnits((VS1+"漢").toCharArray(), 0, 2));
 		//範囲の端で割れている対も 1 字ずつ振らない
 		assertNull(AozoraEpub3Converter.rubyBaseUnits(("漢"+SIP).toCharArray(), 0, 2));
+	}
+
+	/** 崩れたルビ（｜で親文字の始まりだけが動き、範囲が逆になる）でも変換は止まらない */
+	@Test
+	public void aReversedRubyRangeDoesNotStopTheConversion() throws Exception
+	{
+		String out = convertLine("漢《あ｜字》");
+		org.junit.Assert.assertTrue(out, out.contains("漢"));
 	}
 }
