@@ -1015,7 +1015,8 @@ public class AozoraEpub3Converter
 			//TODO パターンと目次レベルは設定可能にする 空行指定の場合はpreLines利用
 			if (autoChapter && bookInfo.getChapterLevel(lineNum) == 0) {
 				//文字列から注記と前の空白を除去
-				String noChukiLine = CharUtils.removeSpace(CharUtils.removeTag(noRubyLine));
+				//柱（章の扉ページの作品名）は自動の章の判定に使わない（作品名が「1 …」のような形でも章にしない。監査項目 20）
+				String noChukiLine = CharUtils.removeSpace(CharUtils.removeTag(CharUtils.removeHashira(noRubyLine)));
 				
 				//その他パターン
 				if (this.chapterPattern != null) {
@@ -2153,6 +2154,8 @@ public class AozoraEpub3Converter
 	 * @param line 外字と前方参照注記変換済文字列 */
 	public String convertTitleLineToEpub3(String line) throws IOException
 	{
+		//扉ページの表題・著者にも柱は出さない（OPF の表題と同じく、名前には柱を使わない。監査項目 20）
+		line = CharUtils.removeHashira(line);
 		StringBuilder buf = new StringBuilder();
 		char[] ch = line.toCharArray();
 		int charStart = 0;
@@ -2245,6 +2248,13 @@ public class AozoraEpub3Converter
 		
 		//外字変換後に前方参照注記変換
 		line = this.replaceChukiSufTag(this.convertGaijiChuki(line, true));
+		
+		//柱の印は 1 行の中で対にする。対にならない印は外す（注記の表で div にしているので、残すと XHTML の開閉が崩れる。監査項目 20）
+		//外字の変換の後で見る（前走査と同じ順。前に見ると、※［＃ここで柱終わり］ のように外字の注記に飲まれた閉じを対に数える）
+		String balanced = CharUtils.balanceHashira(line);
+		//表題より前の行は 2 回通ることがある（下見と書き出し）。重なっても、出ないよりはよいので毎回出す
+		if (balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
+		line = balanced;
 		
 		//キャプション指定の画像の場合はすぐにキャプションでなければ画像タグを閉じる
 		if (this.nextLineIsCaption) {

@@ -12,3 +12,11 @@ src: url(res:///ebook/fonts/../../mnt/sdcard/fonts/Dfpaburi.ttc);
 body {
 font-family: "CustomFont", "@ＭＳ 明朝", "@MS Mincho", "ヒラギノ明朝 ProN W3", "HiraMinProN-W3", serif, sans-serif;
 }
+
+/* 柱（もどき）。vertical_font.css と同じ（章の扉ページの作品名をページの隅に小さく出す） */
+.running_head {
+	position: absolute !important;
+	top: 15px;
+	left: 10px;
+	font-size: 0.8em;
+}
