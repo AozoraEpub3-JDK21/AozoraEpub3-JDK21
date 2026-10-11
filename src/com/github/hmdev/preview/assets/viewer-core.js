@@ -202,7 +202,8 @@ function cacheElements()
 		'libraryDownloadToggle', 'libraryDownload', 'libraryDownloadForm', 'libraryDownloadUrl', 'libraryDownloadGo',
 		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
 		'libraryCheckAll',
-		'libraryRankingToggle', 'libraryRanking', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingStatus', 'rankingList'];
+		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
+		'rankingStatus', 'rankingList'];
 	for (const id of ids) el[id] = document.getElementById(id);
 }
 

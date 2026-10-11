@@ -534,7 +534,6 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	padding: 8px 12px 0;
 }
 .library-ranking .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.library-ranking .label { font-weight: bold; }
 .library-ranking select {
 	height: 28px;
 	background: var(--surface-2);

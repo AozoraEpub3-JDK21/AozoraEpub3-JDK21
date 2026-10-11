@@ -1,23 +1,10 @@
 package com.github.hmdev.preview;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.ProxySelector;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.zip.GZIPInputStream;
 
 /**
  * 本棚のランキング（小説家になろう）。internal #11
@@ -31,7 +18,7 @@ import java.util.zip.GZIPInputStream;
  * ここで確かめるのは、配列の形で返ったかだけ。API はエラーも 200 で「Error: …」の本文を返す。</p>
  *
  * <p>API の注意事項は「利用制限は今は無いがキャッシュを入れること・長くても 2 週間で更新」。
- * 同じ問い合わせは {@link #CACHE_TTL} の間は取り直さない。</p>
+ * 同じ問い合わせは {@link RankingFetch#CACHE_TTL} の間は取り直さない。</p>
  */
 final class NarouRanking
 {
@@ -39,30 +26,6 @@ final class NarouRanking
 
 	/** 1 回に出す作品の数（API の上限は 500） */
 	static final int LIMIT = 100;
-
-	/** 同じ問い合わせを取り直さない間 */
-	static final Duration CACHE_TTL = Duration.ofMinutes(10);
-
-	/** 覚えておく問い合わせの数（期間 6 × ジャンル 22 × 2 より少なく、使う組だけ残れば足りる） */
-	static final int CACHE_SIZE = 32;
-
-	/**
-	 * なろうへ同時に出す問い合わせの数。プレビューの HTTP のスレッドは 4 本で、問い合わせの間は 1 本を掴む。
-	 * 2 本を残して、本・仕事の状態・heartbeat が待たないようにする（PR #127 の codex）
-	 */
-	static final int MAX_UPSTREAM = 2;
-
-	/** 同時に出せる数を超えた（覚えている答えも無い） */
-	static final class BusyException extends IOException
-	{
-		BusyException()
-		{
-			super("ランキングの問い合わせが混んでいます。少ししてからもう一度選んでください");
-		}
-	}
-
-	/** 受け取る応答の上限（100 作のあらすじで 200KB ほど） */
-	static final int MAX_BYTES = 4 * 1024 * 1024;
 
 	/** 期間 → 並び順（order）と、点数の項目（of） */
 	private static final Map<String, String[]> PERIODS = Map.of(
@@ -137,31 +100,29 @@ final class NarouRanking
 		}
 	}
 
-	/** API から本文を取るもの（試験では差し替える） */
-	interface Fetcher
+	/** API の名前（文言に出す） */
+	static final String SITE = "なろうの API";
+
+	private final RankingFetch.Fetcher fetcher;
+
+	private final RankingFetch fetch;
+
+	/** @param upstream サイトへ同時に出す数の枠（カクヨムと同じものを渡す） */
+	NarouRanking(java.util.concurrent.Semaphore upstream)
 	{
-		/** gzip を解いた本文。200 以外は IOException */
-		byte[] get(URI uri) throws IOException, InterruptedException;
+		this(uri -> RankingFetch.httpGet(uri, RankingFetch.DEADLINE, SITE, false), upstream);
 	}
 
-	/** 取り直さないで返す応答 */
-	private record Cached(long fetchedNanos, byte[] body) { }
-
-	private final Fetcher fetcher;
-
-	private final java.util.concurrent.Semaphore upstream = new java.util.concurrent.Semaphore(MAX_UPSTREAM);
-
-	/** 古い順に捨てる。同期は自分で取る */
-	private final LinkedHashMap<Query, Cached> cache = new LinkedHashMap<>(16, 0.75f, true);
-
-	NarouRanking()
+	NarouRanking(RankingFetch.Fetcher fetcher)
 	{
-		this(uri -> httpGet(uri, DEADLINE));
+		this(fetcher, RankingFetch.newUpstream());
 	}
 
-	NarouRanking(Fetcher fetcher)
+	/** @param upstream サイトへ同時に出す数の枠（カクヨムと同じものを渡す） */
+	NarouRanking(RankingFetch.Fetcher fetcher, java.util.concurrent.Semaphore upstream)
 	{
 		this.fetcher = fetcher;
+		this.fetch = new RankingFetch(upstream);
 	}
 
 	/**
@@ -176,95 +137,17 @@ final class NarouRanking
 	/** 時刻を渡せる版（試験用） */
 	byte[] fetch(Query query, long nowNanos) throws IOException, InterruptedException
 	{
-		synchronized (this.cache) {
-			Cached hit = this.cache.get(query);
-			if (hit != null && nowNanos - hit.fetchedNanos < CACHE_TTL.toNanos()) return hit.body;
-		}
-		//覚えている答えは混んでいても返す。取りに行くのだけを数で抑える
-		if (!this.upstream.tryAcquire()) throw new BusyException();
-		byte[] body;
-		try {
-			body = this.fetcher.get(query.uri());
-		} finally {
-			this.upstream.release();
-		}
+		return this.fetch.fetch(query, query.uri(), this.fetcher, NarouRanking::checkList, nowNanos);
+	}
+
+	/** 配列の形で返ったかだけを見る。API はエラーも 200 で「Error: …」の本文を返す */
+	static byte[] checkList(byte[] body) throws IOException
+	{
 		String head = new String(body, 0, Math.min(body.length, 200), StandardCharsets.UTF_8).strip();
 		if (!head.startsWith("[")) {
 			//「Error: …」のような本文。そのまま伝える（直すのはこちらの問い合わせの組み立て）
 			throw new IOException("なろうの API が一覧を返しませんでした: " + head);
 		}
-		synchronized (this.cache) {
-			this.cache.put(query, new Cached(nowNanos, body));
-			while (this.cache.size() > CACHE_SIZE) {
-				this.cache.remove(this.cache.keySet().iterator().next());
-			}
-		}
 		return body;
-	}
-
-	/** 頼んでから本文を受け取り終えるまでの上限 */
-	static final Duration DEADLINE = Duration.ofSeconds(30);
-
-	/** 本文まで受け取る。deadline は試験で短くする */
-	static byte[] httpGet(URI uri, Duration deadline) throws IOException, InterruptedException
-	{
-		HttpClient client = HttpClient.newBuilder()
-			.connectTimeout(Duration.ofSeconds(10))
-			.followRedirects(HttpClient.Redirect.NORMAL)
-			//既定ではプロキシを見ない。-Dhttp.proxyHost 等が効くように渡す
-			.proxy(ProxySelector.getDefault())
-			.build();
-		try {
-			HttpRequest request = HttpRequest.newBuilder(uri)
-				.header("User-Agent", "AozoraEpub3")
-				.timeout(deadline)
-				.GET()
-				.build();
-			//request の timeout は見出しが届くまでしか効かない。本文の途中で止まると、
-			//プレビューの 4 本しかないスレッドを掴んだままになる（PR #127 の codex P2）。
-			//本文を受け取り終えるまでを 1 つの期限で囲む
-			//長さを名乗る応答は、上限を超えていたら本文を読まずにその場で断る（ofByteArray は全部を溜めてから返す）。
-			//長さを名乗らない応答は、期限までしか受け取らない
-			HttpResponse.BodyHandler<byte[]> handler = info -> {
-				long length = info.headers().firstValueAsLong("Content-Length").orElse(-1L);
-				if (length > MAX_BYTES) throw new java.io.UncheckedIOException(new IOException("なろうの API の応答が大きすぎます"));
-				return HttpResponse.BodySubscribers.ofByteArray();
-			};
-			CompletableFuture<HttpResponse<byte[]>> pending = client.sendAsync(request, handler);
-			HttpResponse<byte[]> response;
-			try {
-				response = pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
-			} catch (TimeoutException e) {
-				pending.cancel(true);
-				throw new IOException("なろうの API が " + deadline.toSeconds() + " 秒で応えませんでした");
-			} catch (ExecutionException e) {
-				//つながらないときの ConnectException は文言が null のことがある。画面に「null」と出さない
-				Throwable cause = e.getCause();
-				if (cause instanceof java.io.UncheckedIOException unchecked) throw unchecked.getCause();
-				String why = (cause != null && cause.getMessage() != null) ? cause.getMessage()
-					: (cause != null ? cause.getClass().getSimpleName() : "不明");
-				throw new IOException("なろうの API につながりません (" + why + ")", cause);
-			}
-			if (response.statusCode() != 200) {
-				throw new IOException("なろうの API が HTTP " + response.statusCode() + " を返しました");
-			}
-			byte[] raw = response.body();
-			if (raw.length > MAX_BYTES) throw new IOException("なろうの API の応答が大きすぎます");
-			return gunzip(raw);
-		} finally {
-			//close() は走っている要求の終わりを待つので、期限切れのときに止まってしまう。待たずに閉じる
-			client.shutdownNow();
-		}
-	}
-
-	/** gzip なら解く（gzip=5 で頼むと gzip のファイルが返る）。gzip でなければそのまま */
-	static byte[] gunzip(byte[] raw) throws IOException
-	{
-		if (raw.length < 2 || (raw[0] & 0xff) != 0x1f || (raw[1] & 0xff) != 0x8b) return raw;
-		try (InputStream in = new GZIPInputStream(new ByteArrayInputStream(raw))) {
-			byte[] body = in.readNBytes(MAX_BYTES + 1);
-			if (body.length > MAX_BYTES) throw new IOException("なろうの API の応答が大きすぎます");
-			return body;
-		}
 	}
 }
