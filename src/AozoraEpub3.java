@@ -364,24 +364,32 @@ public class AozoraEpub3
 				if("zip".equals(ext) || "txtz".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countZipText(srcFile);
-					} catch (Exception e) {
+					} catch (IOException e) {
 						logger.warn("ZIP 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					}
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if("rar".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countRarText(srcFile);
-					} catch (Exception e) {
-						//junrar の RarException（壊れた書庫・RAR5）は IOException ではない。受けないと一括全体が止まる
+					} catch (IOException e) {
 						logger.warn("RAR 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
+					} catch (Exception e) {
+						//junrar の RarException（壊れた書庫・RAR5）は IOException ではない。画像のみに倒すと同じ書庫を読み直して
+						//同じ失敗をくり返すので、ここでその本を飛ばす（受けないと一括全体が止まる）
+						logger.error("RAR を読み込めませんでした: {}", srcFile, e);
+						LogAppender.error("書庫が読み込めませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+						LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+						errorCount++;
+						ArchiveTextExtractor.clearCache(srcFile);
+						continue;
 					}
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if ("cbz".equals(ext)) {
 					imageOnly = true;
 				}
-				//1 冊ぶんの処理で何が投げても、その本だけ失敗として数えて次の本へ進む（internal #31。個々の受け口で拾い損ねた例外も一括を止めない）
-				try {
-					for (int txtIdx=0; txtIdx<txtCount; txtIdx++) {
+				for (int txtIdx=0; txtIdx<txtCount; txtIdx++) {
+					//1 冊ぶんの処理で何が投げても、その本（書庫ならその中の 1 冊）だけ失敗として数えて次へ進む（internal #31。個々の受け口で拾い損ねた例外も一括を止めない）
+					try {
 						//表紙は -c の値から本ごとに決める。前の本の決定（「1」の同名画像・相対名に足したフォルダ・
 						//MaxCoverLine で外した表紙）を持ち越さない（GUI の convertFile と同じく変換ごと。internal #32）
 						int coverImageIndex = -1;
@@ -515,13 +523,13 @@ public class AozoraEpub3
 								srcFile, ext, outFile,
 								aozoraConverter, writer,
 								encType, bookInfo, imageInfoReader, txtIdx)) errorCount++;
+					} catch (Exception e) {
+						logger.error("変換に失敗: {}", srcFile, e);
+						LogAppender.error("変換できませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+						LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+						errorCount++;
+						if (!isFile) ArchiveTextExtractor.clearCache(srcFile);
 					}
-				} catch (Exception e) {
-					logger.error("変換に失敗: {}", srcFile, e);
-					LogAppender.error("変換できませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
-					LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
-					errorCount++;
-					if (!isFile) ArchiveTextExtractor.clearCache(srcFile);
 				}
 			}
 			//変換後のプレビュー
