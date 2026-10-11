@@ -323,10 +323,63 @@ public class CharUtils
 		return false;
 	}
 
-	/** 内部エスケープの印を外す（文字は残す） */
+	/**
+	 * 外字から出た［ ］の代わりに置く文字（監査項目 36）。注記の解析は ［＃…］ を正規表現で探すので、
+	 * 印（{@link #ESCAPE}）を前に置いても ［＃ の並びは崩れず、外字の［が注記を開いてしまう。
+	 * 1 字を 1 字に置き換えるので、字数の数え方に例外は要らない。文字の出力（convertReplacedChar）と {@link #removeEscape} で［］に戻す。
+	 * U+FDD0・U+FDD1 は Unicode の非文字（永久に文字を割り当てない、内部で使ってよい値）
+	 */
+	public static final char GAIJI_OPEN_BRACKET = '\uFDD0';
+	/** 外字から出た］の代わり（{@link #GAIJI_OPEN_BRACKET}） */
+	public static final char GAIJI_CLOSE_BRACKET = '\uFDD1';
+
+	/** 内部の文字（印・外字の［］の代わり）を含むなら true */
+	static private boolean hasInternalChars(String text)
+	{
+		for (int i=0; i<text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == ESCAPE || c == GAIJI_OPEN_BRACKET || c == GAIJI_CLOSE_BRACKET) return true;
+		}
+		return false;
+	}
+
+	/** 内部エスケープの印を外し、外字の［］の代わりの文字を［］に戻す（名前・ログなど、出力に向ける文字列） */
 	static public String removeEscape(String text)
 	{
-		return text.indexOf(ESCAPE) < 0 ? text : text.replace(String.valueOf(ESCAPE), "");
+		if (!hasInternalChars(text)) return text;
+		StringBuilder buf = new StringBuilder(text.length());
+		for (int i=0; i<text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == ESCAPE) continue;
+			buf.append(c == GAIJI_OPEN_BRACKET ? '［' : c == GAIJI_CLOSE_BRACKET ? '］' : c);
+		}
+		return buf.toString();
+	}
+
+	/** 本文に紛れた内部の文字（印・外字の［］の代わり）を落とす。残すと印や括弧として読まれる */
+	static public String stripInternalChars(String text)
+	{
+		if (!hasInternalChars(text)) return text;
+		StringBuilder buf = new StringBuilder(text.length());
+		for (int i=0; i<text.length(); i++) {
+			char c = text.charAt(i);
+			if (c != ESCAPE && c != GAIJI_OPEN_BRACKET && c != GAIJI_CLOSE_BRACKET) buf.append(c);
+		}
+		return buf.toString();
+	}
+
+	/** 出力の直前で、外字の［］の代わりの文字をその場で［］に戻す */
+	static public void restoreGaijiBracket(char[] ch, int idx)
+	{
+		if (ch[idx] == GAIJI_OPEN_BRACKET) ch[idx] = '［';
+		else if (ch[idx] == GAIJI_CLOSE_BRACKET) ch[idx] = '］';
+	}
+
+	/** getChapterName を通した名前に、連続する記号を 1 つにまとめて長さを切る（注記の除去はしない。もう一度 getChapterName を通すと、外字の［］に戻した ［＃…］ が消える） */
+	static public String truncateName(String name, int maxLength)
+	{
+		if (name == null) return null;
+		return cutName(reduceSymbols(name), maxLength);
 	}
 
 	/** 前に内部エスケープの印（{@link #ESCAPE}）を付ける特殊文字ならtrue
@@ -366,12 +419,24 @@ public class CharUtils
 		//内部エスケープの印は注記を外した後で外す（先に外すと ［※［＃井げた］…］ が注記に見える）
 		String name = removeEscape(line.replaceAll("［＃.+?］", ""))//注記除去
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
-		if (reduce) name = name.replaceAll("(=|＝|-|―|─)+", "$1");//連続する記号は1つに
+		if (reduce) name = reduceSymbols(name);//連続する記号は1つに
 		//タグはimgとaを削除
 		name = chapterTagOpenPattern.matcher(name).replaceAll("");
 		name = chapterTagClosePattern.matcher(name).replaceAll("");
 		
-		if (maxLength == 0) return name;
+		return cutName(name, maxLength);
+	}
+
+	/** 連続する記号は1つに（getChapterName の reduce） */
+	static public String reduceSymbols(String name)
+	{
+		return name.replaceAll("(=|＝|-|―|─)+", "$1");
+	}
+
+	/** maxLength より長い名前は短くして...をつける。0 なら切らない（getChapterName の最後） */
+	static public String cutName(String name, int maxLength)
+	{
+		if (name == null || maxLength == 0) return name;
 		return name.length()>maxLength ? name.substring(0, maxLength)+"..." : name;
 	}
 	/** imgとaタグ除去用のパターン */
