@@ -275,23 +275,29 @@ public class CharUtils
 		return text.replaceAll("［＃.+?］", "").replaceAll("<[^>]+>", "");
 	}
 	
-	/** ルビを除去 特殊文字のエスケープ文字 ※※ ※《 ※》 等が含まれる */
+	/** ルビを除去 内部エスケープ（{@link #ESCAPE} + 特殊文字）は印ごと残す
+	 * （印を外すと ［※［＃井げた］文字］ が ［＃文字］ になり、後の注記の除去で消える。印は getChapterName が注記を外した後に外す） */
 	static public String removeRuby(String text)
 	{
 		StringBuilder buf = new StringBuilder();
 		char[] ch = text.toCharArray();
 		boolean inRuby = false;
 		for (int i=0; i<ch.length; i++) {
+			if (ch[i] == ESCAPE) {
+				//印の次の 1 文字は文字そのもの（ルビの読みの中なら読みと一緒に捨てる）
+				if (i+1 < ch.length && !inRuby) buf.append(ch[i]).append(ch[i+1]);
+				i++;
+				continue;
+			}
+			//エスケープ済みの文字は上の印の分岐で読み終えているので、ここに来る ｜《》 は記号
 			if (inRuby) {
-				if (ch[i] == '》' && !CharUtils.isEscapedChar(ch, i)) inRuby = false;
+				if (ch[i] == '》') inRuby = false;
 			} else {
 				switch (ch[i]) {
 				case '｜':
-					if (CharUtils.isEscapedChar(ch, i)) buf.append(ch[i]); 
 					break;
 				case '《':
-					if (CharUtils.isEscapedChar(ch, i)) buf.append(ch[i]);
-					else inRuby = true;
+					inRuby = true;
 					break;
 				default:
 					if (!inRuby) buf.append(ch[i]);
@@ -301,9 +307,30 @@ public class CharUtils
 		return buf.toString();
 	}
 	
-	/** 前に※を付けてエスケープする特殊文字ならtrue
-	 * 外字注記変換で付ける側と convertReplacedChar で外す側はこれを使う。
-	 * getChapterName の正規表現と removeRuby は別に持っている（項目 32 の内部エスケープ分離で置き換える予定） */
+	/**
+	 * 内部エスケープの印（監査項目 32）。外字注記などから出た特殊文字（{@link #isEscapableChar}）の前に付け、
+	 * 「次の 1 文字は文字そのもの（ルビ・注記の記号ではない）」を表す。文字の出力（convertReplacedChar）で捨てる。
+	 * 以前は ※ を付けて ※ の個数の偶奇で判定していたので、本文に書かれた ※ が混ざると偶奇がずれ、
+	 * 《 以降が行末まで消えた（upstream kyukyunyorituryo/AozoraEpub3#34。あちらも \u0001 に分けた）。
+	 * 本文にこの文字があれば、外字注記の変換（convertGaijiChuki）の入口で落とす
+	 */
+	public static final char ESCAPE = '\u0001';
+
+	/** begin から end の手前までに内部エスケープの印があれば true */
+	static public boolean hasEscape(char[] ch, int begin, int end)
+	{
+		for (int i=Math.max(begin, 0); i<end && i<ch.length; i++) if (ch[i] == ESCAPE) return true;
+		return false;
+	}
+
+	/** 内部エスケープの印を外す（文字は残す） */
+	static public String removeEscape(String text)
+	{
+		return text.indexOf(ESCAPE) < 0 ? text : text.replace(String.valueOf(ESCAPE), "");
+	}
+
+	/** 前に内部エスケープの印（{@link #ESCAPE}）を付ける特殊文字ならtrue
+	 * 外字注記変換で付ける側と convertReplacedChar で外す側はこれを使う */
 	static public boolean isEscapableChar(char c)
 	{
 		switch (c) {
@@ -313,25 +340,15 @@ public class CharUtils
 		return false;
 	}
 	
-	/** 文字がエスケープされた特殊文字ならtrue */
+	/** 文字がエスケープされた特殊文字（直前が {@link #ESCAPE}）ならtrue。※ の個数は数えない */
 	static public boolean isEscapedChar(char[] ch, int idx)
 	{
-		boolean escaped = false;
-		for (int i=idx-1; i >= 0; i--) {
-			if (ch[i] == '※') escaped = !escaped;
-			else return escaped;
-		}
-		return escaped;
+		return idx > 0 && ch[idx-1] == ESCAPE;
 	}
-	/** 文字がエスケープされた特殊文字ならtrue */
+	/** 文字がエスケープされた特殊文字（直前が {@link #ESCAPE}）ならtrue。※ の個数は数えない */
 	static public boolean isEscapedChar(StringBuilder ch, int idx)
 	{
-		boolean escaped = false;
-		for (int i=idx-1; i >= 0; i--) {
-			if (ch.charAt(i) == '※') escaped = !escaped;
-			else return escaped;
-		}
-		return escaped;
+		return idx > 0 && ch.charAt(idx-1) == ESCAPE;
 	}
 	
 	
@@ -341,13 +358,13 @@ public class CharUtils
 		return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 	}
 	
-	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は'※'エスケープ
+	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は内部エスケープ（{@link #ESCAPE}）
 	 * @param maxLength 文字制限 これより大きい文字は短くして...をつける
 	 * @prram 記号文字を短縮する */
 	static public String getChapterName(String line, int maxLength, boolean reduce)
 	{
-		String name = line.replaceAll("［＃.+?］", "")//注記除去
-				.replaceAll("※(※|《|》|［|］|〔|〕|〔|〕|〔|〕|｜|＃)", "$1") //エスケープ文字から※除外
+		//内部エスケープの印は注記を外した後で外す（先に外すと ［※［＃井げた］…］ が注記に見える）
+		String name = removeEscape(line.replaceAll("［＃.+?］", ""))//注記除去
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
 		if (reduce) name = name.replaceAll("(=|＝|-|―|─)+", "$1");//連続する記号は1つに
 		//タグはimgとaを削除

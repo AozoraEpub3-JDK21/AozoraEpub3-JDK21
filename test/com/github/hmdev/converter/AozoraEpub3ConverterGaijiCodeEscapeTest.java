@@ -41,13 +41,13 @@ public class AozoraEpub3ConverterGaijiCodeEscapeTest
 	@Test
 	public void コードのみの注記も特殊文字をエスケープする() throws Exception
 	{
-		assertEquals("※※", converter.convertGaijiChuki("※［＃U+203B］", true, true));
-		assertEquals("※《", converter.convertGaijiChuki("※［＃U+300A］", true, true));
-		assertEquals("※》", converter.convertGaijiChuki("※［＃u+300b］", true, true));
-		assertEquals("※｜", converter.convertGaijiChuki("※［＃U+FF5C］", true, true));
-		assertEquals("※＃", converter.convertGaijiChuki("※［＃U+FF03］", true, true));
+		assertEquals("\u0001※", converter.convertGaijiChuki("※［＃U+203B］", true, true));
+		assertEquals("\u0001《", converter.convertGaijiChuki("※［＃U+300A］", true, true));
+		assertEquals("\u0001》", converter.convertGaijiChuki("※［＃u+300b］", true, true));
+		assertEquals("\u0001｜", converter.convertGaijiChuki("※［＃U+FF5C］", true, true));
+		assertEquals("\u0001＃", converter.convertGaijiChuki("※［＃U+FF03］", true, true));
 		// 名前付きの注記は元から付いていた（対照）
-		assertEquals("※《", converter.convertGaijiChuki("※［＃始め二重山括弧、U+300A］", true, true));
+		assertEquals("\u0001《", converter.convertGaijiChuki("※［＃始め二重山括弧、U+300A］", true, true));
 		// 特殊文字でなければ付けない
 		assertEquals("葛", converter.convertGaijiChuki("※［＃U+845b］", true, true));
 		// escape=false なら今までどおり付けない
@@ -58,8 +58,8 @@ public class AozoraEpub3ConverterGaijiCodeEscapeTest
 	public void 異体字セレクタ付きでも先頭の特殊文字をエスケープする() throws Exception
 	{
 		// 2文字以上になるので、1文字のときだけ付ける判定をすり抜けていた
-		assertEquals("※《\uFE00", converter.convertGaijiChuki("※［＃U+300A-FE00］", true, true));
-		assertEquals("※｜\uFE00", converter.convertGaijiChuki("※［＃U+FF5C-FE00］", true, true));
+		assertEquals("\u0001《\uFE00", converter.convertGaijiChuki("※［＃U+300A-FE00］", true, true));
+		assertEquals("\u0001｜\uFE00", converter.convertGaijiChuki("※［＃U+FF5C-FE00］", true, true));
 		assertEquals("<p>漢字《\uFE00かんじ》\uFE00の後</p>",
 			convertLine("漢字※［＃U+300A-FE00］かんじ※［＃U+300B-FE00］の後"));
 	}
@@ -68,10 +68,10 @@ public class AozoraEpub3ConverterGaijiCodeEscapeTest
 	public void 二文字の外字は両方の特殊文字をエスケープする() throws Exception
 	{
 		// U+XXXX-U+YYYY は2文字になる。2文字目の｜》が裸で残るとルビの判定がずれる
-		assertEquals("葛※｜", converter.convertGaijiChuki("※［＃U+845B-U+FF5C］", true, true));
-		assertEquals("※《※》", converter.convertGaijiChuki("※［＃U+300A-U+300B］", true, true));
+		assertEquals("葛\u0001｜", converter.convertGaijiChuki("※［＃U+845B-U+FF5C］", true, true));
+		assertEquals("\u0001《\u0001》", converter.convertGaijiChuki("※［＃U+300A-U+300B］", true, true));
 		// 名前付きの注記でも、コードから得た2文字は同じ
-		assertEquals("葛※｜", converter.convertGaijiChuki("※［＃「葛と縦線」、U+845B-U+FF5C］", true, true));
+		assertEquals("葛\u0001｜", converter.convertGaijiChuki("※［＃「葛と縦線」、U+845B-U+FF5C］", true, true));
 		assertEquals("<p>葛葛｜<ruby>漢字<rt>かんじ</rt></ruby></p>",
 			convertLine("葛※［＃U+845B-U+FF5C］漢字《かんじ》"));
 	}
