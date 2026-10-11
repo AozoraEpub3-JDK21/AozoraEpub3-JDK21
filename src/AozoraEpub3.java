@@ -364,15 +364,16 @@ public class AozoraEpub3
 				if("zip".equals(ext) || "txtz".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countZipText(srcFile);
+						//書庫の中で読めずに飛ばしたテキストは、その本の失敗として数える（終了コードに残す。internal #36）
+						errorCount += ArchiveTextExtractor.reportSkippedTexts(srcFile, "zip");
 					} catch (IOException e) {
 						logger.warn("ZIP 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					}
-					//書庫の中で読めずに飛ばしたテキストは、その本の失敗として数える（終了コードに残す。internal #36）
-					errorCount += ArchiveTextExtractor.countSkippedTexts(srcFile, "zip");
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if("rar".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countRarText(srcFile);
+						errorCount += ArchiveTextExtractor.reportSkippedTexts(srcFile, "rar");
 					} catch (IOException e) {
 						logger.warn("RAR 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					} catch (Exception e) {
@@ -385,7 +386,6 @@ public class AozoraEpub3
 						ArchiveTextExtractor.clearCache(srcFile);
 						continue;
 					}
-					errorCount += ArchiveTextExtractor.countSkippedTexts(srcFile, "rar");
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if ("cbz".equals(ext)) {
 					imageOnly = true;

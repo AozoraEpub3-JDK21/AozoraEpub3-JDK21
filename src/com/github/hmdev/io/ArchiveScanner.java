@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 
-import com.github.hmdev.util.LogAppender;
 import com.github.junrar.Archive;
 import com.github.junrar.exception.RarException;
 import com.github.junrar.rarfile.FileHeader;
@@ -63,19 +62,16 @@ final class ArchiveScanner {
 					tmpPath.toFile().deleteOnExit();
 					//1 つのテキストが読めなくても、その 1 つだけ飛ばす（zip と同じ。internal #36）
 					try {
-						try (OutputStream fos = Files.newOutputStream(tmpPath);
-						     InputStream is = archive.getInputStream(fileHeader)) {
-							byte[] buf = new byte[8192];
-							int len;
-							while ((len = is.read(buf)) > 0) {
-								fos.write(buf, 0, len);
-							}
+						//getInputStream は展開の失敗（RarException）を別のスレッドで握りつぶし、途中で切れた本文を返す。
+						//extractFile は投げるので、壊れたテキストを飛ばせる
+						try (OutputStream fos = Files.newOutputStream(tmpPath)) {
+							archive.extractFile(fileHeader, fos);
 						}
 						try (InputStream fis = Files.newInputStream(tmpPath)) {
 							byte[] content = ArchiveCache.readFully(fis);
 							textEntries.add(new ArchiveCache.TextEntry(entryName, content));
 						}
-					} catch (IOException | RuntimeException e) {
+					} catch (IOException | RarException | RuntimeException e) {
 						skipText(skippedTexts, entryName, e);
 					} finally {
 						Files.deleteIfExists(tmpPath);

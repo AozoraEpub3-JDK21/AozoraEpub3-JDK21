@@ -30,9 +30,7 @@ import java.util.zip.CRC32;
 
 import javax.swing.JProgressBar;
 
-import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.Template;

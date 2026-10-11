@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.github.hmdev.image.ImageInfoReader;
@@ -28,7 +29,7 @@ public final class ArchiveTextExtractor {
 		String key = srcFile.getAbsolutePath();
 		ArchiveCache cache = cacheMap.get(key);
 		if (cache == null) {
-			cache = new ArchiveCache(srcFile, ext, true);
+			cache = new ArchiveCache(srcFile, ext);
 			cacheMap.put(key, cache);
 		}
 		return cache;
@@ -72,10 +73,18 @@ public final class ArchiveTextExtractor {
 		return null;
 	}
 
-	/** 読めずに飛ばしたテキストの数（zip/txtz/rar。internal #36）。数えた後に呼ぶ */
-	public static int countSkippedTexts(File srcFile, String ext) {
+	/**
+	 * 数えたときに読めずに飛ばしたテキストの数（zip/txtz/rar。internal #36）。
+	 * 利用者に見えるログにも出す。本ごとに控えを捨てて読み直すので、ログは数えるこの 1 回だけ（読み直しでは出さない）。
+	 * countZipText / countRarText が通った後に呼ぶ（数え損ねた書庫を読み直さない）
+	 */
+	public static int reportSkippedTexts(File srcFile, String ext) {
 		try {
-			return getCache(srcFile, ext).getSkippedTextCount();
+			List<String> skipped = getCache(srcFile, ext).getSkippedTexts();
+			for (String s : skipped) {
+				LogAppender.println("[WARN] 書庫の中のテキストが読めないので飛ばします : " + s + " (" + srcFile.getName() + ")");
+			}
+			return skipped.size();
 		} catch (IOException | RarException e) {
 			return 0;
 		}

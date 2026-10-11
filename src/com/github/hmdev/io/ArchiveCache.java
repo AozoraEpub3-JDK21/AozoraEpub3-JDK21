@@ -1,6 +1,5 @@
 package com.github.hmdev.io;
 
-import com.github.hmdev.util.LogAppender;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -28,17 +27,9 @@ public class ArchiveCache {
 	/** 読めずに飛ばしたテキストの「名前 (理由)」（internal #36） */
 	private List<String> skippedTexts;
 	private boolean scanned = false;
-	/** 飛ばしたテキストを利用者に見えるログに出す（本文を読む ArchiveTextExtractor の控えだけ。画像の一覧を作るだけの控えは出さない） */
-	private final boolean logSkipped;
-
 	public ArchiveCache(File archiveFile, String ext) {
-		this(archiveFile, ext, false);
-	}
-
-	public ArchiveCache(File archiveFile, String ext, boolean logSkipped) {
 		this.archivePath = archiveFile.toPath();
 		this.ext = ext;
-		this.logSkipped = logSkipped;
 	}
 
 	public synchronized void scan() throws IOException, RarException {
@@ -52,11 +43,6 @@ public class ArchiveCache {
 			ArchiveScanner.scanZip(archivePath, textEntries, imageEntries, skippedTexts);
 		} else if ("rar".equals(ext)) {
 			ArchiveScanner.scanRar(archivePath, textEntries, imageEntries, skippedTexts);
-		}
-		if (logSkipped) {
-			for (String skipped : skippedTexts) {
-				LogAppender.println("[WARN] 書庫の中のテキストが読めないので飛ばします : " + skipped + " (" + archivePath.getFileName() + ")");
-			}
 		}
 		
 		textFileCount = textEntries.size();
@@ -88,10 +74,10 @@ public class ArchiveCache {
 		return new ArrayList<>(imageEntries);
 	}
 	
-	/** 読めずに飛ばしたテキストの数 */
-	public int getSkippedTextCount() throws IOException, RarException {
+	/** 読めずに飛ばしたテキストの「名前 (理由)」 */
+	public List<String> getSkippedTexts() throws IOException, RarException {
 		if (!scanned) scan();
-		return skippedTexts.size();
+		return new ArrayList<>(skippedTexts);
 	}
 
 	public String getTextEntryName(int txtIdx) throws IOException, RarException {

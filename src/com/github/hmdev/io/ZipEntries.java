@@ -55,7 +55,8 @@ public final class ZipEntries
 		}
 	}
 
-	/** 前からの読み方（先頭から順に） */
+	/** 前からの読み方（先頭から順に）。この読み方では、壊れた項目を飛ばしても次の項目へ進むときに同じ失敗が出るので、
+	 * 壊れたテキストの後ろは読めない（目次が壊れた zip だけの、前と同じ振る舞い） */
 	private static void forEachInStream(Path zipPath, boolean useUnicodeExtraFields, Visitor visitor) throws IOException
 	{
 		try (ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(Files.newInputStream(zipPath), 65536), "MS932", useUnicodeExtraFields)) {

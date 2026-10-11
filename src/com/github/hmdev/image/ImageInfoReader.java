@@ -9,13 +9,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 
-import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -293,18 +291,16 @@ public class ImageInfoReader
 		LogAppender.println();
 	}
 
-	/** readZipImage で名前の合う項目が在ったか（在って読めなければ、拡張子を直して探し直さない。前と同じ） */
-	private boolean zipImageFound;
-
-	/** zip の中の画像を、名前（大文字小文字を見ない）で探して読む。読めなければ null（ログに出す） */
-	private BufferedImage readZipImage(String srcImageFileName, String failMessage) throws IOException
+	/** zip の中の画像を、名前（大文字小文字を見ない）で探して読む。読めなければ null（ログに出す）
+	 * @param found 名前の合う項目が在れば found[0] を true にする（在って読めなければ、拡張子を直して探し直さない。前と同じ） */
+	private BufferedImage readZipImage(String srcImageFileName, String failMessage, boolean[] found) throws IOException
 	{
-		this.zipImageFound = false;
+		found[0] = false;
 		final BufferedImage[] image = new BufferedImage[1];
 		//前は ZipArchiveInputStream(fis, "MS932")＝useUnicodeExtraFields は既定の true
 		com.github.hmdev.io.ZipEntries.forEach(this.srcPath, true, (name, opener) -> {
 			if (!name.equalsIgnoreCase(srcImageFileName)) return true;
-			this.zipImageFound = true;
+			found[0] = true;
 			try (InputStream is = opener.open()) {
 				image[0] = ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), is);
 			} catch (Exception e) {
@@ -447,10 +443,13 @@ public class ImageInfoReader
 
 			} else {
 				//目次から開く（ほかの項目は展開しない。internal #36）。名前の大文字小文字は見ない（前と同じ）
-				BufferedImage image = readZipImage(srcImageFileName, "ZIP 内画像の読み込みに失敗: {}");
-				if (image != null || this.zipImageFound) return image;
-				// 拡張子が異なる場合は正しい拡張子を探す
-				return readZipImage(this.correctExt(srcImageFileName), "ZIP 内画像の読み込みに失敗（拡張子訂正後）: {}");
+				boolean[] found = new boolean[1];
+				BufferedImage image = readZipImage(srcImageFileName, "ZIP 内画像の読み込みに失敗: {}", found);
+				if (image != null || found[0]) return image;
+				// 拡張子が異なる場合は正しい拡張子を探す（見つからなければ探しに行かない）
+				String corrected = this.correctExt(srcImageFileName);
+				if (corrected == null) return null;
+				return readZipImage(corrected, "ZIP 内画像の読み込みに失敗（拡張子訂正後）: {}", found);
 			}
 		}
 		return null;

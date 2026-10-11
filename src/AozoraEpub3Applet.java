@@ -4103,6 +4103,8 @@ public class AozoraEpub3Applet extends JPanel
 		if("zip".equals(ext) || "txtz".equals(ext)) { 
 			try {
 				txtCount = ArchiveTextExtractor.countZipText(srcFile);
+				//書庫の中で読めずに飛ばしたテキストをログに出す（internal #36）
+				ArchiveTextExtractor.reportSkippedTexts(srcFile, "zip");
 			} catch (Exception e) {
 				logger.warn("ZIP 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 			}
@@ -4110,6 +4112,8 @@ public class AozoraEpub3Applet extends JPanel
 		} else if ("rar".equals(ext)) {
 			try {
 				txtCount = ArchiveTextExtractor.countRarText(srcFile);
+				//書庫の中で読めずに飛ばしたテキストをログに出す（internal #36）
+				ArchiveTextExtractor.reportSkippedTexts(srcFile, "rar");
 			} catch (Exception e) {
 				logger.warn("RAR 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 			}
