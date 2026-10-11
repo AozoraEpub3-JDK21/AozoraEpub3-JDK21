@@ -85,8 +85,8 @@ public class WebAozoraConverterTocPageDatesTest {
 	private WebAozoraConverter siteConverterFor(String base) throws IOException {
 		String fqdn = base.substring(base.indexOf("//") + 2);
 		File web = tempFolder.newFolder("web");
-		File siteDir = new File(web, fqdn);
-		//Windows はフォルダ名に : を使えない
+		//サイト定義はホスト名で探す（ポート番号は見ない。internal #29）ので、Windows でも置ける名前で作る
+		File siteDir = new File(web, fqdn.substring(0, fqdn.lastIndexOf(':')));
 		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
 		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
 			"TITLE\th1:0",
