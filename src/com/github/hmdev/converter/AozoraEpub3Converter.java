@@ -1357,7 +1357,7 @@ public class AozoraEpub3Converter
 		boolean noImage = false;
 		
 		//表題をバッファ処理
-		if ((this.bookInfo.titlePageType == BookInfo.TITLE_NONE || this.bookInfo.titlePageType == BookInfo.TITLE_MIDDLE || this.bookInfo.titlePageType == BookInfo.TITLE_HORIZONTAL)) {
+		if (this.bookInfo.titleBlockLeavesBody()) {
 			//ページ出力設定
 			bookInfo.insertTitlePage = true;
 			//開始位置がタグの中なら次の行へ

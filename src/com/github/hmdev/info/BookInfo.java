@@ -119,6 +119,13 @@ public class BookInfo
 	
 	/** タイトル行の最後 */
 	public int titleEndLine = -1;
+
+	/** 表題の塊の後に空行が無く、すぐ続いた行（本文の先頭が表題の塊に飲まれている印）。無ければ -1（監査 35） */
+	public int titleBlockRunOnLine = -1;
+
+	/** 表題の塊に飲まれた本文を残す方法。警告に添える（監査 35） */
+	public final static String TITLE_BLOCK_ADVICE = "本文に残すには、表題・著者の行の後に空行を 1 行入れてください"
+		+"（表題と著者が 1 行ずつで表題が先なら、画面の「表題: 本文内」を「表題+著者のみ(2行)」に、CLI では -t 4 にしてもよい）";
 	
 	/** コメント先頭行 */
 	int firstCommentLineNum = -1;
@@ -587,6 +594,9 @@ public class BookInfo
 		this.creator = "";
 		this.creatorAs = null;
 		this.publisher = null;
+		//読み直し（JConfirmDialog → reloadMetadata）で表題を読まなくなったとき、前の塊の終わりが残ると、その行まで本文から落ちる
+		this.titleEndLine = -1;
+		this.titleBlockRunOnLine = -1;
 		
 		if (titleType != TitleType.NONE) {
 			
@@ -792,6 +802,13 @@ public class BookInfo
 					}
 					break;
 				}
+				//空行までを表題の塊として読むので、表題の後に空行が無いと本文の先頭が表題ページに回って本文から消える。
+				//塊の後にまだ行が続いていれば、空行が無かったことは確か（読み方は変えずに知らせるだけ。監査 35）
+				//linesLength が 0（10 行以上続いた）なら表題を読んでいない（titleEndLine は -1）。本文も消えていない
+				//linesLength と metaLineStart はここでは発行者の行を除いた数え方
+				if (linesLength > 0 && linesLength > titleEndLine - metaLineStart + 1) {
+					this.titleBlockRunOnLine = titleEndLine + 1;
+				}
 			}
 			
 			if (this.creator != null && (this.creator.startsWith("―") || this.creator.startsWith("【"))) this.creator = null;
@@ -802,6 +819,19 @@ public class BookInfo
 			if (this.creator != null) this.creator = CharUtils.getChapterName(CharUtils.removeRuby(this.creator), 0);
 		}
 	}
+	/** 表題の塊を本文に出さない表題ページの設定か（AozoraEpub3Converter#convertTextToEpub3 が塊を本文から外す条件） */
+	public boolean titleBlockLeavesBody()
+	{
+		return this.titlePageType == TITLE_NONE || this.titlePageType == TITLE_MIDDLE || this.titlePageType == TITLE_HORIZONTAL;
+	}
+
+	/** titleBlockRunOnLine の警告の説明（飲まれた行の範囲と直し方）。発行者の行も表題ページに回るので数に入れる */
+	public String titleBlockRunOnDesc()
+	{
+		return "先頭の "+(this.titleEndLine-this.metaLineStart+1)+" 行（"+(this.metaLineStart+1)+"〜"+(this.titleEndLine+1)+" 行目）を表題・著者として読み、本文に入れませんでした。"
+			+TITLE_BLOCK_ADVICE;
+	}
+
 	/** 本文内のタイトル再読み込み */
 	public void reloadMetadata(TitleType titleType, boolean pubFirst)
 	{
