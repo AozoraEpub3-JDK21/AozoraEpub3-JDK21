@@ -67,6 +67,19 @@ public class Epub3ImageWriter extends Epub3Writer
 	/** 本文を出力する
 	 * setFileNamesで sortedFileNames が設定されている必要がある 
 	 * @throws RarException */
+	/**
+	 * 書庫の項目が、画像として書き出す物か（writeArchiveImage が書く物＝id の付いた登録済みの画像）。開く前に見る。
+	 * 項目の名前そのものが画像の拡張子であることも見る（01.jpg と同じ名前の 01.txt を correctExt が 01.jpg に読み替えて開くと、
+	 * 壊れたテキストで 1 冊が失敗し、読めてもテキストを画像として書いてしまう。internal #36）
+	 */
+	private boolean isWrittenImage(String srcImageFileName) throws java.io.IOException
+	{
+		String lower = srcImageFileName.toLowerCase();
+		if (!(lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".bmp"))) return false;
+		ImageInfo imageInfo = this.imageInfoReader.getImageInfo(this.imageInfoReader.correctExt(srcImageFileName));
+		return imageInfo != null && imageInfo.getId() != null;
+	}
+
 	@Override
 	void writeSections(AozoraEpub3Converter converter, BufferedReader src, BufferedWriter bw, File srcFile, String srcExt, ZipArchiveOutputStream zos) throws IOException, RarException
 	{
@@ -94,11 +107,14 @@ public class Epub3ImageWriter extends Epub3Writer
 					entryName = entryName.replace('\\', '/');
 					//アーカイブ内のサブフォルダは除外
 					String srcImageFileName = entryName.substring(archivePathLength);
-					InputStream is = archive.getInputStream(fileHeader);
-					try {
-						this.writeArchiveImage(srcImageFileName, is);
-					} finally {
-						is.close();
+					//使う画像だけ開く（zip と同じ。壊れたテキストを画像として開かない）
+					if (this.isWrittenImage(srcImageFileName)) {
+						InputStream is = archive.getInputStream(fileHeader);
+						try {
+							this.writeArchiveImage(srcImageFileName, is);
+						} finally {
+							is.close();
+						}
 					}
 				}
 				if (this.canceled) return;
@@ -114,12 +130,7 @@ public class Epub3ImageWriter extends Epub3Writer
 					String srcImageFileName = entryName.substring(pathLength);
 					//使う画像（writeArchiveImage が書くもの）だけ開く。ほかの項目は展開しない
 					//（暗号化や未対応の圧縮の項目を開くと、前は素通りしていたのに失敗する）
-					//項目の名前そのものが画像の拡張子であることも見る（01.jpg と同じ名前の 01.txt を correctExt が 01.jpg に読み替えて開くと、
-					//壊れたテキストで 1 冊が失敗し、読めてもテキストを画像として書いてしまう）
-					String lower = srcImageFileName.toLowerCase();
-					boolean imageName = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".bmp");
-					ImageInfo imageInfo = imageName ? this.imageInfoReader.getImageInfo(this.imageInfoReader.correctExt(srcImageFileName)) : null;
-					if (imageInfo == null || imageInfo.getId() == null) return !this.canceled;
+					if (!this.isWrittenImage(srcImageFileName)) return !this.canceled;
 					try (java.io.InputStream is = opener.open()) {
 						this.writeArchiveImage(srcImageFileName, is);
 					}
