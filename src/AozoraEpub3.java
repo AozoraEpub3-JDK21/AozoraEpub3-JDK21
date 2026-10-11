@@ -415,10 +415,20 @@ public class AozoraEpub3
 					
 					Epub3Writer writer = epub3Writer;
 					if (!isFile) {
-						if ("rar".equals(ext)) {
-							imageInfoReader.loadRarImageInfos(srcFile, imageOnly);
-						} else {
-							imageInfoReader.loadZipImageInfos(srcFile, imageOnly);
+						//壊れた書庫・読めない形式は、その本だけ失敗として数えて次の本へ進む（internal #31）
+						try {
+							if ("rar".equals(ext)) {
+								imageInfoReader.loadRarImageInfos(srcFile, imageOnly);
+							} else {
+								imageInfoReader.loadZipImageInfos(srcFile, imageOnly);
+							}
+						} catch (Exception e) {
+							logger.error("アーカイブ画像情報の読み込みに失敗: {}", srcFile, e);
+							LogAppender.error("書庫が読み込めませんでした : " + e.getMessage());
+							LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+							errorCount++;
+							ArchiveTextExtractor.clearCache(srcFile);
+							continue;
 						}
 						if (imageOnly) {
 							LogAppender.println("画像のみのePubファイルを生成します");
@@ -430,7 +440,11 @@ public class AozoraEpub3
 							
 							if (imageInfoReader.countImageFileInfos() == 0) {
 								LogAppender.error("画像がありませんでした");
-								return 1;
+								LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+								//画像の無い書庫も、その本だけ失敗として次の本へ進む（internal #31）
+								errorCount++;
+								ArchiveTextExtractor.clearCache(srcFile);
+								continue;
 							}
 							//名前順で並び替え
 							imageInfoReader.sortImageFileNames();
