@@ -2863,9 +2863,9 @@ public class AozoraEpub3Applet extends JPanel
 		setPropsSelected(this.jCheckConfirm, props, "ChkConfirm");
 
 		//本棚の「続きを取る」は、画面の今の設定で、画面を使わずに変換する（internal #11）。
-		//設定は更新のたびに画面から写す（ini は終了するまで書かれないので、ini を読むと古い）
+		//設定は更新のたびに画面から写す（ini は終了するときと窓が手前から外れたときにしか書かれないので、ini を読むと古いことがある）
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(this::snapshotSettings, this.jarPath));
-		//Web 本棚の場所は画面の設定（全体設定）に持ち、棚の一覧にも足す（internal #11 の案 A）。ini は終了するときに書かれる
+		//Web 本棚の場所は画面の設定（全体設定）に持ち、棚の一覧にも足す（internal #11 の案 A）。ini は終了するときと窓が手前から外れたときに書かれる
 		com.github.hmdev.preview.PreviewLauncher.setWebShelf(new com.github.hmdev.preview.WebShelf() {
 			@Override
 			public java.nio.file.Path location()
@@ -5223,7 +5223,7 @@ public class AozoraEpub3Applet extends JPanel
 		return dir != null && Files.isDirectory(dir) ? dir : null;
 	}
 
-	/** Web 本棚の場所を設定に入れ、棚の一覧に足す（EDT で呼ぶ）。設定は終了するときに ini に書かれる */
+	/** Web 本棚の場所を設定に入れ、棚の一覧に足す（EDT で呼ぶ）。設定は終了するときと窓が手前から外れたときに ini に書かれる */
 	private void recordWebShelf(java.nio.file.Path dir)
 	{
 		com.github.hmdev.preview.WebShelfPrefs.store(this.props, dir);
