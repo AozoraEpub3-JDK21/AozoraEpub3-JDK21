@@ -49,6 +49,45 @@ public class IniWebShelfTest {
 		assertEquals("一時ファイルを残さない", 0, temp.getRoot().listFiles((d, n) -> n.endsWith(".tmp")).length);
 	}
 
+	/** 配布の ini の説明（コメント）とキーの順は残る。変わるのは足したキーの行だけ（internal #30） */
+	@Test
+	public void theCommentsOfTheIniSurvive() throws Exception {
+		File ini = new File(temp.getRoot(), "AozoraEpub3.ini");
+		byte[] shipped = Files.readAllBytes(Path.of("AozoraEpub3.ini"));
+		Files.write(ini.toPath(), shipped);
+		Path dir = temp.newFolder("web").toPath();
+		new IniWebShelf(ini).setLocation(dir);
+		byte[] out = Files.readAllBytes(ini.toPath());
+		org.junit.Assert.assertTrue("元の中身がそのまま先頭に残る",
+			new String(out, java.nio.charset.StandardCharsets.ISO_8859_1).startsWith(new String(shipped, java.nio.charset.StandardCharsets.ISO_8859_1)));
+		Properties after = read(ini);
+		assertEquals(dir.toString(), after.getProperty(WebShelfPrefs.KEY));
+		assertEquals(List.of(dir.toString()), PreviewLibraryPrefs.load(after));
+	}
+
+	/** 書き換えても ini の権限は変えない。同じ場所を決め直しただけなら書かない（PR のゲート2） */
+	@Test
+	public void thePermissionsStayAndTheSameLocationDoesNotRewrite() throws Exception {
+		File ini = new File(temp.getRoot(), "AozoraEpub3.ini");
+		Files.write(ini.toPath(), "# 説明\nVertical=1\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> mode;
+		try {
+			mode = java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--");
+			Files.setPosixFilePermissions(ini.toPath(), mode);
+		} catch (UnsupportedOperationException e) {
+			org.junit.Assume.assumeNoException("POSIX の権限が無い環境", e);
+			return;
+		}
+		Path dir = temp.newFolder("web").toPath();
+		IniWebShelf shelf = new IniWebShelf(ini);
+		shelf.setLocation(dir);
+		assertEquals(mode, Files.getPosixFilePermissions(ini.toPath()));
+		java.nio.file.attribute.FileTime written = java.nio.file.attribute.FileTime.fromMillis(1_000_000_000_000L);
+		Files.setLastModifiedTime(ini.toPath(), written);
+		shelf.setLocation(dir);
+		assertEquals("決め直しただけでは書かない", written, Files.getLastModifiedTime(ini.toPath()));
+	}
+
 	/** ini が無ければ作る */
 	@Test
 	public void aMissingIniIsCreated() throws Exception {

@@ -1,3 +1,4 @@
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,23 +40,37 @@ class IniWebShelf implements WebShelf
 	}
 
 	@Override
-	public void setLocation(Path dir) throws IOException
+	public synchronized void setLocation(Path dir) throws IOException
 	{
 		//書く前に読めなければ書かない（読めなかった設定を空のまま書き戻すと、ほかの設定が消える。PR の手元の codex）
-		Properties props = new Properties();
-		if (this.iniFile.isFile()) {
-			try (InputStream in = Files.newInputStream(this.iniFile.toPath())) {
-				props.load(in);
+		//コメントと行の順を残すため、読んだ中身のまま持って、変わったキーの行だけ書き換える（internal #30）
+		byte[] original = this.iniFile.isFile() ? Files.readAllBytes(this.iniFile.toPath()) : null;
+		Properties before = new Properties();
+		if (original != null) {
+			try (InputStream in = new ByteArrayInputStream(original)) {
+				before.load(in);
 			} catch (IllegalArgumentException e) {
 				throw new IOException("設定ファイルを読めないため、Web 本棚を保存しませんでした: " + this.iniFile, e);
 			}
 		}
+		Properties props = new Properties();
+		props.putAll(before);
 		WebShelfPrefs.store(props, dir);
 		//同じ棚は store が畳み、上限を超えた分は落とす
 		List<String> folders = new ArrayList<>(PreviewLibraryPrefs.load(props));
 		folders.add(dir.toString());
 		PreviewLibraryPrefs.store(props, folders);
-		write(props);
+		byte[] content;
+		if (original == null) {
+			java.io.ByteArrayOutputStream all = new java.io.ByteArrayOutputStream();
+			props.store(all, "AozoraEpub3 Parameters");
+			content = all.toByteArray();
+		} else {
+			content = IniLines.update(original, before, props);
+			//同じ場所を決め直しただけなら書かない（更新時刻も権限も変えない）
+			if (java.util.Arrays.equals(content, original)) return;
+		}
+		write(content);
 	}
 
 	@Override
@@ -82,8 +97,12 @@ class IniWebShelf implements WebShelf
 		return props;
 	}
 
-	/** 一時ファイルに書いてから置き換える（途中で止まっても ini が壊れない） */
-	private void write(Properties props) throws IOException
+	/**
+	 * 一時ファイルに書いてから置き換える（途中で止まっても ini が壊れない）。
+	 * 元の ini の権限は一時ファイルへ写す（createTempFile は 0600 で作るので、そのまま置き換えると
+	 * ほかの利用者が読めなくなる。PR のゲート2）
+	 */
+	private void write(byte[] content) throws IOException
 	{
 		//ini がリンクなら、リンクの先を書き換える（リンクを普通のファイルに置き換えない。PR の codex）
 		Path target = this.iniFile.toPath();
@@ -93,7 +112,14 @@ class IniWebShelf implements WebShelf
 		Path tmp = Files.createTempFile(dir, target.getFileName().toString(), ".tmp");
 		try {
 			try (OutputStream out = Files.newOutputStream(tmp)) {
-				props.store(out, "AozoraEpub3 Parameters");
+				out.write(content);
+			}
+			if (Files.exists(target)) {
+				try {
+					Files.setPosixFilePermissions(tmp, Files.getPosixFilePermissions(target));
+				} catch (UnsupportedOperationException e) {
+					//Windows（POSIX の権限が無い）。置き換えた先はフォルダの既定の ACL を受け継ぐ
+				}
 			}
 			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
 		} finally {
