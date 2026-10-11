@@ -1035,6 +1035,8 @@ public class AozoraEpub3
 				src = new BufferedReader(new InputStreamReader(is, encType));
 			}
 			
+			//本文を読み始める今の台帳の話数を、この本の話数として控える（getBookInfo の後、GUI の確認画面の間などに txt が更新されても、書く本文と合う）
+			com.github.hmdev.info.BookLedger.captureEpisodes(bookInfo);
 			//ePub書き出し srcは中でクローズされる
 			epubWriter.write(aozoraConverter, src, srcFile, ext, outFile, bookInfo, imageInfoReader);
 

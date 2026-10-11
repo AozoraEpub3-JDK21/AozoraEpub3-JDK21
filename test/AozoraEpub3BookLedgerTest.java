@@ -204,7 +204,7 @@ public class AozoraEpub3BookLedgerTest {
 	public void aTemporaryEpubIsNotRecordedUnderItsOwnName() throws Exception {
 		File dir = tempFolder.newFolder();
 		File txt = txt(dir, "題\n著者\n\n本文\n");
-		BookLedger.create(URL, "in").withEpisodes(5).withLastEpisodes(3).save(dir);
+		BookLedger.create(URL, "in").withEpisodes(5).withLastEpisodes(2).save(dir);
 		String templatePath = VelocityTestUtils.templateDir() + File.separator;
 		Epub3Writer writer = new Epub3Writer(templatePath, VelocityTestUtils.engineForTemplateSubpath(""));
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
@@ -212,15 +212,17 @@ public class AozoraEpub3BookLedgerTest {
 		BookInfo bookInfo = AozoraEpub3.getBookInfo(txt, "txt", 0, imageInfoReader, converter, "UTF-8",
 			BookInfo.TitleType.TITLE_AUTHOR, false);
 		File out = tempFolder.newFolder();
+		//getBookInfo の後（GUI の確認画面の間など）に txt と台帳が更新された（2 → 3 話）。本文は読み直すので、記録は 3 話
+		BookLedger.load(dir).withLastEpisodes(3).save(dir);
 		File tmp = File.createTempFile("kindle", ".epub", out);
 		File real = new File(out, "本.epub");
 		assertTrue(AozoraEpub3.convertFile(txt, "txt", tmp, converter, writer, "UTF-8", bookInfo, imageInfoReader, 0, false));
 		assertEquals("一時ファイルの名前で記録しない", -1, BookLedger.load(dir).ownEpisodesFor(tmp));
-		//動かすまで（kindlegen）の間に同じ作品の txt と台帳が更新されても（話数 3 → 4）、この本は txt を読んだときの 3 話
+		//動かすまで（kindlegen）の間に同じ作品の txt と台帳が更新されても（話数 3 → 4）、この本は本文を読み始めたときの 3 話
 		BookLedger.load(dir).withLastEpisodes(4).save(dir);
 		Files.move(tmp.toPath(), real.toPath());
 		BookLedger.recordBookEpisodes(bookInfo, real);
-		assertEquals("本当の名前で、txt を読んだときの話数を記録する", 3, BookLedger.load(dir).ownEpisodesFor(real));
+		assertEquals("本当の名前で、本文を読み始めたときの話数を記録する", 3, BookLedger.load(dir).ownEpisodesFor(real));
 	}
 
 	/** 対照: 記録する指定（既定）では、書き出した名前で記録する */
