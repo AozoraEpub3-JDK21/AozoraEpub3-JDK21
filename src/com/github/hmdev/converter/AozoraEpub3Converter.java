@@ -3036,23 +3036,34 @@ public class AozoraEpub3Converter
 							}
 							//同じ長さで同じ文字なら一文字づつルビを振る
 							//親文字か読みに内部エスケープの印があれば使わない（印も1文字に数え、読みが空の親文字に付く）
-							if (rubyTopStart-rubyStart == i-rubyTopStart-1 && CharUtils.isSameChars(ch, rubyTopStart+1, i)
-									&& !CharUtils.hasEscape(ch, rubyStart, i)) {
+							//親文字は char ではなく字で数える（4バイト文字の対と、後ろの異体字セレクタを基底字ごと 1 字にまとめる。監査項目 33）
+							//読みは同じ BMP の字の繰り返しに限る
+							//安い判定（読みが同じ字の繰り返しか）を先に。ほとんどのルビはここで外れるので、字の区切りを作らない
+							//（読みが空の ｜《》 も前と同じくこの分岐を通る。出力を変えないため）
+							int[] rubyUnits = (CharUtils.isSameChars(ch, rubyTopStart+1, i)
+									&& (rubyTopStart+1 >= i || !Character.isSurrogate(ch[rubyTopStart+1])) && !CharUtils.hasEscape(ch, rubyStart, i))
+									? rubyBaseUnits(ch, rubyStart, rubyTopStart) : null;
+							if (rubyUnits != null && rubyUnits.length-1 == i-rubyTopStart-1) {
 								if (buf.indexOf(rubyEndChuki, buf.length()-rubyEndChuki.length()) == -1) {
 									buf.append(rubyStartChuki);
 								} else {
 									buf.setLength(buf.length()-rubyEndChuki.length());
 								}
-								for (int j=0; j<rubyTopStart-rubyStart; j++) {
+								int unitCount = rubyUnits.length-1;
+								for (int j=0; j<unitCount; j++) {
+									int unitStart = rubyUnits[j];
 									//本文が除去済み(NULL)の文字は前の文字とまとめられている
 									//仮名＋濁点を対で 〓 に落とすと 2 文字目が NULL になるので、
 									//そのままだと本文の無い <rt> が残って 1 文字に 2 つルビが付く
-									if (ch[rubyStart+j] == '\0') continue;
-									convertReplacedChar(buf, ch, rubyStart+j, noTcy); //本文
+									if (ch[unitStart] == '\0') continue;
+									//1 char の字は従来どおり。4バイト文字・異体字セレクタ付きの字は、対を割らないよう convertTcyText で字ごと出す
+									//（外字フォント・〓 への置き換え・IVS の出力設定も、ルビを一つにまとめた場合と同じになる）
+									if (rubyUnits[j+1]-unitStart == 1) convertReplacedChar(buf, ch, unitStart, noTcy); //本文
+									else convertTcyText(buf, ch, unitStart, rubyUnits[j+1], noTcy); //本文
 									buf.append(chukiMap.get("ルビ前")[0]);
 									convertReplacedChar(buf, ch, rubyTopStart+1+j, true);//ルビ
 									//まとめられた分のルビも同じ<rt>に入れる 読みを落とさない
-									while (j+1 < rubyTopStart-rubyStart && ch[rubyStart+j+1] == '\0') {
+									while (j+1 < unitCount && ch[rubyUnits[j+1]] == '\0') {
 										j++;
 										convertReplacedChar(buf, ch, rubyTopStart+1+j, true);//ルビ
 									}
@@ -3147,6 +3158,45 @@ public class AozoraEpub3Converter
 		return true;
 	}
 	
+	/** 同じ長さのルビで 1 字ずつ振るときの、親文字の字の区切り（監査項目 33）
+	 * <p>4バイト文字（サロゲートの対）は 1 字、後ろに続く異体字セレクタ（U+FE00～FE0F、U+E0100～ の対）は基底字に含める。
+	 * 区切りは {@link #convertTcyText(StringBuilder, char[], int, int, boolean)} がまとめて出す範囲と揃える。
+	 * サロゲートと異体字セレクタの無い親文字では 1 char が 1 字なので、従来の char 単位と同じ区切りになる。</p>
+	 * @return 各字の先頭の位置と、最後に end を並べた配列。単独のサロゲート・基底字の無いセレクタがあれば null（1 字ずつ振らない） */
+	static int[] rubyBaseUnits(char[] ch, int begin, int end)
+	{
+		//崩れたルビ（漢《あ｜字》など）では｜で親文字の始まりだけが動き、範囲が逆になる。1 字ずつは振らない
+		if (end < begin) return null;
+		int[] units = new int[end-begin+1];
+		int count = 0;
+		int k = begin;
+		while (k < end) {
+			char c = ch[k];
+			//字の頭に、基底字の無いセレクタや下位サロゲートが来たら 1 字ずつは振らない
+			if (Character.isLowSurrogate(c) || (c >= 0xFE00 && c <= 0xFE0F)) return null;
+			if (c == 0xDB40 && k+1 < end && Character.isLowSurrogate(ch[k+1])
+					&& com.github.hmdev.util.JisLevelUtil.isVariationSelector(Character.toCodePoint(c, ch[k+1]))) return null;
+			int next = k+1;
+			if (Character.isHighSurrogate(c)) {
+				if (next >= end || !Character.isLowSurrogate(ch[next])) return null;
+				next++;
+			}
+			//後ろの異体字セレクタは基底字の字に含める（NULL に付いたセレクタは振り分けられないので 1 字ずつ振らない）
+			if (next < end && ch[next] >= 0xFE00 && ch[next] <= 0xFE0F) {
+				if (c == '\0') return null;
+				next++;
+			} else if (next+1 < end && ch[next] == 0xDB40 && Character.isLowSurrogate(ch[next+1])
+					&& com.github.hmdev.util.JisLevelUtil.isVariationSelector(Character.toCodePoint(ch[next], ch[next+1]))) {
+				if (c == '\0') return null;
+				next += 2;
+			}
+			units[count++] = k;
+			k = next;
+		}
+		units[count++] = end;
+		return java.util.Arrays.copyOf(units, count);
+	}
+
 	/** 縦中横変換してbufに出力
 	 * 1文字フォントがある場合もここで出力 */
 	private void convertTcyText(StringBuilder buf, char[] ch, int begin, int end, boolean noTcy) throws IOException
