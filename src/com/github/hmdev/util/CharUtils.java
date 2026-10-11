@@ -438,8 +438,8 @@ public class CharUtils
 	/** 柱を中身ごと外した行（目次の章の名前・表題・自動の章の判定に柱を使わない。監査項目 20）。対にならない印は印だけ外す */
 	static public String removeHashira(String line)
 	{
-		if (line.indexOf("柱］") < 0 && line.indexOf("柱終わり］") < 0) return line;
-		return HASHIRA_MARK.matcher(HASHIRA_SPAN.matcher(line).replaceAll("")).replaceAll("");
+		//「対になっているか」は balanceHashira だけが決める
+		return HASHIRA_SPAN.matcher(balanceHashira(line)).replaceAll("");
 	}
 
 	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は内部エスケープ（{@link #ESCAPE}）

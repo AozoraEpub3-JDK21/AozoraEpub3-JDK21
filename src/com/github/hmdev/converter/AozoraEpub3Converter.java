@@ -941,8 +941,8 @@ public class AozoraEpub3Converter
 						if (this.useNextLineChapterName) addNextChapterName = lineNum+1;
 						addSectionChapter = false; //改ページ後のChapter出力を抑止
 					}
-					//必ず文字が入る
-					preChapterLineInfo = null;
+					//必ず文字が入る。ただし柱だけの行（本文には見えるが名前にしない）は飛ばして次の行を見る（監査項目 20）
+					if (name.length() > 0 || CharUtils.removeHashira(noRubyLine).equals(noRubyLine)) preChapterLineInfo = null;
 				}
 			}
 			//画像のファイル名の順にimageInfoReaderにファイル名を追加
@@ -2154,6 +2154,8 @@ public class AozoraEpub3Converter
 	 * @param line 外字と前方参照注記変換済文字列 */
 	public String convertTitleLineToEpub3(String line) throws IOException
 	{
+		//扉ページの表題・著者にも柱は出さない（OPF の表題と同じく、名前には柱を使わない。監査項目 20）
+		line = CharUtils.removeHashira(line);
 		StringBuilder buf = new StringBuilder();
 		char[] ch = line.toCharArray();
 		int charStart = 0;
@@ -2244,14 +2246,15 @@ public class AozoraEpub3Converter
 	{
 		StringBuilder buf = new StringBuilder();
 		
+		//外字変換後に前方参照注記変換
+		line = this.replaceChukiSufTag(this.convertGaijiChuki(line, true));
+		
 		//柱の印は 1 行の中で対にする。対にならない印は外す（注記の表で div にしているので、残すと XHTML の開閉が崩れる。監査項目 20）
+		//外字の変換の後で見る（前走査と同じ順。前に見ると、※［＃ここで柱終わり］ のように外字の注記に飲まれた閉じを対に数える）
 		String balanced = CharUtils.balanceHashira(line);
 		//表題より前の行は 2 回通る（out が null の下見と、表題の後の書き出し）ので、警告は書き出すときだけ
 		if (out != null && balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
 		line = balanced;
-		
-		//外字変換後に前方参照注記変換
-		line = this.replaceChukiSufTag(this.convertGaijiChuki(line, true));
 		
 		//キャプション指定の画像の場合はすぐにキャプションでなければ画像タグを閉じる
 		if (this.nextLineIsCaption) {

@@ -27,12 +27,17 @@ public class AozoraEpub3HashiraTest {
 	private String allXhtml;
 	private String toc;
 	private final java.util.List<String> pages = new java.util.ArrayList<>();
+	private String titlePage = "";
 
 	private void convert(String text) throws Exception {
 		convert(text, "");
 	}
 
 	private void convert(String text, String iniText) throws Exception {
+		convert(text, iniText, new String[0]);
+	}
+
+	private void convert(String text, String iniText, String[] extraArgs) throws Exception {
 		File src = tempFolder.newFolder();
 		File dst = tempFolder.newFolder();
 		File txt = new File(src, "book.txt");
@@ -46,7 +51,10 @@ public class AozoraEpub3HashiraTest {
 			System.setProperty("java.class.path", new File("AozoraEpub3.jar").getAbsolutePath());
 			Velocity.reset();
 			System.setOut(new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8));
-			assertEquals(0, AozoraEpub3.run(new String[]{ "-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(), txt.getPath() }));
+			java.util.List<String> args = new java.util.ArrayList<>(java.util.List.of("-i", ini.getPath(), "-enc", "UTF-8"));
+			args.addAll(java.util.List.of(extraArgs));
+			args.addAll(java.util.List.of("-d", dst.getPath(), txt.getPath()));
+			assertEquals(0, AozoraEpub3.run(args.toArray(new String[0])));
 		} finally {
 			System.setOut(orgOut);
 			if (orgClassPath == null) System.clearProperty("java.class.path"); else System.setProperty("java.class.path", orgClassPath);
@@ -58,6 +66,7 @@ public class AozoraEpub3HashiraTest {
 				if (e.getName().endsWith("toc.ncx")) toc = body;
 				else if (e.getName().endsWith(".xhtml") && !e.getName().endsWith("nav.xhtml") && !e.getName().endsWith("title.xhtml")) xhtml.append(body);
 				if (e.getName().endsWith(".xhtml")) pages.add(body);
+				if (e.getName().endsWith("title.xhtml")) titlePage = body;
 			}
 		}
 		//<head> の <title>（本の題名）は柱ではない
@@ -110,6 +119,29 @@ public class AozoraEpub3HashiraTest {
 		//章として拾うと、柱の div に章の目印（id）が付く
 		assertTrue("柱が章として拾われた:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">1 始まりの物語</div>"));
 		assertWellFormed();
+	}
+
+	/** 外字の注記に飲まれた閉じ（※［＃ここで柱終わり］）は閉じに数えない。出力は外字の変換の後で対にする（前走査と同じ順） */
+	@Test
+	public void aCloseSwallowedByGaijiDoesNotLeaveAnOpenDiv() throws Exception {
+		convert("題\n作者\n\n［＃ここから柱］注※［＃ここで柱終わり］\n［＃改ページ］\n本文です。\n");
+		assertTrue(allXhtml, allXhtml.contains("本文です。"));
+		assertWellFormed();
+	}
+
+	/** 表題の行の柱は、OPF の表題と同じく扉ページの表題にも出さない */
+	@Test
+	public void aHashiraOnTheTitleLineIsNotOnTheTitlePage() throws Exception {
+		convert("題名［＃ここから柱］作品名［＃ここで柱終わり］\n作者\n\n本文です。\n");
+		assertTrue(titlePage, titlePage.contains("題名"));
+		assertFalse("扉ページの表題に柱が出た:\n" + titlePage, titlePage.contains("作品名"));
+	}
+
+	/** 見出しのブロックの最初の行が柱だけでも、次の行を章の名前にする（目次から章が落ちない） */
+	@Test
+	public void aHashiraOnlyLineInAHeadingBlockIsSkippedForTheName() throws Exception {
+		convert("題\n作者\n\n［＃改ページ］\n［＃ここから中見出し］\n［＃ここから柱］作品名［＃ここで柱終わり］\n章一\n［＃ここで中見出し終わり］\n本文です。\n");
+		assertTrue("章が目次に無い:\n" + toc, toc.contains("<text>章一</text>"));
 	}
 
 	private void assertWellFormed() throws Exception {
