@@ -776,9 +776,8 @@ public class AozoraEpub3Applet extends JPanel
 			props.setProperty("UILang", "ja");
 			// 設定ファイル更新
 			try {
-				try (OutputStream fos = Files.newOutputStream(Path.of(jarPath+propFileName))) {
-					props.store(fos, "AozoraEpub3 Parameters");
-				}
+				//コメントを残して、変わった行だけ書き換える（internal #30）
+				IniLines.writeInPlace(Path.of(jarPath+propFileName), props, "AozoraEpub3 Parameters");
 			} catch (Exception ignore) { /* 意図的: 設定保存失敗時は無視 (次回起動時に既定値で起動) */ }
 			JOptionPane.showMessageDialog(
 				jFrameParent,
@@ -792,9 +791,8 @@ public class AozoraEpub3Applet extends JPanel
 			props.setProperty("UILang", "en");
 			// 設定ファイル更新
 			try {
-				try (OutputStream fos = Files.newOutputStream(Path.of(jarPath+propFileName))) {
-					props.store(fos, "AozoraEpub3 Parameters");
-				}
+				//コメントを残して、変わった行だけ書き換える（internal #30）
+				IniLines.writeInPlace(Path.of(jarPath+propFileName), props, "AozoraEpub3 Parameters");
 			} catch (Exception ignore) { /* 意図的: 設定保存失敗時は無視 (次回起動時に既定値で起動) */ }
 			JOptionPane.showMessageDialog(
 				jFrameParent,
@@ -6204,9 +6202,9 @@ public class AozoraEpub3Applet extends JPanel
 			if (this.jarPath != null && this.propFileName != null) {
 				//その場で書く（一時ファイルから置き換えると、ini の権限が変わる・フォルダに書けない置き場で保存できない・
 				//先の無いリンクを置き換える、の後退が出た。PR #125 の codex）
-				try (OutputStream fos = Files.newOutputStream(Path.of(this.jarPath+this.propFileName))) {
-					this.props.store(fos, "AozoraEpub3 Parameters");
-				}
+				//配布の ini のコメント（各設定の説明）とキーの順を残し、変わったキーの行だけ書き換える（internal #30）。
+				//窓が手前から外れるたびに保存するので（#130）、変わらなければ書かない
+				IniLines.writeInPlace(Path.of(this.jarPath+this.propFileName), this.props, "AozoraEpub3 Parameters");
 			}
 		} catch (Exception e) {
 			logger.error("プロパティファイル保存でエラー", e);

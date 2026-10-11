@@ -181,7 +181,7 @@ The same settings can be specified in an ini file. Use this method when driving 
 
 The file to edit is **`AozoraEpub3.ini`** in the AozoraEpub3 folder. A different file can be specified with the `-i` option.
 
-> ⚠️ **Note**: The GUI writes `AozoraEpub3.ini` back on exit. When editing the ini directly, **close the GUI first**. Closing the GUI while editing will overwrite your changes.
+> ⚠️ **Note**: When the GUI saves its settings (on exit and when its window loses focus), it writes its settings back to `AozoraEpub3.ini` (comments are kept when the ini can be read). When editing the ini directly, **close the GUI first**. Edits made while the GUI is open are overwritten.
 
 | Key | Value | Initial value | Description |
 |---|---|---|---|
