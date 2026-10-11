@@ -1935,6 +1935,8 @@ public class WebAozoraConverter
 	Node startElement = null;
 	Node endElement = null;
 	boolean noHr = false;
+	/** 青空文庫の HTML の注記（span.notes）の中を出力している間 true。中の「［＃」を逃がさない */
+	boolean inChukiNotes = false;
 	/** ノードを出力 子ノード内のテキストも出力 */
 	private void printNode(BufferedWriter bw, Node parent, boolean noHr) throws IOException
 	{
@@ -1963,10 +1965,18 @@ public class WebAozoraConverter
 			if (endElement != null && node.equals(endElement)) {
 				return;
 			}
-			if (node instanceof TextNode) printText(bw, ((TextNode)node).getWholeText());
+			if (node instanceof TextNode) printText(bw, ((TextNode)node).getWholeText(), false, this.inChukiNotes);
 			else if (node instanceof Element) {
 				Element elem = (Element)node;
-				if ("br".equals(elem.tagName())) {
+				if ("span".equals(elem.tagName()) && elem.hasClass("notes") && !this.inChukiNotes) {
+					//青空文庫の HTML は、底本との違いなどの注記を <span class="notes">［＃…］</span> の文字で置く。注記として読ませる（本文に出さない）
+					this.inChukiNotes = true;
+					try {
+						_printNode(bw, node);
+					} finally {
+						this.inChukiNotes = false;
+					}
+				} else if ("br".equals(elem.tagName())) {
 					if (elem.nextSibling() != null) bw.append('\n');
 				} else if ("div".equals(elem.tagName())) {
 					if (elem.previousSibling() != null && !isBlockNode(elem.previousSibling())) bw.append('\n');
@@ -2913,6 +2923,12 @@ public class WebAozoraConverter
 
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle) throws IOException
 	{
+		printText(bw, text, isSubtitle, false);
+	}
+
+	/** @param keepChuki 文字の「［＃」を注記として通す（青空文庫の HTML の span.notes。中身が注記そのもの） */
+	private void printText(BufferedWriter bw, String text, boolean isSubtitle, boolean keepChuki) throws IOException
+	{
 		text = text.replaceAll("[\r\n]+", "");
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
 		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
@@ -2934,7 +2950,14 @@ public class WebAozoraConverter
 
 		StringBuilder sb = new StringBuilder();
 		char[] chars = text.toCharArray();
-		for (char ch : chars) {
+		for (int i = 0; i < chars.length; i++) {
+			char ch = chars[i];
+			//サイトの文字の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・字が消える。internal #38）。
+			//「［」を外字の注記で書き、ただの文字にする。変換が足す注記は PH_* で書いてあり、ここより後で戻すので逃がさない
+			if (ch == '［' && !keepChuki && i+1 < chars.length && chars[i+1] == '＃') {
+				sb.append("※［＃始め角括弧、1-1-46］");
+				continue;
+			}
 			switch (ch) {
 			case '《': sb.append("※［＃始め二重山括弧］"); break;
 			case '》': sb.append("※［＃終わり二重山括弧］"); break;
