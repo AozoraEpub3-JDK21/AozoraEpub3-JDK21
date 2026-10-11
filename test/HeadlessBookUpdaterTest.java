@@ -87,7 +87,8 @@ public class HeadlessBookUpdaterTest {
 		String base = "http://127.0.0.1:" + server.getAddress().getPort();
 		fqdn = base.substring(base.indexOf("//") + 2);
 		File root = tempFolder.newFolder("base");
-		File siteDir = new File(root, "web/" + fqdn);
+		//サイト定義はホスト名で探す（ポート番号は見ない。internal #29）ので、Windows でも置ける名前で作る
+		File siteDir = new File(root, "web/" + fqdn.substring(0, fqdn.lastIndexOf(':')));
 		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
 		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
 			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
@@ -167,7 +168,8 @@ public class HeadlessBookUpdaterTest {
 		String base = "http://127.0.0.1:" + server.getAddress().getPort();
 		fqdn = base.substring(base.indexOf("//") + 2);
 		File root = tempFolder.newFolder("base");
-		File siteDir = new File(root, "web/" + fqdn);
+		//サイト定義はホスト名で探す（ポート番号は見ない。internal #29）ので、Windows でも置ける名前で作る
+		File siteDir = new File(root, "web/" + fqdn.substring(0, fqdn.lastIndexOf(':')));
 		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
 		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
 			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
