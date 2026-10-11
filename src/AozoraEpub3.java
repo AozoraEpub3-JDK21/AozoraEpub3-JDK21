@@ -484,6 +484,8 @@ public class AozoraEpub3
 						LogAppender.error("出力パスエラー: " + e.getMessage());
 						LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 						errorCount++;
+						//書庫の本文の控えは convertFile の最後で捨てている。飛ばすときも同じく捨てる（断られた書庫が続くと溜まる）
+						if (!"txt".equals(ext)) ArchiveTextExtractor.clearCache(srcFile);
 						continue;
 					}
 					if (!AozoraEpub3.convertFile(
