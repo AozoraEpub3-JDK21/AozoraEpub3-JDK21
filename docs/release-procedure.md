@@ -161,7 +161,7 @@ ls build/launch4j/ 2>/dev/null
 **ゲート**: 失敗テストがあればここで停止。リリースに進まない。
 
 > **`PreviewServerTest` のハングは解消済み**（2026-10-11、`docs/code-audit-followups.md` 項目 31）。
-> 古い JDK（Temurin 21.0.12+8 以前）で試験の HttpClient が止まっていたのを、client を HTTP/1.1 に固定して直した。
+> win の台で時々（条件は未特定）試験の HttpClient が止まっていたのを、client を HTTP/1.1 に固定して直した。
 > 以前ここにあった「PreviewServerTest を外してゲートを回す」手順は不要。
 >
 > それでも止まったら `jps -l` → `jstack <pid>` でブロック箇所を確認し、`taskkill //PID <pid> //F` で落とす。
