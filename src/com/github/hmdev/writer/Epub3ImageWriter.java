@@ -1,18 +1,14 @@
 package com.github.hmdev.writer;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
-import java.nio.file.Files;
 import java.util.ArrayList;
 
-import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +67,19 @@ public class Epub3ImageWriter extends Epub3Writer
 	/** 本文を出力する
 	 * setFileNamesで sortedFileNames が設定されている必要がある 
 	 * @throws RarException */
+	/**
+	 * 書庫の項目が、画像として書き出す物か（writeArchiveImage が書く物＝id の付いた登録済みの画像）。開く前に見る。
+	 * 項目の名前そのものが画像の拡張子であることも見る（01.jpg と同じ名前の 01.txt を correctExt が 01.jpg に読み替えて開くと、
+	 * 壊れたテキストで 1 冊が失敗し、読めてもテキストを画像として書いてしまう。internal #36）
+	 */
+	private boolean isWrittenImage(String srcImageFileName) throws java.io.IOException
+	{
+		String lower = srcImageFileName.toLowerCase();
+		if (!(lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".bmp"))) return false;
+		ImageInfo imageInfo = this.imageInfoReader.getImageInfo(this.imageInfoReader.correctExt(srcImageFileName));
+		return imageInfo != null && imageInfo.getId() != null;
+	}
+
 	@Override
 	void writeSections(AozoraEpub3Converter converter, BufferedReader src, BufferedWriter bw, File srcFile, String srcExt, ZipArchiveOutputStream zos) throws IOException, RarException
 	{
@@ -98,34 +107,40 @@ public class Epub3ImageWriter extends Epub3Writer
 					entryName = entryName.replace('\\', '/');
 					//アーカイブ内のサブフォルダは除外
 					String srcImageFileName = entryName.substring(archivePathLength);
-					InputStream is = archive.getInputStream(fileHeader);
-					try {
-						this.writeArchiveImage(srcImageFileName, is);
-					} finally {
-						is.close();
+					//使う画像だけ開く（zip と同じ。壊れたテキストを画像として開かない）
+					if (this.isWrittenImage(srcImageFileName)) {
+						InputStream is = archive.getInputStream(fileHeader);
+						try {
+							this.writeArchiveImage(srcImageFileName, is);
+						} finally {
+							is.close();
+						}
 					}
 				}
 				if (this.canceled) return;
 			}
 			} finally { archive.close(); }
 		} else {
-			ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(Files.newInputStream(srcFile.toPath()), 65536), "MS932", false);
-			try {
-			ArchiveEntry entry;
-			while( (entry = zis.getNextEntry()) != null ) {
+			//目次から 1 つずつ開く（壊れた項目があっても、ほかの画像を読める。internal #36）
+			final int pathLength = archivePathLength;
+			com.github.hmdev.io.ZipEntries.forEach(srcFile.toPath(), false, (rawName, opener) -> {
 				try {
 					//アーカイブ内のサブフォルダは除外
-					String entryName = Epub3Writer.sanitizeArchiveEntryName(entry.getName());
-					String srcImageFileName = entryName.substring(archivePathLength);
-					this.writeArchiveImage(srcImageFileName, zis);
-					if (this.canceled) return;
+					String entryName = Epub3Writer.sanitizeArchiveEntryName(rawName);
+					String srcImageFileName = entryName.substring(pathLength);
+					//使う画像（writeArchiveImage が書くもの）だけ開く。ほかの項目は展開しない
+					//（暗号化や未対応の圧縮の項目を開くと、前は素通りしていたのに失敗する）
+					if (!this.isWrittenImage(srcImageFileName)) return !this.canceled;
+					try (java.io.InputStream is = opener.open()) {
+						this.writeArchiveImage(srcImageFileName, is);
+					}
 				} catch (IllegalArgumentException e) {
 					System.err.println("Skipping suspicious archive entry: " + e.getMessage());
 					// 疑わしいエントリはスキップ
-					continue;
 				}
-			}
-			} finally { zis.close(); }
+				return !this.canceled;
+			});
+			if (this.canceled) return;
 		}
 		
 		//画像xhtmlを出力

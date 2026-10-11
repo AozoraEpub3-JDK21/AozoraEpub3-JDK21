@@ -145,4 +145,106 @@ public class AozoraEpub3BatchPerBookTest {
 				dr * dr + dg * dg + db * db < 40 * 40);
 		}
 	}
+
+	/** 書庫の中のテキストが 1 つ壊れていても、残りの本は変換する。飛ばした本は失敗として終了コードに残す（internal #36） */
+	@Test
+	public void aCorruptTextInAZipSkipsOnlyThatBook() throws Exception {
+		File src = tempFolder.newFolder("zsrc");
+		File dst = tempFolder.newFolder("zdst");
+		File zip = new File(src, "two.zip");
+		StringBuilder big = new StringBuilder();
+		for (int i = 0; i < 2000; i++) big.append("壊れる本の").append(i).append("行目です。\n");
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(new FileOutputStream(zip))) {
+			zos.putNextEntry(new java.util.zip.ZipEntry("1_bad.txt"));
+			zos.write(big.toString().getBytes(StandardCharsets.UTF_8));
+			zos.closeEntry();
+			zos.putNextEntry(new java.util.zip.ZipEntry("2_good.txt"));
+			zos.write("良い本\n著\n\n　本文です。\n".getBytes(StandardCharsets.UTF_8));
+			zos.closeEntry();
+		}
+		byte[] b = Files.readAllBytes(zip.toPath());
+		int data = 30 + ((b[26] & 0xff) | ((b[27] & 0xff) << 8)) + ((b[28] & 0xff) | ((b[29] & 0xff) << 8));
+		for (int i = data + 40; i < data + 80; i++) b[i] = (byte)0xff;
+		Files.write(zip.toPath(), b);
+		File ini = tempFolder.newFile("zempty.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(), zip.getPath());
+
+		assertTrue("残りの本が変換されていない:\n" + lastLog, new File(dst, "[著] 良い本.epub").isFile());
+		assertTrue("飛ばしたことが出ていない:\n" + lastLog, lastLog.contains("書庫の中のテキストが読めないので飛ばします : 1_bad.txt"));
+		assertEquals("飛ばした本は失敗として数える", 1, exitCode);
+	}
+
+	/** 壊れた項目のローカルヘッダの後ろ（圧縮データ）を壊す */
+	private static void corruptFirstEntry(File zip) throws Exception {
+		byte[] b = Files.readAllBytes(zip.toPath());
+		int data = 30 + ((b[26] & 0xff) | ((b[27] & 0xff) << 8)) + ((b[28] & 0xff) | ((b[29] & 0xff) << 8));
+		for (int i = data + 40; i < data + 80; i++) b[i] = (byte)0xff;
+		Files.write(zip.toPath(), b);
+	}
+
+	private static byte[] bigText() {
+		StringBuilder big = new StringBuilder();
+		for (int i = 0; i < 2000; i++) big.append("壊れる本の").append(i).append("行目です。\n");
+		return big.toString().getBytes(StandardCharsets.UTF_8);
+	}
+
+	/** テキストが何冊あっても、飛ばしたことは 1 回だけ出す（本ごとに読み直しても重ねない） */
+	@Test
+	public void aSkippedTextIsReportedOnceForAMultiBookZip() throws Exception {
+		File src = tempFolder.newFolder("msrc");
+		File dst = tempFolder.newFolder("mdst");
+		File zip = new File(src, "three.zip");
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(new FileOutputStream(zip))) {
+			zos.putNextEntry(new java.util.zip.ZipEntry("1_bad.txt"));
+			zos.write(bigText());
+			zos.closeEntry();
+			for (String t : new String[]{ "二冊目", "三冊目" }) {
+				zos.putNextEntry(new java.util.zip.ZipEntry(t + ".txt"));
+				zos.write((t + "\n著\n\n　本文です。\n").getBytes(StandardCharsets.UTF_8));
+				zos.closeEntry();
+			}
+		}
+		corruptFirstEntry(zip);
+		File ini = tempFolder.newFile("mempty.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(), zip.getPath());
+
+		assertTrue(lastLog, new File(dst, "[著] 二冊目.epub").isFile());
+		assertTrue(lastLog, new File(dst, "[著] 三冊目.epub").isFile());
+		assertEquals("飛ばしたことは 1 回だけ:\n" + lastLog, 1, lastLog.split("テキストが読めないので飛ばします", -1).length - 1);
+		assertEquals(1, exitCode);
+	}
+
+	/** 画像と同じ名前の壊れたテキスト（01.txt と 01.png）があっても、画像だけの本として変換できる（テキストを画像として開かない） */
+	@Test
+	public void aCorruptTextNamedLikeAnImageDoesNotBreakAnImageOnlyBook() throws Exception {
+		File src = tempFolder.newFolder("isrc");
+		File dst = tempFolder.newFolder("idst");
+		File zip = new File(src, "comic.zip");
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(new FileOutputStream(zip))) {
+			zos.putNextEntry(new java.util.zip.ZipEntry("01.txt"));
+			zos.write(bigText());
+			zos.closeEntry();
+			for (String n : new String[]{ "01.png", "02.png" }) {
+				zos.putNextEntry(new java.util.zip.ZipEntry(n));
+				java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(60, 80, java.awt.image.BufferedImage.TYPE_INT_RGB);
+				javax.imageio.ImageIO.write(img, "png", zos);
+				zos.closeEntry();
+			}
+		}
+		corruptFirstEntry(zip);
+		File ini = tempFolder.newFile("iempty.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(), zip.getPath());
+
+		File[] epubs = dst.listFiles((d, n) -> n.endsWith(".epub"));
+		assertEquals("画像だけの本ができていない:\n" + lastLog, 1, epubs.length);
+		int images = 0;
+		try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(epubs[0])) {
+			for (java.util.zip.ZipEntry e : java.util.Collections.list(z.entries())) if (e.getName().startsWith("OPS/images/")) images++;
+		}
+		assertEquals("画像は 2 枚（テキストを画像として書かない）", 2, images);
+		assertEquals("飛ばしたテキストは失敗として数える", 1, exitCode);
+	}
 }
