@@ -116,22 +116,10 @@ public final class BookLedger
 	 */
 	public static void recordBookEpisodes(BookInfo bookInfo, File epub)
 	{
-		recordBookEpisodes(bookInfo, epub, episodesToRecord(bookInfo));
-	}
-
-	/** 今書き終えた本に記録する話数（最後に作った txt の話数）。台帳が無い・Web から取った本でなければ -1。
-	 * 書き終えてから記録するまでに間がある呼び手（kindlegen の後で本当の名前へ動かす GUI）は、書き終えたときにこれを控えておく */
-	public static int episodesToRecord(BookInfo bookInfo)
-	{
-		if (bookInfo == null || bookInfo.ledgerDir == null) return -1;
-		BookLedger ledger = load(bookInfo.ledgerDir);
-		return ledger == null ? -1 : ledger.lastEpisodes;
-	}
-
-	/** 書き終えた本に、控えておいた話数 episodes を記録する（{@link #episodesToRecord} の値。負なら何もしない） */
-	public static void recordBookEpisodes(BookInfo bookInfo, File epub, int episodes)
-	{
-		if (bookInfo == null || bookInfo.ledgerDir == null || episodes < 0) return;
+		//記録するのは txt を読んだときに控えた話数（applyTo）。今の台帳の話数ではない
+		if (bookInfo == null || bookInfo.ledgerDir == null) return;
+		int episodes = bookInfo.ledgerEpisodes;
+		if (episodes < 0) return;
 		BookLedger ledger = load(bookInfo.ledgerDir);
 		if (ledger == null || ledger.episodesFor(epub) == episodes
 			&& ledger.bookEpisodes.containsKey(bookKey(epub))) return;
@@ -353,6 +341,8 @@ public final class BookLedger
 		bookInfo.identifier = ledger.identifier;
 		bookInfo.outputBaseName = ledger.outputBaseName;
 		bookInfo.ledgerDir = workDir;
+		//txt を読んだ時点の話数を控える。書き終えるまで・動かすまで（kindlegen）の間に同じ作品の txt と台帳が更新されても、この本の話数を記録する
+		bookInfo.ledgerEpisodes = ledger.lastEpisodes;
 	}
 
 	/**

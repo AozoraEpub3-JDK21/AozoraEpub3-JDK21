@@ -1013,7 +1013,7 @@ public class AozoraEpub3
 
 	/** ファイルを変換
 	 * @param recordLedger 書き終えた本の話数を台帳に書くか。outFile が後で別の名前へ動かす一時ファイルなら false にして、
-	 *   動かした後で呼び手が {@link com.github.hmdev.info.BookLedger#recordBookEpisodes} を呼ぶ（一時ファイルの名前で記録しない。internal #25）
+	 *   動かした後で呼び手が {@link com.github.hmdev.info.BookLedger#recordBookEpisodes(BookInfo, File)} を呼ぶ（一時ファイルの名前で記録しない。internal #25）
 	 * @return 変換に成功したら true。失敗時は false（出力途中の EPUB は削除済み） */
 	static public boolean convertFile(File srcFile, String ext, File outFile, AozoraEpub3Converter aozoraConverter, Epub3Writer epubWriter,
 			String encType, BookInfo bookInfo, ImageInfoReader imageInfoReader, int txtIdx, boolean recordLedger)

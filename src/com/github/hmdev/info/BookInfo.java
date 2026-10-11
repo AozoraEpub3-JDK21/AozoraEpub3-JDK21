@@ -112,6 +112,8 @@ public class BookInfo
 	public String outputBaseName;
 	/** 台帳のある作品のフォルダ。最初の変換で決まった EPUB の名前をここの台帳に記録する。null なら記録しない */
 	public File ledgerDir;
+	/** txt を読んだときの台帳の最後の話数（その txt の話数。本を書き終えたらこの値をその本の話数として記録する。無ければ -1） */
+	public int ledgerEpisodes = -1;
 	
 	////////////////////////////////
 	

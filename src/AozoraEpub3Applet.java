@@ -4546,8 +4546,6 @@ public class AozoraEpub3Applet extends JPanel
 			LogAppender.error("変換に失敗しました : "+srcFile.getAbsolutePath());
 			return;
 		}
-		//kindle*.epub の一時ファイルなら、書き終えた今の話数を控える（kindlegen の数分の間に同じ作品の txt が更新されても、この本の話数を記録する）
-		int bookEpisodes = outFileOrg != null ? com.github.hmdev.info.BookLedger.episodesToRecord(bookInfo) : -1;
 		//プレビュー対象を更新 (kindlegen 経路では後段のリネーム後に上書きする)。
 		//outFileOrg != null は outFile が kindle*.epub の一時ファイルであることを意味する
 		this.setPreviewTarget(outFile, outFileOrg == null);
@@ -4604,7 +4602,7 @@ public class AozoraEpub3Applet extends JPanel
 							Files.move(outFile.toPath(), outFileOrg.toPath(), StandardCopyOption.REPLACE_EXISTING);
 							this.setPreviewTarget(outFileOrg);
 							//本当の EPUB の名前で、本の話数を台帳に書く（一時ファイルの名前では書いていない。internal #25）
-							com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFileOrg, bookEpisodes);
+							com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFileOrg);
 						} else {
 							outFile.delete();
 							//epub を残さない設定なのでプレビュー対象も無くなる
