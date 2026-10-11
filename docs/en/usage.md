@@ -217,6 +217,8 @@ java -jar AozoraEpub3.jar -of -d ./output/ --preview input.txt
 In the GUI, the "Preview" button becomes available once a conversion finishes. Turning on
 "Open the preview automatically after conversion" on the "Preview" tab opens it after every
 conversion (off by default).
+If a preview tab is visible in the browser, the book is shown in that tab instead of a new one
+(a background tab or a hidden browser gets a new tab).
 
 | Control | What it does |
 |---------|--------------|
