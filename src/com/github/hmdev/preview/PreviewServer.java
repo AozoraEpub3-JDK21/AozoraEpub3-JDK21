@@ -1288,16 +1288,29 @@ public class PreviewServer implements AutoCloseable
 		return uri.getRawQuery() == null ? path : path + "?" + uri.getRawQuery();
 	}
 
+	/** サイトへ同時に出す数の枠（なろうとカクヨムで共有する。掴むのは同じ 4 本のスレッド） */
+	private final java.util.concurrent.Semaphore rankingUpstream = RankingFetch.newUpstream();
+
 	/** 本棚のランキング（なろう）。試験では差し替える */
-	private volatile NarouRanking narouRanking = new NarouRanking();
+	private volatile NarouRanking narouRanking = new NarouRanking(
+		uri -> RankingFetch.httpGet(uri, RankingFetch.DEADLINE, NarouRanking.SITE, false), this.rankingUpstream);
+
+	/** 本棚のランキング（カクヨム）。試験では差し替える */
+	private volatile KakuyomuRanking kakuyomuRanking = new KakuyomuRanking(this.rankingUpstream);
 
 	void setNarouRanking(NarouRanking narouRanking)
 	{
 		this.narouRanking = narouRanking;
 	}
 
+	void setKakuyomuRanking(KakuyomuRanking kakuyomuRanking)
+	{
+		this.kakuyomuRanking = kakuyomuRanking;
+	}
+
 	/**
-	 * ランキング（GET api/ranking?period=d&genre=0&serial=1）。API の応答の JSON をそのまま返す。
+	 * ランキング（GET api/ranking?site=narou&period=d&genre=0&serial=1）。
+	 * なろうは API の応答の JSON を、カクヨム（site=kakuyomu）はページの __NEXT_DATA__ の JSON をそのまま返す。
 	 * 落とせる本棚（アプリから開いた本棚）だけ。札から落とせないランキングは出さない
 	 */
 	private void serveRanking(HttpExchange exchange) throws IOException
@@ -1306,15 +1319,29 @@ public class PreviewServer implements AutoCloseable
 			respondJsonStatus(exchange, 503, errorJson("この本棚ではランキングを使えません（アプリから本棚を開いてください）"));
 			return;
 		}
-		NarouRanking.Query query = NarouRanking.Query.parse(exchange.getRequestURI().getRawQuery());
-		if (query == null) {
-			respondJsonStatus(exchange, 400, errorJson("ランキングの期間かジャンルの指定が読めません"));
-			return;
-		}
+		String rawQuery = exchange.getRequestURI().getRawQuery();
+		String site = queryValue(exchange, "site");
 		byte[] body;
 		try {
-			body = this.narouRanking.fetch(query);
-		} catch (NarouRanking.BusyException e) {
+			if (site == null || site.equals("narou")) {
+				NarouRanking.Query query = NarouRanking.Query.parse(rawQuery);
+				if (query == null) {
+					respondJsonStatus(exchange, 400, errorJson("ランキングの期間かジャンルの指定が読めません"));
+					return;
+				}
+				body = this.narouRanking.fetch(query);
+			} else if (site.equals("kakuyomu")) {
+				KakuyomuRanking.Query query = KakuyomuRanking.Query.parse(rawQuery);
+				if (query == null) {
+					respondJsonStatus(exchange, 400, errorJson("ランキングの期間かジャンルの指定が読めません"));
+					return;
+				}
+				body = this.kakuyomuRanking.fetch(query);
+			} else {
+				respondJsonStatus(exchange, 400, errorJson("ランキングのサイトの指定が読めません"));
+				return;
+			}
+		} catch (RankingFetch.BusyException e) {
 			respondJsonStatus(exchange, 503, errorJson(e.getMessage()));
 			return;
 		} catch (IOException e) {

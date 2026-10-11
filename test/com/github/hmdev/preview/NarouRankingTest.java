@@ -75,11 +75,11 @@ public class NarouRankingTest
 		NarouRanking.Query daily = NarouRanking.Query.parse("period=d");
 		long t0 = 1_000_000_000L;
 		assertArrayEquals(LIST, ranking.fetch(daily, t0));
-		assertArrayEquals(LIST, ranking.fetch(daily, t0 + NarouRanking.CACHE_TTL.toNanos() - 1));
+		assertArrayEquals(LIST, ranking.fetch(daily, t0 + RankingFetch.CACHE_TTL.toNanos() - 1));
 		assertEquals(1, asked.size());
 		ranking.fetch(NarouRanking.Query.parse("period=w"), t0);
 		assertEquals("別の問い合わせは取る", 2, asked.size());
-		ranking.fetch(daily, t0 + NarouRanking.CACHE_TTL.toNanos());
+		ranking.fetch(daily, t0 + RankingFetch.CACHE_TTL.toNanos());
 		assertEquals("古くなったら取り直す", 3, asked.size());
 	}
 
@@ -113,7 +113,7 @@ public class NarouRankingTest
 		try {
 			ranking.fetch(NarouRanking.Query.parse("period=q"));
 			fail("3 本目は断る");
-		} catch (NarouRanking.BusyException e) {
+		} catch (RankingFetch.BusyException e) {
 			//待たずに断る
 		}
 		assertArrayEquals("覚えている答えは返す", LIST, ranking.fetch(NarouRanking.Query.parse("period=d")));
@@ -167,7 +167,7 @@ public class NarouRankingTest
 			URI uri = URI.create("http://" + PreviewServer.urlHost(java.net.InetAddress.getLoopbackAddress()) + ":" + stall.getAddress().getPort() + "/");
 			long t0 = System.nanoTime();
 			try {
-				NarouRanking.httpGet(uri, java.time.Duration.ofSeconds(1));
+				RankingFetch.httpGet(uri, java.time.Duration.ofSeconds(1), NarouRanking.SITE, false);
 				fail("本文が届かないまま返ってはいけない");
 			} catch (IOException e) {
 				assertTrue(e.getMessage(), e.getMessage().contains("応えませんでした"));
@@ -188,7 +188,7 @@ public class NarouRankingTest
 		com.sun.net.httpserver.HttpServer big = com.sun.net.httpserver.HttpServer.create(
 			new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
 		big.createContext("/", exchange -> {
-			exchange.sendResponseHeaders(200, NarouRanking.MAX_BYTES + 1L);
+			exchange.sendResponseHeaders(200, RankingFetch.MAX_BYTES + 1L);
 			try {
 				//長さだけ名乗って 1 バイト送り、止まる
 				exchange.getResponseBody().write('[');
@@ -206,7 +206,7 @@ public class NarouRankingTest
 			URI uri = URI.create("http://" + PreviewServer.urlHost(java.net.InetAddress.getLoopbackAddress()) + ":" + big.getAddress().getPort() + "/");
 			long t0 = System.nanoTime();
 			try {
-				NarouRanking.httpGet(uri, java.time.Duration.ofSeconds(10));
+				RankingFetch.httpGet(uri, java.time.Duration.ofSeconds(10), NarouRanking.SITE, false);
 				fail("上限を超える応答は断る");
 			} catch (IOException e) {
 				assertTrue(e.getMessage(), e.getMessage().contains("大きすぎます"));
@@ -229,7 +229,7 @@ public class NarouRankingTest
 		}
 		URI uri = URI.create("http://" + PreviewServer.urlHost(java.net.InetAddress.getLoopbackAddress()) + ":" + port + "/");
 		try {
-			NarouRanking.httpGet(uri, java.time.Duration.ofSeconds(5));
+			RankingFetch.httpGet(uri, java.time.Duration.ofSeconds(5), NarouRanking.SITE, false);
 			fail("閉じたポートからは取れない");
 		} catch (IOException e) {
 			assertTrue(e.getMessage(), e.getMessage().contains("つながりません"));
@@ -244,8 +244,8 @@ public class NarouRankingTest
 		try (GZIPOutputStream out = new GZIPOutputStream(packed)) {
 			out.write(LIST);
 		}
-		assertArrayEquals(LIST, NarouRanking.gunzip(packed.toByteArray()));
-		assertArrayEquals(LIST, NarouRanking.gunzip(LIST));
-		assertArrayEquals(new byte[0], NarouRanking.gunzip(new byte[0]));
+		assertArrayEquals(LIST, RankingFetch.gunzip(packed.toByteArray(), NarouRanking.SITE));
+		assertArrayEquals(LIST, RankingFetch.gunzip(LIST, NarouRanking.SITE));
+		assertArrayEquals(new byte[0], RankingFetch.gunzip(new byte[0], NarouRanking.SITE));
 	}
 }

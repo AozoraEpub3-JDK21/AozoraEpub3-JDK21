@@ -1821,6 +1821,43 @@ public class PreviewServerTest
 		assertTrue(down.body(), down.body().contains("つながりません"));
 	}
 
+	/** site=kakuyomu はカクヨムのページの __NEXT_DATA__ を返す。site が分からなければ 400、なろうへも出さない */
+	@Test
+	public void theKakuyomuRankingPassesTheNextDataThrough() throws Exception
+	{
+		java.util.List<URI> narouAsked = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.List<URI> asked = new java.util.concurrent.CopyOnWriteArrayList<>();
+		String json = "{\"props\":{\"pageProps\":{\"__APOLLO_STATE__\":{\"Work:1\":{\"title\":\"<b>題</b>\"}}}}}";
+		byte[] page = ("<html><body><script id=\"__NEXT_DATA__\" type=\"application/json\">" + json + "</script></body></html>")
+			.getBytes(StandardCharsets.UTF_8);
+		this.server.setNarouRanking(new NarouRanking(uri -> { narouAsked.add(uri); return "[]".getBytes(StandardCharsets.UTF_8); }));
+		this.server.setKakuyomuRanking(new KakuyomuRanking(uri -> { asked.add(uri); return page; }));
+		assertEquals(503, get(base() + "api/ranking?site=kakuyomu").statusCode());
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		this.server.setWebShelf(new FakeWebShelf());
+		assertEquals(400, get(base() + "api/ranking?site=hameln").statusCode());
+		assertEquals(400, get(base() + "api/ranking?site=kakuyomu&period=q").statusCode());
+		assertEquals(400, get(base() + "api/ranking?site=kakuyomu&genre=201").statusCode());
+		assertTrue("断った問い合わせはサイトへ出さない", asked.isEmpty() && narouAsked.isEmpty());
+
+		HttpResponse<String> ok = get(base() + "api/ranking?site=kakuyomu&period=m&genre=fantasy&serial=0&tab=t1");
+		assertEquals(200, ok.statusCode());
+		assertEquals(json, ok.body());
+		assertTrue(ok.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
+		assertEquals(java.util.List.of(URI.create("https://kakuyomu.jp/rankings/fantasy/monthly?work_variation=all")), asked);
+		assertTrue("カクヨムを頼んだらなろうへは出さない", narouAsked.isEmpty());
+
+		//site=narou と、site を付けないもの（前からのビューアー）はなろう
+		assertEquals(200, get(base() + "api/ranking?site=narou").statusCode());
+		assertEquals(200, get(base() + "api/ranking?period=w").statusCode());
+		assertEquals(2, narouAsked.size());
+
+		this.server.setKakuyomuRanking(new KakuyomuRanking(uri -> "<html>メンテナンス中</html>".getBytes(StandardCharsets.UTF_8)));
+		HttpResponse<String> changed = get(base() + "api/ranking?site=kakuyomu");
+		assertEquals(502, changed.statusCode());
+		assertTrue(changed.body(), changed.body().contains("ページの作りが変わった"));
+	}
+
 	private volatile String lastJob;
 
 	/** 落とせたら、Web 本棚を本棚に出す（読み直す）。同じ URL は 1 つの仕事。落とせない本棚は失敗で知らせる */

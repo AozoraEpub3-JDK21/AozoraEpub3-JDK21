@@ -1,8 +1,10 @@
 /*
  * 本棚のランキング (internal #11)
  *
- * - サーバの api/ranking は、なろう小説 API の応答をそのまま返す。並べる・本棚にあるかを見るのはここ
- * - 順番は今のポイントで並べたもの。サイトのランキングのページ (集計した時点の写し) と少し違う
+ * - サーバの api/ranking は、なろうは小説 API の応答を、カクヨムはランキングのページの __NEXT_DATA__ を
+ *   そのまま返す。読んで並べる・本棚にあるかを見るのはここ (サイトごとの行を rankingWork の形にそろえる)
+ * - なろうの順番は今のポイントで並べたもの。サイトのランキングのページ (集計した時点の写し) と少し違う。
+ *   カクヨムはランキングのページそのものなので、順番はサイトと同じ
  * - 「落とす」は URL を貼って落とすのと同じ道 (viewer-library.js の startDownload)。同時に 1 つだけ
  * - API の文字列は textContent でしか入れない (あらすじや題に < が入る)
  */
@@ -17,7 +19,32 @@ const RANKING_GENRES = [
 	['その他', [[9901, '童話'], [9902, '詩'], [9903, 'エッセイ'], [9904, 'リプレイ'], [9999, 'その他'], [9801, 'ノンジャンル']]],
 ];
 
-/** 期間 → 点数の項目 (サーバが of に入れる名前) */
+/** カクヨムのジャンル (ランキングのページの URL の名前)。0 は総合 */
+const KAKUYOMU_GENRES = [
+	['fantasy', '異世界ファンタジー'], ['action', '現代ファンタジー'], ['sf', 'SF'], ['love_story', '恋愛'],
+	['romance', 'ラブコメ'], ['drama', '現代ドラマ'], ['horror', 'ホラー'], ['mystery', 'ミステリー'],
+	['nonfiction', 'エッセイ・ノンフィクション'], ['history', '歴史・時代・伝奇'], ['criticism', '創作論・評論'],
+	['others', '詩・童話・その他'],
+];
+
+const RANKING_PERIOD_NAMES = {d: '日間', w: '週間', m: '月間', q: '四半期', y: '年間', all: '累計'};
+
+/** サイトごとの選べるもの */
+const RANKING_SITES = {
+	narou: {
+		periods: ['d', 'w', 'm', 'q', 'y', 'all'],
+		serial: '連載だけ (短編を外す)',
+		note: 'なろうの今のポイントで並べています (サイトのランキングのページと順番が少し違うことがあります)',
+	},
+	kakuyomu: {
+		// カクヨムに四半期は無い
+		periods: ['d', 'w', 'm', 'y', 'all'],
+		serial: '長編だけ (短編を外す)',
+		note: 'カクヨムのランキングのページから読んでいます (上位 100 作)',
+	},
+};
+
+/** 期間 → なろうの点数の項目 (サーバが of に入れる名前) */
 const RANKING_POINTS = {
 	d: 'daily_point', w: 'weekly_point', m: 'monthly_point',
 	q: 'quarter_point', y: 'yearly_point', all: 'global_point',
@@ -26,7 +53,10 @@ const RANKING_POINTS = {
 /** ランキングの読み込みの通し番号。遅れて返った古い一覧で新しい一覧を上書きしない */
 let rankingLoadSeq = 0;
 
-/** いま出している作品 (API の行)。本棚の印を付け直すときに使う */
+/**
+ * いま出している作品 (サイトをそろえた形)。本棚の印を付け直すときに使う。
+ * {key, url, title, writer, genre, kind, points, summary, story}。key は本棚の本の URL からも作れる印 (workKeyOfUrl)
+ */
 let rankingWorks = [];
 
 /**
@@ -39,23 +69,16 @@ let rankingTimer = 0;
 let rankingInFlight = false;
 let rankingWanted = false;
 
-/** ランキングから落としている作品のコード (小文字)。押した瞬間から持つ (startDownload が仕事を持つのは POST の返り以降) */
-let rankingBusyNcode = null;
+/** ランキングから落としている作品の印 (key)。押した瞬間から持つ (startDownload が仕事を持つのは POST の返り以降) */
+let rankingBusyKey = null;
 
 function bindRankingEvents()
 {
-	const genre = el.rankingGenre;
-	for (const [group, items] of RANKING_GENRES) {
-		const optgroup = document.createElement('optgroup');
-		optgroup.label = group;
-		for (const [code, name] of items) {
-			const option = document.createElement('option');
-			option.value = String(code);
-			option.textContent = name;
-			optgroup.appendChild(option);
-		}
-		genre.appendChild(optgroup);
-	}
+	fillRankingChoices();
+	el.rankingSite.addEventListener('change', () => {
+		fillRankingChoices();
+		loadRanking();
+	});
 	el.libraryRankingToggle.addEventListener('click', () => toggleRanking());
 	for (const control of [el.rankingPeriod, el.rankingGenre, el.rankingSerial]) {
 		control.addEventListener('change', () => loadRanking());
@@ -73,6 +96,38 @@ function bindRankingEvents()
 		if (!button) return;
 		downloadFromRanking(button).catch(err => showDownloadStatus('落とせませんでした: ' + err.message, true));
 	});
+}
+
+/** サイトに合わせて期間とジャンルの選択肢を作り直す。期間はそのサイトにあれば残す (四半期はカクヨムでは月間に) */
+function fillRankingChoices()
+{
+	const site = RANKING_SITES[el.rankingSite.value] ? el.rankingSite.value : 'narou';
+	const config = RANKING_SITES[site];
+	const period = el.rankingPeriod.value;
+	el.rankingPeriod.replaceChildren(...config.periods.map(code => rankingOption(code, RANKING_PERIOD_NAMES[code])));
+	el.rankingPeriod.value = config.periods.includes(period) ? period : 'm';
+	const genre = el.rankingGenre;
+	genre.replaceChildren(rankingOption('0', '総合'));
+	if (site === 'kakuyomu') {
+		for (const [code, name] of KAKUYOMU_GENRES) genre.appendChild(rankingOption(code, name));
+	} else {
+		for (const [group, items] of RANKING_GENRES) {
+			const optgroup = document.createElement('optgroup');
+			optgroup.label = group;
+			for (const [code, name] of items) optgroup.appendChild(rankingOption(String(code), name));
+			genre.appendChild(optgroup);
+		}
+	}
+	genre.value = '0';
+	el.rankingSerialLabel.textContent = config.serial;
+}
+
+function rankingOption(value, label)
+{
+	const option = document.createElement('option');
+	option.value = value;
+	option.textContent = label;
+	return option;
 }
 
 function rankingOpen()
@@ -132,19 +187,21 @@ async function fetchRanking()
 {
 	// 選択が変わるたびに loadRanking が番号を進める。返ったときに番号が違えば、選択が変わっている
 	const seq = rankingLoadSeq;
+	const site = el.rankingSite.value;
 	const period = el.rankingPeriod.value;
-	const query = 'period=' + encodeURIComponent(period)
+	const query = 'site=' + encodeURIComponent(site)
+		+ '&period=' + encodeURIComponent(period)
 		+ '&genre=' + encodeURIComponent(el.rankingGenre.value)
 		+ '&serial=' + (el.rankingSerial.checked ? '1' : '0');
-	let rows;
+	let works;
 	try {
 		const response = await fetch('api/ranking?' + query, {cache: 'no-store'});
 		let json = null;
 		try { json = await response.json(); } catch (e) { /* 本文の無い応答 */ }
-		if (!response.ok || !Array.isArray(json)) {
+		if (!response.ok || !json || (json.error && !Array.isArray(json))) {
 			throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
 		}
-		rows = json;
+		works = (site === 'kakuyomu') ? kakuyomuWorks(json) : narouWorks(json, period);
 	} catch (e) {
 		if (seq !== rankingLoadSeq) return;
 		rankingWorks = [];
@@ -154,34 +211,89 @@ async function fetchRanking()
 		return;
 	}
 	if (seq !== rankingLoadSeq) return;
-	// 先頭は {"allcount": n}。作品の行は ncode を持つ。
-	// 題・作者・あらすじは文字列にそろえる (数字だけだと数で返ることがある。split で落ちる)
-	rankingWorks = rows.filter(row => row && typeof row.ncode === 'string').map(row => Object.assign({}, row, {
-		title: rankingText(row.title), writer: rankingText(row.writer), story: rankingText(row.story),
-	}));
-	el.rankingStatus.textContent = rankingWorks.length
-		? 'なろうの今のポイントで並べています (サイトのランキングのページと順番が少し違うことがあります)'
-		: '作品がありません';
-	renderRanking(period);
+	rankingWorks = works;
+	el.rankingStatus.textContent = rankingWorks.length ? RANKING_SITES[site].note : '作品がありません';
+	renderRanking();
 }
 
-/** 本棚にある作品のコード (dc:source の URL から取る。小文字) */
-function shelfNcodes()
+/**
+ * なろうの API の行をそろえる。先頭は {"allcount": n}。作品の行は ncode を持つ。
+ * period は頼んだときの期間 (点数の項目を選ぶ。今の選択で読むと、別の期間の答えで点数が消える)
+ */
+function narouWorks(rows, period)
 {
-	const codes = new Set();
-	for (const book of (state.library && state.library.books) || []) {
-		const code = ncodeOfUrl(book.source);
-		if (code) codes.add(code);
-	}
-	return codes;
+	if (!Array.isArray(rows)) throw new Error('なろうの API が一覧を返しませんでした');
+	const point = RANKING_POINTS[period];
+	return rows.filter(row => row && typeof row.ncode === 'string').map(row => {
+		// 題・作者・あらすじは文字列にそろえる (数字だけだと数で返ることがある。split で落ちる)
+		const story = rankingText(row.story);
+		const ncode = row.ncode.toLowerCase();
+		return {
+			key: ncode,
+			url: 'https://ncode.syosetu.com/' + ncode + '/',
+			title: rankingText(row.title) || ncode,
+			writer: rankingText(row.writer),
+			genre: rankingGenreName(row.genre),
+			kind: rankingKind(row),
+			points: rankingPoints(row[point], ' pt'),
+			summary: firstLine(story),
+			story,
+		};
+	});
 }
 
-/** なろうの作品ページの URL から作品コード (小文字) を取る。なろうでなければ null */
-function ncodeOfUrl(url)
+/**
+ * カクヨムのページの __NEXT_DATA__ をそろえる。順位の並びは ROOT_QUERY の rankedWorks(…) の nodes にあり、
+ * 作品と作者は Apollo の控えの Work:… と UserAccount:… を引く (2026-10-11 のページの作り)
+ */
+function kakuyomuWorks(data)
+{
+	const apollo = data && data.props && data.props.pageProps && data.props.pageProps.__APOLLO_STATE__;
+	const root = apollo && apollo.ROOT_QUERY;
+	const key = root && Object.keys(root).find(k => k.startsWith('rankedWorks('));
+	const nodes = key && root[key] && root[key].nodes;
+	if (!Array.isArray(nodes)) throw new Error('カクヨムのページにランキングが見つかりません (ページの作りが変わったかもしれません)');
+	const works = [];
+	for (const node of nodes) {
+		const work = node && apollo[node.__ref];
+		if (!work || !/^[0-9]+$/.test(String(work.id))) continue;
+		const author = (work.author && apollo[work.author.__ref]) || {};
+		const intro = rankingText(work.introduction);
+		const id = String(work.id);
+		works.push({
+			key: 'kakuyomu:' + id,
+			url: 'https://kakuyomu.jp/works/' + id,
+			title: rankingText(work.title) || id,
+			writer: rankingText(work.alternateAuthorName) || rankingText(author.activityName) || rankingText(author.name),
+			genre: kakuyomuGenreName(work.genre),
+			kind: kakuyomuKind(work),
+			points: rankingPoints(work.totalReviewPoint, '', '★ '),
+			summary: firstLine(rankingText(work.catchphrase) || intro),
+			story: intro,
+		});
+	}
+	return works;
+}
+
+/** 本棚にある作品の印 (dc:source の URL から取る) */
+function shelfKeys()
+{
+	const keys = new Set();
+	for (const book of (state.library && state.library.books) || []) {
+		const key = workKeyOfUrl(book.source);
+		if (key) keys.add(key);
+	}
+	return keys;
+}
+
+/** 作品ページの URL から印を取る。なろうは作品コード (小文字)、カクヨムは kakuyomu:作品の番号。どちらでもなければ null */
+function workKeyOfUrl(url)
 {
 	if (!url) return null;
-	const match = /^https?:\/\/ncode\.syosetu\.com\/(n[0-9a-z]+)(?:\/|$)/i.exec(url);
-	return match ? match[1].toLowerCase() : null;
+	const narou = /^https?:\/\/ncode\.syosetu\.com\/(n[0-9a-z]+)(?:\/|$)/i.exec(url);
+	if (narou) return narou[1].toLowerCase();
+	const kakuyomu = /^https?:\/\/kakuyomu\.jp\/works\/([0-9]+)(?:[/?#]|$)/i.exec(url);
+	return kakuyomu ? 'kakuyomu:' + kakuyomu[1] : null;
 }
 
 function rankingText(value)
@@ -189,25 +301,18 @@ function rankingText(value)
 	return (value === null || value === undefined) ? '' : String(value);
 }
 
-function rankingWorkUrl(work)
+function renderRanking()
 {
-	return 'https://ncode.syosetu.com/' + work.ncode.toLowerCase() + '/';
-}
-
-/** period は頼んだときの期間 (点数の項目を選ぶ。今の選択で読むと、別の期間の答えで点数が消える) */
-function renderRanking(period)
-{
-	const owned = shelfNcodes();
-	const point = RANKING_POINTS[period];
-	const items = rankingWorks.map((work, index) => rankingCard(work, index + 1, point, owned));
+	const owned = shelfKeys();
+	const items = rankingWorks.map((work, index) => rankingCard(work, index + 1, owned));
 	el.rankingList.replaceChildren(...items);
 }
 
-function rankingCard(work, rank, point, owned)
+function rankingCard(work, rank, owned)
 {
 	const item = document.createElement('li');
 	item.className = 'ranking-card';
-	item.dataset.ncode = work.ncode.toLowerCase();
+	item.dataset.key = work.key;
 
 	const number = document.createElement('div');
 	number.className = 'rank';
@@ -218,24 +323,23 @@ function rankingCard(work, rank, point, owned)
 	body.className = 'body';
 	const title = document.createElement('a');
 	title.className = 'title';
-	title.href = rankingWorkUrl(work);
+	title.href = work.url;
 	title.target = '_blank';
 	title.rel = 'noopener noreferrer';
 	title.title = '作品のページを開く';
-	title.textContent = work.title || work.ncode;
+	title.textContent = work.title;
 	body.appendChild(title);
 
 	const meta = document.createElement('div');
 	meta.className = 'meta';
-	meta.textContent = [work.writer, rankingGenreName(work.genre), rankingKind(work), rankingPoints(work[point])]
-		.filter(Boolean).join(' ・ ');
+	meta.textContent = [work.writer, work.genre, work.kind, work.points].filter(Boolean).join(' ・ ');
 	body.appendChild(meta);
 
 	if (work.story) {
 		const story = document.createElement('details');
 		story.className = 'story';
 		const summary = document.createElement('summary');
-		summary.textContent = firstLine(work.story);
+		summary.textContent = work.summary || firstLine(work.story);
 		story.appendChild(summary);
 		const full = document.createElement('div');
 		full.textContent = work.story;
@@ -248,8 +352,8 @@ function rankingCard(work, rank, point, owned)
 	action.type = 'button';
 	action.className = 'ranking-get';
 	// 期間を変えて描き直しても、落としている最中の札は「落としています…」のまま
-	if (item.dataset.ncode === rankingBusyNcode) paintRankingBusy(action);
-	else paintRankingButton(action, owned.has(item.dataset.ncode));
+	if (work.key === rankingBusyKey) paintRankingBusy(action);
+	else paintRankingButton(action, owned.has(work.key));
 	item.appendChild(action);
 	return item;
 }
@@ -273,16 +377,16 @@ function remarkRanking()
 {
 	// 本棚を読み込めなかった (state.library が null) ときは、印を消さない。消すと本棚にある作品をまた落とせる
 	if (!state.library) return;
-	const owned = shelfNcodes();
+	const owned = shelfKeys();
 	for (const item of el.rankingList.children) {
 		const button = item.querySelector('button.ranking-get');
-		if (button && item.dataset.ncode !== rankingBusyNcode) paintRankingButton(button, owned.has(item.dataset.ncode));
+		if (button && item.dataset.key !== rankingBusyKey) paintRankingButton(button, owned.has(item.dataset.key));
 	}
 }
 
 async function downloadFromRanking(button)
 {
-	if (libraryDownloadJob || libraryDownloadPosting || rankingBusyNcode) {
+	if (libraryDownloadJob || libraryDownloadPosting || rankingBusyKey) {
 		showDownloadStatus('ほかの作品を落としています。終わってから押してください');
 		el.libraryDownload.hidden = false;
 		el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
@@ -296,25 +400,25 @@ async function downloadFromRanking(button)
 		return;
 	}
 	const item = button.closest('.ranking-card');
-	const work = rankingWorks.find(w => w.ncode.toLowerCase() === item.dataset.ncode);
+	const work = rankingWorks.find(w => w.key === item.dataset.key);
 	if (!work) return;
 	// 進み具合と Web 本棚の場所を聞く欄は、URL を貼って落とすのと同じ所に出る
 	el.libraryDownload.hidden = false;
 	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
-	el.libraryDownloadUrl.value = rankingWorkUrl(work);
-	rankingBusyNcode = item.dataset.ncode;
+	el.libraryDownloadUrl.value = work.url;
+	rankingBusyKey = work.key;
 	paintRankingBusy(button);
 	try {
-		await startDownload(rankingWorkUrl(work));
+		await startDownload(work.url);
 	} finally {
 		// 落とせたときの印は、本棚の読み直し (loadLibrary) が付ける。ここは押せる形に戻すだけ。
 		// 描き直されていれば button はもう画面に無いので、今の札を探して塗る
-		rankingBusyNcode = null;
-		const owned = state.library ? shelfNcodes() : null;
+		rankingBusyKey = null;
+		const owned = state.library ? shelfKeys() : null;
 		for (const current of el.rankingList.querySelectorAll('.ranking-card')) {
-			if (current.dataset.ncode !== item.dataset.ncode) continue;
+			if (current.dataset.key !== work.key) continue;
 			const now = current.querySelector('button.ranking-get');
-			if (now) paintRankingButton(now, owned ? owned.has(current.dataset.ncode) : false);
+			if (now) paintRankingButton(now, owned ? owned.has(work.key) : false);
 		}
 	}
 }
@@ -337,9 +441,26 @@ function rankingKind(work)
 	return episodes ? progress + ' ' + episodes : progress;
 }
 
-function rankingPoints(value)
+/** 点数 (数のときだけ)。なろうは期間の点数 (… pt)、カクヨムは累計の★ (★ …) */
+function rankingPoints(value, suffix, prefix)
 {
-	return (typeof value === 'number') ? value.toLocaleString('ja-JP') + ' pt' : '';
+	return (typeof value === 'number') ? (prefix || '') + value.toLocaleString('ja-JP') + suffix : '';
+}
+
+/** カクヨムのジャンル (Work の genre は URL の名前を大文字にしたもの。LOVE_STORY など) */
+function kakuyomuGenreName(code)
+{
+	const slug = rankingText(code).toLowerCase();
+	const found = KAKUYOMU_GENRES.find(([value]) => value === slug);
+	return found ? found[1] : '';
+}
+
+/** カクヨムの連載の状態 (serialStatus) と公開している話数 */
+function kakuyomuKind(work)
+{
+	const progress = work.serialStatus === 'COMPLETED' ? '完結' : (work.serialStatus === 'RUNNING' ? '連載中' : '');
+	const episodes = (typeof work.publicEpisodeCount === 'number') ? work.publicEpisodeCount + ' 話' : '';
+	return [progress, episodes].filter(Boolean).join(' ');
 }
 
 /** あらすじの 1 行目 (畳んだときに出す) */

@@ -126,7 +126,10 @@
 	<!-- ランキング (viewer-ranking.js)。出している間は本の一覧を隠す -->
 	<div id="libraryRanking" class="library-ranking" hidden>
 		<div class="row">
-			<span class="label">小説家になろう</span>
+			<select id="rankingSite" title="サイト">
+				<option value="narou">小説家になろう</option>
+				<option value="kakuyomu">カクヨム</option>
+			</select>
 			<select id="rankingPeriod" title="期間">
 				<option value="d">日間</option>
 				<option value="w">週間</option>
@@ -138,7 +141,7 @@
 			<select id="rankingGenre" title="ジャンル">
 				<option value="0">総合</option>
 			</select>
-			<label><input id="rankingSerial" type="checkbox" checked> 連載だけ (短編を外す)</label>
+			<label><input id="rankingSerial" type="checkbox" checked> <span id="rankingSerialLabel">連載だけ (短編を外す)</span></label>
 		</div>
 		<div id="rankingStatus" class="note" aria-live="polite"></div>
 		<ol id="rankingList" class="ranking-list"></ol>
