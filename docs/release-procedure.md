@@ -160,24 +160,11 @@ ls build/launch4j/ 2>/dev/null
 
 **ゲート**: 失敗テストがあればここで停止。リリースに進まない。
 
-> **⚠️ `PreviewServerTest` がローカルでハングする間の回避**（`docs/code-audit-followups.md` 項目 31）
+> **`PreviewServerTest` のハングは解消済み**（2026-10-11、`docs/code-audit-followups.md` 項目 31）。
+> win の台で時々（条件は未特定）試験の HttpClient が止まっていたのを、client を HTTP/1.1 に固定して直した。
+> 以前ここにあった「PreviewServerTest を外してゲートを回す」手順は不要。
 >
-> `PreviewServerTest.settingsRoundTripThroughApi` が `HttpClient.send` でブロックし、
-> **フルテストが終わらない**（スレッドダンプで確認）。CI では全件 PASS するので、
-> ローカルでは当該クラスだけ外してゲートを回し、フルテストは CI の結果で担保する。
->
-> ```bash
-> # パッケージ指定でゲートを回す（PreviewServerTest 以外の preview テストは含める）
-> ./gradlew --no-daemon test --tests "com.github.hmdev.converter.*" --tests "com.github.hmdev.util.*" \
->   --tests "com.github.hmdev.epub.*" --tests "com.github.hmdev.writer.*" --tests "com.github.hmdev.config.*" \
->   --tests "com.github.hmdev.info.*" --tests "com.github.hmdev.io.*" --tests "com.github.hmdev.pipeline.*" \
->   --tests "com.github.hmdev.validator.*" --tests "com.github.hmdev.image.*" --tests "com.github.hmdev.web.*" \
->   --tests "com.github.hmdev.update.*" --tests "com.github.hmdev.preview.PreviewLibraryPrefsTest" \
->   --tests "com.github.hmdev.preview.PreviewSessionTest" --tests "com.github.hmdev.preview.PreviewSettingsStoreTest" \
->   --tests "AozoraEpub3SmokeTest" --tests "AozoraEpub3AutoPreviewTest" --tests "AozoraTextFinalizerTest"
-> ```
->
-> ハングしたら `jps -l` → `jstack <pid>` でブロック箇所を確認し、`taskkill //PID <pid> //F` で落とす。
+> それでも止まったら `jps -l` → `jstack <pid>` でブロック箇所を確認し、`taskkill //PID <pid> //F` で落とす。
 > **タグを打つ前に `gh run list --branch master` で CI が GREEN であることを必ず確認する。**
 
 ### 3.3 配布パッケージ生成
@@ -186,8 +173,8 @@ ls build/launch4j/ 2>/dev/null
 ./gradlew --no-daemon dist
 ```
 
-> `dist` → `build` → `check` → `test` と依存するので、上記のハングが解消するまでは
-> **`./gradlew --no-daemon dist -x test`** で回す（§3.2 のゲートは別に済ませてあること）。
+> `dist` → `build` → `check` → `test` と依存するので、§3.2 のゲートを済ませてあれば
+> **`./gradlew --no-daemon dist -x test`** で試験の二度回しを省いてよい。
 
 `dist` タスクは `[zipDistribution, tarDistribution]` に依存し、内部で以下が走る：
 
@@ -564,6 +551,8 @@ gh release edit v1.x.x-jdk21 --draft
 
 ## 9. 改訂履歴
 
+- 2026-10-11: `PreviewServerTest` のハングが解消した（試験の HttpClient を HTTP/1.1 に固定）ので、
+  §3.2 の `--tests` 列挙による回避を外し、§3.3 の `dist -x test` を「ゲート済みなら二度回しを省く」扱いに改めた。
 - 2026-08-27: v1.6.1-jdk21 リリース時の実施結果を反映。
   §3.2 に `PreviewServerTest` ハング時のゲートの回し方（`--tests` 列挙 + `jstack` での確認 +
   タグ前の CI GREEN 確認）、§3.3 に `dist -x test` を追記。
