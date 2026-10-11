@@ -1,8 +1,12 @@
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,8 +19,8 @@ import java.util.TreeMap;
  * ini を、変わったキーの行だけ書き換える（internal #30）。
  *
  * <p>{@link Properties#store} で書き直すと、配布の ini のコメント（各設定の説明）が消え、キーの順も変わる。
- * CLI だけで使う人にはコメントが唯一の説明なので、CLI が書くときはこちらを使う
- * （GUI は今も store で全部を書き直す。配布の ini の冒頭にそう書いてある）。</p>
+ * CLI だけで使う人にはコメントが唯一の説明なので、CLI（{@code IniWebShelf}）も GUI（{@link #writeInPlace}）も
+ * こちらで書く。書く設定は前と同じ（書き手の設定がファイルに勝つ）で、変わるのはコメントと行の順が残ることだけ。</p>
  *
  * <p>ファイルはバイトのまま扱う（{@link Properties#load(java.io.InputStream)} と同じ ISO-8859-1 で読む）。
  * 触らない行は 1 バイトも変えない（UTF-8 のコメントもそのまま残る）。</p>
@@ -31,6 +35,12 @@ final class IniLines
 	 * @return 書く中身。値の変わったキーはその行を書き換え、無くなったキーは行を消し、新しいキーは末尾に足す
 	 */
 	static byte[] update(byte[] original, Properties before, Properties after) throws IOException
+	{
+		return update(original, before, after, "AozoraEpub3 Parameters");
+	}
+
+	/** @param comment 行を残せず store で全部を書くときの見出し */
+	static byte[] update(byte[] original, Properties before, Properties after, String comment) throws IOException
 	{
 		//足す順は名前順。ただし末尾の番号は数で比べる（PreviewLibraryDir.2 を .10 より前に）
 		Map<String, String> set = new TreeMap<>(IniLines::compareKeys);
@@ -71,10 +81,47 @@ final class IniLines
 		//読み直して書きたい設定にならなければ、行を残すのをあきらめて全部を書く（コメントより設定が大事）
 		if (!after.equals(load(result))) {
 			ByteArrayOutputStream all = new ByteArrayOutputStream();
-			after.store(all, "AozoraEpub3 Parameters");
+			after.store(all, comment);
 			return all.toByteArray();
 		}
 		return result;
+	}
+
+	/**
+	 * 設定をファイルへ、その場で書く（一時ファイルから置き換えない。GUI の保存。PR #125 の codex）。
+	 * 今のファイルが読めれば、変わったキーの行だけを書き換え、何も変わらなければ書かない。
+	 * 読めない・無いときは store で全部を書く（前からの GUI の書き方）
+	 */
+	static void writeInPlace(Path file, Properties props, String comment) throws IOException
+	{
+		byte[] content = null;
+		byte[] original = null;
+		if (Files.isRegularFile(file)) {
+			try {
+				original = Files.readAllBytes(file);
+			} catch (IOException e) {
+				//書けるが読めない ini（権限・ほかのプロセスの共有の禁止）。前からの書き方（store で全部）で書く（PR の手元の codex）
+				original = null;
+			}
+		}
+		if (original != null) {
+			Properties before = load(original);
+			//GUI は窓が手前から外れるたびに保存する（#130）。ファイルと同じ設定なら、行を見ずに抜ける
+			if (props.equals(before)) return;
+			if (before != null) {
+				content = update(original, before, props, comment);
+				//GUI は窓が手前から外れるたびに保存する（#130）。変わらなければファイルに触らない
+				if (Arrays.equals(content, original)) return;
+			}
+		}
+		if (content == null) {
+			ByteArrayOutputStream all = new ByteArrayOutputStream();
+			props.store(all, comment);
+			content = all.toByteArray();
+		}
+		try (OutputStream out = Files.newOutputStream(file)) {
+			out.write(content);
+		}
 	}
 
 	/** 最初に使われている改行（無ければ \n） */
@@ -88,24 +135,37 @@ final class IniLines
 		return "\n";
 	}
 
-	/** 名前で比べる。同じ前置きで末尾が数なら数で */
+	/**
+	 * 名前で比べる。末尾が「.数」のキーは、前置きで比べてから数で比べる（PreviewLibraryDir.2 を .10 より前に）。
+	 * (前置き, 数) の組で比べるので推移的（TreeMap の比べ方に使える。PR のゲート2）
+	 */
 	static int compareKeys(String a, String b)
 	{
-		int da = a.lastIndexOf('.') + 1;
-		int db = b.lastIndexOf('.') + 1;
-		if (da > 0 && da == db && a.regionMatches(0, b, 0, da)) {
-			String na = a.substring(da);
-			String nb = b.substring(db);
-			if (!na.isEmpty() && !nb.isEmpty() && na.length() < 10 && nb.length() < 10
-				&& na.chars().allMatch(c -> c >= '0' && c <= '9') && nb.chars().allMatch(c -> c >= '0' && c <= '9')) {
-				int c = Integer.compare(Integer.parseInt(na), Integer.parseInt(nb));
-				if (c != 0) return c;
-			}
-		}
-		return a.compareTo(b);
+		int c = numberedBase(a).compareTo(numberedBase(b));
+		if (c != 0) return c;
+		c = Long.compare(numberOf(a), numberOf(b));
+		return c != 0 ? c : a.compareTo(b);
 	}
 
-	private static Properties load(byte[] bytes)
+	/** 末尾が「.数」なら「.」までの前置き、そうでなければキーそのもの */
+	private static String numberedBase(String key)
+	{
+		return numberOf(key) < 0 ? key : key.substring(0, key.lastIndexOf('.') + 1);
+	}
+
+	/** 末尾の「.数」の数（18 桁まで）。無ければ -1 */
+	private static long numberOf(String key)
+	{
+		int dot = key.lastIndexOf('.');
+		if (dot < 0 || dot == key.length() - 1 || key.length() - dot - 1 > 18) return -1;
+		for (int i = dot + 1; i < key.length(); i++) {
+			char ch = key.charAt(i);
+			if (ch < '0' || ch > '9') return -1;
+		}
+		return Long.parseLong(key.substring(dot + 1));
+	}
+
+	static Properties load(byte[] bytes)
 	{
 		Properties p = new Properties();
 		try {
