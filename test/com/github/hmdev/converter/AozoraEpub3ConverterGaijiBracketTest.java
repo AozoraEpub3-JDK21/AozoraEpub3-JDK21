@@ -100,6 +100,14 @@ public class AozoraEpub3ConverterGaijiBracketTest
 		assertTrue(name, name.startsWith("第［＃１］話"));
 	}
 
+	/** 挿絵のファイル名に外字の［があっても、画像は［］の名前で探す（代わりの文字のまま探さない） */
+	@Test
+	public void anImageFileNameGetsTheBracketBack() throws Exception
+	{
+		String tag = converter.convertGaijiChuki("［＃挿絵（foo※［＃U+FF3B］.png）入る］", true, false);
+		assertEquals("foo［.png", converter.getImageChukiFileName(tag, tag.indexOf('（')));
+	}
+
 	/** 本物の注記は今までどおり */
 	@Test
 	public void realAnnotationsStillWork() throws Exception

@@ -1296,7 +1296,8 @@ public class AozoraEpub3Converter
 		int endIdx = chukiTag.indexOf('、', startIdx+1);
 		if (endIdx == -1) endIdx = chukiTag.indexOf('）', startIdx+1);
 		else endIdx = Math.min(endIdx, chukiTag.indexOf('）', startIdx+1));
-		if (startIdx < endIdx) return chukiTag.substring(startIdx+1, endIdx);
+		//注記の中身は文字の出力を通らないので、外字の［］の代わりの文字と印はここで戻す（ファイル名として探す前に）
+		if (startIdx < endIdx) return CharUtils.removeEscape(chukiTag.substring(startIdx+1, endIdx));
 		return null;
 	}
 	
