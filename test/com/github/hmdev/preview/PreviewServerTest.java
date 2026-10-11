@@ -1667,11 +1667,16 @@ public class PreviewServerTest
 	{
 		assertEquals(204, postText(base() + "api/inbox?tab=h&focus=1", "").statusCode());
 		assertEquals(204, postText(base() + "api/inbox?tab=h&hidden=1", "").statusCode());
-		assertFalse("奥へ回ったタブ", this.server.offerToVisibleTab("http://x/1", 200));
+		//候補が無ければ待たずに返る（候補に残っていると、来ないタブを 2 秒待ってから false になる。どちらも false なので時間で分ける）
+		long t0 = System.nanoTime();
+		assertFalse("奥へ回ったタブ", this.server.offerToVisibleTab("http://x/1", 2_000));
+		assertTrue("奥へ回ったタブを待たない", (System.nanoTime() - t0) / 1_000_000L < 1_000);
 
 		assertEquals(204, postText(base() + "api/inbox?tab=t&focus=1", "").statusCode());
 		assertEquals("t", claimWhileOffering("http://x/3", "t"));
-		assertFalse("取ったタブは読み込み直して別の ID で来る", this.server.offerToVisibleTab("http://x/4", 200));
+		t0 = System.nanoTime();
+		assertFalse("取ったタブは読み込み直して別の ID で来る", this.server.offerToVisibleTab("http://x/4", 2_000));
+		assertTrue("取ったタブを待たない", (System.nanoTime() - t0) / 1_000_000L < 1_000);
 	}
 
 	/** フォーカスを持つタブを先にする。閉じたタブには渡さない */
