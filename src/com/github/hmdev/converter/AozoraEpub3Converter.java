@@ -3864,9 +3864,11 @@ public class AozoraEpub3Converter
 		String line = buf.toString();
 		//内部エスケープの印は convertRubyText で消えているはず。残っていれば変換を通っていない道があるので、
 		//XHTML を壊さないよう外し、開発用のログに残す（XML 1.0 は制御文字を許さない）
-		if (line.indexOf(CharUtils.ESCAPE) >= 0) {
-			logger.warn("変換されていない本文が出力に来ました（{} 行目）。内部エスケープの印を外します", lineNum+1);
-			line = CharUtils.removeEscape(line);
+		//外字の［］の代わりの文字も同じ（文字の出力で［］に戻っているはず）。removeEscape は何も無ければ同じ文字列を返す
+		String cleaned = CharUtils.removeEscape(line);
+		if (cleaned != line) {
+			logger.warn("変換されていない本文が出力に来ました（{} 行目）。内部の文字を外します", lineNum+1);
+			line = cleaned;
 		}
 		//印を外したときは line が短くなるので、長さは line から取る（buf から取ると走査が line の外へ出る）
 		int length = line.length();
