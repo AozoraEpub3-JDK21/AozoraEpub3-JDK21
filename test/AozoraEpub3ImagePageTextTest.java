@@ -73,4 +73,61 @@ public class AozoraEpub3ImagePageTextTest {
 		assertFalse("内部エスケープの印が XHTML に出ている", all.indexOf('\u0001') >= 0);
 		assertTrue(all, all.contains("前》と<ruby>漢字<rt>かんじ</rt></ruby>"));
 	}
+
+	/** 本文 body の本を、大きな画像 fig.png と一緒に変換し、xhtml の中身（名前→中身）を返す */
+	private java.util.Map<String, String> convert(String body, StringBuilder log) throws Exception {
+		return convert(body, log, "");
+	}
+
+	private java.util.Map<String, String> convert(String body, StringBuilder log, String iniText) throws Exception {
+		File src = tempFolder.newFolder();
+		File dst = tempFolder.newFolder();
+		ImageIO.write(new BufferedImage(1000, 1500, BufferedImage.TYPE_INT_RGB), "png", new File(src, "fig.png"));
+		File txt = new File(src, "book.txt");
+		Files.write(txt.toPath(), ("題名\n著者\n\n" + body + "\n後の行\n").getBytes(StandardCharsets.UTF_8));
+		File ini = tempFolder.newFile();
+		Files.write(ini.toPath(), iniText.getBytes(StandardCharsets.UTF_8));
+		String orgClassPath = System.getProperty("java.class.path");
+		PrintStream orgOut = System.out;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		try {
+			System.setProperty("java.class.path", new File("AozoraEpub3.jar").getAbsolutePath());
+			Velocity.reset();
+			System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
+			assertEquals(0, AozoraEpub3.run(new String[]{ "-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(), txt.getPath() }));
+		} finally {
+			System.setOut(orgOut);
+			if (orgClassPath == null) System.clearProperty("java.class.path"); else System.setProperty("java.class.path", orgClassPath);
+		}
+		log.append(baos.toString(StandardCharsets.UTF_8));
+		java.util.Map<String, String> pages = new java.util.TreeMap<>();
+		try (ZipFile zip = new ZipFile(dst.listFiles((d, n) -> n.endsWith(".epub"))[0])) {
+			for (ZipEntry e : java.util.Collections.list(zip.entries())) {
+				if (e.getName().endsWith(".xhtml")) pages.put(e.getName(), new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+			}
+		}
+		return pages;
+	}
+
+	/** 行の中で開いたタグ（縦中横）の中の大きな挿絵は、単ページに分けない（開いた span を前のページへ、閉じを次のページへ書かない。internal #34） */
+	@Test
+	public void aPageImageInsideAnOpenTagStaysInline() throws Exception {
+		StringBuilder log = new StringBuilder();
+		java.util.Map<String, String> pages = convert("前［＃縦中横］１［＃挿絵（fig.png）入る］２［＃縦中横終わり］", log);
+		for (java.util.Map.Entry<String, String> page : pages.entrySet()) {
+			String body = page.getValue();
+			assertEquals(page.getKey(), body.split("<span", -1).length - 1, body.split("</span>", -1).length - 1);
+		}
+		assertTrue(log.toString(), log.toString().contains("タグ内のため画像単ページ化できません"));
+	}
+
+	/** 改ページの注記で行の途中から書き出しても、横組みの中の数字は縦中横にしない（抑止の位置を書き出した分だけずらす。internal #34） */
+	@Test
+	public void autoTcyOffsetsFollowAMidLineFlush() throws Exception {
+		StringBuilder log = new StringBuilder();
+		java.util.Map<String, String> pages = convert("あ［＃横組み］ab［＃改ページ］12［＃横組み終わり］と34です", log, "AutoYoko=1\n");
+		String all = String.join("", pages.values());
+		assertFalse("横組みの中の 12 を縦中横にした:\n" + all, all.contains("<span>12</span>"));
+		assertTrue("横組みの外の 34 は縦中横:\n" + all, all.contains("<span>34</span>"));
+	}
 }

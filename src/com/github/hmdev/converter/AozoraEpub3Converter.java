@@ -2405,11 +2405,7 @@ public class AozoraEpub3Converter
 					}
 					
 					//改ページの前に文字があれば出力
-					if (buf.length() > 0) {
-						printLineBuffer(out, this.convertRubyText(buf.toString()), lineNum, true);
-						//bufはクリア
-						buf.setLength(0);
-					}
+					if (buf.length() > 0) this.flushPendingLine(out, buf, lineNum);
 					
 					noBr = true;
 					//改ページの後ろに文字があれば</br>は出力
@@ -2825,12 +2821,58 @@ public class AozoraEpub3Converter
 		else if (clearLeft) out.append(chukiMap.get("左クリア")[0]);*/
 	}
 	
+	/**
+	 * 行の途中で、ここまでの本文を先に書き出す（改ページの注記・単ページの挿絵の前）。
+	 * buf は convertEscapedText のままなので、行の終わりと同じく convertRubyText を通す（通さないと内部エスケープの印が XHTML に出る）。
+	 * 自動縦中横を抑える位置（noTcyStart/End）は buf の中の位置なので、書き出した分だけ前へずらす。
+	 * 書き出した所で横組みなどの中なら、続きの先頭から抑える（ずらさないと、後ろの本文が古い位置で判定される。internal #34）
+	 */
+	private void flushPendingLine(BufferedWriter out, StringBuilder buf, int lineNum) throws IOException
+	{
+		int flushed = buf.length();
+		//書き出す範囲の終わりで抑えている途中か（開始が終わりより多い）
+		int open = 0;
+		for (int p : this.noTcyStart) if (p < flushed) open++;
+		for (int p : this.noTcyEnd) if (p <= flushed) open--;
+		StringBuilder converted = this.convertRubyText(buf.toString());
+		buf.setLength(0);
+		java.util.Set<Integer> starts = new java.util.HashSet<>();
+		java.util.Set<Integer> ends = new java.util.HashSet<>();
+		for (int p : this.noTcyStart) if (p >= flushed) starts.add(p - flushed);
+		for (int p : this.noTcyEnd) if (p > flushed) ends.add(p - flushed);
+		if (open > 0) starts.add(0);
+		this.noTcyStart.clear(); this.noTcyStart.addAll(starts);
+		this.noTcyEnd.clear(); this.noTcyEnd.addAll(ends);
+		this.printLineBuffer(out, converted, lineNum, true);
+	}
+
+	/** 行の中で開いたまま閉じていないタグの数（printLineBuffer と同じ数え方。&lt;… /&gt; は開いて閉じる） */
+	static int openTagCount(CharSequence line)
+	{
+		int tagStart = 0, tagEnd = 0;
+		boolean inTag = false;
+		int length = line.length();
+		for (int i=0; i<length; i++) {
+			if (inTag) {
+				if (line.charAt(i) == '/' && i+1 < length && line.charAt(i+1) == '>') tagEnd++;
+				if (line.charAt(i) == '>') inTag = false;
+			} else if (line.charAt(i) == '<') {
+				if (i<length-1 && line.charAt(i+1) == '/') tagEnd++;
+				else tagStart++;
+				inTag = true;
+			}
+		}
+		return Math.max(0, tagStart - tagEnd);
+	}
+
 	/** 画像タグを出力
 	 * @return 単ページ出力ならtrue */
 	private boolean printImageChuki(BufferedWriter out, StringBuilder buf, String srcFileName, String dstFileName, boolean hasCaption, int lineNum) throws IOException
 	{
 		//サイズを取得して画面サイズとの%を指定
-		int imagePageType = this.writer.getImagePageType(srcFileName, this.tagLevel, lineNum, hasCaption);
+		//単ページにするのはタグの外だけ。tagLevel は書き出した行のタグしか数えないので、この行の中でまだ閉じていないタグも足す
+		//（数えないと、開いた <span> を前のページへ、閉じタグを次のページへ書いて、両方の XHTML が壊れる。internal #34）
+		int imagePageType = this.writer.getImagePageType(srcFileName, this.tagLevel + openTagCount(buf), lineNum, hasCaption);
 		
 		//サイズを%で指定 倍率指定が無効または画像が小さいなら0
 		double ratio = this.writer.getImageWidthRatio(srcFileName, hasCaption);
@@ -2869,11 +2911,7 @@ public class AozoraEpub3Converter
 				//改ページの前に文字があれば前のページに出力
 				//buf は convertEscapedText のままで、ルビ・文字の変換（convertRubyText）がまだ。行の終わりと同じく通してから出す
 				//（通さないと内部エスケープの印 \u0001 が XHTML に出て XML として壊れ、ルビも記号のまま出る）
-				if (buf.length() > 0) {
-					StringBuilder converted = this.convertRubyText(buf.toString());
-					buf.setLength(0);
-					this.printLineBuffer(out, converted, lineNum, true);
-				}
+				if (buf.length() > 0) this.flushPendingLine(out, buf, lineNum);
 				buf.append(String.format(chukiMap.get("画像")[0], dstFileName));
 				buf.append(chukiMap.get("画像終わり")[0]);
 				//単ページ出力
