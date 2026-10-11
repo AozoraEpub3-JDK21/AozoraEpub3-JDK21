@@ -3853,6 +3853,12 @@ public class AozoraEpub3Converter
 	private void printLineBuffer(BufferedWriter out, StringBuilder buf, int lineNum, boolean noBr) throws IOException
 	{
 		String line = buf.toString();
+		//内部エスケープの印は convertRubyText で消えているはず。残っていれば変換を通っていない道があるので、
+		//XHTML を壊さないよう外し、開発用のログに残す（XML 1.0 は制御文字を許さない）
+		if (line.indexOf(CharUtils.ESCAPE) >= 0) {
+			logger.warn("変換されていない本文が出力に来ました（{} 行目）。内部エスケープの印を外します", lineNum+1);
+			line = CharUtils.removeEscape(line);
+		}
 		int length = buf.length();
 		//すべて空白は空行にする
 		if (CharUtils.isSpace(line)) { line = ""; length = 0; }

@@ -57,11 +57,18 @@ public class AozoraEpub3ImagePageTextTest {
 		File[] epubs = dst.listFiles((d, n) -> n.endsWith(".epub"));
 		assertEquals(1, epubs.length);
 		StringBuilder xhtml = new StringBuilder();
+		String textPage = null, imagePage = null;
 		try (ZipFile zip = new ZipFile(epubs[0])) {
 			for (ZipEntry e : java.util.Collections.list(zip.entries())) {
-				if (e.getName().endsWith(".xhtml")) xhtml.append(new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+				if (!e.getName().endsWith(".xhtml")) continue;
+				String page = new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8);
+				xhtml.append(page);
+				if (page.contains("前》と")) textPage = e.getName();
+				if (page.contains("<img") && !e.getName().endsWith("title.xhtml")) imagePage = e.getName();
 			}
 		}
+		//画像は単ページに出て、前の本文は別のページ（試験が単ページの道を通っていること）
+		assertTrue(textPage != null && imagePage != null && !textPage.equals(imagePage));
 		String all = xhtml.toString();
 		assertFalse("内部エスケープの印が XHTML に出ている", all.indexOf('\u0001') >= 0);
 		assertTrue(all, all.contains("前》と<ruby>漢字<rt>かんじ</rt></ruby>"));
