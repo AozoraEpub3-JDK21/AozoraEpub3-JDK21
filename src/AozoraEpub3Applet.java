@@ -6100,6 +6100,9 @@ public class AozoraEpub3Applet extends JPanel
 			//予約しておく等）では、最後に手前から外れたあとの変更は保存されない
 			@Override
 			public void windowDeactivated(WindowEvent evt) {
+				//変換中は保存しない。Web 変換は文字コードなどの画面の設定を変換の間だけ書き換えて、終わってから戻す。
+				//変換前確認のダイアログでも窓は手前から外れるので、ここで書くと一時的な値が ini に残る（PR #130 の codex）
+				if (applet.isRunning()) return;
 				saveWindowAndProperties(jFrame, applet);
 			}
 		});
