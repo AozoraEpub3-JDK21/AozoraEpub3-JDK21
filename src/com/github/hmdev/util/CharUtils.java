@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -411,13 +412,44 @@ public class CharUtils
 		return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 	}
 	
+	/** 1 行の中で閉じた柱（中に柱の印を含まない） */
+	static final Pattern HASHIRA_SPAN = Pattern.compile("［＃ここから柱］((?:(?!［＃ここ(?:から柱|で柱終わり)］).)*)［＃ここで柱終わり］", Pattern.DOTALL);
+	static final Pattern HASHIRA_MARK = Pattern.compile("［＃ここ(?:から柱|で柱終わり)］");
+
+	/**
+	 * 柱（narou.rb の章の扉ページが作品名を置く独自の注記。作る側はどれも 1 行で閉じて書く）の印を、1 行の中で対にする。
+	 * 対にならない開始・閉じの印は外し、中の文字は残す（注記の表で柱を div にしているので、残すと XHTML の開閉が崩れる。監査項目 20）
+	 */
+	static public String balanceHashira(String line)
+	{
+		if (line.indexOf("柱］") < 0 && line.indexOf("柱終わり］") < 0) return line;
+		StringBuilder out = new StringBuilder();
+		Matcher m = HASHIRA_SPAN.matcher(line);
+		int last = 0;
+		while (m.find()) {
+			out.append(HASHIRA_MARK.matcher(line.substring(last, m.start())).replaceAll(""));
+			out.append(m.group());
+			last = m.end();
+		}
+		out.append(HASHIRA_MARK.matcher(line.substring(last)).replaceAll(""));
+		return out.toString();
+	}
+
+	/** 柱を中身ごと外した行（目次の章の名前・表題・自動の章の判定に柱を使わない。監査項目 20）。対にならない印は印だけ外す */
+	static public String removeHashira(String line)
+	{
+		//「対になっているか」は balanceHashira だけが決める
+		return HASHIRA_SPAN.matcher(balanceHashira(line)).replaceAll("");
+	}
+
 	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は内部エスケープ（{@link #ESCAPE}）
 	 * @param maxLength 文字制限 これより大きい文字は短くして...をつける
 	 * @prram 記号文字を短縮する */
 	static public String getChapterName(String line, int maxLength, boolean reduce)
 	{
+		//柱（narou.rb の章の扉ページの作品名）は中身ごと外す。本文には見えるが、章の名前・表題にはしない（監査項目 20）
 		//内部エスケープの印は注記を外した後で外す（先に外すと ［※［＃井げた］…］ が注記に見える）
-		String name = removeEscape(line.replaceAll("［＃.+?］", ""))//注記除去
+		String name = removeEscape(removeHashira(line).replaceAll("［＃.+?］", ""))//注記除去
 				.replaceAll("\t", " ").replaceFirst("^[ |　]+", "").replaceFirst("[ |　]+$",""); //前後の不要な文字所除去
 		if (reduce) name = reduceSymbols(name);//連続する記号は1つに
 		//タグはimgとaを削除
