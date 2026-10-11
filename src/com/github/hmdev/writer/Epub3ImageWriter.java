@@ -109,23 +109,23 @@ public class Epub3ImageWriter extends Epub3Writer
 			}
 			} finally { archive.close(); }
 		} else {
-			ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(Files.newInputStream(srcFile.toPath()), 65536), "MS932", false);
-			try {
-			ArchiveEntry entry;
-			while( (entry = zis.getNextEntry()) != null ) {
+			//目次から 1 つずつ開く（壊れた項目があっても、ほかの画像を読める。internal #36）
+			final int pathLength = archivePathLength;
+			com.github.hmdev.io.ZipEntries.forEach(srcFile.toPath(), false, (rawName, opener) -> {
 				try {
 					//アーカイブ内のサブフォルダは除外
-					String entryName = Epub3Writer.sanitizeArchiveEntryName(entry.getName());
-					String srcImageFileName = entryName.substring(archivePathLength);
-					this.writeArchiveImage(srcImageFileName, zis);
-					if (this.canceled) return;
+					String entryName = Epub3Writer.sanitizeArchiveEntryName(rawName);
+					String srcImageFileName = entryName.substring(pathLength);
+					try (java.io.InputStream is = opener.open()) {
+						this.writeArchiveImage(srcImageFileName, is);
+					}
 				} catch (IllegalArgumentException e) {
 					System.err.println("Skipping suspicious archive entry: " + e.getMessage());
 					// 疑わしいエントリはスキップ
-					continue;
 				}
-			}
-			} finally { zis.close(); }
+				return !this.canceled;
+			});
+			if (this.canceled) return;
 		}
 		
 		//画像xhtmlを出力

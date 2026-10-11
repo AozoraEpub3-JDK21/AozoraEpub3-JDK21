@@ -291,18 +291,41 @@ public class ImageInfoReader
 		LogAppender.println();
 	}
 
+	/** readZipImage で名前の合う項目が在ったか（在って読めなければ、拡張子を直して探し直さない。前と同じ） */
+	private boolean zipImageFound;
+
+	/** zip の中の画像を、名前（大文字小文字を見ない）で探して読む。読めなければ null（ログに出す） */
+	private BufferedImage readZipImage(String srcImageFileName, String failMessage) throws IOException
+	{
+		this.zipImageFound = false;
+		final BufferedImage[] image = new BufferedImage[1];
+		//前は ZipArchiveInputStream(fis, "MS932")＝useUnicodeExtraFields は既定の true
+		com.github.hmdev.io.ZipEntries.forEach(this.srcPath, true, (name, opener) -> {
+			if (!name.equalsIgnoreCase(srcImageFileName)) return true;
+			this.zipImageFound = true;
+			try (InputStream is = opener.open()) {
+				image[0] = ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), is);
+			} catch (Exception e) {
+				logger.warn(failMessage, srcImageFileName, e);
+			}
+			return false;
+		});
+		return image[0];
+	}
+
 	/** アーカイブ内の特定エントリからImageInfoを読み込む */
 	private ImageInfo readImageInfoFromArchive(Path srcPath, String ext, String entryName) throws IOException, RarException {
 		if ("zip".equals(ext) || "txtz".equals(ext)) {
-			try (ZipArchiveInputStream zis = new ZipArchiveInputStream(
-					new BufferedInputStream(Files.newInputStream(srcPath), 65536), "MS932", false)) {
-				ArchiveEntry entry;
-				while ((entry = zis.getNextEntry()) != null) {
-					if (entry.getName().equals(entryName)) {
-						return ImageInfo.getImageInfo(zis);
-					}
+			//目次から開く（ほかの項目は展開しない。internal #36）
+			final ImageInfo[] found = new ImageInfo[1];
+			com.github.hmdev.io.ZipEntries.forEach(srcPath, false, (name, opener) -> {
+				if (!name.equals(entryName)) return true;
+				try (InputStream is = opener.open()) {
+					found[0] = ImageInfo.getImageInfo(is);
 				}
-			}
+				return false;
+			});
+			if (found[0] != null) return found[0];
 		} else if ("rar".equals(ext)) {
 			try (Archive archive = new Archive(srcPath.toFile())) {
 				for (FileHeader fileHeader : archive.getFileHeaders()) {
@@ -419,41 +442,11 @@ public class ImageInfoReader
 				}
 
 			} else {
-				// ZipFileの非推奨使用を避けるため、ZipArchiveInputStreamを使用
-				try (InputStream fis = Files.newInputStream(this.srcPath, StandardOpenOption.READ);
-				     ZipArchiveInputStream zais = new ZipArchiveInputStream(fis, "MS932")) {
-
-					ArchiveEntry entry = null;
-					while ((entry = zais.getNextEntry()) != null) {
-						if (entry.getName().equalsIgnoreCase(srcImageFileName)) {
-							try {
-								return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais);
-							} catch (Exception e) {
-								logger.warn("ZIP 内画像の読み込みに失敗: {}", srcImageFileName, e);
-								return null;
-							}
-						}
-					}
-
-					// 拡張子が異なる場合は正しい拡張子を探す
-					srcImageFileName = this.correctExt(srcImageFileName);
-					try (InputStream fis2 = Files.newInputStream(this.srcPath, StandardOpenOption.READ);
-					     ZipArchiveInputStream zais2 = new ZipArchiveInputStream(fis2, "MS932")) {
-						
-						ArchiveEntry entry2 = null;
-						while ((entry2 = zais2.getNextEntry()) != null) {
-							if (entry2.getName().equalsIgnoreCase(srcImageFileName)) {
-								try {
-									return ImageUtils.readImage(srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(), zais2);
-								} catch (Exception e) {
-									logger.warn("ZIP 内画像の読み込みに失敗（拡張子訂正後）: {}", srcImageFileName, e);
-									return null;
-								}
-							}
-						}
-					}
-				}
-				return null;
+				//目次から開く（ほかの項目は展開しない。internal #36）。名前の大文字小文字は見ない（前と同じ）
+				BufferedImage image = readZipImage(srcImageFileName, "ZIP 内画像の読み込みに失敗: {}");
+				if (image != null || this.zipImageFound) return image;
+				// 拡張子が異なる場合は正しい拡張子を探す
+				return readZipImage(this.correctExt(srcImageFileName), "ZIP 内画像の読み込みに失敗（拡張子訂正後）: {}");
 			}
 		}
 		return null;

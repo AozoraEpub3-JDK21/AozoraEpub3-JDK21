@@ -28,7 +28,7 @@ public final class ArchiveTextExtractor {
 		String key = srcFile.getAbsolutePath();
 		ArchiveCache cache = cacheMap.get(key);
 		if (cache == null) {
-			cache = new ArchiveCache(srcFile, ext);
+			cache = new ArchiveCache(srcFile, ext, true);
 			cacheMap.put(key, cache);
 		}
 		return cache;
@@ -70,6 +70,15 @@ public final class ArchiveTextExtractor {
 			LogAppender.println(srcFile.getPath());
 		}
 		return null;
+	}
+
+	/** 読めずに飛ばしたテキストの数（zip/txtz/rar。internal #36）。数えた後に呼ぶ */
+	public static int countSkippedTexts(File srcFile, String ext) {
+		try {
+			return getCache(srcFile, ext).getSkippedTextCount();
+		} catch (IOException | RarException e) {
+			return 0;
+		}
 	}
 
 	/** Counts txt entries in zip/txtz archives. Uses cache. */

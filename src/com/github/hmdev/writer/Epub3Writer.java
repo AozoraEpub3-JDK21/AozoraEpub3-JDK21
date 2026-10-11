@@ -1156,26 +1156,27 @@ public class Epub3Writer
 			} else {
 				////////////////////////////////
 				//Zip
-				ZipArchiveInputStream zis = new ZipArchiveInputStream(new BufferedInputStream(Files.newInputStream(srcFile.toPath()), 65536), "MS932", false);
-				try {
-				ArchiveEntry entry;
-				while( (entry = zis.getNextEntry()) != null ) {
+				//目次から 1 つずつ開く（使う画像だけ展開する。壊れたテキストがあっても画像を読める。internal #36）
+				final int pathLength = archivePathLength;
+				final java.util.Set<String> wanted = outImageFileNames;
+				com.github.hmdev.io.ZipEntries.forEach(srcFile.toPath(), false, (rawName, opener) -> {
 					try {
 						//アーカイブ内のサブフォルダは除外してテキストからのパスにする
-						String entryName = sanitizeArchiveEntryName(entry.getName());
+						String entryName = sanitizeArchiveEntryName(rawName);
 						//本文より浅い階層のエントリは対象外（substring の SIOOBE 回避）
-						if (entryName.length() < archivePathLength) continue;
-						String srcImageFileName = entryName.substring(archivePathLength);
-						if (outImageFileNames.contains(srcImageFileName)) {
-							this.writeArchiveImage(srcImageFileName, zis);
+						if (entryName.length() < pathLength) return true;
+						String srcImageFileName = entryName.substring(pathLength);
+						if (wanted.contains(srcImageFileName)) {
+							try (java.io.InputStream is = opener.open()) {
+								this.writeArchiveImage(srcImageFileName, is);
+							}
 						}
 					} catch (IllegalArgumentException | IndexOutOfBoundsException e) {
 						System.err.println("Skipping suspicious archive entry: " + e.getMessage());
 						// 疑わしいエントリはスキップ
-						continue;
 					}
-				}
-				} finally { zis.close(); }
+					return true;
+				});
 			}
 		}
 		
