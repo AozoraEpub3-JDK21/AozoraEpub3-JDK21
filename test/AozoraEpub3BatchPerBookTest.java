@@ -79,15 +79,19 @@ public class AozoraEpub3BatchPerBookTest {
 			zos.write(new byte[]{1, 2, 3});
 			zos.closeEntry();
 		}
+		//壊れた rar は中身を数える段で junrar の RarException（IOException ではない）を投げる
+		File brokenRar = new File(src, "broken.rar");
+		Files.write(brokenRar.toPath(), "this is not a rar file either".getBytes(StandardCharsets.UTF_8));
 		File txt = book(src, "ok.txt", "続く本");
 		File ini = tempFolder.newFile("empty.ini");
 
 		int exitCode = run("-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(),
-			broken.getPath(), empty.getPath(), txt.getPath());
+			broken.getPath(), empty.getPath(), brokenRar.getPath(), txt.getPath());
 
 		assertTrue("後ろの txt が変換されていない:\n" + lastLog, new File(dst, "[著] 続く本.epub").isFile());
 		assertTrue("壊れた書庫を中止したことが出ていない:\n" + lastLog, lastLog.contains("変換中止: " + broken.getAbsolutePath()));
 		assertTrue("画像の無い書庫を中止したことが出ていない:\n" + lastLog, lastLog.contains("変換中止: " + empty.getAbsolutePath()));
+		assertTrue("壊れた rar を中止したことが出ていない:\n" + lastLog, lastLog.contains("変換中止: " + brokenRar.getAbsolutePath()));
 		assertEquals("1 冊でも失敗があれば非 0", 1, exitCode);
 	}
 

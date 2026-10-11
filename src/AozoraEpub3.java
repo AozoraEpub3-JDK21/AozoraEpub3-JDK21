@@ -364,150 +364,164 @@ public class AozoraEpub3
 				if("zip".equals(ext) || "txtz".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countZipText(srcFile);
-					} catch (IOException e) {
+					} catch (Exception e) {
 						logger.warn("ZIP 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					}
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if("rar".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countRarText(srcFile);
-					} catch (IOException e) {
+					} catch (Exception e) {
+						//junrar の RarException（壊れた書庫・RAR5）は IOException ではない。受けないと一括全体が止まる
 						logger.warn("RAR 内テキスト数の取得に失敗、画像のみとして扱う: {}", srcFile, e);
 					}
 					if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 				} else if ("cbz".equals(ext)) {
 					imageOnly = true;
 				}
-				for (int txtIdx=0; txtIdx<txtCount; txtIdx++) {
-					//表紙は -c の値から本ごとに決める。前の本の決定（「1」の同名画像・相対名に足したフォルダ・
-					//MaxCoverLine で外した表紙）を持ち越さない（GUI の convertFile と同じく変換ごと。internal #32）
-					int coverImageIndex = -1;
-					String coverFileName = coverOption;
-					if ("0".equals(coverFileName)) {
-						coverImageIndex = 0;
-						coverFileName = "";
-					} else if ("1".equals(coverFileName)) {
-						coverFileName = AozoraEpub3.getSameCoverFileName(srcFile); //入力ファイルと同じ名前+.jpg/.png
-					}
-					
-					ImageInfoReader imageInfoReader = new ImageInfoReader(isFile, srcFile);
-					
-					BookInfo bookInfo = null;
-					if (!imageOnly) {
-						bookInfo = AozoraEpub3.getBookInfo(srcFile, ext, txtIdx, imageInfoReader, aozoraConverter, encType, BookInfo.TitleType.indexOf(titleIndex), false);
-						if (bookInfo == null) {
-							//txt を含まない zip 等。そのまま進むと以降の参照で NPE になる
-							LogAppender.error("入力ファイルから書籍情報が取得できませんでした : "+srcFile.getPath());
-							errorCount++;
-							continue;
+				//1 冊ぶんの処理で何が投げても、その本だけ失敗として数えて次の本へ進む（internal #31。個々の受け口で拾い損ねた例外も一括を止めない）
+				try {
+					for (int txtIdx=0; txtIdx<txtCount; txtIdx++) {
+						//表紙は -c の値から本ごとに決める。前の本の決定（「1」の同名画像・相対名に足したフォルダ・
+						//MaxCoverLine で外した表紙）を持ち越さない（GUI の convertFile と同じく変換ごと。internal #32）
+						int coverImageIndex = -1;
+						String coverFileName = coverOption;
+						if ("0".equals(coverFileName)) {
+							coverImageIndex = 0;
+							coverFileName = "";
+						} else if ("1".equals(coverFileName)) {
+							coverFileName = AozoraEpub3.getSameCoverFileName(srcFile); //入力ファイルと同じ名前+.jpg/.png
 						}
-						bookInfo.vertical = vertical;
-						bookInfo.insertTocPage = tocPage;
-						bookInfo.setTocVertical(tocVertical);
-						bookInfo.insertTitleToc = insertTitleToc;
-						aozoraConverter.vertical = vertical;
-						//表題ページ
-						bookInfo.titlePageType = titlePage;
-					}
-					//表題の見出しが非表示で行が追加されていたら削除
-					//imageOnly 時は bookInfo が null のままここに来る（後段の imageOnly 分岐で生成される）
-					if (bookInfo != null && !bookInfo.insertTitleToc && bookInfo.titleLine >= 0) {
-						bookInfo.removeChapterLineInfo(bookInfo.titleLine);
-					}
-					
-					Epub3Writer writer = epub3Writer;
-					if (!isFile) {
-						//壊れた書庫・読めない形式は、その本だけ失敗として数えて次の本へ進む（internal #31）
-						try {
-							if ("rar".equals(ext)) {
-								imageInfoReader.loadRarImageInfos(srcFile, imageOnly);
-							} else {
-								imageInfoReader.loadZipImageInfos(srcFile, imageOnly);
-							}
-						} catch (Exception e) {
-							logger.error("アーカイブ画像情報の読み込みに失敗: {}", srcFile, e);
-							LogAppender.error("書庫が読み込めませんでした : " + e.getMessage());
-							LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
-							errorCount++;
-							ArchiveTextExtractor.clearCache(srcFile);
-							continue;
-						}
-						if (imageOnly) {
-							LogAppender.println("画像のみのePubファイルを生成します");
-							//画像出力用のBookInfo生成
-							bookInfo = new BookInfo(srcFile);
-							bookInfo.imageOnly = true;
-							//Writerを画像出力用派生クラスに入れ替え
-							writer = epub3ImageWriter;
-							
-							if (imageInfoReader.countImageFileInfos() == 0) {
-								LogAppender.error("画像がありませんでした");
+						
+						ImageInfoReader imageInfoReader = new ImageInfoReader(isFile, srcFile);
+						
+						BookInfo bookInfo = null;
+						if (!imageOnly) {
+							bookInfo = AozoraEpub3.getBookInfo(srcFile, ext, txtIdx, imageInfoReader, aozoraConverter, encType, BookInfo.TitleType.indexOf(titleIndex), false);
+							if (bookInfo == null) {
+								//txt を含まない zip 等。そのまま進むと以降の参照で NPE になる
+								LogAppender.error("入力ファイルから書籍情報が取得できませんでした : "+srcFile.getPath());
 								LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
-								//画像の無い書庫も、その本だけ失敗として次の本へ進む（internal #31）
 								errorCount++;
-								ArchiveTextExtractor.clearCache(srcFile);
+								//書庫の本文の控えは convertFile の最後で捨てている。飛ばすときも同じく捨てる
+								if (!isFile) ArchiveTextExtractor.clearCache(srcFile);
 								continue;
 							}
-							//名前順で並び替え
-							imageInfoReader.sortImageFileNames();
+							bookInfo.vertical = vertical;
+							bookInfo.insertTocPage = tocPage;
+							bookInfo.setTocVertical(tocVertical);
+							bookInfo.insertTitleToc = insertTitleToc;
+							aozoraConverter.vertical = vertical;
+							//表題ページ
+							bookInfo.titlePageType = titlePage;
 						}
-					}
-					//先頭からの場合で指定行数以降なら表紙無し
-					if ("".equals(coverFileName)) {
+						//表題の見出しが非表示で行が追加されていたら削除
+						//imageOnly 時は bookInfo が null のままここに来る（後段の imageOnly 分岐で生成される）
+						if (bookInfo != null && !bookInfo.insertTitleToc && bookInfo.titleLine >= 0) {
+							bookInfo.removeChapterLineInfo(bookInfo.titleLine);
+						}
+						
+						Epub3Writer writer = epub3Writer;
+						if (!isFile) {
+							//壊れた書庫・読めない形式は、その本だけ失敗として数えて次の本へ進む（internal #31）
+							try {
+								if ("rar".equals(ext)) {
+									imageInfoReader.loadRarImageInfos(srcFile, imageOnly);
+								} else {
+									imageInfoReader.loadZipImageInfos(srcFile, imageOnly);
+								}
+							} catch (Exception e) {
+								logger.error("アーカイブ画像情報の読み込みに失敗: {}", srcFile, e);
+								LogAppender.error("書庫が読み込めませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+								LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+								errorCount++;
+								ArchiveTextExtractor.clearCache(srcFile);
+								//書庫ごと飛ばす（同じ書庫の次のテキストでも同じ失敗をくり返す）
+								break;
+							}
+							if (imageOnly) {
+								LogAppender.println("画像のみのePubファイルを生成します");
+								//画像出力用のBookInfo生成
+								bookInfo = new BookInfo(srcFile);
+								bookInfo.imageOnly = true;
+								//Writerを画像出力用派生クラスに入れ替え
+								writer = epub3ImageWriter;
+								
+								if (imageInfoReader.countImageFileInfos() == 0) {
+									LogAppender.error("画像がありませんでした");
+									LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+									//画像の無い書庫も、その本だけ失敗として次の本へ進む（internal #31）
+									errorCount++;
+									ArchiveTextExtractor.clearCache(srcFile);
+									break;
+								}
+								//名前順で並び替え
+								imageInfoReader.sortImageFileNames();
+							}
+						}
+						//先頭からの場合で指定行数以降なら表紙無し
+						if ("".equals(coverFileName)) {
+							try {
+								int maxCoverLine = SettingDefaults.getInt(props, "MaxCoverLine");
+								if (maxCoverLine > 0 && bookInfo.firstImageLineNum >= maxCoverLine) {
+									coverImageIndex = -1;
+									coverFileName = null;
+								}
+							} catch (Exception e) { /* 意図的: MaxCoverLine 不正時は cover 設定変更せず */ }
+						}
+						
+						//表紙設定
+						bookInfo.insertCoverPageToc = coverPageToc;
+						bookInfo.insertCoverPage = coverPage;
+						bookInfo.coverImageIndex = coverImageIndex;
+						if (coverFileName != null && !coverFileName.startsWith("http")) {
+							File coverFile = new File(coverFileName);
+							if (!coverFile.exists()) {
+								coverFileName = srcFile.getParent()+"/"+coverFileName;
+								if (!new File(coverFileName).exists()) {
+									coverFileName = null;
+									LogAppender.println("[WARN] 表紙画像ファイルが見つかりません : "+coverFile.getAbsolutePath());
+								}
+							}
+						}
+						bookInfo.coverFileName = coverFileName;
+						
+						String[] titleCreator = BookInfo.getFileTitleCreator(srcFile.getName());
+						if (titleCreator != null) {
+							if (useFileName) {
+								if (titleCreator[0] != null && titleCreator[0].trim().length() >0) bookInfo.title = titleCreator[0];
+								if (titleCreator[1] != null && titleCreator[1].trim().length() >0) bookInfo.creator = titleCreator[1];
+							} else {
+								//テキストから取得できていない場合
+								if (bookInfo.title == null || bookInfo.title.length() == 0) bookInfo.title = titleCreator[0]==null?"":titleCreator[0];
+								if (bookInfo.creator == null || bookInfo.creator.length() == 0) bookInfo.creator = titleCreator[1]==null?"":titleCreator[1];
+							}
+						}
+						
+						//出力先を断られた本は、その本だけ失敗として数えて次の本へ進む（GUI と同じ。internal #20）。
+						//深いフォルダで名前を切れずに断るのは題の長い本だけなので、同じ一括の短い題の本は変換できる
+						File outFile;
 						try {
-							int maxCoverLine = SettingDefaults.getInt(props, "MaxCoverLine");
-							if (maxCoverLine > 0 && bookInfo.firstImageLineNum >= maxCoverLine) {
-								coverImageIndex = -1;
-								coverFileName = null;
-							}
-						} catch (Exception e) { /* 意図的: MaxCoverLine 不正時は cover 設定変更せず */ }
-					}
-					
-					//表紙設定
-					bookInfo.insertCoverPageToc = coverPageToc;
-					bookInfo.insertCoverPage = coverPage;
-					bookInfo.coverImageIndex = coverImageIndex;
-					if (coverFileName != null && !coverFileName.startsWith("http")) {
-						File coverFile = new File(coverFileName);
-						if (!coverFile.exists()) {
-							coverFileName = srcFile.getParent()+"/"+coverFileName;
-							if (!new File(coverFileName).exists()) {
-								coverFileName = null;
-								LogAppender.println("[WARN] 表紙画像ファイルが見つかりません : "+coverFile.getAbsolutePath());
-							}
+							outFile = getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
+						} catch (IOException e) {
+							LogAppender.error("出力パスエラー: " + e.getMessage());
+							LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+							errorCount++;
+							//書庫の本文の控えは convertFile の最後で捨てている。飛ばすときも同じく捨てる（断られた書庫が続くと溜まる）
+							if (!"txt".equals(ext)) ArchiveTextExtractor.clearCache(srcFile);
+							continue;
 						}
+						if (!AozoraEpub3.convertFile(
+								srcFile, ext, outFile,
+								aozoraConverter, writer,
+								encType, bookInfo, imageInfoReader, txtIdx)) errorCount++;
 					}
-					bookInfo.coverFileName = coverFileName;
-					
-					String[] titleCreator = BookInfo.getFileTitleCreator(srcFile.getName());
-					if (titleCreator != null) {
-						if (useFileName) {
-							if (titleCreator[0] != null && titleCreator[0].trim().length() >0) bookInfo.title = titleCreator[0];
-							if (titleCreator[1] != null && titleCreator[1].trim().length() >0) bookInfo.creator = titleCreator[1];
-						} else {
-							//テキストから取得できていない場合
-							if (bookInfo.title == null || bookInfo.title.length() == 0) bookInfo.title = titleCreator[0]==null?"":titleCreator[0];
-							if (bookInfo.creator == null || bookInfo.creator.length() == 0) bookInfo.creator = titleCreator[1]==null?"":titleCreator[1];
-						}
-					}
-					
-					//出力先を断られた本は、その本だけ失敗として数えて次の本へ進む（GUI と同じ。internal #20）。
-					//深いフォルダで名前を切れずに断るのは題の長い本だけなので、同じ一括の短い題の本は変換できる
-					File outFile;
-					try {
-						outFile = getOutFile(srcFile, dstPath, bookInfo, autoFileName, outExt);
-					} catch (IOException e) {
-						LogAppender.error("出力パスエラー: " + e.getMessage());
-						LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
-						errorCount++;
-						//書庫の本文の控えは convertFile の最後で捨てている。飛ばすときも同じく捨てる（断られた書庫が続くと溜まる）
-						if (!"txt".equals(ext)) ArchiveTextExtractor.clearCache(srcFile);
-						continue;
-					}
-					if (!AozoraEpub3.convertFile(
-							srcFile, ext, outFile,
-							aozoraConverter, writer,
-							encType, bookInfo, imageInfoReader, txtIdx)) errorCount++;
+				} catch (Exception e) {
+					logger.error("変換に失敗: {}", srcFile, e);
+					LogAppender.error("変換できませんでした : " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+					LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
+					errorCount++;
+					if (!isFile) ArchiveTextExtractor.clearCache(srcFile);
 				}
 			}
 			//変換後のプレビュー
