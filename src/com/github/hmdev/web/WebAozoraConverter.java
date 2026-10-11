@@ -872,7 +872,7 @@ public class WebAozoraConverter
 					// APIのあらすじはプレーンテキスト（改行は\nのみ）
 					String story = apiMetadata.getStory().replace("\r\n", "\n").replace("\r", "\n");
 					for (String line : story.split("\n")) {
-						printText(bw, line);
+						printBodyText(bw, line);
 						bw.append('\n');
 					}
 					bw.append("［＃ここで字上げ終わり］\n");
@@ -900,7 +900,7 @@ public class WebAozoraConverter
 							if (descText != null && !descText.isEmpty()) {
 								descText = descText.replace("\\r\\n", "\n").replace("\\r", "\n").replace("\\n", "\n");
 								for (String line : descText.split("\n", -1)) {
-									printText(bw, line);
+									printBodyText(bw, line);
 									bw.append('\n');
 								}
 							}
@@ -1965,7 +1965,7 @@ public class WebAozoraConverter
 			if (endElement != null && node.equals(endElement)) {
 				return;
 			}
-			if (node instanceof TextNode) printText(bw, ((TextNode)node).getWholeText(), false, this.inChukiNotes);
+			if (node instanceof TextNode) printBodyText(bw, ((TextNode)node).getWholeText());
 			else if (node instanceof Element) {
 				Element elem = (Element)node;
 				if ("span".equals(elem.tagName()) && elem.hasClass("notes") && !this.inChukiNotes) {
@@ -2052,7 +2052,7 @@ public class WebAozoraConverter
 		if (parts.length < 2) {
 			// <rt>タグがない場合は、タグを削除してテキストのみ出力
 			String text = parts[0].replaceAll("<[^>]+>", "");
-			printText(bw, text);
+			printBodyText(bw, text);
 			return;
 		}
 
@@ -2069,9 +2069,9 @@ public class WebAozoraConverter
 
 		// 青空文庫形式で出力
 		bw.append('｜');
-		printText(bw, rubyBase);
+		printBodyText(bw, rubyBase);
 		bw.append('《');
-		printText(bw, rubyText);
+		printBodyText(bw, rubyText);
 		bw.append('》');
 	}
 	/** 画像をキャッシュして相対パスの注記にする */
@@ -2915,7 +2915,35 @@ public class WebAozoraConverter
 		}
 	}
 
-	/** 文字を出力 特殊文字は注記に変換 */
+	/** サイトの文字の「［＃」（注記の始まりに読まれる）をどこまで逃がすか（internal #38） */
+	enum ChukiEscape {
+		/** 全部逃がす。作品名・章題・話の題・著者名など。題名に注記を書く作者はいないうえ、柱に入ると閉じを飲み込んで柱が閉じない */
+		ALL,
+		/** 中が数字だけのもの（［＃１］・［＃一］）だけ逃がす。本文・あらすじ。
+		 * 作者が本文に書いた注記（［＃改ページ］など）は narou.rb と同じく注記として効かせる。
+		 * 数字だけの注記は青空文庫の書式に無く、[#1] のような番号（記号を全角にすると［＃１］）が消えるのを防ぐ */
+		NUMBER_ONLY,
+		/** 逃がさない。青空文庫の HTML の span.notes（中身が注記そのもの） */
+		NONE
+	}
+
+	/** chars[i] の「［」が「［＃」の始まりで、chukiEscape の範囲なら true */
+	static boolean escapesChukiOpen(char[] chars, int i, ChukiEscape chukiEscape)
+	{
+		if (chukiEscape == ChukiEscape.NONE || i+1 >= chars.length || chars[i+1] != '＃') return false;
+		if (chukiEscape == ChukiEscape.ALL) return true;
+		//数字だけ（区切りの ・－，． を挟んでもよい）で「］」が閉じる
+		int j = i+2;
+		if (j >= chars.length || !isChukiNumber(chars[j])) return false;
+		while (j < chars.length && (isChukiNumber(chars[j]) || "・－，．".indexOf(chars[j]) >= 0)) j++;
+		return j < chars.length && chars[j] == '］';
+	}
+	private static boolean isChukiNumber(char ch)
+	{
+		return (ch >= '0' && ch <= '9') || (ch >= '０' && ch <= '９') || "〇一二三四五六七八九十百千万".indexOf(ch) >= 0;
+	}
+
+	/** 文字を出力 特殊文字は注記に変換。題名など（「［＃」は全部逃がす） */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
 		printText(bw, text, false);
@@ -2923,11 +2951,16 @@ public class WebAozoraConverter
 
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle) throws IOException
 	{
-		printText(bw, text, isSubtitle, false);
+		printText(bw, text, isSubtitle, ChukiEscape.ALL);
 	}
 
-	/** @param keepChuki 文字の「［＃」を注記として通す（青空文庫の HTML の span.notes。中身が注記そのもの） */
-	private void printText(BufferedWriter bw, String text, boolean isSubtitle, boolean keepChuki) throws IOException
+	/** 本文の文字を出力（「［＃」は数字だけのものを逃がす。span.notes の中は逃がさない） */
+	private void printBodyText(BufferedWriter bw, String text) throws IOException
+	{
+		printText(bw, text, false, this.inChukiNotes ? ChukiEscape.NONE : ChukiEscape.NUMBER_ONLY);
+	}
+
+	private void printText(BufferedWriter bw, String text, boolean isSubtitle, ChukiEscape chukiEscape) throws IOException
 	{
 		text = text.replaceAll("[\r\n]+", "");
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
@@ -2952,13 +2985,10 @@ public class WebAozoraConverter
 		char[] chars = text.toCharArray();
 		for (int i = 0; i < chars.length; i++) {
 			char ch = chars[i];
-			//サイトの文字の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・字が消える。internal #38）。
-			//「［」を外字の注記で書き、ただの文字にする。変換が足す注記は PH_* で書いてあり、ここより後で戻すので逃がさない
-			if (ch == '［' && !keepChuki && i+1 < chars.length && chars[i+1] == '＃') {
-				sb.append("※［＃始め角括弧、1-1-46］");
-				continue;
-			}
 			switch (ch) {
+			//サイトの文字の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・字が消える。internal #38）。
+			//逃がすときは「［」を外字の注記で書き、ただの文字にする。変換が足す注記は PH_* で書いてあり、ここより後で戻すので逃がさない
+			case '［': sb.append(escapesChukiOpen(chars, i, chukiEscape) ? "※［＃始め角括弧、1-1-46］" : "［"); break;
 			case '《': sb.append("※［＃始め二重山括弧］"); break;
 			case '》': sb.append("※［＃終わり二重山括弧］"); break;
 			case '※': sb.append("※［＃米印、1-2-8］"); break;
