@@ -246,7 +246,6 @@ public class WebAozoraConverter
 	WebAozoraConverter(String fqdn, File configPath) throws IOException
 	{
 		String siteDirName = siteDirName(fqdn, configPath);
-		this.chukiNotesSite = AOZORA_SITE_DIR.equals(siteDirName);
 		if (configPath.isDirectory()) {
 			for (File file : configPath.listFiles()) {
 				if (file.isDirectory() && file.getName().equals(siteDirName)) {
@@ -1936,12 +1935,6 @@ public class WebAozoraConverter
 	Node startElement = null;
 	Node endElement = null;
 	boolean noHr = false;
-	/** 青空文庫のサイト定義のフォルダ名 */
-	static final String AOZORA_SITE_DIR = "www.aozora.gr.jp";
-	/** span.notes の中身を注記として通すサイト（青空文庫。注記を <span class="notes">［＃…］</span> の文字で置く） */
-	boolean chukiNotesSite = false;
-	/** 青空文庫の HTML の注記（span.notes）の中を出力している間 true。中の「［＃」を逃がさない */
-	boolean inChukiNotes = false;
 	/** ノードを出力 子ノード内のテキストも出力 */
 	private void printNode(BufferedWriter bw, Node parent, boolean noHr) throws IOException
 	{
@@ -1973,15 +1966,7 @@ public class WebAozoraConverter
 			if (node instanceof TextNode) printBodyText(bw, ((TextNode)node).getWholeText());
 			else if (node instanceof Element) {
 				Element elem = (Element)node;
-				if (this.chukiNotesSite && "span".equals(elem.tagName()) && elem.hasClass("notes") && !this.inChukiNotes) {
-					//青空文庫の HTML は、底本との違いなどの注記を <span class="notes">［＃…］</span> の文字で置く。注記として読ませる（本文に出さない）
-					this.inChukiNotes = true;
-					try {
-						_printNode(bw, node);
-					} finally {
-						this.inChukiNotes = false;
-					}
-				} else if ("br".equals(elem.tagName())) {
+				if ("br".equals(elem.tagName())) {
 					if (elem.nextSibling() != null) bw.append('\n');
 				} else if ("div".equals(elem.tagName())) {
 					if (elem.previousSibling() != null && !isBlockNode(elem.previousSibling())) bw.append('\n');
@@ -2782,7 +2767,8 @@ public class WebAozoraConverter
 				out.append(text, start, text.length());
 				break;
 			}
-			String title = text.substring(titleStart, end);
+			//見出しの中は題名と同じく「［＃」を全部逃がす（閉じの［＃中見出し終わり］を飲み込まないように。internal #38）
+			String title = escapeChukiOpenAll(text.substring(titleStart, end));
 			String replacement = phChuki(formatSettings.getIndent() + "字下げ") +
 				phChuki("中見出し") + title + phChuki("中見出し終わり");
 			out.append(replacement);
@@ -2825,7 +2811,8 @@ public class WebAozoraConverter
 		while (matcher.find()) {
 			String marks = matcher.group(1);
 			String next = matcher.group(2);
-			if (next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
+			//逃がした「［」（本文の番号の [#1]）も「［」と同じく前を空けない
+			if (next.charAt(0) == PH_ESCAPED_BRACKET || next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + next));
 			} else if (next.matches("[ 、。]")) {
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + "　"));
@@ -2892,7 +2879,7 @@ public class WebAozoraConverter
 	private static final char PH_BRACKET_CLOSE = '\uE001';
 	private static final char PH_HASH = '\uE002';
 	private static final char PH_KOME = '\uE003';
-	/** \u9003\u304C\u3057\u305F\u300C\uFF3B\u300D\uFF08\u203B\uFF3B\uFF03\u59CB\u3081\u89D2\u62EC\u5F27\u30011-1-46\uFF3D\uFF09\u3002\u6570\u5B57\u30FB\u8A18\u53F7\u306E\u5909\u63DB\u3088\u308A\u524D\u306B\u7F6E\u304F\u306E\u3067\u3001\u6CE8\u8A18\u306E\u4E2D\u8EAB\u304C\u5909\u63DB\u3055\u308C\u306A\u3044\u3088\u3046 1 \u5B57\u3067\u6301\u3064 */
+	/** 逃がした「［」（※［＃始め角括弧、1-1-46］）。数字・記号の変換より前に置くので、注記の中身が変換されないよう 1 字で持つ */
 	private static final char PH_ESCAPED_BRACKET = '\uE004';
 
 	static String phChuki(String content) {
@@ -2927,16 +2914,30 @@ public class WebAozoraConverter
 	enum ChukiEscape {
 		/** 全部逃がす。作品名・章題・話の題・著者名など。題名に注記を書く作者はいないうえ、柱に入ると閉じを飲み込んで柱が閉じない */
 		ALL,
-		/** サイトの文字のまま中がアラビア数字だけのもの（[#1]・［＃１］・［＃1,000］）だけ逃がす。本文・ルビ・あらすじ。
+		/** サイトの文字のまま中がアラビア数字だけのもの（[#1]・［＃１］・［＃12］）だけ逃がす。本文・ルビ・あらすじ。
 		 * 作者が本文に書いた注記（［＃改ページ］など）は narou.rb と同じく注記として効かせる。
-		 * 漢数字の［＃一］〜［＃四］は返り点の注記なので逃がさない。数字を漢数字にする前のサイトの文字で見るので、番号の [#1] と返り点を取り違えない */
-		NUMBER_ONLY,
-		/** 逃がさない。青空文庫の HTML の span.notes（中身が注記そのもの） */
-		NONE
+		 * 漢数字の［＃一］〜［＃四］は返り点の注記なので逃がさない。数字を漢数字にする前のサイトの文字で見るので、番号の [#1] と返り点を取り違えない。
+		 * 青空文庫の HTML が <span class="notes"> に置く注記（［＃「措しい」はママ］など）も数字だけではないので、注記のまま通る */
+		NUMBER_ONLY
 	}
 
 	/** 本文の番号の「［＃」の「［」。半角の「[」「#」は記号を全角にする設定のときだけ「［＃」になる */
 	private static final Pattern NUMBER_CHUKI_OPEN = Pattern.compile("([［\\[])(?=([＃#])[0-9０-９][0-9０-９,，.．・\\-－]*[］\\]])");
+
+	/** 文字の中の「［＃」の「［」を全部 PH_ESCAPED_BRACKET にする。半角の [ # は記号を全角にする設定のときだけ「［＃」になる */
+	String escapeChukiOpenAll(String text)
+	{
+		if (text.indexOf('［') < 0 && text.indexOf('[') < 0) return text;
+		boolean zenkaku = formatSettings.isEnableConvertSymbolsToZenkaku();
+		StringBuilder sb = new StringBuilder(text.length());
+		for (int i = 0; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			char next = i+1 < text.length() ? text.charAt(i+1) : 0;
+			boolean forms = (ch == '［' || (ch == '[' && zenkaku)) && (next == '＃' || (next == '#' && zenkaku));
+			sb.append(forms ? PH_ESCAPED_BRACKET : ch);
+		}
+		return sb.toString();
+	}
 
 	/** 本文の番号の「［＃数字］」の「［」を、逃がした「［」の PH_ESCAPED_BRACKET に置き換える。数字の変換より前に呼ぶ */
 	String escapeNumberChukiOpen(String text)
@@ -2965,16 +2966,18 @@ public class WebAozoraConverter
 		printText(bw, text, isSubtitle, ChukiEscape.ALL);
 	}
 
-	/** 本文の文字を出力（「［＃」はアラビア数字だけのものを逃がす。span.notes の中は逃がさない） */
+	/** 本文の文字を出力（「［＃」はアラビア数字の番号だけを逃がす） */
 	private void printBodyText(BufferedWriter bw, String text) throws IOException
 	{
-		printText(bw, text, false, this.inChukiNotes ? ChukiEscape.NONE : ChukiEscape.NUMBER_ONLY);
+		printText(bw, text, false, ChukiEscape.NUMBER_ONLY);
 	}
 
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle, ChukiEscape chukiEscape) throws IOException
 	{
 		text = text.replaceAll("[\r\n]+", "");
-		if (chukiEscape == ChukiEscape.NUMBER_ONLY) text = escapeNumberChukiOpen(text);
+		//サイトの文字の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・番号が消える。internal #38）。
+		//逃がす「［」は 1 字の PH_ESCAPED_BRACKET にして、最後に ※［＃始め角括弧、1-1-46］ に戻す。変換が足す注記は PH_* で書くので逃がさない
+		text = chukiEscape == ChukiEscape.ALL ? escapeChukiOpenAll(text) : escapeNumberChukiOpen(text);
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
 		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
 		if (formatSettings.isEnableNarouTag()) text = convertNarouTags(text);
@@ -2995,12 +2998,8 @@ public class WebAozoraConverter
 
 		StringBuilder sb = new StringBuilder();
 		char[] chars = text.toCharArray();
-		for (int i = 0; i < chars.length; i++) {
-			char ch = chars[i];
+		for (char ch : chars) {
 			switch (ch) {
-			//題名の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・字が消える。internal #38）。
-			//「［」を外字の注記で書き、ただの文字にする。変換が足す注記は PH_* で書いてあり、ここより後で戻すので逃がさない
-			case '［': sb.append(chukiEscape == ChukiEscape.ALL && i+1 < chars.length && chars[i+1] == '＃' ? "※［＃始め角括弧、1-1-46］" : "［"); break;
 			case '《': sb.append("※［＃始め二重山括弧］"); break;
 			case '》': sb.append("※［＃終わり二重山括弧］"); break;
 			case '※': sb.append("※［＃米印、1-2-8］"); break;

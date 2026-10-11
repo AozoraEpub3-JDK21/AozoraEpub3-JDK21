@@ -28,9 +28,10 @@ import com.github.hmdev.web.WebAozoraConverter;
  * internal #38: Web 変換は、サイトの文字の「［＃」を逃がさなかったので、注記の始まりとして読まれていた。
  * 作品名が柱に入ると閉じの注記を飲み込んで柱が閉じず、[#1] のような番号（記号を全角にすると［＃１］）は消えた。
  * 逃がすときは「［」を外字の注記（※［＃始め角括弧、1-1-46］）で書いて、ただの文字にする。
- * - 題名（作品名・章題・話の題・著者名など）: 全部逃がす
- * - 本文: 中が数字だけのもの（［＃１］・［＃一］）だけ逃がす。作者が書いた注記（［＃改ページ］など）は narou.rb と同じく効かせる
- * - 青空文庫の HTML の span.notes: 中身が注記そのもの（底本との違いなど）なので逃がさない
+ * - 題名（作品名・章題・話の題・著者名・なろうの [chapter:] の見出し）: 全部逃がす
+ * - 本文: サイトの文字のまま中がアラビア数字だけのもの（[#1]・［＃１］）だけ逃がす。
+ *   作者が書いた注記（［＃改ページ］など）と、漢数字の返り点（［＃一］〜［＃四］）は narou.rb と同じく効かせる。
+ *   青空文庫の HTML が span.notes に置く注記（［＃「…」はママ］など）も数字だけではないので、注記のまま
  *
  * 実行方法:
  *   gradlew test --tests WebAozoraConverterChukiEscapeTest
@@ -185,14 +186,33 @@ public class WebAozoraConverterChukiEscapeTest {
 
 	@Test
 	public void aozoraNotesStayAnnotations() throws Exception {
-		//青空文庫の HTML: <span class="notes">［＃…］</span> は注記として読ませる（本文に出さない）。数字だけでも逃がさない
-		String html = "<p>措しい<span class=\"notes\">［＃「措しい」はママ］［＃１］</span>事を［＃１］する</p>";
+		//青空文庫の HTML: <span class="notes">［＃…］</span> は注記として読ませる（本文に出さない）。数字だけではないので本文の規則のままで通る
+		String html = "<p>措しい<span class=\"notes\">［＃「措しい」はママ］</span>事を［＃１］する<span class=\"notes\">［＃ルビの「か」は底本では「け」］</span></p>";
 		String out = printNode("https://www.aozora.gr.jp/cards/000148/files/789_14547.html", html);
-		assertTrue("span.notes の中は注記のまま: " + out, out.contains("措しい［＃「措しい」はママ］［＃１］事を"));
-		assertTrue("span.notes を出た後は本文として逃がす: " + out, out.contains("事を" + ESCAPED + "１］する"));
-		//青空文庫でないサイトの span.notes は、ただの本文
-		out = printNode("https://ncode.syosetu.com/n0000xx/1/", html);
-		assertTrue("青空文庫でないサイト: " + out, out.contains("［＃「措しい」はママ］" + ESCAPED + "１］事を"));
+		assertTrue("span.notes の中は注記のまま: " + out, out.contains("措しい［＃「措しい」はママ］事を"));
+		assertTrue("span.notes の中は注記のまま: " + out, out.contains("する［＃ルビの「か」は底本では「け」］"));
+		assertTrue("本文の番号は逃がす: " + out, out.contains("事を" + ESCAPED + "１］する"));
+	}
+
+	@Test
+	public void noExtraSpaceBeforeAnEscapedNumberAfterAnExclamation() throws Exception {
+		//！？ の後は空けるが、「［」の前は空けない（narou.rb）。逃がした「［」も同じ
+		String out = episode("作品", null, "<p id=\"L1\">すごい！［＃２］ と なに？［注］</p>");
+		assertTrue(out, out.contains("すごい！" + ESCAPED + "２］"));
+		assertTrue(out, out.contains("なに？［注］"));
+	}
+
+	@Test
+	public void narouChapterTagHeadingIsEscaped() throws Exception {
+		//本文の [chapter:…] は中見出しになる。見出しの中の「［＃」は題名と同じく全部逃がす（閉じを飲み込まないように）
+		boolean saved = settings.isEnableNarouTag();
+		try {
+			settings.setEnableNarouTag(true);
+			String out = episode("作品", null, "<p id=\"L1\">[chapter:章［＃題]</p>");
+			assertTrue(out, out.contains("［＃中見出し］章" + ESCAPED + "題［＃中見出し終わり］"));
+		} finally {
+			settings.setEnableNarouTag(saved);
+		}
 	}
 
 	/** そのサイトの converter で、本文の要素を出力する（printNode） */
