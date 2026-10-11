@@ -376,13 +376,13 @@ public class AozoraEpub3ConverterLongMiddleTest
 	public void エスケープされた縦線は一字に数える() throws Exception
 	{
 		int n = AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
-		// ※｜ は表示される｜。removeRuby の後は ※｜ の2字が残り、多めに数える
+		// エスケープされた｜は表示される｜。印は数えないので 1 字に数える（監査項目 32）
 		BookInfo bookInfo = scan(
 				"［＃ページの左右中央］",
-				repeat("字", n-2) + "※［＃縦線］",
+				repeat("字", n-1) + "※［＃縦線］",
 				"［＃改ページ］",
 				"［＃ページの左右中央］",
-				repeat("字", n-1) + "※［＃縦線］",
+				repeat("字", n) + "※［＃縦線］",
 				"［＃改ページ］");
 		assertFalse(bookInfo.isLongMiddleLine(0));
 		assertTrue(bookInfo.isLongMiddleLine(3));

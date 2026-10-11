@@ -603,7 +603,8 @@ public class BookInfo
 			//先頭に発行者で2行以上
 			if (pubFirst && linesLength >= 2) {
 				this.publisherLine = metaLineStart;
-				this.publisher = metaLines[0];
+				//発行者は名前の処理（getChapterName）を通らないので、内部エスケープの印だけ外す（OPF に制御文字を書かない）
+				this.publisher = CharUtils.removeEscape(metaLines[0]);
 				metaLineStart++;
 				linesLength--;
 				arrIndex++;

@@ -133,10 +133,10 @@ public class AozoraEpub3ConverterTest
 			buf = converter.convertRubyText("※※＃※》");
 			System.out.println(buf);
 			
-			buf = converter.convertRubyText("｜※｜縦線《たてせん》※｜");
+			buf = converter.convertRubyText("｜\u0001｜縦線《たてせん》\u0001｜");
 			System.out.println(buf);
 			Assert.assertEquals(buf.toString(), "<ruby>｜縦線<rt>たてせん</rt></ruby>｜");
-			buf = converter.convertRubyText("※｜縦線《たてせん》※｜");
+			buf = converter.convertRubyText("\u0001｜縦線《たてせん》\u0001｜");
 			System.out.println(buf);
 			Assert.assertEquals(buf.toString(), "｜<ruby>縦線<rt>たてせん</rt></ruby>｜");
 			
@@ -152,7 +152,7 @@ public class AozoraEpub3ConverterTest
 			String str;
 			str = converter.convertGaijiChuki("｜※［＃縦線］縦線※［＃縦線］《※［＃縦線］たてせん※［＃縦線］》", true, true);
 			System.out.println(str);
-			Assert.assertEquals(str, "｜※｜縦線※｜《※｜たてせん※｜》");
+			Assert.assertEquals(str, "｜\u0001｜縦線\u0001｜《\u0001｜たてせん\u0001｜》");
 			
 			str = converter.convertGaijiChuki("※［＃U+845b］U+845b", true, true);
 			System.out.println(str);
@@ -189,7 +189,7 @@ public class AozoraEpub3ConverterTest
 			
 			str = converter.replaceChukiSufTag(converter.convertGaijiChuki("　　　　　　あ※［＃米印］※［＃始め二重山括弧］１［＃「あ※［＃米印］※［＃始め二重山括弧］１」は中見出し］",true, false));
 			System.out.println(str);
-			Assert.assertEquals(str,  "　　　　　　［＃中見出し］あ※※※《１［＃中見出し終わり］");
+			Assert.assertEquals(str,  "　　　　　　［＃中見出し］あ\u0001※\u0001《１［＃中見出し終わり］");
 			
 			str = converter.replaceChukiSufTag("星状、扇形などの標本図は第一一〇及び一一一頁の一般分類の図［＃「第一一〇及び一一一頁の一般分類の図」は「第32図」を指す。］の中に示してある。");
 			System.out.println(str);
@@ -229,10 +229,10 @@ public class AozoraEpub3ConverterTest
 			//［＃注記付き］はあとで ｜ に変換される
 			str = converter.replaceChukiSufTag(converter.convertGaijiChuki("［＃注記付き］○○［＃「××※［＃米印］」の注記付き終わり］", true, false));
 			System.out.println(str);
-			Assert.assertEquals(str, "｜○○《××※※》");
+			Assert.assertEquals(str, "｜○○《××\u0001※》");
 			str = converter.replaceChukiSufTag(converter.convertGaijiChuki("［＃注記付き］勝安房守［＃「本ト麟太郎※［＃コト、1-2-24］」の注記付き終わり］あああ［＃注記付き］○○［＃「××※［＃米印］」の注記付き終わり］", true, false));
 			System.out.println(str);
-			Assert.assertEquals(str, "｜勝安房守《本ト麟太郎ヿ》あああ｜○○《××※※》");
+			Assert.assertEquals(str, "｜勝安房守《本ト麟太郎ヿ》あああ｜○○《××\u0001※》");
 			
 			str = converter.replaceChukiSufTag("青空文庫［＃「文庫」に「ぶんこ」のルビ］");
 			System.out.println(str);

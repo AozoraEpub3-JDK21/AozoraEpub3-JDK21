@@ -45,9 +45,9 @@ public class AozoraEpub3ConverterForwardRefEscapeTest
 	@Test
 	public void エスケープ済みの閉じ括弧で終わる対象でも止まらない() throws Exception
 	{
-		assertEquals("題名は［＃傍線］猫※》［＃傍線終わり］です。",
+		assertEquals("題名は［＃傍線］猫\u0001》［＃傍線終わり］です。",
 			replace("題名は猫※［＃終わり二重山括弧］［＃「猫※［＃終わり二重山括弧］」に傍線］です。"));
-		assertEquals("閉じ括弧だけ［＃太字］※》［＃太字終わり］です。",
+		assertEquals("閉じ括弧だけ［＃太字］\u0001》［＃太字終わり］です。",
 			replace("閉じ括弧だけ※［＃終わり二重山括弧］［＃「※［＃終わり二重山括弧］」は太字］です。"));
 		assertEquals("<p>題名は<span class=\"underline\">猫》</span>です。</p>",
 			convertLine("題名は猫※［＃終わり二重山括弧］［＃「猫※［＃終わり二重山括弧］」に傍線］です。"));
@@ -57,7 +57,7 @@ public class AozoraEpub3ConverterForwardRefEscapeTest
 	public void エスケープ済みの二重山括弧で囲んだ対象の始まりがずれない() throws Exception
 	{
 		// 修正前は》をルビの終わりと読んで行頭側の《まで戻り、傍点が「書名は」まで掛かっていた
-		assertEquals("書名は［＃傍点］※《猫※》［＃傍点終わり］です。",
+		assertEquals("書名は［＃傍点］\u0001《猫\u0001》［＃傍点終わり］です。",
 			replace("書名は※［＃始め二重山括弧］猫※［＃終わり二重山括弧］［＃「※［＃始め二重山括弧］猫※［＃終わり二重山括弧］」に傍点］です。"));
 	}
 
@@ -75,9 +75,9 @@ public class AozoraEpub3ConverterForwardRefEscapeTest
 		assertEquals("［＃傍点］壊れた》［＃傍点終わり］です。", replace("壊れた》［＃「壊れた》」に傍点］です。"));
 		assertEquals("前文の［＃傍点］壊れた》［＃傍点終わり］です。", replace("前文の壊れた》［＃「壊れた》」に傍点］です。"));
 		// 前にエスケープ済みの文字があっても、そこで止まってルビ扱いにしない
-		assertEquals("米※※［＃傍点］壊れた》［＃傍点終わり］です。", replace("米※［＃米印］壊れた》［＃「壊れた》」に傍点］です。"));
-		assertEquals("※《前文の［＃傍点］壊れた》［＃傍点終わり］です。", replace("※［＃始め二重山括弧］前文の壊れた》［＃「壊れた》」に傍点］です。"));
-		assertEquals("米※※｜壊れた》《こわれた》です。", replace("米※［＃米印］壊れた》［＃「壊れた》」に「こわれた」のルビ］です。"));
+		assertEquals("米\u0001※［＃傍点］壊れた》［＃傍点終わり］です。", replace("米※［＃米印］壊れた》［＃「壊れた》」に傍点］です。"));
+		assertEquals("\u0001《前文の［＃傍点］壊れた》［＃傍点終わり］です。", replace("※［＃始め二重山括弧］前文の壊れた》［＃「壊れた》」に傍点］です。"));
+		assertEquals("米\u0001※｜壊れた》《こわれた》です。", replace("米※［＃米印］壊れた》［＃「壊れた》」に「こわれた」のルビ］です。"));
 	}
 
 	@Test
@@ -90,13 +90,13 @@ public class AozoraEpub3ConverterForwardRefEscapeTest
 	@Test
 	public void ルビの読みにエスケープ済みの文字があっても読みの中にタグを入れない() throws Exception
 	{
-		assertEquals("書名は［＃傍点］｜米《こめ※※》［＃傍点終わり］です。", replace("書名は｜米《こめ※［＃米印］》［＃「米」に傍点］です。"));
+		assertEquals("書名は［＃傍点］｜米《こめ\u0001※》［＃傍点終わり］です。", replace("書名は｜米《こめ※［＃米印］》［＃「米」に傍点］です。"));
 	}
 
 	@Test
 	public void ルビを付ける前方参照注記でもエスケープ済みの閉じ括弧で止まらない() throws Exception
 	{
-		assertEquals("題名は｜猫※》《ねこ》です。",
+		assertEquals("題名は｜猫\u0001》《ねこ》です。",
 			replace("題名は猫※［＃終わり二重山括弧］［＃「猫※［＃終わり二重山括弧］」に「ねこ」のルビ］です。"));
 	}
 }

@@ -22,6 +22,8 @@ public class LogAppender
 	}
 	static public void append(String log)
 	{
+		//変換途中の文字列に入る内部エスケープの印（制御文字）はログに出さない
+		if (log != null) log = CharUtils.removeEscape(log);
 		if (jTextArea != null) {
 			jTextArea.append(log);
 			jTextArea.setCaretPosition(jTextArea.getDocument().getLength());

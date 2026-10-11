@@ -56,7 +56,7 @@ public class AozoraEpub3ConverterUnclosedRubyTest
 	@Test
 	public void 注記の後ろのルビのエスケープ済みの閉じ括弧を終わりと読まない() throws Exception
 	{
-		assertEquals("［＃傍点］猫《ね※》こ》［＃傍点終わり］です。",
+		assertEquals("［＃傍点］猫《ね\u0001》こ》［＃傍点終わり］です。",
 			replace("猫［＃「猫」に傍点］《ね※［＃終わり二重山括弧］こ》です。"));
 		assertEquals("<p><span class=\"sesame\"><ruby>猫<rt>ね》こ</rt></ruby></span>です。</p>",
 			convertLine("猫［＃「猫」に傍点］《ね※［＃終わり二重山括弧］こ》です。"));

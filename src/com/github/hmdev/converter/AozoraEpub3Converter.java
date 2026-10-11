@@ -715,10 +715,11 @@ public class AozoraEpub3Converter
 			int end = found ? m.start() : noRubyLine.length();
 			if (this.middleCountLine >= 0) {
 				//空白も1字ぶん場所を取る。サロゲートペアは1字
-				//(ルビの開始の｜は removeRuby で除去済みで、残る｜はエスケープされて表示されるもの。エスケープの※は多めに数える側に倒れる)
+				//(ルビの開始の｜は removeRuby で除去済みで、残る｜はエスケープされて表示されるもの。内部エスケープの印は数えない)
 				int chars = 0;
 				for (int i=pos; i<end; i++) {
-					if (!Character.isLowSurrogate(noRubyLine.charAt(i))) chars++;
+					char c = noRubyLine.charAt(i);
+					if (!Character.isLowSurrogate(c) && c != CharUtils.ESCAPE) chars++;
 				}
 				if (chars > 0) {
 					lineChars += chars;
@@ -1202,7 +1203,7 @@ public class AozoraEpub3Converter
 		}
 	}
 	
-	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は'※'エスケープ */
+	/** 目次やタイトル用の文字列を取得 ルビ関連の文字 ｜《》 は除外済で他の特殊文字は内部エスケープ（CharUtils.ESCAPE） */
 	private String getChapterName(String line)
 	{
 		return CharUtils.getChapterName(line, this.maxChapterNameLength);
@@ -1514,7 +1515,7 @@ public class AozoraEpub3Converter
 	
 	/** 文字列内の外字を変換
 	 * ・外字はUTF-16文字列に変換
-	 * ・特殊文字のうち※《》｜＃ は文字の前に※をつけてエスケープ
+	 * ・特殊文字のうち※《》｜＃ は文字の前に内部エスケープの印（CharUtils.ESCAPE）をつけてエスケープ
 	 * @param line 行文字列
 	 * @param escape ※での特殊文字のエスケープをするならtrue
 	 * @return 外字変換済の行文字列 */
@@ -1522,11 +1523,11 @@ public class AozoraEpub3Converter
 	{
 		return convertGaijiChuki(line, escape, true);
 	}
-	/** 変換した外字を出力する。escape なら特殊文字（{@link CharUtils#isEscapableChar(char)}）の前に※をつけて文字出力時に例外処理
+	/** 変換した外字を出力する。escape なら特殊文字（{@link CharUtils#isEscapableChar(char)}）の前に内部エスケープの印（{@link CharUtils#ESCAPE}）をつけて文字出力時に例外処理
 	 * コードや外字表から得た文字は1文字とは限らない（異体字セレクタ付きや U+XXXX-U+YYYY の2文字）ので、全部の文字を見る。
 	 * 代替文字（chuki_alt.txt）は ［＃縦中横］!!!［＃縦中横終わり］ のように注記やルビを書けるので、1文字のときだけ見る（従来どおり）。
 	 * U+のコードのみの注記も含めすべての外字変換で通すこと。
-	 * 抜けると裸の特殊文字が残り、isEscapedCharの※の偶奇がずれてルビ判定が狂う */
+	 * 抜けると裸の特殊文字が残り、ルビ・注記の記号として読まれる */
 	static void appendGaiji(StringBuilder buf, String gaiji, boolean escape, boolean isAlter)
 	{
 		if (!escape || (isAlter && gaiji.length() != 1)) {
@@ -1535,12 +1536,14 @@ public class AozoraEpub3Converter
 		}
 		for (int i=0; i<gaiji.length(); i++) {
 			char c = gaiji.charAt(i);
-			if (CharUtils.isEscapableChar(c)) buf.append('※');
+			if (CharUtils.isEscapableChar(c)) buf.append(CharUtils.ESCAPE);
 			buf.append(c);
 		}
 	}
 	public String convertGaijiChuki(String line, boolean escape, boolean logged)
 	{
+		//本文に内部エスケープの印（制御文字）があれば落とす。残すとエスケープと読まれる（XML にも書けない文字）
+		line = CharUtils.removeEscape(line);
 		/*
 		・外字
 		 ※の場合は外字に変換
@@ -1993,7 +1996,8 @@ public class AozoraEpub3Converter
 				chOffset += target.length()+2 - (chukiTagEnd-chukiTagStart);
 			} else if (tags != null) {
 				//置換済みの文字列で注記追加位置を探す
-				int targetStart = this.getTargetStart(buf, chukiTagStart, chOffset, CharUtils.removeRuby(target).length());
+				//内部エスケープの印は数えない（getTargetStart も印を飛ばして数える）
+				int targetStart = this.getTargetStart(buf, chukiTagStart, chOffset, CharUtils.removeEscape(CharUtils.removeRuby(target)).length());
 				
 				//後ろタグ置換
 				buf.delete(chukiTagStart+chOffset, chukiTagEnd+chOffset);
@@ -2017,7 +2021,8 @@ public class AozoraEpub3Converter
 			String target = m.group(1);
 			String chuki = m.group(2);
 			String[] tags = sufChukiMap.get(chuki);
-			int targetLength = target.length();
+			//内部エスケープの印は数えない（getTargetStart も印を飛ばして数える）
+			int targetLength = CharUtils.removeEscape(target).length();
 			int chukiTagStart = m.start();
 			int chukiTagEnd = m.end();
 			
@@ -2056,7 +2061,7 @@ public class AozoraEpub3Converter
 		return buf.toString();
 	}
 	/** from 以降で最初のエスケープされていない》の位置 閉じていなければ -1
-	 * ※》 はエスケープ済みの文字なのでルビの終わりではない。
+	 * 印＋》 はエスケープ済みの文字なのでルビの終わりではない。
 	 * 途中で次のルビの《に出会ったら、このルビは閉じていない（読みの中に別のルビは入らない。
 	 * 先へ進むと後ろのルビの》を拾い、別のルビや注記ごと動かしてしまう）。
 	 * 読みの中の注記（外字変換で入る［＃小書き］など）は特別扱いしない。
@@ -2079,20 +2084,25 @@ public class AozoraEpub3Converter
 		int idx = chukiTagStart-1+chOffset;
 		boolean hasRuby = false;
 		int length = 0;
-		//間にあるルビと注記タグは除外 ※※※》等のエスケープをチェックする
+		//間にあるルビと注記タグは除外 印＋》等のエスケープをチェックする
 		while (targetLength > length && idx >= 0) {
-			switch (buf.charAt(idx)) {
+			char c = buf.charAt(idx);
+			//内部エスケープの印は数えない（呼び出し側も対象の長さを印を除いて数えている）
+			if (c == CharUtils.ESCAPE) {
+				idx--;
+				continue;
+			}
+			//エスケープ済みの文字（印＋文字）はどの記号でも普通の1文字。印も一緒に越える（印と文字の間に注記を入れない）
+			if (CharUtils.isEscapedChar(buf, idx)) {
+				length++;
+				idx -= 2;
+				continue;
+			}
+			switch (c) {
 			case '》':
-				//エスケープ文字 ※》 は2文字 対象の長さ(removeRuby)も※を数えている
-				//判定は》自身の位置で行う 1つ戻してから判定するとエスケープ済みの》をルビの終わりと読む
-				if (CharUtils.isEscapedChar(buf, idx)) {
-					length += 2;
-					idx--;
-					break;
-				}
 				int closeIdx = idx;
 				idx--;
-				//エスケープされていない《でだけ止まる ※※ や ※《 などエスケープ済みの文字は読みの一部として飛ばす
+				//エスケープされていない《でだけ止まる エスケープ済みの文字は読みの一部として飛ばす
 				while (idx >= 0 && !(buf.charAt(idx) == '《' && !CharUtils.isEscapedChar(buf, idx))) {
 					idx--;
 				}
@@ -2106,29 +2116,27 @@ public class AozoraEpub3Converter
 				hasRuby = true;
 				break;
 			case '］':
-				idx--;
-				//エスケープ文字
-				if (CharUtils.isEscapedChar(buf, idx)) {
+				//直前がエスケープ済みの文字なら、］は注記の終わりではなく普通の1文字（前と同じ判定）。直前の文字は次で数える
+				if (idx > 0 && CharUtils.isEscapedChar(buf, idx-1)) {
 					length++;
 					break;
 				}
-				while (idx >= 0 && buf.charAt(idx) != '［' && !CharUtils.isEscapedChar(buf, idx)) {
+				idx--;
+				//注記の［まで飛ばす。注記の中のエスケープ済みの文字では止まらない（止まると注記の残りを対象として数える）
+				while (idx >= 0 && !(buf.charAt(idx) == '［' && !CharUtils.isEscapedChar(buf, idx))) {
 					idx--;
 				}
 				break;
 			case '｜':
-				//エスケープ文字
-				if (CharUtils.isEscapedChar(buf, idx)) {
-					length++;
-				}
+				//エスケープされていない｜はルビの始まりの印で、文字として数えない
 				break;
 			default:
 				length++;
 			}
 			idx--;
 		}
-		//ルビがあれば先頭の｜を含める
-		if (hasRuby && idx >= 0 && buf.charAt(idx) == '｜') return idx;
+		//ルビがあれば先頭の｜を含める（エスケープ済みの｜は文字なので含めない）
+		if (hasRuby && idx >= 0 && buf.charAt(idx) == '｜' && !CharUtils.isEscapedChar(buf, idx)) return idx;
 		//対応する［《が無い入力の誤りでは行頭より前まで戻ることがある
 		//-1 を返すと呼び出し側の insert で例外になり、前走査で起きるので変換全体が止まる
 		if (idx < -1) return 0;
@@ -2257,7 +2265,8 @@ public class AozoraEpub3Converter
 		//行頭インデント 先頭が「『―（以外 半角空白は除去
 		if (this.forceIndent && ch.length > charStart+1) {
 			switch (ch[charStart]) {
-			case '　': case '「': case '『':  case '（': case '”': case '〈': case '【': case '〔': case '［': case '※':
+			//印（外字の特殊文字の前）は、前の ※ と同じく字下げしない（出力を変えない）
+			case '　': case '「': case '『':  case '（': case '”': case '〈': case '【': case '〔': case '［': case '※': case CharUtils.ESCAPE:
 				break;
 			case ' ': case ' ':
 				char c1 = ch[charStart+1];
@@ -2511,7 +2520,13 @@ public class AozoraEpub3Converter
 								inChuki = true;
 								i++;
 							} else if (inRuby) {
-								if (ch[i]=='》') inRuby = false;
+								//読みの中のエスケープ済みの文字（印＋》など）は印ごと越える。読みは数えない
+								if (ch[i] == CharUtils.ESCAPE) i++;
+								else if (ch[i]=='》') inRuby = false;
+							} else if (ch[i] == CharUtils.ESCAPE) {
+								//印は幅を持たない。次のエスケープ済みの文字を数えて、印と一緒に越える
+								if (i+1 < end) blength += CharUtils.isHalf(ch[i+1]) ? 1 : 2;
+								i++;
 							} else if (i < end-1 && ch[i]=='《') {
 								inRuby = true;
 							} else {
@@ -2531,7 +2546,17 @@ public class AozoraEpub3Converter
 									inChuki = true;
 									i++;
 								} else if (inRuby) {
-									if (ch[i]=='》') inRuby = false;
+									//読みの中では切らない。エスケープ済みの文字は印ごと越える
+									if (ch[i] == CharUtils.ESCAPE) i++;
+									else if (ch[i]=='》') inRuby = false;
+								} else if (ch[i] == CharUtils.ESCAPE) {
+									//印と次の文字の間では切らない。切るなら印の前
+									if (blength >= half) {
+										wrcBrPos = i;
+										break;
+									}
+									if (i+1 < end) blength += CharUtils.isHalf(ch[i+1]) ? 1 : 2;
+									i++;
 								} else if (i < end-1 && ch[i]=='《') {
 									inRuby = true;
 								} else {
@@ -2544,8 +2569,9 @@ public class AozoraEpub3Converter
 								}
 							}
 							//改行位置を取得 、。は禁則処理する
+							//括弧が無いと wrcBrPos が -1 のときも ch[-1] を読んで変換全体が止まった（割り注が 1 文字だけのとき）
 							if (wrcBrPos > 0 && wrcBrPos < ch.length &&
-								ch[wrcBrPos] == '、' || ch[wrcBrPos] == '。') wrcBrPos++;
+								(ch[wrcBrPos] == '、' || ch[wrcBrPos] == '。')) wrcBrPos++;
 						}
 					}
 				}
@@ -2882,27 +2908,27 @@ public class AozoraEpub3Converter
 			break;
 		}
 		
-		//事前に《,》の代替文字をエスケープ済※《,※》 に変換
+		//事前に《,》の代替文字をエスケープ済（印＋《,印＋》）に変換
 		for (int i=begin+1; i<end; i++) {
 			switch (ch[i]) {
 			case '<':
 				if (ch[i-1] == '<' && (i == begin+1 || ch[i-2] != '<') && (end-1==i || ch[i+1] != '<')) {
-					ch[i-1] = '※'; ch[i] = '《';
+					ch[i-1] = CharUtils.ESCAPE; ch[i] = '《';
 				}
 				break;
 			case '>':
 				if (ch[i-1] == '>' && (i == begin+1 || ch[i-2] != '>') && (end-1==i || ch[i+1] != '>')) {
-					ch[i-1] = '※'; ch[i] = '》';
+					ch[i-1] = CharUtils.ESCAPE; ch[i] = '》';
 				}
 				break;
 			case '＜':
 				if (ch[i-1] == '＜' && (i == begin+1 || ch[i-2] != '＜') && (end-1==i || ch[i+1] != '＜')) {
-					ch[i-1] = '※'; ch[i] = '《';
+					ch[i-1] = CharUtils.ESCAPE; ch[i] = '《';
 				}
 				break;
 			case '＞':
 				if (ch[i-1] == '＞' && (i == begin+1 || ch[i-2] != '＞') && (end-1==i || ch[i+1] != '＞')) {
-					ch[i-1] = '※'; ch[i] = '》';
+					ch[i-1] = CharUtils.ESCAPE; ch[i] = '》';
 				}
 				break;
 			//濁点半濁点の結合文字は通常の文字に変換 半角は横書きの場合があるのでそのまま
@@ -2925,7 +2951,7 @@ public class AozoraEpub3Converter
 	}
 	
 	/** ルビタグに変換して出力
-	 * 特殊文字は※が前についているので※｜※《※》はルビ処理しない
+	 * 特殊文字は内部エスケープの印が前についているので（印＋｜《》）ルビ処理しない
 	 * ・ルビ （前｜漢字《かんじ》 → 前<ruby>漢字<rt>かんじ</rt></ruby>）
 	 * ・</ruby><ruby> と連続する場合はタグを除去
 	 * @param buf 出力先バッファ
@@ -2998,7 +3024,9 @@ public class AozoraEpub3Converter
 									LogAppender.warn(lineNum, "ルビが長すぎます");
 							}
 							//同じ長さで同じ文字なら一文字づつルビを振る
-							if (rubyTopStart-rubyStart == i-rubyTopStart-1 && CharUtils.isSameChars(ch, rubyTopStart+1, i)) {
+							//親文字か読みに内部エスケープの印があれば使わない（印も1文字に数え、読みが空の親文字に付く）
+							if (rubyTopStart-rubyStart == i-rubyTopStart-1 && CharUtils.isSameChars(ch, rubyTopStart+1, i)
+									&& !CharUtils.hasEscape(ch, rubyStart, i)) {
 								if (buf.indexOf(rubyEndChuki, buf.length()-rubyEndChuki.length()) == -1) {
 									buf.append(rubyStartChuki);
 								} else {
@@ -3638,12 +3666,9 @@ public class AozoraEpub3Converter
 		//else out.write(ch);
 		int length = buf.length();
 		
-		//エスケープ文字を変換
-		boolean escaped = false;
-		if (idx > 0 && CharUtils.isEscapableChar(ch[idx]) && ch[idx-1] == '※') {
-			buf.setLength(length-1);//1文字削除
-			escaped = true;
-		}
+		//内部エスケープの印は出力しない。次の文字はエスケープ済みの文字として出す
+		if (ch[idx] == CharUtils.ESCAPE) return;
+		boolean escaped = idx > 0 && CharUtils.isEscapableChar(ch[idx]) && ch[idx-1] == CharUtils.ESCAPE;
 		
 		if (replaceMap != null) {
 			String replaced = replaceMap.get(ch[idx]);
@@ -3659,7 +3684,8 @@ public class AozoraEpub3Converter
 				String replaced = replace2Map.get(""+ch[idx-(escaped?2:1)]+ch[idx]);
 				//置換して終了
 				if (replaced != null) {
-					buf.setLength(length-1);//1文字削除
+					//エスケープ済みの文字のときは前の文字を消さない（前は※を消すだけで、前の文字は残していた。同じ出力にする）
+					if (!escaped) buf.setLength(length-1);//1文字削除
 					buf.append(replaced);
 					return;
 				}
@@ -3668,7 +3694,7 @@ public class AozoraEpub3Converter
 		//エスケープ文字を出力
 		if (escaped) {
 			buf.append(ch[idx]);
-			ch[idx] = '　'; //※※の場合の対策
+			ch[idx] = '　'; //次の文字の2文字置換（replace2Map）にエスケープ済みの文字を使わせない（前と同じ）
 			return;
 		}
 		
