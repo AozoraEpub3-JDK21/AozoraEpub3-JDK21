@@ -216,7 +216,8 @@ public class AozoraEpub3
 			
 			//オプション指定を反映
 			boolean useFileName = false;//表題に入力ファイル名利用
-			String coverFileName = null;
+			//-c の値。本ごとに解決するので、ここでは書き換えない（internal #32）
+			String coverOption = null;
 			String encType = "MS932";
 			String outExt = ".epub";
 			boolean autoFileName = true; //ファイル名を表題に利用
@@ -224,7 +225,7 @@ public class AozoraEpub3
 			String targetDevice = null;
 			if(commandLine.hasOption("t")) try { titleIndex = Integer.parseInt(commandLine.getOptionValue("t")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			if(commandLine.hasOption("tf")) useFileName = true;
-			if(commandLine.hasOption("c")) coverFileName = commandLine.getOptionValue("c");
+			if(commandLine.hasOption("c")) coverOption = commandLine.getOptionValue("c");
 			if(commandLine.hasOption("enc")) encType = commandLine.getOptionValue("enc");
 			if(commandLine.hasOption("ext")) outExt = commandLine.getOptionValue("ext");
 			if(commandLine.hasOption("of")) autoFileName = false;
@@ -356,16 +357,6 @@ public class AozoraEpub3
 				String ext = srcFile.getName();
 				ext = ext.substring(ext.lastIndexOf('.')+1).toLowerCase();
 				
-				int coverImageIndex = -1;
-				if (coverFileName != null) {
-					if ("0".equals(coverFileName)) {
-						coverImageIndex = 0;
-						coverFileName = "";
-					} else if ("1".equals(coverFileName)) {
-						coverFileName = AozoraEpub3.getSameCoverFileName(srcFile); //入力ファイルと同じ名前+.jpg/.png
-					}
-				}
-				
 				//zipならzip内のテキストを検索
 				int txtCount = 1;
 				boolean imageOnly = false;
@@ -388,6 +379,17 @@ public class AozoraEpub3
 					imageOnly = true;
 				}
 				for (int txtIdx=0; txtIdx<txtCount; txtIdx++) {
+					//表紙は -c の値から本ごとに決める。前の本の決定（「1」の同名画像・相対名に足したフォルダ・
+					//MaxCoverLine で外した表紙）を持ち越さない（GUI の convertFile と同じく変換ごと。internal #32）
+					int coverImageIndex = -1;
+					String coverFileName = coverOption;
+					if ("0".equals(coverFileName)) {
+						coverImageIndex = 0;
+						coverFileName = "";
+					} else if ("1".equals(coverFileName)) {
+						coverFileName = AozoraEpub3.getSameCoverFileName(srcFile); //入力ファイルと同じ名前+.jpg/.png
+					}
+					
 					ImageInfoReader imageInfoReader = new ImageInfoReader(isFile, srcFile);
 					
 					BookInfo bookInfo = null;

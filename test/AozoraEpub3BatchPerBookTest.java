@@ -1,14 +1,21 @@
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Enumeration;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+
+import javax.imageio.ImageIO;
 
 import org.apache.velocity.app.Velocity;
 import org.junit.Rule;
@@ -16,10 +23,12 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 /**
- * CLI の一括変換で、1 冊の失敗が後ろの本を止めないことのテスト。
+ * CLI の一括変換で、1 冊の失敗や 1 冊の表紙の決定が後ろの本へ持ち越されないことのテスト。
  *
  * internal #31: 壊れた書庫・画像の無い書庫は、その本だけ失敗にして次の本へ進む
  *   （修正前は壊れた書庫の例外が run() の外側の catch まで抜け、画像の無い書庫は return 1 で一括が止まった）。
+ * internal #32: -c の値は本ごとに解決する
+ *   （修正前は「-c 1」が 1 冊目の同名画像に書き換わり、2 冊目も 1 冊目の表紙になった）。
  *
  * run() の呼び方は AozoraEpub3BatchOutPathErrorTest と同じ。
  */
@@ -80,5 +89,56 @@ public class AozoraEpub3BatchPerBookTest {
 		assertTrue("壊れた書庫を中止したことが出ていない:\n" + lastLog, lastLog.contains("変換中止: " + broken.getAbsolutePath()));
 		assertTrue("画像の無い書庫を中止したことが出ていない:\n" + lastLog, lastLog.contains("変換中止: " + empty.getAbsolutePath()));
 		assertEquals("1 冊でも失敗があれば非 0", 1, exitCode);
+	}
+
+	/** 「-c 1」（入力と同じ名前の画像）は本ごとに解決する。b の表紙は b の画像 */
+	@Test
+	public void sameNameCoverIsResolvedPerBook() throws Exception {
+		File dirA = tempFolder.newFolder("a");
+		File dirB = tempFolder.newFolder("b");
+		File dst = tempFolder.newFolder("dst");
+		File a = book(dirA, "a.txt", "本A");
+		File b = book(dirB, "b.txt", "本B");
+		writePng(new File(dirA, "a.png"), Color.RED);
+		writePng(new File(dirB, "b.png"), Color.BLUE);
+		File ini = tempFolder.newFile("empty.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-enc", "UTF-8", "-d", dst.getPath(), "-c", "1",
+			a.getPath(), b.getPath());
+		assertEquals("全件成功:\n" + lastLog, 0, exitCode);
+
+		assertCoverColor(new File(dst, "[著] 本A.epub"), Color.RED);
+		assertCoverColor(new File(dst, "[著] 本B.epub"), Color.BLUE);
+	}
+
+	private static void writePng(File file, Color color) throws Exception {
+		BufferedImage img = new BufferedImage(60, 80, BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = img.createGraphics();
+		g.setColor(color);
+		g.fillRect(0, 0, 60, 80);
+		g.dispose();
+		ImageIO.write(img, "png", file);
+	}
+
+	private void assertCoverColor(File epub, Color expected) throws Exception {
+		assertTrue("EPUB が無い: " + epub + "\n" + lastLog, epub.isFile());
+		try (ZipFile zip = new ZipFile(epub)) {
+			BufferedImage cover = null;
+			String names = "";
+			for (Enumeration<? extends ZipEntry> en = zip.entries(); en.hasMoreElements();) {
+				ZipEntry e = en.nextElement();
+				names += e.getName() + "\n";
+				String n = e.getName().toLowerCase();
+				//表紙のほかに画像は無いので、images/ の唯一の画像が表紙
+				if (n.startsWith("ops/images/") && (n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg"))) {
+					cover = ImageIO.read(zip.getInputStream(e));
+				}
+			}
+			assertNotNull(epub.getName() + " に表紙画像が無い:\n" + names, cover);
+			Color c = new Color(cover.getRGB(cover.getWidth() / 2, cover.getHeight() / 2));
+			int dr = c.getRed() - expected.getRed(), dg = c.getGreen() - expected.getGreen(), db = c.getBlue() - expected.getBlue();
+			assertTrue(epub.getName() + " の表紙の色が違う: " + c + " (期待 " + expected + ")",
+				dr * dr + dg * dg + db * db < 40 * 40);
+		}
 	}
 }
