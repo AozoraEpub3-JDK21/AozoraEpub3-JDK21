@@ -1620,6 +1620,88 @@ public class PreviewServerTest
 		assertEquals(409, postText(base() + "api/download", "https://ncode.syosetu.com/n1234ab/").statusCode());
 	}
 
+	// ---- 開いているタブを使い回す ----
+
+	/** 見に来たタブが無ければ渡さない。見に来たタブには、次に見に来たときに渡る。取ると空になる */
+	@Test(timeout = 20_000)
+	public void aVisibleTabGetsTheUrlOnItsNextVisit() throws Exception
+	{
+		assertFalse("見に来たタブが無い", this.server.offerToVisibleTab("http://x/1", 200));
+		assertEquals(405, get(base() + "api/inbox?tab=a").statusCode());
+		assertEquals(204, postText(base() + "api/inbox?tab=a&focus=0", "").statusCode());
+		java.util.concurrent.atomic.AtomicBoolean taken = new java.util.concurrent.atomic.AtomicBoolean();
+		Thread offer = new Thread(() -> {
+			try {
+				taken.set(this.server.offerToVisibleTab("http://x/book?book=b2", 5_000));
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		offer.start();
+		HttpResponse<String> got = null;
+		for (int i = 0; i < 100; i++) {
+			got = postText(base() + "api/inbox?tab=a&focus=0", "");
+			if (got.statusCode() == 200) break;
+			Thread.sleep(20);
+		}
+		assertEquals(200, got.statusCode());
+		assertTrue(got.body(), got.body().contains("\"open\":\"http://x/book?book=b2\""));
+		offer.join();
+		assertTrue("取りに来たと分かる", taken.get());
+		assertEquals("取ったら空", 204, postText(base() + "api/inbox?tab=a&focus=0", "").statusCode());
+	}
+
+	/** 取りに来なければ渡していない扱いにして、受け箱から下げる（後で見に来たタブが古い本へ飛ばない） */
+	@Test(timeout = 20_000)
+	public void anUnclaimedUrlIsWithdrawn() throws Exception
+	{
+		assertEquals(204, postText(base() + "api/inbox?tab=a", "").statusCode());
+		assertFalse(this.server.offerToVisibleTab("http://x/old", 200));
+		assertEquals(204, postText(base() + "api/inbox?tab=a", "").statusCode());
+	}
+
+	/** フォーカスを持つタブを先にする。閉じたタブには渡さない */
+	@Test(timeout = 20_000)
+	public void theFocusedTabIsPreferredAndAClosedTabIsSkipped() throws Exception
+	{
+		assertEquals(204, postText(base() + "api/inbox?tab=focused&focus=1", "").statusCode());
+		assertEquals(204, postText(base() + "api/inbox?tab=later&focus=0", "").statusCode());
+		assertEquals("フォーカスを持つ方", "focused", claimWhileOffering("http://x/1", "focused", "later"));
+		assertEquals(204, postText(base() + "api/bye?tab=focused", "").statusCode());
+		assertEquals("閉じたタブには渡さない", "later", claimWhileOffering("http://x/2", "focused", "later"));
+	}
+
+	/** 渡すのを待つ間、両方のタブが見に来る。取ったタブの名前を返す */
+	private String claimWhileOffering(String url, String... tabs) throws Exception
+	{
+		java.util.concurrent.atomic.AtomicBoolean taken = new java.util.concurrent.atomic.AtomicBoolean();
+		Thread offer = new Thread(() -> {
+			try {
+				taken.set(this.server.offerToVisibleTab(url, 5_000));
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		offer.start();
+		String claimed = null;
+		for (int i = 0; i < 100 && claimed == null; i++) {
+			Thread.sleep(20);
+			for (String tab : tabs) {
+				//閉じたタブは見に来ない（bye の後は来ないのが本物の動き）
+				if (tab.equals("focused") && url.endsWith("/2")) continue;
+				HttpResponse<String> r = postText(base() + "api/inbox?tab=" + tab + (tab.equals("focused") ? "&focus=1" : "&focus=0"), "");
+				if (r.statusCode() == 200) {
+					assertTrue(r.body(), r.body().contains(url));
+					claimed = tab;
+					break;
+				}
+			}
+		}
+		offer.join();
+		assertTrue(taken.get());
+		return claimed;
+	}
+
 	// ---- ランキング（internal #11） ----
 
 	/** アプリから開いた本棚だけ。期間・ジャンルが読めなければ 400、取れなければ 502、取れたら API の本文のまま */

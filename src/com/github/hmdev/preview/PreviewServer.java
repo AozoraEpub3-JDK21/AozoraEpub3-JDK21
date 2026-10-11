@@ -118,6 +118,35 @@ public class PreviewServer implements AutoCloseable
 	 */
 	private final Map<String, Long> clients = new ConcurrentHashMap<>();
 
+	/*
+	 * 開いているタブを使い回す（本や本棚を開くたびに新しいタブを足さない）。
+	 *
+	 * 見えているタブ（ウィンドウの手前のタブで、ブラウザが隠されていない）は、受け箱（api/inbox）を
+	 * 1 秒ごとに見に来る。見えていないタブは来ない。2026-10-11 の spike（Safari・Chrome、mac）で、
+	 * 別のアプリの窓に覆われたタブも visible のまま、隠したブラウザや奥のタブは hidden になると確かめた。
+	 * 開く側は、最近見に来たタブの受け箱に URL を入れて、取りに来るのを少し待つ。来なければ
+	 * 今までどおり新しいタブを開く。ページからタブを手前に出すことはブラウザが許さないので、前には出ない
+	 */
+
+	/** 見えているタブが受け箱を見に来る間隔（ビューアーの INBOX_POLL と合わせる） */
+	static final long INBOX_POLL_MILLIS = 1_000L;
+
+	/** この間に見に来たタブを「見えている」とみなす */
+	static final long INBOX_FRESH_MILLIS = 3_000L;
+
+	/** 受け箱に入れてから、取りに来るのを待つ間 */
+	static final long INBOX_WAIT_MILLIS = 2_500L;
+
+	/** タブが受け箱を最後に見に来た時刻（nanoTime）と、そのときウィンドウがフォーカスを持っていたか */
+	private record InboxVisit(long nanos, boolean focused) { }
+
+	private final Map<String, InboxVisit> inboxVisits = new ConcurrentHashMap<>();
+
+	/** 受け箱に入っている、開いてほしい URL。取られたら taken が落ちる */
+	private record Delivery(String url, java.util.concurrent.CountDownLatch taken) { }
+
+	private final Map<String, Delivery> inbox = new ConcurrentHashMap<>();
+
 	/** 本棚の「続きを取る」を行うもの。本棚を開く側（GUI・CLI）が渡す。null なら更新できない */
 	private volatile BookUpdater bookUpdater;
 	/** 更新は 1 冊ずつ（サイトへの負担と、変換の静的な状態を共有しないため） */
@@ -362,6 +391,8 @@ public class PreviewServer implements AutoCloseable
 	{
 		long limitNanos = IDLE_TIMEOUT_MILLIS * 1_000_000L;
 		this.clients.values().removeIf(seen -> nowNanos - seen >= limitNanos);
+		//忘れたタブの受け箱の記録も捨てる（タブ ID は開くたびに増える）
+		this.inboxVisits.keySet().retainAll(this.clients.keySet());
 	}
 
 	/**
@@ -371,6 +402,7 @@ public class PreviewServer implements AutoCloseable
 	void noteClientGone(String clientId)
 	{
 		this.clients.remove(clientId);
+		this.inboxVisits.remove(clientId);
 		this.closeNotified = this.clients.isEmpty();
 	}
 
@@ -470,6 +502,10 @@ public class PreviewServer implements AutoCloseable
 				// タブを閉じたときの sendBeacon。猶予を待たずに終了できるようにする
 				noteClientGone(clientIdOf(exchange));
 				respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+				return;
+			}
+			if (rest.equals("api/inbox")) {
+				serveInbox(exchange, method);
 				return;
 			}
 			if (rest.equals("api/settings")) {
@@ -1115,6 +1151,70 @@ public class PreviewServer implements AutoCloseable
 		} catch (java.net.URISyntaxException e) {
 			return false;
 		}
+	}
+
+	/**
+	 * 受け箱（POST api/inbox?tab=…&focus=0|1）。見えているタブが 1 秒ごとに見に来る。
+	 * 入っていれば {"open": URL} を返して空にする。無ければ 204。取ると状態が変わるので POST
+	 */
+	private void serveInbox(HttpExchange exchange, String method) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		String tab = clientIdOf(exchange);
+		String query = exchange.getRequestURI().getRawQuery();
+		boolean focused = query != null && java.util.Arrays.asList(query.split("&")).contains("focus=1");
+		//見に来た＝生きている。記録はその後（noteClientAlive の掃除は、まだ生きているタブに無い記録を捨てる）
+		noteClientAlive(tab);
+		this.inboxVisits.put(tab, new InboxVisit(System.nanoTime(), focused));
+		Delivery delivery = this.inbox.remove(tab);
+		if (delivery == null) {
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		delivery.taken.countDown();
+		StringBuilder buf = new StringBuilder(64);
+		buf.append('{');
+		Json.prop(buf, "open", delivery.url);
+		buf.append('}');
+		respondJson(exchange, buf.toString());
+	}
+
+	/**
+	 * 見えているタブに URL を開いてもらう。フォーカスを持つタブ、無ければ最後に見に来たタブ。
+	 * 取りに来るまで待つ（呼ぶのは画面のスレッド以外から）。
+	 * @return 取りに来た。false なら誰にも渡していない（新しいタブを開くこと）
+	 */
+	public boolean offerToVisibleTab(String url) throws InterruptedException
+	{
+		return offerToVisibleTab(url, INBOX_WAIT_MILLIS);
+	}
+
+	boolean offerToVisibleTab(String url, long waitMillis) throws InterruptedException
+	{
+		long now = System.nanoTime();
+		long fresh = INBOX_FRESH_MILLIS * 1_000_000L;
+		String best = null;
+		InboxVisit bestVisit = null;
+		for (Map.Entry<String, InboxVisit> e : this.inboxVisits.entrySet()) {
+			InboxVisit v = e.getValue();
+			if (now - v.nanos > fresh || !this.clients.containsKey(e.getKey())) continue;
+			if (bestVisit == null || (v.focused && !bestVisit.focused)
+				|| (v.focused == bestVisit.focused && v.nanos > bestVisit.nanos)) {
+				best = e.getKey();
+				bestVisit = v;
+			}
+		}
+		if (best == null) return false;
+		Delivery delivery = new Delivery(url, new java.util.concurrent.CountDownLatch(1));
+		this.inbox.put(best, delivery);
+		if (delivery.taken.await(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS)) return true;
+		//取りに来なかった（奥へ回った・凍った）。入れたままにすると、後で見に来たときに古い本へ飛ぶ
+		this.inbox.remove(best, delivery);
+		//remove と取りに来るのが重なったら、取られている
+		return delivery.taken.getCount() == 0;
 	}
 
 	/** 本棚のランキング（なろう）。試験では差し替える */
