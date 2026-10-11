@@ -4732,15 +4732,17 @@ public class AozoraEpub3Applet extends JPanel
 					if (jComboCover.getSelectedIndex() == 0 || jComboCover.getSelectedIndex() == 1) jComboCover.setSelectedIndex(1);
 				
 					//変換処理実行
-					convertFiles(new File[]{srcFile}, dstPath);
-				
-					//設定を戻す
-					jComboEncType.setSelectedItem(encType);
-					jComboTitle.setSelectedIndex(titleTypeIdx);
-					jCheckUseFileName.setSelected(checkUseFileName);
-					jCheckCommentPrint.setSelected(commentPrint);
-					jCheckCommentConvert.setSelected(commentConvert);
-					jComboCover.setSelectedItem(coverItem);
+					try {
+						convertFiles(new File[]{srcFile}, dstPath);
+					} finally {
+						//設定を戻す。例外で抜けても戻す（戻さないと、窓が手前から外れたときの保存で一時的な値が ini に残る）
+						jComboEncType.setSelectedItem(encType);
+						jComboTitle.setSelectedIndex(titleTypeIdx);
+						jCheckUseFileName.setSelected(checkUseFileName);
+						jCheckCommentPrint.setSelected(commentPrint);
+						jCheckCommentConvert.setSelected(commentConvert);
+						jComboCover.setSelectedItem(coverItem);
+					}
 				}
 				
 			} catch (Exception e) {
