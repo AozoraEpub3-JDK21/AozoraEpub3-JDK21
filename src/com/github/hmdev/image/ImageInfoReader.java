@@ -203,7 +203,8 @@ public class ImageInfoReader
 		if (isFile) {
 			//ファイルシステムから取得
 			Path imageFile = Path.of(this.srcParentPath+srcImageFileName);
-			if (Files.exists(imageFile)) return true;
+			//フォルダは画像ではない（名前が空の <img src=""> だと入力のフォルダそのものを指す。internal #33）
+			if (Files.isRegularFile(imageFile)) return true;
 		} else {
 			if (this.imageFileInfos.containsKey(this.archiveTextParentPath+srcImageFileName)) return true;
 		}
@@ -222,14 +223,15 @@ public class ImageInfoReader
 		if (isFile) {
 			//ファイルシステムから取得
 			Path imageFile = Path.of(this.srcParentPath+srcImageFileName);
-			if (Files.exists(imageFile)) {
+			//フォルダは画像ではない。開こうとすると Windows では AccessDeniedException になり、それを素のまま出していた（internal #33）
+			if (Files.isRegularFile(imageFile)) {
 				try {
 					imageInfo = ImageInfo.getImageInfo(imageFile.toFile());
 					if (imageInfo != null) {
 						this.imageFileInfos.put(srcImageFileName, imageInfo);
 						return imageInfo;
 					}
-				} catch (IOException ioe) { System.err.println(ioe); }
+				} catch (IOException ioe) { logger.warn("画像を読めませんでした: {}", imageFile, ioe); }
 			}
 		} else {
 			//Zipで中にフォルダがある場合
@@ -409,11 +411,13 @@ public class ImageInfoReader
 	{
 		if (this.isFile) {
 			Path file = Path.of(this.srcParentPath+srcImageFileName);
-			if (!Files.exists(file)) {
+			if (!Files.isRegularFile(file)) {
 				//拡張子修正
 				srcImageFileName = this.correctExt(srcImageFileName);
+				//見つからなければ null が返る（そのまま足すと「…/null」というパスを探してしまう）
+				if (srcImageFileName == null) return null;
 				file = Path.of(this.srcParentPath+srcImageFileName);
-				if (!Files.exists(file)) return null;
+				if (!Files.isRegularFile(file)) return null;
 			}
 			BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(file), 8192);
 			try {
