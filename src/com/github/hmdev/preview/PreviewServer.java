@@ -380,6 +380,13 @@ public class PreviewServer implements AutoCloseable
 		return "default";
 	}
 
+	/** 問い合わせに {@code flag}（例: {@code focus=1}）がそのまま入っているか */
+	static boolean hasQueryFlag(HttpExchange exchange, String flag)
+	{
+		String query = exchange.getRequestURI().getRawQuery();
+		return query != null && java.util.Arrays.asList(query.split("&")).contains(flag);
+	}
+
 	/** タブが生きていることを記録する */
 	void noteClientAlive(String clientId)
 	{
@@ -660,8 +667,7 @@ public class PreviewServer implements AutoCloseable
 			return;
 		}
 		//利用者が「減ったまま更新」を選んだ（話数が減って止めた本を、それでも取り直す）
-		String query = exchange.getRequestURI().getRawQuery();
-		boolean allowFewer = query != null && java.util.Arrays.asList(query.split("&")).contains("allowFewer=1");
+		boolean allowFewer = hasQueryFlag(exchange, "allowFewer=1");
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
@@ -1168,8 +1174,13 @@ public class PreviewServer implements AutoCloseable
 			return;
 		}
 		String tab = clientIdOf(exchange);
-		String query = exchange.getRequestURI().getRawQuery();
-		boolean focused = query != null && java.util.Arrays.asList(query.split("&")).contains("focus=1");
+		//奥へ回った・隠れたタブの知らせ。見えているタブの候補から外す（外さないと、3 秒の間は来ないタブを待つ）
+		if (hasQueryFlag(exchange, "hidden=1")) {
+			this.inboxVisits.remove(tab);
+			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
+			return;
+		}
+		boolean focused = hasQueryFlag(exchange, "focus=1");
 		//見に来た＝生きている。記録はその後（noteClientAlive の掃除は、まだ生きているタブに無い記録を捨てる）
 		noteClientAlive(tab);
 		this.inboxVisits.put(tab, new InboxVisit(System.nanoTime(), focused));
@@ -1178,6 +1189,8 @@ public class PreviewServer implements AutoCloseable
 			respond(exchange, 204, "text/plain; charset=utf-8", new byte[0]);
 			return;
 		}
+		//取ったタブは移る（読み込み直すと別のタブ ID で来る）。候補から外す
+		this.inboxVisits.remove(tab);
 		delivery.taken.countDown();
 		StringBuilder buf = new StringBuilder(64);
 		buf.append('{');
@@ -1196,7 +1209,17 @@ public class PreviewServer implements AutoCloseable
 		return offerToVisibleTab(url, INBOX_WAIT_MILLIS);
 	}
 
+	/** 渡すのは 1 つずつ（同じタブの受け箱に 2 つ入れると、先の 1 つが上書きされて待ちぼうけになる） */
+	private final Object offering = new Object();
+
 	boolean offerToVisibleTab(String url, long waitMillis) throws InterruptedException
+	{
+		synchronized (this.offering) {
+			return offerOnce(url, waitMillis);
+		}
+	}
+
+	private boolean offerOnce(String url, long waitMillis) throws InterruptedException
 	{
 		long now = System.nanoTime();
 		long fresh = INBOX_FRESH_MILLIS * 1_000_000L;

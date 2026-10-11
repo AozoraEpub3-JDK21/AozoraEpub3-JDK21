@@ -1661,6 +1661,19 @@ public class PreviewServerTest
 		assertEquals(204, postText(base() + "api/inbox?tab=a", "").statusCode());
 	}
 
+	/** 奥へ回ったと知らせたタブには渡さない。取ったタブは移るので、次は候補にしない */
+	@Test(timeout = 20_000)
+	public void aHiddenTabAndATabThatTookAUrlAreNotOffered() throws Exception
+	{
+		assertEquals(204, postText(base() + "api/inbox?tab=h&focus=1", "").statusCode());
+		assertEquals(204, postText(base() + "api/inbox?tab=h&hidden=1", "").statusCode());
+		assertFalse("奥へ回ったタブ", this.server.offerToVisibleTab("http://x/1", 200));
+
+		assertEquals(204, postText(base() + "api/inbox?tab=t&focus=1", "").statusCode());
+		assertEquals("t", claimWhileOffering("http://x/3", "t"));
+		assertFalse("取ったタブは読み込み直して別の ID で来る", this.server.offerToVisibleTab("http://x/4", 200));
+	}
+
 	/** フォーカスを持つタブを先にする。閉じたタブには渡さない */
 	@Test(timeout = 20_000)
 	public void theFocusedTabIsPreferredAndAClosedTabIsSkipped() throws Exception
@@ -1668,6 +1681,8 @@ public class PreviewServerTest
 		assertEquals(204, postText(base() + "api/inbox?tab=focused&focus=1", "").statusCode());
 		assertEquals(204, postText(base() + "api/inbox?tab=later&focus=0", "").statusCode());
 		assertEquals("フォーカスを持つ方", "focused", claimWhileOffering("http://x/1", "focused", "later"));
+		//取ったタブは候補から外れる。もう一度見に来させてから閉じる（ここで確かめるのは bye の側）
+		assertEquals(204, postText(base() + "api/inbox?tab=focused&focus=1", "").statusCode());
 		assertEquals(204, postText(base() + "api/bye?tab=focused", "").statusCode());
 		assertEquals("閉じたタブには渡さない", "later", claimWhileOffering("http://x/2", "focused", "later"));
 	}

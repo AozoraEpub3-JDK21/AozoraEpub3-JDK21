@@ -151,8 +151,9 @@ public class PreviewLauncher
 		try {
 			openInBrowser(prepared.url);
 		} catch (IOException | RuntimeException e) {
-			// このセッションを今作ったのなら、失敗として片付ける
-			if (prepared.createdSession) shutdown();
+			// このセッションを今作ったのなら、失敗として片付ける。
+			// 鍵の外にいる間にほかの呼び出しがこのセッションへ本を足したかもしれないので、まだ同じセッションのときだけ
+			if (prepared.createdSession) shutdownIfCurrent(prepared.launcher);
 			throw e;
 		}
 		return new Opened(prepared.url, false);
@@ -343,6 +344,12 @@ public class PreviewLauncher
 
 	/** 起動中のプレビューがあれば返す。無ければ null */
 	public static synchronized PreviewLauncher getCurrent() { return current; }
+
+	/** 起動中のプレビューが launcher のときだけ止める */
+	private static synchronized void shutdownIfCurrent(PreviewLauncher launcher)
+	{
+		if (current == launcher) shutdown();
+	}
 
 	/** 起動中のプレビューを停止する */
 	public static synchronized void shutdown()

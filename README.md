@@ -450,7 +450,7 @@ java -jar AozoraEpub3.jar --library ./output/ --library ./novels/
 java -jar AozoraEpub3.jar -of -d ./output/ --library ./output/ input.txt
 ```
 
-GUI では「プレビュー」タブでフォルダを追加し、「本棚を開く」で表示します。
+GUI では「プレビュー」タブでフォルダを追加し、「本棚を開く」で表示します。見えているプレビューのタブがあれば、そのタブに本棚を出します。
 登録したフォルダは `AozoraEpub3.ini` に保存されます。
 
 > 画面サイズ・フォントの近似表示です。Kindle / Kobo / Apple Books は独自の描画エンジンを

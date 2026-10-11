@@ -253,7 +253,7 @@ java -jar AozoraEpub3.jar --library ./output/ --library ./novels/
 java -jar AozoraEpub3.jar -of -d ./output/ --library ./output/ input.txt
 ```
 
-In the GUI, add folders under "Library folders" on the "Preview" tab and click "Open library".
+In the GUI, add folders under "Library folders" on the "Preview" tab and click "Open library". If a preview tab is visible, the library is shown in that tab.
 The folders you add are stored in `AozoraEpub3.ini`.
 
 Books converted from the web show ⟳ (fetch new chapters) at the top right of the cover. It fetches

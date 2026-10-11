@@ -159,9 +159,14 @@ function startInbox(tab)
 			});
 	};
 	setInterval(check, INBOX_POLL);
-	// 手前に戻ったらすぐに見に行く (奥にいる間に頼まれていても、待たずに開く)
+	// 手前に戻ったらすぐに見に行く。奥へ回ったら、候補から外してもらう (外さないと、来ないタブを数秒待たせる)
 	document.addEventListener('visibilitychange', () => {
-		if (!document.hidden) check();
+		if (!document.hidden) {
+			check();
+			return;
+		}
+		fetch('api/inbox?' + tab + '&hidden=1', {method: 'POST', cache: 'no-store', keepalive: true})
+			.catch(() => { /* サーバが既に終了している */ });
 	});
 	check();
 }
