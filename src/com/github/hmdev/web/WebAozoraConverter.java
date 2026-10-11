@@ -222,17 +222,36 @@ public class WebAozoraConverter
 		//return converter._convertToAozoraText(urlString, baseUri, fqdn, cachePath);
 	}
 	
+	/**
+	 * サイト定義のフォルダ名（web/ の下）。サイト定義は URL のホスト名で探し、ポート番号は見ない
+	 * （Windows はフォルダ名に ':' を使えず、「ホスト名:ポート」のフォルダを置けないため。internal #29）。
+	 * 以前の「ホスト名:ポート」のフォルダが置いてあれば、そちらを使う（置ける OS で作った定義を壊さない）。
+	 * @param authority URL の「//」と次の「/」の間（ホスト名、またはホスト名:ポート）
+	 */
+	static String siteDirName(String authority, File configPath)
+	{
+		if (new File(configPath, authority).isDirectory()) return authority;
+		int colon = authority.lastIndexOf(':');
+		//IPv6 のアドレス（[::1]）の中の ':' はポートの区切りではない
+		if (colon > 0 && colon > authority.lastIndexOf(']') && colon < authority.length() - 1
+			&& authority.substring(colon + 1).chars().allMatch(c -> c >= '0' && c <= '9')) {
+			return authority.substring(0, colon);
+		}
+		return authority;
+	}
+
 	////////////////////////////////////////////////////////////////
-	/** fqdnに対応したパラメータ取得 
+	/** fqdnに対応したパラメータ取得
 	 * @throws IOException */
 	WebAozoraConverter(String fqdn, File configPath) throws IOException
 	{
+		String siteDirName = siteDirName(fqdn, configPath);
 		if (configPath.isDirectory()) {
 			for (File file : configPath.listFiles()) {
-				if (file.isDirectory() && file.getName().equals(fqdn)) {
-					
+				if (file.isDirectory() && file.getName().equals(siteDirName)) {
+
 					//抽出情報
-					File extractInfoFile = new File(configPath.getAbsolutePath()+"/"+fqdn+"/extract.txt");
+					File extractInfoFile = new File(configPath.getAbsolutePath()+"/"+siteDirName+"/extract.txt");
 					if (!extractInfoFile.isFile()) return;
 					this.queryMap = new HashMap<ExtractId, ExtractInfo[]>();
 					String line;
@@ -263,7 +282,7 @@ public class WebAozoraConverter
 					
 					//置換情報
 					this.replaceMap = new HashMap<ExtractId, ArrayList<String[]>>();
-					File replaceInfoFile = new File(configPath.getAbsolutePath()+"/"+fqdn+"/replace.txt");
+					File replaceInfoFile = new File(configPath.getAbsolutePath()+"/"+siteDirName+"/replace.txt");
 					if (replaceInfoFile.isFile()) {
 						br = new BufferedReader(new InputStreamReader(Files.newInputStream(replaceInfoFile.toPath()), "UTF-8"));
 						try {

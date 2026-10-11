@@ -22,13 +22,19 @@ import java.util.zip.*;
  *   - input.txt      : narou.rb が生成した青空文庫形式テキスト
  *   - reference.epub  : Java AozoraEpub3 で生成したリファレンス EPUB
  *
+ * 通常のテスト一式では走らない（-DreferenceCompare=true を付けたときだけ。internal #29）。
+ * お手本は Java が作った物なので、Java の正しさは確かめられない。意味があるのは .NET ポートとの差を見ることだけで、
+ * .NET は Java に後追いで合わせる（2026-10-08 利用者判断）。Java の出力を意図して変えるとここが落ちるが、
+ * それは「.NET が追いついていない」という知らせで、Java の不具合ではない。
+ *
  * スキップ条件:
+ *   - -DreferenceCompare=true が無い
  *   - fat JAR (build/libs/AozoraEpub3.jar) が存在しない → gradlew jar を先に実行
  *   - reference ディレクトリが存在しない → aozoraepub3-dotnet リポジトリが必要
  *
  * 実行方法:
  *   gradlew jar
- *   gradlew test --tests "JavaAozoraVsReferenceTest"
+ *   gradlew test -DreferenceCompare=true --tests "JavaAozoraVsReferenceTest"
  */
 @RunWith(Parameterized.class)
 public class JavaAozoraVsReferenceTest {
@@ -81,6 +87,9 @@ public class JavaAozoraVsReferenceTest {
 
 	@Test
 	public void compareWithReference() throws Exception {
+		Assume.assumeTrue(
+			".NET ポートとの比較は手で回す（有効化するには -DreferenceCompare=true を指定）",
+			"true".equalsIgnoreCase(System.getProperty("referenceCompare")));
 		Path jarFile = PROJECT_ROOT.resolve(JAR_PATH);
 		Assume.assumeTrue(
 			"fat JAR が見つかりません: " + jarFile + "（先に gradlew jar を実行）",
