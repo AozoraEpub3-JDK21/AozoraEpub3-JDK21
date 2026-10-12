@@ -2234,23 +2234,28 @@ public class WebAozoraConverter
 		       ASCII_LETTER_PATTERN.matcher(str).find();
 	}
 
-	/**
-	 * 保護した英文を復元（narou.rb互換）
-	 */
 	/** 退避したカンマ区切りの数字を、出てきた順に戻す（narou.rb の rebuild_hankaku_num_and_comma） */
 	private String rebuildCommaNumbers(String text) {
 		if (commaNumbers.isEmpty()) return text;
 		StringBuilder sb = new StringBuilder(text.length());
-		int n = 0;
+		int n = 0, marks = 0;
 		for (int i = 0; i < text.length(); i++) {
 			char ch = text.charAt(i);
+			if (ch == PH_COMMA_NUMBER) marks++;
 			if (ch == PH_COMMA_NUMBER && n < commaNumbers.size()) sb.append(commaNumbers.get(n++));
 			else sb.append(ch);
+		}
+		//印と退避の数が合わない（サイトの文字にもともと U+E005 がある・途中の処理が印を落とした）と、数字がずれる・消える。黙って通さない
+		if (marks != commaNumbers.size()) {
+			LogAppender.println("[WARN] カンマ区切りの数字を正しく戻せませんでした（退避 " + commaNumbers.size() + " 件・印 " + marks + " 個）: " + sb);
 		}
 		commaNumbers.clear();
 		return sb.toString();
 	}
 
+	/**
+	 * 保護した英文を復元（narou.rb互換）
+	 */
 	private String rebuildEnglishSentences(String text) {
 		for (int i = 0; i < englishSentences.size(); i++) {
 			text = text.replace(phChuki("英文＝" + i), englishSentences.get(i));
@@ -2328,6 +2333,9 @@ public class WebAozoraConverter
 		return text;
 	}
 
+	/** 数字とカンマの並び（narou.rb の num_to_kanji と同じ。仕上げの AozoraTextFinalizer#convertNumsInSegment も同じ並びで見る） */
+	private static final Pattern NUMBER_RUN = Pattern.compile("[0-9０-９,，]+");
+
 	/**
 	 * 数字の漢数字化処理（narou.rb互換）
 	 * 参考: narou-3.8.2/lib/converterbase.rb:93-232
@@ -2339,21 +2347,27 @@ public class WebAozoraConverter
 	 * 4. 単位化（enable_kanji_num_with_units=trueの場合）
 	 * 5. 退避した漢数字を復元
 	 */
-	private static final Pattern COMMA_NUMBER = Pattern.compile("([0-9]{1,3}(?:,[0-9]{3})+)");
-
 	private String convertNumbersToKanji(String text) {
 		// 1. 既存の漢数字を一時退避
 		text = stashKanjiNum(text);
 
-		// 2. カンマ区切りの数字は半角保護（全角化対策）。narou.rb と同じく退避して、printText の最後に半角のまま戻す
-		//（前は［＃半角数字＝1,000］の注記で包んだまま戻さず、AozoraEpub3 が知らない注記として数字ごと捨てていた。internal #40）
-		Matcher comma = COMMA_NUMBER.matcher(text);
+		// 2. カンマを含む数字の並びは漢数字にしない。narou.rb と同じく並びごと退避して、printText の最後に戻す（全角のカンマは半角に）。
+		//（前は 3 桁区切りの 1,000 だけを［＃半角数字＝1,000］の注記で包んだまま戻さず、AozoraEpub3 が知らない注記として数字ごと捨てていた。
+		//  3 桁区切りだけを見ていたので、12345,678 や 1，000 は一部が漢数字になった。internal #40）
+		Matcher run = NUMBER_RUN.matcher(text);
 		StringBuilder stashed = new StringBuilder();
-		while (comma.find()) {
-			commaNumbers.add(comma.group(1));
-			comma.appendReplacement(stashed, Matcher.quoteReplacement(String.valueOf(PH_COMMA_NUMBER)));
+		while (run.find()) {
+			String s = run.group();
+			boolean comma = s.indexOf(',') >= 0 || s.indexOf('，') >= 0;
+			boolean digit = s.chars().anyMatch(c -> (c >= '0' && c <= '9') || (c >= '０' && c <= '９'));
+			if (comma && digit) {
+				commaNumbers.add(s.replace('，', ','));
+				run.appendReplacement(stashed, Matcher.quoteReplacement(String.valueOf(PH_COMMA_NUMBER)));
+			} else {
+				run.appendReplacement(stashed, Matcher.quoteReplacement(s));
+			}
 		}
-		comma.appendTail(stashed);
+		run.appendTail(stashed);
 		text = stashed.toString();
 
 		// 3. アラビア数字を漢数字に変換

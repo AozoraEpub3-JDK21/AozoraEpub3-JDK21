@@ -174,6 +174,35 @@ public class WebAozoraConverterNarouCompatTest {
 	// ========================================================================
 
 	/**
+     * internal #40: カンマを含む数字の並びは、本文で漢数字にせず、消さずに残す（narou.rb と同じ並び）。
+     * 仕上げ（AozoraTextFinalizer）まで通すと、全角の数字と全角のカンマになる
+     */
+    @Test
+    public void testCommaNumbersSurviveInBodyAndFinalizer() throws Exception {
+        Method mBody = getPrivateMethod("printBodyText", java.io.BufferedWriter.class, String.class);
+        converter.getFormatSettings().setEnableConvertNumToKanji(true);
+        String body = "価格は1,000円、12345,678円、1,0000円、1，000円、１，０００円、1,23、2,000と3,000。";
+        StringWriter sw = new StringWriter();
+        try (BufferedWriter bw = new BufferedWriter(sw)) {
+            mBody.invoke(converter, bw, body);
+        }
+        String out = sw.toString();
+        assertTrue("printBodyText -> [" + out + "]", out.contains("価格は1,000円、12345,678円、1,0000円、1,000円、１,０００円、1,23、2,000と3,000。"));
+        assertFalse("printBodyText -> [" + out + "]", out.contains("半角数字"));
+
+        //変換の本体と同じく、中間テキストに仕上げを通す
+        java.io.File txt = java.io.File.createTempFile("comma", ".txt");
+        try {
+            java.nio.file.Files.write(txt.toPath(), ("表題\n著者\n\n" + out + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            new com.github.hmdev.web.AozoraTextFinalizer(converter.getFormatSettings()).finalize(txt);
+            String fin = new String(java.nio.file.Files.readAllBytes(txt.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue("finalize -> [" + fin + "]", fin.contains("価格は１，０００円、１２３４５，６７８円、１，００００円、１，０００円、１，０００円、１，２３、２，０００と３，０００。"));
+        } finally {
+            txt.delete();
+        }
+    }
+
+	/**
      * Phase 3.1: 数字の漢数字化テスト（実装）
      */
     @Test
