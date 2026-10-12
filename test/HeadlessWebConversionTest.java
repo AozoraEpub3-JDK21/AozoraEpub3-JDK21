@@ -281,7 +281,7 @@ public class HeadlessWebConversionTest {
 			@Override
 			public void write(com.github.hmdev.converter.AozoraEpub3Converter converter, java.io.BufferedReader src, File srcFile, String srcExt,
 					File epubFile, com.github.hmdev.info.BookInfo bookInfo, com.github.hmdev.image.ImageInfoReader imageInfoReader) throws Exception {
-				heldWhileWriting.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
+				heldWhileWriting.set(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.isHeldByCurrentThread());
 				super.write(converter, src, srcFile, srcExt, epubFile, bookInfo, imageInfoReader);
 			}
 		};

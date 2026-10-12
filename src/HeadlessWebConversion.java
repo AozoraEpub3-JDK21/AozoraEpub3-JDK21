@@ -163,7 +163,8 @@ public class HeadlessWebConversion
 		try {
 			//キャッシュの txt と台帳を書き直し、同じサイトへの取得の間隔も守るので、GUI の Web 変換とは 1 つずつ（WebAozoraConverter.WEB_LOCK）
 			File srcFile;
-			synchronized (WebAozoraConverter.WEB_LOCK) {
+			WebAozoraConverter.WEB_LOCK.lock();
+			try {
 				WebAozoraConverter web = WebAozoraConverter.createWebAozoraConverter(url, new File(this.basePath + "web"));
 				if (web == null) return new Result(false, false, null, "このサイトには対応していません: " + url);
 				//変換器は変換ごとに新しい（internal #22）。設定はここですべて入れる（GUI と同じ）
@@ -246,6 +247,8 @@ public class HeadlessWebConversion
 				} finally {
 					if (!written && web.episodesRecorded) restoreEpisodes(srcFile, web.ledgerBeforeEpisodes);
 				}
+			} finally {
+				WebAozoraConverter.WEB_LOCK.unlock();
 			}
 		} catch (Exception e) {
 			logger.error("画面なしの変換に失敗: {}", url, e);

@@ -272,7 +272,7 @@ public class HeadlessBookUpdaterTest {
 	public void settingsAreTakenWhileHoldingTheWebLock() throws Exception {
 		java.util.concurrent.atomic.AtomicBoolean held = new java.util.concurrent.atomic.AtomicBoolean(false);
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> {
-			held.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
+			held.set(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.isHeldByCurrentThread());
 			return new Properties();
 		}, "");
 		updater.conversions = (props, cache) -> { throw new IllegalStateException("ここまで来れば十分"); };
