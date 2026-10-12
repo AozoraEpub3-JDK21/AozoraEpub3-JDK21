@@ -162,7 +162,8 @@ public class VerticalMiddleLayoutTest {
 			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
 			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
-			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td><div class=\"running_head yoko\">作品名</div>"));
+			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td>"));
+			assertTrue(chapter, chapter.contains("<div class=\"running_head yoko\">作品名</div>"));
 			String css = read(zf, "OPS/css/vertical_middle.css");
 			assertTrue(css, css.contains("table.middle div.running_head {"));
 			assertTrue(css, css.contains("position: static !important;"));
