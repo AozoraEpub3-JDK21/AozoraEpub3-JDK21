@@ -2154,8 +2154,16 @@ narou.rb の決まり（`hankaku_num_to_zenkaku_num`、converterbase.rb:583）�
   - (a) 送る側（JDK の HttpClient）が本文を先に送った。同じ形の通信だけを小さなプログラムで 3,000 回送っても起きない。試験のクラスの中でだけ起きる
   - (b) 同じ接続で前の要求の本文が読まれずに残り、次の要求の頭に付いた。PreviewServer には本文を読む前に答える POST の道がある（`handle` の 403、`serveWebShelf` の 503 など）。ただ `aFailedSaveLeavesNoCreatedFolder` は要求を 1 つしか送らない
 - **JDK 25.0.4（Temurin）では 30 回とも起きなかった**。該当する JDK の不具合番号は見つけられていない。(b) なら JDK 25 でも潜んだまま残る
-- 確かめ方: 試験とサーバの間に、接続に流れるバイトを記録する中継ぎを挟む
 - win を全件の門にするときは `-PjavaToolchainVersion=25`（JDK 25 で試験を回す）で避けられる。測った物は win の `D:\git\AozoraEpub3\temp\i29-preview-flake\`
+
+**追いの調べ（2026-10-12、mac の依頼）**:
+- 配布物は Java を同梱せず、利用者の Java 21 以降で動く（launch4j の `jreMinVersion = '21'`）。ただし本物のアプリでこのサーバに送るのはブラウザで、JDK の HttpClient ではない。(b) なら利用者に当たり、(a) なら当たらない
+- (b) を狙って確かめた: 本文を読む前に答える道（Web 本棚の無いときの 503、他オリジンの 403）に、本文を答えの前・後に送り、同じ接続で次の要求を送った。**4 通りとも次の要求は 200 で正しく読まれた**（JDK 21 のサーバは読まなかった本文を読み捨てている）。落ちた `aFailedSaveLeavesNoCreatedFolder` は要求を 1 つしか送らず、同じ接続の前の要求が無い。
+  この読み捨て（利用者に当たる側）は回帰試験 `PreviewServerKeepAliveTest` で固定した
+- 利用者に当たらない判断（mac、2026-10-12）: 本物の送り手はブラウザで、(b) は上の試験で否定された。win の全件の門は `-PjavaToolchainVersion=25` で回す。JDK 21 で PreviewServerTest が 1 件だけ、この形（POST に 405・404、本文が要求の行の頭に付く）で落ちたら項目 49。ほかの落ち方は本物として扱う
+- 試験とサーバの間に、接続のバイトを記録する中継ぎを挟むと、**40 回とも落ちなかった**（中継ぎが無いと 30 回に 3 回）。書き込みの区切り・時間が変わるだけで消える
+- 見立て: (a)（JDK 21 の HttpClient 側、Windows の時間に依る）が濃い。ただし接続に流れたバイトの順をそのまま押さえてはいないので確定ではない
+- 次に確かめるなら: 中継ぎを挟まずに送る側の書き込みを見る（`-Djdk.internal.httpclient.debug=true` を JDK 21 で付け、落ちた回の書き込みの順を読む）
 
 ---
 
