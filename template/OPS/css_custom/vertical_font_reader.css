@@ -13,7 +13,7 @@ body {
 font-family: "CustomFont", "@ＭＳ 明朝", "@MS Mincho", "ヒラギノ明朝 ProN W3", "HiraMinProN-W3", serif, sans-serif;
 }
 
-/* 柱（もどき）。vertical_font.css と同じ（章の扉ページの作品名をページの隅に小さく出す） */
+/* 柱（もどき）。vertical_font.css と同じ（作品名をページの隅に小さく出す。左右中央のページ（章の扉など）では、vertical_middle.css が章題の横の小さな縦の 1 行にする） */
 .running_head {
 	position: absolute !important;
 	top: 15px;

@@ -118,6 +118,64 @@ public class VerticalMiddleLayoutTest {
 		}
 	}
 
+	/**
+	 * Web 変換と narou.rb の章の中扉（左右中央 → 柱 → 大見出し）: 柱は章題の横の縦の 1 行として並びに入るので、1 行として数える。
+	 * 短い作品名なら 1 ページに収まる中扉（横書きの親の中の縦書きのブロック）、長い作品名なら表組み
+	 */
+	@Test
+	public void 中扉の柱は1行として数える() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃ここから柱］短い作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第１章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃ここから柱］声が出せないので無詠唱魔法でもいいですか長い長い作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第２章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String shortHead = read(zf, "OPS/xhtml/0001.xhtml");
+			assertTrue(shortHead, shortHead.contains("<div class=\"vrtl middle\">"));
+			assertTrue(shortHead, shortHead.contains("<div class=\"running_head yoko\">短い作品名</div>"));
+			String longHead = read(zf, "OPS/xhtml/0003.xhtml");
+			assertTrue(longHead, longHead.contains("<table class=\"middle\"><tr><td>"));
+			assertTrue(longHead, longHead.contains("running_head"));
+		}
+	}
+
+	/**
+	 * 左右中央のページの柱は、ページの角に置かず、章題の横の縦の 1 行として並びに入れる（CSS）
+	 * （角に置くと、位置の決め方がリーダーごとに違い、Thorium では章題に重なった）
+	 */
+	@Test
+	public void 表組みの中扉の柱は並びに入れる() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃ここから柱］作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第一部　第十二章　一列に収まらないほど長い長い章題です［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
+			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td>"));
+			assertTrue(chapter, chapter.contains("<div class=\"running_head yoko\">作品名</div>"));
+			String css = read(zf, "OPS/css/vertical_middle.css");
+			assertTrue(css, css.contains(".middle div.running_head {"));
+			assertTrue(css, css.contains("position: static !important;"));
+		}
+	}
+
 	@Test
 	public void 短い中扉だけ横書きの親の中に縦書きのブロックを置く() throws Exception {
 		try (ZipFile zf = new ZipFile(convert(true, false))) {

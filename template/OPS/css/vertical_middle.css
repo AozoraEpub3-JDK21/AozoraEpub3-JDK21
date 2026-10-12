@@ -92,3 +92,15 @@ writing-mode: vertical-rl;
 -webkit-writing-mode: vertical-rl;
 -epub-writing-mode: vertical-rl;
 }
+
+/* 左右中央のページ（章の中扉など）の柱: ページの角に置かず（position:absolute をやめ）、章題の横の小さな縦の 1 行として並びに入れる。
+   角に置くと、位置の決め方がリーダーごとに違い、章題に重なる（Thorium）・狭い画面で折り返して重なる。並びに入れればどのリーダーでも重ならない。
+   並びに入るので、左右中央の節の長さを数えるときも柱を 1 行として数える（長い作品名なら表組み＝右寄りになる） */
+.middle div.running_head {
+position: static !important;
+display: block;
+font-size: 0.8em;
+writing-mode: vertical-rl;
+-webkit-writing-mode: vertical-rl;
+-epub-writing-mode: vertical-rl;
+}
