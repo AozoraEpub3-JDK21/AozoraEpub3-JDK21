@@ -589,6 +589,8 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 .ranking-card .ranking-get[data-state="busy"] { cursor: progress; }
 /* display を指定した要素は hidden の属性が効かなくなるので、明示する */
 .library-ranking[hidden], .library-status[hidden], .library-grid[hidden] { display: none; }
+/* ランキングを出している間は、本の一覧にだけ効く操作を隠す (viewer-ranking.js の toggleRanking。internal #49) */
+.library.ranking-open #libraryFilter, .library.ranking-open #librarySort, .library.ranking-open #libraryShelfSelect { display: none; }
 
 .library-status {
 	display: flex;

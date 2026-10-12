@@ -205,7 +205,8 @@ async function openLibrary()
 	await loadLibrary();
 	// ランキングを出したまま本棚を閉じていたら、開き直したときに頼み直す (古い順位を出したままにしない)
 	if (rankingOpen()) loadRanking();
-	el.libraryFilter.focus();
+	// ランキングを出している間は絞り込みを隠している (viewer.css)。隠した欄にフォーカスを置かない
+	(rankingOpen() ? el.libraryRankingToggle : el.libraryFilter).focus();
 }
 
 function closeLibrary()

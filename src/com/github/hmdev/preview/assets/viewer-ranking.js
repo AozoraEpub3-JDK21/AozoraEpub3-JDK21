@@ -143,7 +143,11 @@ function toggleRanking(force)
 	el.libraryRanking.hidden = !show;
 	el.libraryStatus.hidden = show;
 	el.libraryGrid.hidden = show;
-	el.libraryRankingToggle.setAttribute('aria-pressed', String(show));
+	// 同じボタンで戻る。押された印 (aria-pressed) だけでは、戻るにはもう一度押すと分からなかった (internal #49)
+	el.libraryRankingToggle.textContent = show ? '← 本棚に戻る' : 'ランキング';
+	el.libraryRankingToggle.title = show ? '本の一覧に戻る (Esc)' : '小説家になろう・カクヨムのランキングから落とす';
+	// 本の一覧にだけ効く絞り込み・並び順・棚は隠す (残すと本棚にいるように見える。viewer.css)
+	el.libraryView.classList.toggle('ranking-open', show);
 	// 開くたびに頼む。同じ問い合わせはサーバが 10 分覚えているので、なろうへは行かない。
 	// 前に開いたときの一覧を出したままにすると、日をまたいでも古い順位が残る (PR #127 の codex)
 	if (show) loadRanking();
