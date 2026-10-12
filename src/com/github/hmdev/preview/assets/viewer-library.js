@@ -271,7 +271,15 @@ function renderLibraryKeepingView()
 	libraryVisible = visibleLibraryBooks();
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
-	appendLibraryCards(Math.max(shown, LIBRARY_PAGE_SIZE));
+	//「続きを取る」を押した本（状態を持つ本）と、触っていた本（フォーカス・名前の欄）が、並べ替えで描いた範囲の外へ動いたら、そこまで描く
+	//（「更新が古い順」で更新した本は末尾へ動き、描かないとカードも進み具合も消える。マウスで押すとフォーカスが移らない
+	//ブラウザがあるので、フォーカスだけには頼らない。internal #24）
+	let count = Math.max(shown, LIBRARY_PAGE_SIZE);
+	for (const id of [...libraryUpdates.keys(), focusId, renameState ? renameState.id : null]) {
+		const index = id ? libraryVisible.findIndex(b => b.id === id) : -1;
+		if (index >= count) count = index + 1;
+	}
+	appendLibraryCards(count);
 	el.libraryGrid.scrollTop = top;
 	if (renameState) {
 		const slot = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(renameState.id) + '"]');
