@@ -2181,7 +2181,7 @@ narou.rb の決まり（`hankaku_num_to_zenkaku_num`、converterbase.rb:583）�
 1.6.1 から ini を引き継いだ利用者（narou.rb・narou.rs 用に Kindle を選んでいた人など）は、本棚の機能を初めて使うときに必ずここで止まる。
 **直し方（案）**: 文言に原因と直し方を書く（例:「出力の拡張子が Kindle（.mobi）になっています。本棚に落とすには、拡張子を .epub にしてください（GUI の「拡張子」、CLI は AozoraEpub3.ini の Ext=）」）。
 あわせて、ランキングの「落とす」・＋ を押す前に分かるようにする（ボタンを押せなくして理由を出す、など）かを決める。
-**対応**: 断りの文言を「出力の拡張子が Kindle（.mobi）なので、本棚には落とせません。拡張子を .epub にしてください（画面の「拡張子」、CLI では AozoraEpub3.ini の Ext=）」にした（`HeadlessWebConversion.kindleRefusal`、＋・⟳・ランキングの「落とす」で共通）。押す前に知らせるのは、実際に要る場面が出るまで置く。
+**対応**: 断りの文言に原因（拡張子の設定）と直し方を書いた（`HeadlessWebConversion.kindleRefusal`）。＋・ランキングの「落とす」では .epub（Kobo なら .kepub.epub）に、⟳ ではその本と同じ拡張子にするよう言う（.epub と言うと、Kobo の本では名前が合わずに別の理由で断る）。ini は「使っている ini（-i で渡したもの。無ければ AozoraEpub3.ini）」と書く。押す前に知らせるのは、実際に要る場面が出るまで置く。
 
 ---
 
