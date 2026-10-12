@@ -872,7 +872,7 @@ public class WebAozoraConverter
 					// APIのあらすじはプレーンテキスト（改行は\nのみ）
 					String story = apiMetadata.getStory().replace("\r\n", "\n").replace("\r", "\n");
 					for (String line : story.split("\n")) {
-						printText(bw, line);
+						printBodyText(bw, line);
 						bw.append('\n');
 					}
 					bw.append("［＃ここで字上げ終わり］\n");
@@ -900,7 +900,7 @@ public class WebAozoraConverter
 							if (descText != null && !descText.isEmpty()) {
 								descText = descText.replace("\\r\\n", "\n").replace("\\r", "\n").replace("\\n", "\n");
 								for (String line : descText.split("\n", -1)) {
-									printText(bw, line);
+									printBodyText(bw, line);
 									bw.append('\n');
 								}
 							}
@@ -1963,7 +1963,7 @@ public class WebAozoraConverter
 			if (endElement != null && node.equals(endElement)) {
 				return;
 			}
-			if (node instanceof TextNode) printText(bw, ((TextNode)node).getWholeText());
+			if (node instanceof TextNode) printBodyText(bw, ((TextNode)node).getWholeText());
 			else if (node instanceof Element) {
 				Element elem = (Element)node;
 				if ("br".equals(elem.tagName())) {
@@ -2042,7 +2042,7 @@ public class WebAozoraConverter
 		if (parts.length < 2) {
 			// <rt>タグがない場合は、タグを削除してテキストのみ出力
 			String text = parts[0].replaceAll("<[^>]+>", "");
-			printText(bw, text);
+			printBodyText(bw, text);
 			return;
 		}
 
@@ -2059,9 +2059,9 @@ public class WebAozoraConverter
 
 		// 青空文庫形式で出力
 		bw.append('｜');
-		printText(bw, rubyBase);
+		printBodyText(bw, rubyBase);
 		bw.append('《');
-		printText(bw, rubyText);
+		printBodyText(bw, rubyText);
 		bw.append('》');
 	}
 	/** 画像をキャッシュして相対パスの注記にする */
@@ -2767,7 +2767,8 @@ public class WebAozoraConverter
 				out.append(text, start, text.length());
 				break;
 			}
-			String title = text.substring(titleStart, end);
+			//見出しの中は題名と同じく「［＃」を全部逃がす（閉じの［＃中見出し終わり］を飲み込まないように。internal #38）
+			String title = escapeChukiOpenAll(text.substring(titleStart, end));
 			String replacement = phChuki(formatSettings.getIndent() + "字下げ") +
 				phChuki("中見出し") + title + phChuki("中見出し終わり");
 			out.append(replacement);
@@ -2810,7 +2811,8 @@ public class WebAozoraConverter
 		while (matcher.find()) {
 			String marks = matcher.group(1);
 			String next = matcher.group(2);
-			if (next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
+			//逃がした「［」（題名の「［＃」）も「［」と同じく前を空けない
+			if (next.charAt(0) == PH_ESCAPED_BRACKET || next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + next));
 			} else if (next.matches("[ 、。]")) {
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + "　"));
@@ -2877,6 +2879,8 @@ public class WebAozoraConverter
 	private static final char PH_BRACKET_CLOSE = '\uE001';
 	private static final char PH_HASH = '\uE002';
 	private static final char PH_KOME = '\uE003';
+	/** 逃がした「［」（※［＃始め角括弧、1-1-46］）。数字・記号の変換より前に置くので、注記の中身が変換されないよう 1 字で持つ */
+	private static final char PH_ESCAPED_BRACKET = '\uE004';
 
 	static String phChuki(String content) {
 		return String.valueOf(PH_BRACKET_OPEN) + PH_HASH + content +
@@ -2884,10 +2888,12 @@ public class WebAozoraConverter
 	}
 
 	private static String restorePlaceholders(String text) {
-		return text.replace(PH_BRACKET_OPEN, '［')
+		text = text.replace(PH_BRACKET_OPEN, '［')
 		           .replace(PH_BRACKET_CLOSE, '］')
 		           .replace(PH_HASH, '＃')
 		           .replace(PH_KOME, '※');
+		//逃がした「［」は題名にしか無いので、在るときだけ戻す
+		return text.indexOf(PH_ESCAPED_BRACKET) < 0 ? text : text.replace(String.valueOf(PH_ESCAPED_BRACKET), "※［＃始め角括弧、1-1-46］");
 	}
 
 	/** 中間テキスト先頭のシリーズ名・表題を出力
@@ -2905,7 +2911,25 @@ public class WebAozoraConverter
 		}
 	}
 
-	/** 文字を出力 特殊文字は注記に変換 */
+	/** 題名（作品名・章題・話の題など）の文字の「［＃」の「［」を全部 PH_ESCAPED_BRACKET にする（internal #38）。
+	 * 「［＃」は注記の始まりに読まれ、作品名が柱に入ると閉じの注記を飲み込んで柱が閉じない。題名に注記を書く作者はまずいない。
+	 * 本文は逃がさない（narou.rb と同じ。作者が本文に書いた注記・返り点は効く。2026-10-12 に手元の 74 作品の取ったままの HTML を調べ、本文・題名とも［＃・[# は 0 件）。
+	 * 半角の [ # は記号を全角にする設定のときだけ「［＃」になる */
+	String escapeChukiOpenAll(String text)
+	{
+		if (text.indexOf('［') < 0 && text.indexOf('[') < 0) return text;
+		boolean zenkaku = formatSettings.isEnableConvertSymbolsToZenkaku();
+		StringBuilder sb = new StringBuilder(text.length());
+		for (int i = 0; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			char next = i+1 < text.length() ? text.charAt(i+1) : 0;
+			boolean forms = (ch == '［' || (ch == '[' && zenkaku)) && (next == '＃' || (next == '#' && zenkaku));
+			sb.append(forms ? PH_ESCAPED_BRACKET : ch);
+		}
+		return sb.toString();
+	}
+
+	/** 文字を出力 特殊文字は注記に変換。題名など（「［＃」は全部逃がす） */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
 		printText(bw, text, false);
@@ -2913,7 +2937,21 @@ public class WebAozoraConverter
 
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle) throws IOException
 	{
+		printText(bw, text, isSubtitle, true);
+	}
+
+	/** 本文の文字を出力（「［＃」は逃がさない。narou.rb と同じ） */
+	private void printBodyText(BufferedWriter bw, String text) throws IOException
+	{
+		printText(bw, text, false, false);
+	}
+
+	/** @param escapeChukiOpen 文字の「［＃」を逃がす（題名） */
+	private void printText(BufferedWriter bw, String text, boolean isSubtitle, boolean escapeChukiOpen) throws IOException
+	{
 		text = text.replaceAll("[\r\n]+", "");
+		//逃がす「［」は 1 字の PH_ESCAPED_BRACKET にして、最後に ※［＃始め角括弧、1-1-46］ に戻す。変換が足す注記は PH_* で書くので逃がさない
+		if (escapeChukiOpen) text = escapeChukiOpenAll(text);
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
 		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
 		if (formatSettings.isEnableNarouTag()) text = convertNarouTags(text);
