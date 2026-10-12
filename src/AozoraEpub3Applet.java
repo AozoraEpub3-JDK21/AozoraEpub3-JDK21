@@ -4538,12 +4538,16 @@ public class AozoraEpub3Applet extends JPanel
 		//変換中にキャンセルされた場合
 		if (this.convertCanceled) {
 			LogAppender.println("変換処理を中止しました : "+srcFile.getAbsolutePath());
+			//途中までの一時ファイル（kindle*.epub）を出力のフォルダに残さない（internal #39）
+			if (outFileOrg != null) finishKindleTempEpub(outFile, outFileOrg, false, false, bookInfo);
 			return;
 		}
 		
 		//変換失敗時は出力途中のファイルが削除済みなので後続処理(kindlegen等)に進まない
 		if (!converted) {
 			LogAppender.error("変換に失敗しました : "+srcFile.getAbsolutePath());
+			//作った一時ファイル（kindle*.epub）が残っていれば消す（internal #39）
+			if (outFileOrg != null) finishKindleTempEpub(outFile, outFileOrg, false, false, bookInfo);
 			return;
 		}
 		//プレビュー対象を更新 (kindlegen 経路では後段のリネーム後に上書きする)。
@@ -4552,6 +4556,8 @@ public class AozoraEpub3Applet extends JPanel
 		
 		////////////////////////////////
 		//kindlegen.exeがあれば実行
+		//mobi ができたら true（自動プレビューの対象を確定するのはそのときだけ）
+		boolean mobiDone = false;
 		try {
 			if (kindlegen != null) {
 				long time = System.currentTimeMillis();
@@ -4569,17 +4575,22 @@ public class AozoraEpub3Applet extends JPanel
 				}
 				LogAppender.println("kindlegenを実行します : "+kindlegenName+" \""+outFileName+"\"");
 				ProcessBuilder pb = new ProcessBuilder(kindlegenPath, "-locale", "en","-verbose", outFileName);
+				//エラーの出力も同じ流れで読む（読まないと、失敗の理由がログに出ず、出力が多いと kindlegen が止まる）
+				pb.redirectErrorStream(true);
 				this.kindleProcess = pb.start();
 				BufferedReader br = new BufferedReader(new InputStreamReader(this.kindleProcess.getInputStream()));
 				String line;
 				int idx = 0;
 				int cnt = 0;
 				String msg = "";
+				//エラーの行（失敗の理由。最後の行は要約のことが多い）
+				StringBuilder errors = new StringBuilder();
 				while ((line = br.readLine()) != null) {
 					if (line.length() > 0) {
 						System.out.println(line);
 						if (msg.startsWith("Error")) msg += line;
 						else msg = line;
+						if (line.startsWith("Error")) errors.append(errors.length() > 0 ? " / " : "").append(line);
 						if (idx++ % 2 == 0) {
 							if (cnt++ > 100) { cnt = 1; LogAppender.println(); }
 							LogAppender.append(".");
@@ -4589,35 +4600,94 @@ public class AozoraEpub3Applet extends JPanel
 				br.close();
 				if (convertCanceled) {
 					LogAppender.println("\n"+msg+"\nkindlegenの変換を中断しました");
-				} else {
-					if (outFileOrg != null) {
-						//mobiリネーム
-						File mobiTmpFile = new File(outFile.getAbsolutePath().substring(0, outFile.getAbsolutePath().length()-4)+"mobi");
-						File mobiFile = new File(outFileOrg.getAbsolutePath().substring(0, outFileOrg.getAbsolutePath().length()-4)+"mobi");
-						if (mobiFile.exists()) mobiFile.delete();
-						Files.move(mobiTmpFile.toPath(), mobiFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-						if (outExt.endsWith(".epub")) {
-							//epubリネーム
-							if (outFileOrg.exists()) outFileOrg.delete();
-							Files.move(outFile.toPath(), outFileOrg.toPath(), StandardCopyOption.REPLACE_EXISTING);
-							this.setPreviewTarget(outFileOrg);
-							//本当の EPUB の名前で、本の話数を台帳に書く（一時ファイルの名前では書いていない。internal #25）
-							com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFileOrg);
-						} else {
-							outFile.delete();
-							//epub を残さない設定なのでプレビュー対象も無くなる
-							this.setPreviewTarget(null);
+				} else if (outFileOrg != null) {
+					//mobiリネーム
+					File mobiTmpFile = new File(outFile.getAbsolutePath().substring(0, outFile.getAbsolutePath().length()-4)+"mobi");
+					File mobiFile = new File(outFileOrg.getAbsolutePath().substring(0, outFileOrg.getAbsolutePath().length()-4)+"mobi");
+					if (mobiTmpFile.exists()) {
+						try {
+							Files.move(mobiTmpFile.toPath(), mobiFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+							mobiDone = true;
+							LogAppender.println("\n"+msg+"\nkindlegen変換完了 ["+(((System.currentTimeMillis()-time)/100)/10f)+"s] -> "+mobiFile.getName());
+						} catch (IOException e) {
+							//前の mobi が開かれている、など。一時ファイルは新しい mobi のただ 1 つの写しなので消さない
+							LogAppender.println();
+							LogAppender.error("mobi を本当の名前にできませんでした。新しい mobi は "+mobiTmpFile.getName()+" にあります: "+mobiFile.getName()+" ("+e.getMessage()+")");
 						}
-						LogAppender.println("\n"+msg+"\nkindlegen変換完了 ["+(((System.currentTimeMillis()-time)/100)/10f)+"s] -> "+mobiFile.getName());
+					} else {
+						//kindlegen が mobi を作れなかった（これまでは画面のログに出ず、一時ファイルの EPUB が残った。internal #39）
+						LogAppender.println();
+						LogAppender.error("kindlegen で mobi を作れませんでした: "+(errors.length() > 0 ? errors : msg));
+						if (mobiFile.exists()) LogAppender.println("[WARN] 前の mobi は古いままです: "+mobiFile.getName());
 					}
 				}
 			}
 		} catch (Exception e) {
 			logger.error("kindlegen 実行中にエラー", e);
+			//中止（kindlegen を止めると読み込みが「Stream closed」で抜ける）はエラーにしない
+			if (!this.convertCanceled) LogAppender.error("kindlegen 実行中にエラー: "+e.getMessage());
 		} finally {
-			if (this.kindleProcess != null) this.kindleProcess.destroy();
+			Process process = this.kindleProcess;
+			if (process != null) {
+				process.destroy();
+				//止めた kindlegen が一時ファイルを離すまで待つ（待たずに消すと、Windows では消せずに残る）
+				try { process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+			}
 			this.kindleProcess = null;
+			//一時ファイル（kindle*.epub・kindle*.mobi）の後始末。mobi ができなかった・中止した・途中で止めたときも、出力のフォルダに残さない（internal #39）
+			if (outFileOrg != null) {
+				//中止の印は 1 回だけ読む。mobi を本当の名前にした後の中止は、仕上がった回として扱う
+				boolean canceled = this.convertCanceled && !mobiDone;
+				if (canceled) {
+					File mobiTmpFile = new File(outFile.getAbsolutePath().substring(0, outFile.getAbsolutePath().length()-4)+"mobi");
+					if (mobiTmpFile.exists() && !mobiTmpFile.delete()) mobiTmpFile.deleteOnExit();
+				}
+				//台帳に記録するのは mobi ができた回だけ（mobi が古いまま、本棚が新しいと見ないように。master も失敗の回は記録しなかった）
+				boolean keepEpub = keepKindleEpub(outExt.endsWith(".epub"), mobiDone, canceled);
+				File epub;
+				if (keepEpub && !outExt.endsWith(".epub") && !overWrite && outFileOrg.exists()) {
+					//mobi だけの設定で mobi ができなかった回。上書きしない設定なので、同じ名前の前の EPUB は置き換えない
+					//（mobi だけの設定は、変換の前に EPUB の重複を見ていない）。一時ファイルは master と同じく残さない
+					LogAppender.println("[WARN] 上書きしない設定で、同じ名前の EPUB があるので、新しい EPUB は残しませんでした: "+outFileOrg.getName());
+					epub = finishKindleTempEpub(outFile, outFileOrg, false, false, bookInfo);
+				} else {
+					epub = finishKindleTempEpub(outFile, outFileOrg, keepEpub, mobiDone, bookInfo);
+				}
+				//epub を残さない設定ならプレビュー対象も無くなる。mobi ができなかった・中止した回、本当の名前にできなかった回は、自動プレビューの対象にしない（これまでどおり）
+				this.setPreviewTarget(epub, mobiDone && !canceled && outFileOrg.equals(epub));
+			}
 		}
+	}
+	
+	/** kindlegen の後の、一時ファイルの EPUB（kindle*.epub）の後始末。
+	 * EPUB を残す設定なら本当の名前へ動かし、その名前で本の話数を台帳に書く（一時ファイルの名前では書いていない。internal #25）。
+	 * 残さないなら消す（internal #39）。残すかは {@link #keepKindleEpub} で決める
+	 * @param record 本当の名前で台帳に話数を書く
+	 * @return 本当の名前の EPUB。本当の名前にできなかったなら一時ファイル（手動のプレビュー用）。残さないなら null */
+	static File finishKindleTempEpub(File tmpEpub, File outFileOrg, boolean keepEpub, boolean record, BookInfo bookInfo)
+	{
+		if (!tmpEpub.exists()) return null;
+		if (!keepEpub) {
+			if (!tmpEpub.delete()) tmpEpub.deleteOnExit();
+			return null;
+		}
+		try {
+			Files.move(tmpEpub.toPath(), outFileOrg.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			//一時ファイルは新しい EPUB のただ 1 つの写しなので消さない（前の版が開かれている、など）
+			LogAppender.error("EPUB を本当の名前にできませんでした。新しい EPUB は "+tmpEpub.getName()+" にあります: "+outFileOrg.getName()+" ("+e.getMessage()+")");
+			return tmpEpub;
+		}
+		if (record) com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFileOrg);
+		return outFileOrg;
+	}
+	
+	/** kindlegen の後、一時ファイルの EPUB を本当の名前で残すか。
+	 * 中止した回は残さない（前の本を置き換えない）。EPUB も出す設定なら残す。mobi だけの設定でも、mobi ができなかったら残す（変換した物を失わない）
+	 * @param epubOutput 出力の形式が EPUB も出す（.mobi+.epub） */
+	static boolean keepKindleEpub(boolean epubOutput, boolean mobiDone, boolean canceled)
+	{
+		return !canceled && (epubOutput || !mobiDone);
 	}
 	
 	/** Web変換
