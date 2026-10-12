@@ -144,8 +144,17 @@ function toggleRanking(force)
 	el.libraryStatus.hidden = show;
 	el.libraryGrid.hidden = show;
 	// 同じボタンで戻る。押された印 (aria-pressed) だけでは、戻るにはもう一度押すと分からなかった (internal #49)
-	el.libraryRankingToggle.textContent = show ? '← 本棚に戻る' : 'ランキング';
-	el.libraryRankingToggle.title = show ? '本の一覧に戻る (Esc)' : '小説家になろう・カクヨムのランキングから落とす';
+	// 出していないときの文字と説明は viewer.html のものを使う (2 か所に書くと食い違う)
+	const toggle = el.libraryRankingToggle;
+	if (toggle.dataset.idleText === undefined) {
+		toggle.dataset.idleText = toggle.textContent;
+		toggle.dataset.idleTitle = toggle.title;
+	}
+	toggle.textContent = show ? '← 本棚に戻る' : toggle.dataset.idleText;
+	toggle.title = show ? '本の一覧に戻る (Esc)' : toggle.dataset.idleTitle;
+	// 読み上げで矢印の記号を読ませない
+	if (show) toggle.setAttribute('aria-label', '本棚に戻る');
+	else toggle.removeAttribute('aria-label');
 	// 本の一覧にだけ効く絞り込み・並び順・棚は隠す (残すと本棚にいるように見える。viewer.css)
 	el.libraryView.classList.toggle('ranking-open', show);
 	// 開くたびに頼む。同じ問い合わせはサーバが 10 分覚えているので、なろうへは行かない。
