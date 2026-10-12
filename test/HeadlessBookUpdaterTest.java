@@ -272,7 +272,7 @@ public class HeadlessBookUpdaterTest {
 	public void settingsAreTakenWhileHoldingTheWebLock() throws Exception {
 		java.util.concurrent.atomic.AtomicBoolean held = new java.util.concurrent.atomic.AtomicBoolean(false);
 		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> {
-			held.set(Thread.holdsLock(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK));
+			held.set(com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.isHeldByCurrentThread());
 			return new Properties();
 		}, "");
 		updater.conversions = (props, cache) -> { throw new IllegalStateException("ここまで来れば十分"); };
@@ -282,6 +282,25 @@ public class HeadlessBookUpdaterTest {
 			/* 意図的: 変換は作らない */
 		}
 		assertTrue(held.get());
+		assertFalse("鍵を外し忘れた", com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.isLocked());
+	}
+
+	/** どの入口も、変換が投げても鍵を外して返る（試験は同じスレッドなので、外し忘れは再入では見えない。isLocked で見る。internal #22） */
+	@Test
+	public void everyEntryReleasesTheWebLock() throws Exception {
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(Properties::new, "");
+		updater.conversions = (props, cache) -> { throw new IllegalStateException("変換は作らない"); };
+		String url = "https://ncode.syosetu.com/n1234ab/";
+		java.nio.file.Path book = tempFolder.newFile("c.epub").toPath();
+		java.nio.file.Path shelf = tempFolder.newFolder("shelf").toPath();
+		for (java.util.concurrent.Callable<?> call : java.util.List.<java.util.concurrent.Callable<?>>of(
+				() -> updater.update(url, book),
+				() -> updater.download(url, shelf),
+				() -> updater.check(url, book),
+				() -> updater.rename(url, book, "新しい名前"))) {
+			try { call.call(); } catch (Exception e) { /* 意図的: 投げても鍵を外すかだけを見る */ }
+			assertFalse("鍵を外し忘れた", com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.isLocked());
+		}
 	}
 
 	/**

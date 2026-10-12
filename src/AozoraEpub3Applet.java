@@ -468,7 +468,8 @@ public class AozoraEpub3Applet extends JPanel
 	Epub3ImageWriter epub3ImageWriter;
 	
 	/** 変換をキャンセルした場合true */
-	boolean convertCanceled = false;
+	//中止のボタン（画面のスレッド）が立て、変換のスレッドが待つ間も読むので volatile
+	volatile boolean convertCanceled = false;
 	/** 変換 1 回 (ConvertWorker 1 本) の間に一度でも中止されたか。
 	 * convertCanceled は convertFiles() の先頭で false に戻り、URL を複数変換すると
 	 * convertWeb() が URL ごとに convertFiles() を呼ぶため、中止した事実がそこで消える。
@@ -4692,6 +4693,21 @@ public class AozoraEpub3Applet extends JPanel
 		return !canceled && (epubOutput || !mobiDone);
 	}
 	
+	/** Web 変換の鍵（WEB_LOCK）を取る。本棚の仕事が持っていて 1 秒で取れなければ、待っていることをログに出す。待つ間も中止を見る
+	 * @return 取れたら true。待っている間に中止されたら false（鍵は持っていない） */
+	private boolean lockWebConversion(String urlString)
+	{
+		return WebAozoraConverter.lockWebLockWaiting(this::webConversionCanceled,
+			() -> LogAppender.println("本棚の仕事（更新・確かめ・取り込み）が終わるのを待っています（中止で待つのをやめます）: "+urlString),
+			() -> LogAppender.println("本棚の仕事が終わったので、続けます"));
+	}
+	/** Web 変換を中止したか（今の変換器・画面の中止・前の URL の変換中の中止） */
+	private boolean webConversionCanceled()
+	{
+		WebAozoraConverter converter = this.webConverter;
+		return (converter != null && converter.isCanceled()) || this.convertCanceled || this.convertCanceledInWorker;
+	}
+	
 	/** Web変換
 	 * @param vecUrlString 青空文庫テキストのzipまたは対応サイトのリンクURL
 	 * @param vecUrlSrcFile ショートカットファイルのURLならファイルが指定されている */
@@ -4774,9 +4790,16 @@ public class AozoraEpub3Applet extends JPanel
 					LogAppender.println(" は変換できませんでした");
 					continue;
 				}
-				synchronized (WebAozoraConverter.WEB_LOCK) {
+				//本棚の更新が鍵を持っていれば、待っていることを知らせ、待つ間も中止を見る（黙って何分も待たない。internal #22）
+				if (!this.lockWebConversion(urlString)) {
+					LogAppender.println("変換処理を中止しました : "+urlString);
+					//ほかの途中でやめる道と同じく、中止した回の印を残す（自動プレビューで前の URL の本を開かない）
+					this.convertCanceledInWorker = true;
+					break;
+				}
+				try {
 					//待っている間に中止されたら、取りに行かない（前の URL の変換中に押された中止も見る。変換器は URL ごとに新しい）
-					if (webConverter.isCanceled() || this.convertCanceled || this.convertCanceledInWorker) {
+					if (this.webConversionCanceled()) {
 						LogAppender.println("変換処理を中止しました : "+urlString);
 						break;
 					}
@@ -4877,6 +4900,8 @@ public class AozoraEpub3Applet extends JPanel
 						jCheckCommentConvert.setSelected(commentConvert);
 						jComboCover.setSelectedItem(coverItem);
 					}
+				} finally {
+					WebAozoraConverter.WEB_LOCK.unlock();
 				}
 				
 			} catch (Exception e) {

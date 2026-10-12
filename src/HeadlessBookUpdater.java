@@ -58,13 +58,16 @@ public class HeadlessBookUpdater implements BookUpdater
 		}
 		//設定は Web 変換の鍵を取ってから写す。GUI は Web 変換の間、画面の部品を一時的に書き換えている（表紙・文字コード・
 		//コメント）ので、その間に写すと一時的な値（別の作品の表紙など）が入る（PR #118 のゲート2）
-		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
+		try {
 			//待っている間に名前を変えられた・消された本は書かない（前の名前で本が増える。PR のゲート2）
 			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません（名前を変えたか、消しました）");
 			Properties props = this.settings.get();
 			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl))
 				.convert(sourceUrl, epubFile.toAbsolutePath().getParent().toFile(), epubFile.toFile(), true, true, allowFewerEpisodes);
 			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
 		}
 	}
 
@@ -82,11 +85,14 @@ public class HeadlessBookUpdater implements BookUpdater
 		if (existing != null) {
 			return new Result(false, false, "もう Web 本棚にある本です: " + shelfDir.relativize(existing) + "（続きは本棚の ⟳ で取れます）");
 		}
-		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
+		try {
 			Properties props = this.settings.get();
 			File shelf = shelfDir.toFile();
 			HeadlessWebConversion.Result r = this.conversions.apply(props, new File(shelf, SHELF_CACHE)).convertNewBook(url, shelf);
 			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
 		}
 	}
 
@@ -100,7 +106,8 @@ public class HeadlessBookUpdater implements BookUpdater
 			return new CheckResult(false, "手元・内部の宛先は取りに行きません: " + sourceUrl, -1, -1, -1, null);
 		}
 		Thread.sleep(CHECK_INTERVAL_MILLIS);
-		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
+		try {
 			if (!java.nio.file.Files.isRegularFile(epubFile)) return new CheckResult(false, "本棚の本が見つかりません", -1, -1, -1, null);
 			Properties props = this.settings.get();
 			HeadlessWebConversion conversion = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl));
@@ -108,6 +115,8 @@ public class HeadlessBookUpdater implements BookUpdater
 			boolean checked = HeadlessWebConversion.STOP_CHECKED.equals(r.stop());
 			return new CheckResult(checked, r.message(), conversion.checkedEpisodes, conversion.checkedNew, conversion.checkedRevised,
 				checked ? null : r.stop());
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
 		}
 	}
 
@@ -227,7 +236,8 @@ public class HeadlessBookUpdater implements BookUpdater
 		}
 		Path target = epubFile.resolveSibling(newName);
 		//変換が本を書き換えている間に動かさない
-		synchronized (com.github.hmdev.web.WebAozoraConverter.WEB_LOCK) {
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
+		try {
 			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません");
 			//大文字小文字だけの違いで、同じファイルと見なされるとき（Windows・mac）。リンクで同じファイルを指す別の名前は、
 			//同じ名前の本として断る（PR の codex）
@@ -263,6 +273,8 @@ public class HeadlessBookUpdater implements BookUpdater
 			}
 			if (ledgerDir != null) moveRecords(ledgerDir, fromKey, fromPrevious, epubFile, target, oldBase, newBaseName, extForFit, shelfLedger);
 			return new Result(true, false, "名前を変えました: " + target.getFileName());
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
 		}
 	}
 

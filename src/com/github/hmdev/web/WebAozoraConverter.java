@@ -72,9 +72,48 @@ public class WebAozoraConverter
 	 * Web 変換（変換器を {@link #createWebAozoraConverter} で取ってから {@code convertToAozoraText} が終わるまで）を
 	 * 1 つずつにする鍵。キャッシュの txt と台帳（book.properties）を書き直すので、GUI の変換と本棚の更新が同時に動くと互いの物を壊し、
 	 * 同じサイトへの取得の間隔も守れない（internal #11。PR #116 のゲート2）。
-	 * 変換器は変換ごとに新しく作るので、設定と途中の状態はもう共有しない（internal #22）
+	 * 変換器は変換ごとに新しく作るので、設定と途中の状態はもう共有しない（internal #22）。
+	 * 取れるかを先に試せるよう ReentrantLock にする（GUI は本棚の更新を待つとき、待っていることを知らせる。internal #22）
 	 */
-	public static final Object WEB_LOCK = new Object();
+	public static final java.util.concurrent.locks.ReentrantLock WEB_LOCK = new java.util.concurrent.locks.ReentrantLock();
+	
+	/**
+	 * WEB_LOCK を、中止を見ながら待って取る（GUI 用。本棚は lock() で待つ）。
+	 * 中止を見るため 250ms ごとに試し直すので、本棚の仕事が続けて来ると、その後になることがある（待っていることは知らせる）。
+	 * しばらく（quietMillis）待っても取れなければ onWaitStart を、その後に取れたら onWaitEnd を呼ぶ（一瞬で取れる待ちは知らせない）。
+	 * 待っている間の割り込みでは待つのをやめない（中止していないのに「中止しました」にしない）。印は戻して返るので、その後の取得は印で止まりうる（master と同じ）
+	 * @return 取れたら true。中止されたら false（鍵は持っていない） */
+	public static boolean lockWebLockWaiting(java.util.function.BooleanSupplier canceled, Runnable onWaitStart, Runnable onWaitEnd)
+	{
+		return lockWaiting(WEB_LOCK, canceled, 1000, onWaitStart, onWaitEnd);
+	}
+	static boolean lockWaiting(java.util.concurrent.locks.ReentrantLock lock, java.util.function.BooleanSupplier canceled, long quietMillis,
+		Runnable onWaitStart, Runnable onWaitEnd)
+	{
+		if (lock.tryLock()) return true;
+		boolean interrupted = false;
+		boolean announced = false;
+		long start = System.nanoTime();
+		try {
+			while (true) {
+				try {
+					if (lock.tryLock(250, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+						if (announced) onWaitEnd.run();
+						return true;
+					}
+				} catch (InterruptedException e) {
+					interrupted = true;
+				}
+				if (canceled.getAsBoolean()) return false;
+				if (!announced && System.nanoTime() - start >= quietMillis * 1_000_000L) {
+					announced = true;
+					onWaitStart.run();
+				}
+			}
+		} finally {
+			if (interrupted) Thread.currentThread().interrupt();
+		}
+	}
 
 	/** 共有 HttpClient (HTTP/2, Cookie自動管理, リダイレクト自動追跡) */
 	private static final HttpClient httpClient;
