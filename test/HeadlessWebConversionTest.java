@@ -160,7 +160,9 @@ public class HeadlessWebConversionTest {
 		File dst = tempFolder.newFolder("out");
 		HeadlessWebConversion.Result r = conversion(props, basePath).convert("http://" + fqdn + "/novel/", dst, null, true);
 		assertFalse(r.ok());
-		assertTrue(r.message(), r.message().contains("kindle"));
+		//原因（拡張子）と直し方（.epub、ini の Ext=）を言う（監査 50。「作れません」だけでは利用者に分からなかった）
+		assertEquals(HeadlessWebConversion.kindleRefusal(".mobi"), r.message());
+		assertTrue(r.message(), r.message().contains("拡張子を .epub にしてください") && r.message().contains("Ext="));
 		assertEquals(0, dst.list().length);
 		assertEquals("取りに行く前に断る（取ってから断ると、次の更新で更新なしに見える）", 0, requests.get());
 	}

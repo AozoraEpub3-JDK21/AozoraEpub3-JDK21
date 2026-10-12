@@ -147,7 +147,7 @@ public class HeadlessWebConversion
 		//kindle は取りに行く前に断る（取ってから断ると、次の「更新分のみ」で更新なしに見える。#116 のゲート2）
 		String outExt = outExt();
 		//確かめるだけなら、書き出しの形（kindle）を問わない（PR のゲート2）
-		if (outExt.startsWith(".mobi") && !this.checkMode) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
+		if (outExt.startsWith(".mobi") && !this.checkMode) return new Result(false, false, null, kindleRefusal(outExt));
 		//青空文庫の作品は HTML から作らない（傍点・字下げなどが落ちる。internal の ADR 0001）。完結した作品で続きも無いので、本棚では扱わない。
 		//前から本棚にある本は、更新・新着の確かめでは「更新なし」（失敗にすると、続きの無い本がずっと失敗に見える）
 		if (com.github.hmdev.util.AozoraBunkoUrl.isWorkUrl(url)) {
@@ -295,7 +295,7 @@ public class HeadlessWebConversion
 	Result convertText(File srcFile, File dstPath, File expectedOutFile, boolean overwrite) throws Exception
 	{
 		String outExt = outExt();
-		if (outExt.startsWith(".mobi")) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
+		if (outExt.startsWith(".mobi")) return new Result(false, false, null, kindleRefusal(outExt));
 
 		GuiConversionSettings.applyTo(this.props, this.writer, this.imageWriter);
 		this.writer.setIsKindle(false);
@@ -438,6 +438,12 @@ public class HeadlessWebConversion
 	private int intOf(String key, int defaultValue)
 	{
 		try { return Integer.parseInt(GuiConversionSettings.text(this.props, key).trim()); } catch (Exception e) { return defaultValue; }
+	}
+
+	/** kindle の出力を断る文言。本棚は EPUB しか並べられないので、原因（拡張子の設定）と直し方を言う（監査 50） */
+	static String kindleRefusal(String outExt)
+	{
+		return "出力の拡張子が Kindle（" + outExt + "）なので、本棚には落とせません。拡張子を .epub にしてください（画面の「拡張子」、CLI では AozoraEpub3.ini の Ext=）";
 	}
 
 	private String outExt()
