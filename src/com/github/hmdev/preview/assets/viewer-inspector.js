@@ -18,13 +18,16 @@ async function renderInspector()
 		// 取得中に本棚から別の本へ切り替えられることがある。
 		// 要求したときの本を控えておき、変わっていたら結果を捨てる
 		// (捨てないと、新しい本の欄に前の本の書誌・CSS が出る)
+		// 同じ本を読み込み直したときも、前の版の返りを捨てる (通し番号で見る。internal #23)
 		const requestedId = state.bookId;
+		const requestedSeq = state.inspectionSeq;
+		const stale = () => requestedId !== state.bookId || requestedSeq !== state.inspectionSeq;
 		try {
 			const inspection = await getJson('api/book/' + encodeURIComponent(requestedId) + '/inspect');
-			if (requestedId !== state.bookId) return;
+			if (stale()) return;
 			state.inspection = inspection;
 		} catch (e) {
-			if (requestedId !== state.bookId) return;
+			if (stale()) return;
 			pane('summary').textContent = 'EPUB 情報の取得に失敗しました: ' + e.message;
 			return;
 		}

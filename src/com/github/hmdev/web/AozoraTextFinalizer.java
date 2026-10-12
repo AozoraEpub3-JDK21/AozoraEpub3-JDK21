@@ -120,14 +120,16 @@ public class AozoraTextFinalizer {
 			content = detectAndMarkAuthorComments(content);
 		}
 
-		// 4. 改ページ直後の見出し化（漢数字変換より前に実行し、見出し行を保護する）
-		if (settings.isEnableEnchantMidashi()) {
-			content = enchantMidashi(content);
-		}
-
-		// 5. 漢数字変換
+		// 4. 漢数字変換（見出しの行は Web 変換が見出しの決まりで変換済みなので触らない）
+		// narou.rb と同じく見出し化より前に行う（convert_for_all_data の後に enchant_midashi。converterbase.rb:1358・1403）。
+		// 2026-10-12 までは見出し化の後で、改ページの直後の本文の行が話の題の決まりで変換されていた（internal #43）
 		if (settings.isEnableConvertNumToKanji()) {
 			content = convertNumToKanji(content);
+		}
+
+		// 5. 改ページ直後の見出し化
+		if (settings.isEnableEnchantMidashi()) {
+			content = enchantMidashi(content);
 		}
 
 		// 6. 英字全角化
@@ -364,13 +366,8 @@ public class AozoraTextFinalizer {
 		String[] lines = text.split("\n", -1);
 		List<String> result = new ArrayList<>();
 		for (String line : lines) {
-			// narou.rb互換: サブタイトル・章見出し行は漢数字変換せず全角数字変換のみ
-			// (注記行スキップより先に判定。サブタイトル行は ［＃３字下げ］［＃中見出し］ で始まるため)
-			if (line.contains("［＃中見出し］") || line.contains("［＃大見出し］")) {
-				result.add(convertNumToZenkakuLine(line));
-				continue;
-			}
-			// 注記行はスキップ
+			// 注記行はスキップ。話の題・章の題の行（［＃３字下げ］［＃中見出し］…）もここで飛ぶ: 数字は Web 変換が見出しの決まりで
+			// 変換済み（WebAozoraConverter#convertHeadingNumbers。もとから全角の数字を漢数字にしないように、ここでは触らない）
 			if (line.startsWith("［＃")) {
 				result.add(line);
 				continue;
@@ -440,35 +437,6 @@ public class AozoraTextFinalizer {
 				pos = tagMatcher.end();
 			}
 		}
-		return sb.toString();
-	}
-
-	/** サブタイトル・章見出し行: 半角数字→縦中横または全角数字変換（漢数字にはしない）
-	 * 2桁以上: ［＃縦中横］...［＃縦中横終わり］で囲む（縦書き時に横組み表示）
-	 * 1桁: 全角数字に変換 */
-	private String convertNumToZenkakuLine(String line) {
-		return convertOutsideChukiAndTags(line, this::convertNumsToZenkakuInSegment);
-	}
-
-	/** 半角数字→縦中横または全角数字変換（注記外セグメント用）
-	 * 2桁以上は縦中横注記で囲み縦書き時に横組み表示、1桁は全角数字に変換 */
-	private String convertNumsToZenkakuInSegment(String segment) {
-		StringBuilder sb = new StringBuilder();
-		Matcher m = Pattern.compile("[\\d０-９]+").matcher(segment);
-		int lastEnd = 0;
-		while (m.find()) {
-			sb.append(segment, lastEnd, m.start());
-			String digits = zenkakuNumToHankaku(m.group()); // 全角数字も半角に統一
-			if (digits.length() >= 2) {
-				// 2桁以上: 縦中横で囲む（縦書き時に横組み表示）
-				sb.append("［＃縦中横］").append(digits).append("［＃縦中横終わり］");
-			} else {
-				// 1桁: 全角数字に変換
-				sb.append(hankakuNumToZenkaku(digits));
-			}
-			lastEnd = m.end();
-		}
-		sb.append(segment, lastEnd, segment.length());
 		return sb.toString();
 	}
 

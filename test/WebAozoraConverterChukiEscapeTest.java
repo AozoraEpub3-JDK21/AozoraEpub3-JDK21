@@ -125,7 +125,8 @@ public class WebAozoraConverterChukiEscapeTest {
 			settings.setEnableConvertSymbolsToZenkaku(false);
 			out = episode("作品", null, "[#1] 出会い ［#2］ [＃3]", "<p id=\"L1\">本文。</p>");
 			assertFalse(out, out.contains("始め角括弧"));
-			assertTrue("半角の [ は全角にしない設定なら半角のまま: " + out, out.contains("[＃3]"));
+			//話の題の数字は Web 変換が全角にする（internal #43）。見るのは「[」が半角のままか
+			assertTrue("半角の [ は全角にしない設定なら半角のまま: " + out, out.contains("[＃３]"));
 		} finally {
 			settings.setEnableConvertSymbolsToZenkaku(saved);
 		}
