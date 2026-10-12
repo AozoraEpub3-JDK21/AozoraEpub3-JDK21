@@ -4007,6 +4007,27 @@ public class AozoraEpub3Converter
 		if (this.pageBreakTrigger != null && this.pageBreakTrigger.pageType != PageBreakType.PAGE_NORMAL) this.skipMiddleEmpty = true;
 	}
 	
+	/** 行のタグを順に見て、open 個のタグが開いている所から、対になる開きの無い閉じタグを外し、残りを kept に書く。
+	 * 開きと閉じは trackOpenTags と同じく位置の順に対にする（名前は見ない）
+	 * @return 外した数 */
+	public static int dropUnmatchedCloseTags(String line, int open, StringBuilder kept)
+	{
+		int dropped = 0, i = 0, length = line.length();
+		while (i < length) {
+			int start = line.indexOf('<', i);
+			int end = start < 0 ? -1 : line.indexOf('>', start);
+			if (end < 0) { kept.append(line, i, length); break; }
+			kept.append(line, i, start);
+			if (start+1 < length && line.charAt(start+1) == '/') {
+				if (open > 0) open--;
+				else { dropped++; i = end+1; continue; }
+			} else if (line.charAt(end-1) != '/') open++;
+			kept.append(line, start, end+1);
+			i = end+1;
+		}
+		return dropped;
+	}
+	
 	/** 開いたままのタグを、後から開いた順に閉じる */
 	private void closeOpenTags(BufferedWriter out) throws IOException
 	{
@@ -4094,6 +4115,27 @@ public class AozoraEpub3Converter
 					if (i<length-1 && line.charAt(i+1) == '/') tagEnd++;
 					else tagStart++;
 					inTag = true;
+				}
+			}
+		}
+		
+		//開いていないタグの閉じは書かない（改ページで終えたブロックの後から来た閉じの注記など）。
+		//字下げの「字下げ終わり重複」と同じ扱いを、ほかのブロックにも当てる（書くと XHTML が壊れ、tagLevel が負になる。internal #41）
+		//この呼び出しで改ページするなら、開いているタグは改ページの前に閉じるので、開いていないものとして見る（表題の後に書き直すタグは閉じない）
+		//表題・著者などの前後に付ける枠（行番号 -1）は対なので見ない
+		if (lineNum >= 0 && tagEnd > 0) {
+			boolean closedByPageBreak = out != null && this.pageBreakTrigger != null && this.reopenTags == null;
+			StringBuilder kept = new StringBuilder(line.length());
+			int dropped = dropUnmatchedCloseTags(line, closedByPageBreak ? 0 : this.openTags.size(), kept);
+			if (dropped > 0) {
+				LogAppender.info(lineNum, "閉じる注記の重複（改ページなどで閉じていて開いていないので、外しました）");
+				line = kept.toString();
+				length = line.length();
+				tagEnd -= dropped;
+				//閉じだけの行は書かない（字下げ終わり重複と同じく行に何も出さない。改ページは次の行で）
+				if (CharUtils.isSpace(line)) {
+					buf.setLength(0);
+					return;
 				}
 			}
 		}
