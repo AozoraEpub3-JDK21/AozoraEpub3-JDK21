@@ -626,8 +626,10 @@ public class PreviewSession implements AutoCloseable
 	{
 		Path tmp = Path.of(System.getProperty("java.io.tmpdir", "."));
 		try (Stream<Path> children = Files.list(tmp)) {
-			children.filter(Files::isDirectory)
-				.filter(path -> path.getFileName().toString().startsWith(TEMP_PREFIX + "-"))
+			//名前で先に絞る。一時フォルダの全部に isDirectory（OS への問い合わせ）をすると、物の多い台で遅い
+			//（win の台の %TEMP% は 22,094 個で、プレビューを始めるたびに 2.4 秒。試験は 105 件で 260 秒かかっていた。internal #29）
+			children.filter(path -> path.getFileName().toString().startsWith(TEMP_PREFIX + "-"))
+				.filter(Files::isDirectory)
 				.sorted(Comparator.comparing(Path::toString))
 				.forEach(PreviewSession::deleteIfNotInUse);
 		} catch (IOException e) {
