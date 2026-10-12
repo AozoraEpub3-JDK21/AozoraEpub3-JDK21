@@ -330,6 +330,11 @@ java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_
 > When `-url` points at a `.zip` / `.txtz` / `.rar` file, the archive is downloaded into the
 > output directory (`-d`, or the current directory if omitted) instead of being scraped as HTML,
 > and is then converted through exactly the same path as a local archive input.
+
+> An Aozora Bunko **work page (`cards/…/files/…_….html`) or library card (`cards/…/card….html`) URL** is not scraped as HTML either:
+> AozoraEpub3 fetches the text zip listed on the work's library card and converts it the same way, so emphasis dots, indents, gaiji and so on come out as in the original.
+> That zip is always read as `MS932`, whatever `-enc` says. If the card cannot be found or lists no zip, the conversion stops and says why.
+> The GUI behaves the same: pasting a zip URL or a work page URL now converts it (the zip is saved in the output folder).
 > Aozora Bunko text ZIPs are Shift_JIS, so the default `-enc MS932` is correct.
 
 ### Exit Codes

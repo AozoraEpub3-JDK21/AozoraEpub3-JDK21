@@ -52,7 +52,7 @@ mai-net は、DEFUNCT を外した規則で SS 投稿掲示板の作品（`act=d
 | 小説家になろう (ncode.syosetu.com) | `n9623lp` ほか | ✅ (2026-08-11 リリース後 dogfood) |
 | カクヨム (kakuyomu.jp) | `works/822139840468926025` | ✅ (同上) |
 | ハーメルン (novel.syosetu.org) | 章あり `402358` / 章なし `422019` | ✅ (同上 + HamelnE2ETest) |
-| 青空文庫 (www.aozora.gr.jp) | `cards/000035/files/1567_14913.html` | ✅ (表題二重は #80 で修正) |
+| 青空文庫 (www.aozora.gr.jp) | `cards/000035/files/1567_14913.html` | ✅ (表題二重は #80 で修正)。**2026-10-12 から作品の XHTML・図書カードの URL は HTML を読まず、図書カードの zip から変換する**（internal の ADR 0001。HTML から戻すと傍点・字下げ・見出しが落ちていた）。猫 789・舞姫 2078・震災日記より 4671 で、zip を直に変換した本と本文が 1 行も違わないことを確かめた。`web/www.aozora.gr.jp/extract.txt` は WebAozoraConverter を直に呼ぶ試験用に残っている |
 | **なろう R18 (novel18.syosetu.com)** | `n0037mn` (ノクターン) | ✅ EPUB 生成・タイトル/mimetype 正常。COOKIE over18=yes で年齢認証も通過。**2026-10-08 訂正: 本文は空だった**（下記「2026-10-08 ノクターンの本文」） |
 | **暁 (www.akatsuki-novels.com)** | `stories/index/novel_id~8654` | ✅ EPUB 178KB 生成 |
 | **novelist.jp** | `388.html` (WHITE BOOK) | ✅ EPUB 471KB 生成 |

@@ -372,6 +372,11 @@ java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_
 > ローカルのアーカイブを指定した場合とまったく同じ経路で変換します。
 > 青空文庫のテキストzipは Shift_JIS のため、`-enc` は既定の `MS932` のままで構いません。
 
+> 青空文庫の**作品ページ（`cards/…/files/…_….html`）や図書カード（`cards/…/card….html`）の URL** を渡した場合も、
+> HTML は読まずに、図書カードに載っているテキストzipを取って上と同じ経路で変換します（傍点・字下げ・外字などが原文どおりに残ります）。
+> この zip は `-enc` に関わらず `MS932` で読みます。図書カードが見つからない・zipのリンクが無いときは、理由を出して止めます。
+> GUI でも同じで、zip の URL・作品ページの URL を貼ると変換まで進みます（zip は出力先に置かれます）。
+
 > 注記: CLIのヘルプ表示は Commons CLI の新パッケージ `org.apache.commons.cli.help.HelpFormatter` を使用しており、従来と同等の形式で出力されます（内部非推奨APIの解消）。
 
 ### 更新確認

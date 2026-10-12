@@ -119,6 +119,7 @@ import com.github.hmdev.swing.JProfileDialog;
 import com.github.hmdev.swing.NarrowTitledBorder;
 import com.github.hmdev.update.UpdateChecker;
 import com.github.hmdev.util.ArchiveUrlUtils;
+import com.github.hmdev.util.AozoraBunkoUrl;
 import com.github.hmdev.util.JisLevelUtil;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.util.I18n;
@@ -4700,11 +4701,61 @@ public class AozoraEpub3Applet extends JPanel
 			String urlString = vecUrlString.get(i);
 			File urSrcFile = null;
 			if (vecUrlSrcFile != null && vecUrlSrcFile.size() > i) urSrcFile = vecUrlSrcFile.get(i);
+			//青空文庫の作品の URL（XHTML・図書カード）は、HTML を読まず、図書カードのテキストの zip に読み替える
+			//（HTML から戻すと傍点・字下げなどが落ちる。internal の ADR 0001）。zip が無ければ止める
+			if (AozoraBunkoUrl.isWorkUrl(urlString)) {
+				LogAppender.println("--------");
+				try {
+					urlString = AozoraBunkoUrl.resolveZipUrl(urlString);
+					LogAppender.println("図書カードのテキスト（zip）から変換します : "+urlString);
+				} catch (IOException e) {
+					//理由はすぐ下で利用者に出す。スタックトレースは debug だけ（404 でも出ると紛らわしい）
+					logger.debug("青空文庫の zip を見つけられない: {}", urlString, e);
+					LogAppender.error(e.getMessage());
+					LogAppender.append(urlString);
+					LogAppender.println(" は変換できませんでした");
+					continue;
+				}
+				//図書カードを取っている間に中止された。zip は取らない
+				if (this.convertCanceled) {
+					this.convertCanceledInWorker = true;
+					LogAppender.println("変換処理を中止しました : "+urlString);
+					return;
+				}
+			}
 			//URL変換 の最後が .zip .txtz .rar
 			//判定・ダウンロード処理は CLI (AozoraEpub3 の -url 処理) と共通化してある
 			if (ArchiveUrlUtils.isArchiveUrl(urlString)) {
-				//青空zipのURLを出力先にダウンロードする（GUI では変換までは行わない従来動作）
-				ArchiveUrlUtils.downloadArchive(urlString, dstPath);
+				//出力先にダウンロードして、ローカルの zip と同じく変換する（CLI と同じ。ADR 0001 で、ダウンロードだけだったのをやめた）
+				File archiveFile;
+				try {
+					archiveFile = ArchiveUrlUtils.downloadArchive(urlString, dstPath);
+				} catch (IOException e) {
+					logger.error("アーカイブ URL のダウンロードに失敗: {}", urlString, e);
+					LogAppender.error(e.getMessage());
+					LogAppender.append(urlString);
+					LogAppender.println(" は変換できませんでした");
+					continue;
+				}
+				//取っている間に中止された（convertFiles は始めに中止の印を消すので、その前に見る）
+				if (this.convertCanceled) {
+					this.convertCanceledInWorker = true;
+					LogAppender.println("変換処理を中止しました : "+urlString);
+					return;
+				}
+				//青空文庫のテキストは Shift_JIS（画面の入力文字コードに依らない。zip の URL を直に渡したときも）
+				String encType = (String)jComboEncType.getSelectedItem();
+				if (AozoraBunkoUrl.isTextArchiveUrl(urlString)) jComboEncType.setSelectedItem(AozoraBunkoUrl.ENCODING);
+				//表紙が「入力と同じ名前」で、ショートカット（.url）から来たなら、ショートカットと同じ名前の画像を使う（Web の経路と同じ）
+				Object coverItem = jComboCover.getSelectedItem();
+				if (jComboCover.getSelectedIndex() == 1 && urSrcFile != null) jComboCover.setSelectedItem(AozoraEpub3.getSameCoverFileName(urSrcFile));
+				try {
+					convertFiles(new File[]{archiveFile}, dstPath);
+				} finally {
+					//設定を戻す（戻さないと、窓が手前から外れたときの保存で一時的な値が ini に残る）
+					jComboEncType.setSelectedItem(encType);
+					jComboCover.setSelectedItem(coverItem);
+				}
 				continue;
 			}
 			
