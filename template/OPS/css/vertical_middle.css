@@ -92,3 +92,15 @@ writing-mode: vertical-rl;
 -webkit-writing-mode: vertical-rl;
 -epub-writing-mode: vertical-rl;
 }
+
+/* 表組みの左右中央（長い節）の中の柱: ページの角に置かず（position:absolute をやめ）、小さな縦の 1 行として本文の並びに入れる。
+   表組みでは柱の位置がリーダーごとに違い、Thorium は章題の上に重ねる。並びに入れれば、長い柱が何列に折り返しても重ならない。
+   1 ページに収まる節（html.hltr div.vrtl）の柱はページの上に置いたまま */
+table.middle div.running_head {
+position: static !important;
+display: block;
+font-size: 0.8em;
+writing-mode: vertical-rl;
+-webkit-writing-mode: vertical-rl;
+-epub-writing-mode: vertical-rl;
+}

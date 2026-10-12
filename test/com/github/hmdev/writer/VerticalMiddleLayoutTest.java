@@ -144,6 +144,31 @@ public class VerticalMiddleLayoutTest {
 		}
 	}
 
+	/**
+	 * 章題が長い中扉（表組み）でも、柱は表組みの中で並びに入る縦の 1 行にし、ページの角に置かない
+	 * （表組みでは柱の位置がリーダーごとに違い、Thorium では章題に重なった）
+	 */
+	@Test
+	public void 表組みの中扉の柱は並びに入れる() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃ここから柱］作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第一部　第十二章　一列に収まらないほど長い長い章題です［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
+			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td><div class=\"running_head yoko\">作品名</div>"));
+			String css = read(zf, "OPS/css/vertical_middle.css");
+			assertTrue(css, css.contains("table.middle div.running_head {"));
+			assertTrue(css, css.contains("position: static !important;"));
+		}
+	}
+
 	@Test
 	public void 短い中扉だけ横書きの親の中に縦書きのブロックを置く() throws Exception {
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
