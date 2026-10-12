@@ -160,9 +160,18 @@ public class HeadlessWebConversionTest {
 		File dst = tempFolder.newFolder("out");
 		HeadlessWebConversion.Result r = conversion(props, basePath).convert("http://" + fqdn + "/novel/", dst, null, true);
 		assertFalse(r.ok());
-		assertTrue(r.message(), r.message().contains("kindle"));
+		//原因（拡張子）と直し方（.epub、ini の Ext=）を言う（監査 50。「作れません」だけでは利用者に分からなかった）
+		assertEquals("出力の拡張子が Kindle（.mobi）なので、本棚には落とせません。拡張子を .epub（Kobo なら .kepub.epub）にしてください"
+			+ "（画面の「拡張子」、CLI では使っている ini（-i で渡したもの。無ければ AozoraEpub3.ini）の Ext=）", r.message());
 		assertEquals(0, dst.list().length);
 		assertEquals("取りに行く前に断る（取ってから断ると、次の更新で更新なしに見える）", 0, requests.get());
+	}
+
+	/** 本棚の本を kindle の設定で更新（⟳）するときは、その本の拡張子にするよう言う（.epub と言うと、Kobo の本では名前が合わずに別の理由で断る） */
+	@Test
+	public void kindleRefusalOnUpdateNamesTheBooksExtension() {
+		String message = HeadlessWebConversion.kindleRefusal(".mobi", new File("[著者] 題.kepub.epub"));
+		assertTrue(message, message.contains("本棚の本を更新できません") && message.contains("その本と同じ .kepub.epub にしてください"));
 	}
 
 	/** 青空文庫の作品は本棚では扱わない（HTML から作ると傍点・字下げが落ちる。internal の ADR 0001）。取りに行く前に断る */
