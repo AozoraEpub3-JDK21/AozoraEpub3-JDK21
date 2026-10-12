@@ -2,6 +2,7 @@ package com.github.hmdev.web;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -102,8 +103,12 @@ public class WebAozoraConverterUpdateInfoTest {
 		WebAozoraConverter converter = WebAozoraConverter.createWebAozoraConverter(base + "/novel/", web);
 		assertNotNull("サイト定義を読めない", converter);
 		registeredFqdn = fqdn;
+		siteWeb = web;
 		return converter;
 	}
+
+	/** siteConverterFor が作ったサイト定義の置き場所（同じ定義で次の変換器を作るため） */
+	private File siteWeb;
 
 	private int count(String path) {
 		AtomicInteger n = requests.get(path);
@@ -152,10 +157,21 @@ public class WebAozoraConverterUpdateInfoTest {
 		cancelOnEp2 = null;
 		assertEquals(1, count("/ep/1/"));
 
-		// 次の変換: 1 話目は取り直さない（取れた話は記録に残っている）
-		File txt = converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
+		// 次の変換: 1 話目は取り直さない（取れた話は記録に残っている）。変換器は変換ごとに新しく作る（internal #22。中止の印は持ち越さない）
+		File txt = WebAozoraConverter.createWebAozoraConverter(base + "/novel/", siteWeb).convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0);
 		assertNotNull(txt);
 		assertEquals("止まる前に取れた 1 話目は取り直さない", 1, count("/ep/1/"));
+	}
+
+	/** 変換器を作ってから変換を始めるまでに押された中止（GUI が本棚の更新を待っている間など）は効く。何も取りに行かない（internal #22） */
+	@Test
+	public void aCancelBeforeTheConversionStartsHolds() throws Exception {
+		String base = serve();
+		WebAozoraConverter converter = siteConverterFor(base);
+		File cache = tempFolder.newFolder("cache");
+		converter.canceled();
+		assertNull(converter.convertToAozoraText(base + "/novel/", cache, 0, 0f, false, false, false, 0));
+		assertEquals("中止の後に話を取りに行った", 0, count("/ep/1/"));
 	}
 
 	/** 最初の取得で失敗して、後の再試行で取れた話は、次の変換で取り直さない */

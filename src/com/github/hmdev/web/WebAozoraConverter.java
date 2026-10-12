@@ -65,13 +65,14 @@ public class WebAozoraConverter
 			.withLocale(Locale.ROOT)
 			.withZone(ZoneId.systemDefault());
 	
-	/** Singletonインスタンス格納 keyはFQDN */
+	/** 読んだサイトの定義（extract.txt・replace.txt）。key は FQDN。変換器はここから変換ごとに作る（定義だけを使い回す。internal #22） */
 	static HashMap<String, WebAozoraConverter> converters = new HashMap<String, WebAozoraConverter>();
 
 	/**
 	 * Web 変換（変換器を {@link #createWebAozoraConverter} で取ってから {@code convertToAozoraText} が終わるまで）を
-	 * 1 つずつにする鍵。変換器は FQDN ごとに使い回され、設定と途中の状態を持つので、GUI の変換と本棚の更新が
-	 * 同時に動くと互いの設定で取ってしまう（internal #11。PR #116 のゲート2）
+	 * 1 つずつにする鍵。キャッシュの txt と台帳（book.properties）を書き直すので、GUI の変換と本棚の更新が同時に動くと互いの物を壊し、
+	 * 同じサイトへの取得の間隔も守れない（internal #11。PR #116 のゲート2）。
+	 * 変換器は変換ごとに新しく作るので、設定と途中の状態はもう共有しない（internal #22）
 	 */
 	public static final Object WEB_LOCK = new Object();
 
@@ -129,11 +130,12 @@ public class WebAozoraConverter
 	
 	////////////////////////////////
 	//キャンセルリクエストされたらtrue
-	boolean canceled = false;
+	/** 中止された（中止のボタンは画面のスレッドから立てるので volatile） */
+	volatile boolean canceled = false;
 
 	/**
 	 * 本棚の更新の守り（internal #11）。立てると、目次が取れないときにキャッシュの目次で続けず、
-	 * 目次の話数が台帳の話数より少ないときは書かずに止める。本棚の更新が鍵（WEB_LOCK）を持って立て、終わったら倒す
+	 * 目次の話数が台帳の話数より少ないときは書かずに止める。本棚の更新が鍵（WEB_LOCK）を持って立てる（変換器は変換ごとに新しいので、次の変換には残らない。internal #22）
 	 */
 	public boolean updateGuard = false;
 	/** 本棚の更新の守りで、話数が減っていても続ける（利用者が「減ったまま更新」を選んだ） */
@@ -203,25 +205,34 @@ public class WebAozoraConverter
 	private java.util.ArrayList<String> kanjiNumbers = new java.util.ArrayList<>();
 
 	////////////////////////////////////////////////////////////////
-	/** fqdnに対応したインスタンスを生成してキャッシュして変換実行 */
+	/** fqdn に対応した変換器を、変換ごとに新しく作る。サイトの定義は読んだものを使い回す。
+	 * 変換器は設定と変換の途中の状態を持つので、使い回すと GUI の中止が本棚の更新に届き、前の変換の設定や守りが残る（internal #22） */
 	public static WebAozoraConverter createWebAozoraConverter(String urlString, File configPath) throws IOException
 	{
-		urlString = urlString.trim();
-		//パスなし URL (https://example.com) は indexOf が -1 になり substring が例外を投げる
-		int pathIdx = urlString.indexOf('/', urlString.indexOf("//")+2);
-		String baseUri = pathIdx == -1 ? urlString : urlString.substring(0, pathIdx);
-		String fqdn = baseUri.substring(baseUri.indexOf("//")+2);
-		WebAozoraConverter converter = converters.get(fqdn);
-		if (converter == null) {
-			converter = new WebAozoraConverter(fqdn, configPath);
-			if (!converter.isValid()) {
-				LogAppender.println("サイトの定義がありません: "+configPath.getName()+"/"+siteDirName(fqdn, configPath));
-				return null;
+		synchronized (converters) {
+			urlString = urlString.trim();
+			//パスなし URL (https://example.com) は indexOf が -1 になり substring が例外を投げる
+			int pathIdx = urlString.indexOf('/', urlString.indexOf("//")+2);
+			String baseUri = pathIdx == -1 ? urlString : urlString.substring(0, pathIdx);
+			String fqdn = baseUri.substring(baseUri.indexOf("//")+2);
+			WebAozoraConverter converter = converters.get(fqdn);
+			if (converter == null) {
+				converter = new WebAozoraConverter(fqdn, configPath);
+				if (!converter.isValid()) {
+					LogAppender.println("サイトの定義がありません: "+configPath.getName()+"/"+siteDirName(fqdn, configPath));
+					return null;
+				}
+				converters.put(fqdn, converter);
 			}
-			converters.put(fqdn, converter);
+			return new WebAozoraConverter(converter);
 		}
-		return converter;
-		//return converter._convertToAozoraText(urlString, baseUri, fqdn, cachePath);
+	}
+	
+	/** 読んだサイトの定義だけを受け継いだ、新しい変換器（定義は作った後に書き換えないので共有してよい） */
+	private WebAozoraConverter(WebAozoraConverter definition)
+	{
+		this.queryMap = definition.queryMap;
+		this.replaceMap = definition.replaceMap;
 	}
 	
 	/**
@@ -347,9 +358,11 @@ public class WebAozoraConverter
 		this.useApi = useApi;
 		if (useApi && apiClient == null) {
 			apiClient = new NarouApiClient(httpClient);
+			//変換ごとに知らせる（その変換が API を使うことがログで分かる）
 			LogAppender.println("なろうAPI: 有効化");
 		}
 	}
+
 	
 	/**
 	 * APIフォールバック設定
@@ -570,7 +583,7 @@ public class WebAozoraConverter
 	public File convertToAozoraText(String urlString, File cachePath, int interval, float modifiedExpire,
 		boolean convertUpdated, boolean convertModifiedOnly, boolean convertModifiedTail, int beforeChapter, String outFileName) throws IOException
 	{
-		this.canceled = false;
+		//中止の印は戻さない（変換器は変換ごとに新しい。戻すと、作ってからここまでの間に押された中止が消える。internal #22）
 		this.listFailure = 0;
 		this.listFailureOnLaterPage = false;
 		this.checkedEpisodes = -1;
@@ -583,7 +596,7 @@ public class WebAozoraConverter
 		this.pendingEpisodes = -1;
 		this.pendingLastEpisodes = -1;
 		this.guardStopped = false;
-		// 前の作品の状態をリセット（インスタンスは FQDN キャッシュで再利用されるため）
+		// 前の作品の状態をリセット（変換器は変換ごとに新しいので、もとから空。同じ変換器で 2 回呼ぶ呼び手のために残す）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
 		this.bookTitle = null;
@@ -1537,7 +1550,7 @@ public class WebAozoraConverter
 			}
 		}
 
-		this.canceled = false;
+		//中止の印は戻さない（変換器は変換ごとに新しい。戻すと、仕上げの間に押された中止が呼び手に見えない。internal #22）
 		return txtFile;
 	}
 	
