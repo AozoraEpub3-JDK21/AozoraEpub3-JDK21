@@ -710,10 +710,6 @@ public class AozoraEpub3Converter
 	{
 		//左右中央の節の外で、注記も無ければ数えるものは無い
 		if (this.middleCountLine < 0 && noRubyLine.indexOf("［＃") < 0) return;
-		//柱（running_head）はページの角に置く（position:absolute）ので、列の場所を取らない。数えない
-		//（Web 変換と narou.rb は章の中扉の左右中央の中に作品名の柱を書く。長い作品名を 1 列に収まらない行と数えると、
-		//従来の表組みに倒れて柱と章題が重なり、章題も中央に来ない。1.7.0 の確かめで見つけた）
-		noRubyLine = CharUtils.removeHashira(noRubyLine);
 		Matcher m = chukiPattern.matcher(noRubyLine);
 		int pos = 0;
 		boolean lineCounted = false;
