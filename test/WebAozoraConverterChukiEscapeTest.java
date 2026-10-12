@@ -123,8 +123,9 @@ public class WebAozoraConverterChukiEscapeTest {
 			String out = episode("作品", null, "[#1] 出会い", "<p id=\"L1\">本文。</p>");
 			assertTrue(out, out.matches("(?s).*" + java.util.regex.Pattern.quote(ESCAPED) + "[1１一]］ 出会い.*"));
 			settings.setEnableConvertSymbolsToZenkaku(false);
-			out = episode("作品", null, "[#1] 出会い ［#2］", "<p id=\"L1\">本文。</p>");
+			out = episode("作品", null, "[#1] 出会い ［#2］ [＃3]", "<p id=\"L1\">本文。</p>");
 			assertFalse(out, out.contains("始め角括弧"));
+			assertTrue("半角の [ は全角にしない設定なら半角のまま: " + out, out.contains("[＃3]"));
 		} finally {
 			settings.setEnableConvertSymbolsToZenkaku(saved);
 		}
