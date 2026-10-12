@@ -571,6 +571,7 @@ async function reloadOpenBook(bookId)
 	libraryOpening = true;
 	try {
 		state.inspection = null;
+		state.inspectionSeq++;
 		await loadBook(true);
 		if (!el.inspectPanel.hidden) renderInspector();
 		libraryStale.delete(bookId);
@@ -664,12 +665,13 @@ async function switchBook(bookId)
 {
 	// 開けなかったときに戻せるよう控えておく (消された本を選ぶと 404 になる)
 	const previous = {id: state.bookId, book: state.book, inspection: state.inspection,
-		spineIndex: state.spineIndex, path: el.frame.getAttribute('data-path')};
+		inspectionSeq: state.inspectionSeq, spineIndex: state.spineIndex, path: el.frame.getAttribute('data-path')};
 
 	state.bookId = bookId;
 	state.book = null;
 	// 前の本の EPUB 情報を出し続けないよう捨てる (次に開いたとき取り直す)
 	state.inspection = null;
+	state.inspectionSeq++;
 	state.spineIndex = 0;
 	state.pendingFragment = null;
 	state.pendingAtEnd = false;
@@ -682,6 +684,8 @@ async function switchBook(bookId)
 		state.bookId = previous.id;
 		state.book = previous.book;
 		state.inspection = previous.inspection;
+		// 前の本の EPUB 情報の要求が取得中なら、その返りを受け取る（番号を進めたままだと捨てて空のままになる。PR #157 の検証）
+		state.inspectionSeq = previous.inspectionSeq;
 		state.spineIndex = previous.spineIndex;
 		if (previous.path !== null) el.frame.setAttribute('data-path', previous.path);
 		throw e;
