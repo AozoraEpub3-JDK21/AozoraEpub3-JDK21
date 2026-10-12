@@ -17,10 +17,20 @@ import org.junit.Test;
  */
 public class WebAozoraConverterHeadingNumberTest
 {
-	private static String print(String text, WebAozoraConverter.Heading heading) throws Exception
+	private static WebAozoraConverter converter() throws Exception
 	{
 		WebAozoraConverter c = WebAozoraConverter.createWebAozoraConverter("https://ncode.syosetu.com/n0000xx/", new File("web"));
 		assertNotNull(c);
+		return c;
+	}
+
+	private static String print(String text, WebAozoraConverter.Heading heading) throws Exception
+	{
+		return print(converter(), text, heading);
+	}
+
+	private static String print(WebAozoraConverter c, String text, WebAozoraConverter.Heading heading) throws Exception
+	{
 		Method m = WebAozoraConverter.class.getDeclaredMethod("printText", BufferedWriter.class, String.class, WebAozoraConverter.Heading.class);
 		m.setAccessible(true);
 		StringWriter sw = new StringWriter();
@@ -66,14 +76,28 @@ public class WebAozoraConverterHeadingNumberTest
 	public void kanjiSettingDoesNotMatter() throws Exception
 	{
 		//漢数字化を切っていても見出しの決まりで変換する（narou.rb は漢数字化しないときも hankaku_num_to_zenkaku_num）
-		WebAozoraConverter c = WebAozoraConverter.createWebAozoraConverter("https://ncode.syosetu.com/n0000xx/", new File("web"));
-		assertNotNull(c);
+		//設定を変えた変換器そのもので確かめる
+		WebAozoraConverter c = converter();
 		boolean saved = c.getFormatSettings().isEnableConvertNumToKanji();
 		try {
 			c.getFormatSettings().setEnableConvertNumToKanji(false);
-			assertEquals("第１話　１，０００円", sub("第1話　1,000円"));
+			assertEquals("第１話　１，０００円", print(c, "第1話　1,000円", WebAozoraConverter.Heading.SUBTITLE));
+			assertEquals("第［＃縦中横］10［＃縦中横終わり］章", print(c, "第10章", WebAozoraConverter.Heading.CHAPTER));
 		} finally {
 			c.getFormatSettings().setEnableConvertNumToKanji(saved);
 		}
+	}
+
+	@Test
+	public void protectedEnglishIsNotLost() throws Exception
+	{
+		//題の英語は退避されて目印になる。目印の中の番号を全角にすると戻らずに消えた（Opus の確かめ。n9623lp の 7 話）
+		String out = sub("【Side Story】兄の決意");
+		assertFalse(out, out.contains("英文"));
+		assertTrue(out, out.contains("Side Story"));
+		assertTrue(out, out.endsWith("兄の決意"));
+		//目印の後ろの数字は変換する
+		String withNumber = print("【Side Story】第1話", WebAozoraConverter.Heading.CHAPTER);
+		assertTrue(withNumber, withNumber.contains("Side Story") && withNumber.endsWith("第１話"));
 	}
 }

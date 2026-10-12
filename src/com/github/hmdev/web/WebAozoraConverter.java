@@ -2361,9 +2361,27 @@ public class WebAozoraConverter
 	 */
 	String convertHeadingNumbers(String text, boolean subtitle)
 	{
+		//退避した物の目印（PH_BRACKET_OPEN…PH_BRACKET_CLOSE。英文の［＃英文＝0］など）の中の数字は変えない。
+		//変えると目印が戻らず、退避した字が消える（arabicToKanji と同じ飛ばし方）
 		StringBuilder sb = new StringBuilder();
-		Matcher m = HEADING_NUMBER.matcher(text);
-		int last = 0;
+		int pos = 0;
+		while (pos < text.length()) {
+			int open = text.indexOf(PH_BRACKET_OPEN, pos);
+			int close = open < 0 ? -1 : text.indexOf(PH_BRACKET_CLOSE, open);
+			int plainEnd = close < 0 ? text.length() : open;
+			appendHeadingNumbers(sb, text, pos, plainEnd, subtitle);
+			if (close < 0) break;
+			sb.append(text, open, close + 1);
+			pos = close + 1;
+		}
+		return sb.toString();
+	}
+
+	/** text の [from, to) の数字を見出しの決まりで変換して sb に足す */
+	private void appendHeadingNumbers(StringBuilder sb, String text, int from, int to, boolean subtitle)
+	{
+		Matcher m = HEADING_NUMBER.matcher(text).region(from, to);
+		int last = from;
 		while (m.find()) {
 			sb.append(text, last, m.start());
 			String[] runs = m.group().split("[,，]");
@@ -2380,8 +2398,7 @@ public class WebAozoraConverter
 			}
 			last = m.end();
 		}
-		sb.append(text, last, text.length());
-		return sb.toString();
+		sb.append(text, last, to);
 	}
 
 	/** 半角の数字を全角に */
