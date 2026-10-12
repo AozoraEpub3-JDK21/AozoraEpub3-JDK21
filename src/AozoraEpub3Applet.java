@@ -4708,7 +4708,8 @@ public class AozoraEpub3Applet extends JPanel
 					urlString = AozoraBunkoUrl.resolveZipUrl(urlString);
 					LogAppender.println("図書カードのテキスト（zip）から変換します : "+urlString);
 				} catch (IOException e) {
-					logger.warn("青空文庫の zip を見つけられない: {}", urlString, e);
+					//理由はすぐ下で利用者に出す。スタックトレースは debug だけ（404 でも出ると紛らわしい）
+					logger.debug("青空文庫の zip を見つけられない: {}", urlString, e);
 					LogAppender.error(e.getMessage());
 					LogAppender.append(urlString);
 					LogAppender.println(" は変換できませんでした");

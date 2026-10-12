@@ -35,6 +35,10 @@ public class AozoraBunkoUrlTest
 		assertTrue("www なしも", AozoraBunkoUrl.isWorkUrl("https://aozora.gr.jp/cards/000148/files/789_14547.html"));
 		assertTrue("図書カード", AozoraBunkoUrl.isWorkUrl(CARD));
 		assertTrue("ページ内の位置つき", AozoraBunkoUrl.isWorkUrl("https://www.aozora.gr.jp/cards/000148/files/789_14547.html#midashi10"));
+		//ポートつき・大文字のホスト名も（Web 変換のサイトの決め方はポートを落とすので、外すと HTML の経路に落ちる）
+		assertTrue("ポートつき", AozoraBunkoUrl.isWorkUrl("https://www.aozora.gr.jp:443/cards/000148/files/789_14547.html"));
+		assertTrue("大文字のホスト名", AozoraBunkoUrl.isWorkUrl("HTTPS://WWW.AOZORA.GR.JP/cards/000148/card789.html"));
+		assertEquals(CARD, AozoraBunkoUrl.cardUrl("https://www.aozora.gr.jp:443/cards/000148/files/789_14547.html"));
 	}
 
 	@Test
@@ -45,6 +49,8 @@ public class AozoraBunkoUrlTest
 		assertFalse("トップ", AozoraBunkoUrl.isWorkUrl("https://www.aozora.gr.jp/"));
 		assertFalse("別のサイト", AozoraBunkoUrl.isWorkUrl("https://example.com/cards/000148/files/789_14547.html"));
 		assertFalse("ホスト名の後ろが違う", AozoraBunkoUrl.isWorkUrl("https://www.aozora.gr.jp.example.com/cards/000148/card789.html"));
+		assertFalse("ホスト名の前が違う", AozoraBunkoUrl.isWorkUrl("https://xaozora.gr.jp/cards/000148/card789.html"));
+		assertFalse("ホスト名の前が違う（www の代わり）", AozoraBunkoUrl.isWorkUrl("https://evil.aozora.gr.jp/cards/000148/card789.html"));
 		assertFalse(AozoraBunkoUrl.isWorkUrl(null));
 	}
 
@@ -95,8 +101,8 @@ public class AozoraBunkoUrlTest
 	@Test
 	public void noZipGivesNull()
 	{
-		//作品ID の頭が同じ別の作品（7890）も選ばない
-		Document d = card("<a href=\"./files/789_14547.html\">x</a><a href=\"./files/7890_ruby_1.zip\">y</a>", CARD);
+		//作品ID の頭が同じ別の作品（7890）も、後ろが同じ別の作品（1789）も選ばない
+		Document d = card("<a href=\"./files/789_14547.html\">x</a><a href=\"./files/7890_ruby_1.zip\">y</a><a href=\"./files/1789_ruby_2.zip\">z</a>", CARD);
 		assertNull(AozoraBunkoUrl.zipUrlFromCard(d, "789"));
 	}
 }
