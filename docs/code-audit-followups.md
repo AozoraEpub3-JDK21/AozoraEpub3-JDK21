@@ -57,7 +57,8 @@
 | 45 | 🟡 中 | サイト定義を「ホスト名:ポート」のフォルダで探すため、Windows ではポート付きのサイトを定義できず、Web 変換の結合テスト 59 件が走らない | ✅ 対応済（ホスト名で探す）。.NET ポートは後追い | — |
 | 46 | 🟡 中 | Web 変換がサイトの文字（作品名・章題・本文）の「［＃」を逃がさず、注記の始まりとして読まれる（柱が閉じない・字が消える） | ✅ 対応済（題名の「［＃」は全部逃がす。本文は narou.rb と同じく逃がさない）。.NET ポートは後追い | internal #38 |
 | 47 | 🟡 中 | Web 変換の話の題・章の題の数字が narou.rb と違い、「1,000」が「１,」と縦中横の「000」に割れる | ✅ 対応済（narou.rb の決まりに合わせた）。.NET ポートは後追い | internal #43 |
-| 48 | 🟢 低 | プレビューを始めるたびの残骸の掃除が、一時フォルダの全部を OS に問い合わせていて、物の多い台で遅い（win で 2.4 秒。PreviewServerTest 105 件が 260 秒） | ✅ 対応済（名前で先に絞る） | internal #29 |
+| 48 | 🟢 低 | プレビューを始めるたびの残骸の掃除が、一時フォルダの全部を OS に問い合わせていて、物の多い台で遅い（win で 2.4 秒。PreviewServerTest 105 件が 260 秒） | ✅ 対応済（名前で先に絞る。掃除の途中のエラーでプレビューの開始が失敗するのも直した） | internal #29 |
+| 49 | 🟡 中 | PreviewServerTest が win の JDK 21 で 10 回に 1 回ほど 1 件落ちる（POST の本文が要求の行の頭に付く。JDK 25 では 30 回とも起きない） | 🔶 原因未確定（JDK か、サーバの本文の読み残しか） | internal #29 |
 
 ---
 
@@ -2133,20 +2134,28 @@ narou.rb の決まり（`hankaku_num_to_zenkaku_num`、converterbase.rb:583）�
 - 題の数字の間のカンマは、記号を全角にしない設定でも全角になる（本文のカンマ区切りの数字も仕上げで同じく全角になる）
 - 「目印（PH_BRACKET）を飛ばして数字を変える」の歩き方と半角→全角の数字が、`convertHeadingNumbers`・`arabicToKanji`・仕上げの `hankakuNumToZenkaku` に分かれている（/code-review high）
 
+**.NET ポート（後追い）**: `AozoraTextFinalizer.cs` の見出しの数字の扱いと順（v1.3.2 の形のはず）、printText 相当の題の扱いを合わせる。
+
 ### 48. プレビューを始めるたびの残骸の掃除が、一時フォルダの全部を OS に問い合わせていた — ✅ 対応済（2026-10-12、internal #29）
 
 **症状**: win の台で、PreviewServerTest（105 件）が 1 回 260 秒かかった（1 件 2.5〜3 秒）。プレビューを始めるたびに 2.4 秒余計にかかる（GUI のプレビューも同じ）。
 **原因**: `PreviewSession.cleanupOrphans` が `Files.list(java.io.tmpdir)` の全部に `Files::isDirectory` をしてから名前（`aozoraepub3-preview-`）で絞っていた。この台の `%TEMP%` は 22,094 個。
-**対応**: 名前で先に絞る（文字の比べだけ）。掃除は 50 ms、PreviewServerTest は 17 秒になった。掃除の中身（消す・消さないの決め方）は変えていない。
+**対応**: 名前で先に絞る（文字の比べだけ）。掃除は 50 ms、PreviewServerTest は 17 秒、全件は 271 秒（前は 10 分ほど）。掃除の中身（消す・消さないの決め方）は変えていない。
+掃除の途中のエラー（同時に始めた別のプレビューが同じ残骸を消している最中に `Files.walk` が中へ入る、など）が `UncheckedIOException` で外へ漏れ、プレビューの開始が失敗していたのも、同じ PR で直した（掃除は best-effort なので、知らせて続ける）。
 
-**分かったこと（直していない）: PreviewServerTest が JDK 21 で時々落ちる**
-- win の台の JDK 21.0.12 で、30 回に 3 回、1 件だけ落ちる（`aFailedSaveLeavesNoCreatedFolder`・`aRefusedWebShelfLeavesNoCreatedParents` が 405、`aDownloadRunsAsAJobAndShowsTheShelf` が 404 No context）
-- 405 のとき、サーバが受け取ったメソッドが `C:\…\Fresh\xPOST` だった（POST の本文が、要求の行より先に接続に来ている）。試験・サーバのコードは本文を先に送らない
-- 同じ形の通信だけを小さなプログラムで 3,000 回送っても起きない。試験のクラスの中でだけ起きる
-- **JDK 25.0.4（Temurin）では 30 回とも起きなかった**。該当する JDK の不具合番号は見つけられていない
-- win を全件の門にするときは `-PjavaToolchainVersion=25`（JDK 25 で試験を回す）が使える。測った物は win の `D:\git\AozoraEpub3\temp\i29-preview-flake\`
+**残り（起票だけ）**: 他のアプリと共有の一時フォルダを、プレビューを始めるたびに丸ごと並べている（名前で絞っても `Files.list` は全部を並べる）。
+専用の親フォルダ（`tmpdir/aozoraepub3-preview/<セッション>`）に置くか、掃除を JVM ごとに 1 回にすれば、並べるのは自分の残骸だけになる（/code-review high）。
 
-**.NET ポート（後追い）**: `AozoraTextFinalizer.cs` の見出しの数字の扱いと順（v1.3.2 の形のはず）、printText 相当の題の扱いを合わせる。
+### 49. PreviewServerTest が win の JDK 21 で時々 1 件落ちる — 🔶 原因未確定（2026-10-12、internal #29）
+
+- win の台の JDK 21.0.12 で、30 回に 3 回、1 件だけ落ちる（`aFailedSaveLeavesNoCreatedFolder`・`aRefusedWebShelfLeavesNoCreatedParents` が 405、`aDownloadRunsAsAJobAndShowsTheShelf` が 404 No context）。どれも POST の要求
+- 405 のとき、サーバが受け取ったメソッドを記録すると `C:\…\Fresh\xPOST` だった。**POST の本文が、要求の行の頭に付いている**
+- 読み方は 2 つあり、どちらか確かめていない:
+  - (a) 送る側（JDK の HttpClient）が本文を先に送った。同じ形の通信だけを小さなプログラムで 3,000 回送っても起きない。試験のクラスの中でだけ起きる
+  - (b) 同じ接続で前の要求の本文が読まれずに残り、次の要求の頭に付いた。PreviewServer には本文を読む前に答える POST の道がある（`handle` の 403、`serveWebShelf` の 503 など）。ただ `aFailedSaveLeavesNoCreatedFolder` は要求を 1 つしか送らない
+- **JDK 25.0.4（Temurin）では 30 回とも起きなかった**。該当する JDK の不具合番号は見つけられていない。(b) なら JDK 25 でも潜んだまま残る
+- 確かめ方: 試験とサーバの間に、接続に流れるバイトを記録する中継ぎを挟む
+- win を全件の門にするときは `-PjavaToolchainVersion=25`（JDK 25 で試験を回す）で避けられる。測った物は win の `D:\git\AozoraEpub3\temp\i29-preview-flake\`
 
 ---
 
