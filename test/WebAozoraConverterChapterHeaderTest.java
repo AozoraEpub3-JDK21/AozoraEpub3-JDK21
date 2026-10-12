@@ -92,7 +92,8 @@ public class WebAozoraConverterChapterHeaderTest {
 		int center = out.indexOf("［＃ページの左右中央］");
 		int chapterEnd = out.indexOf("［＃大見出し終わり］");
 		int secondBreak = out.lastIndexOf(PAGE_BREAK);
-		int episodeTitle = out.indexOf("第1話 はじまり");
+		//話の題の数字は Web 変換が全角にする（internal #43。前は仕上げで全角にしていた）
+		int episodeTitle = out.indexOf("第１話 はじまり");
 		int body = out.indexOf("本文の一行目。");
 		assertTrue("左右中央の注記がある: " + out, center > 0);
 		assertTrue("左右中央 → 章題 → 改ページ → 第1話の題 → 本文の順: " + out,
@@ -107,7 +108,7 @@ public class WebAozoraConverterChapterHeaderTest {
 		assertFalse("左右中央の注記は無い: " + out, out.contains("［＃ページの左右中央］"));
 		assertEquals("改ページは章題の前の 1 つだけ: " + out, 1, StringUtils.countMatches(out, PAGE_BREAK));
 		assertTrue("章題 → 第1話の題の順: " + out,
-			out.indexOf("［＃大見出し終わり］") < out.indexOf("第1話 はじまり"));
+			out.indexOf("［＃大見出し終わり］") < out.indexOf("第１話 はじまり"));
 	}
 
 	@Test

@@ -420,35 +420,32 @@ public class AozoraTextFinalizerTest {
 		assertTrue("注記行は変換しない", result.contains("［＃３字下げ］注記行"));
 	}
 
+	/**
+	 * 話の題・章の題の行の数字は、仕上げでは変えない（internal #43）。Web 変換が見出しの決まりで変換済み
+	 * （WebAozoraConverterHeadingNumberTest）。ここで漢数字・縦中横にすると、もとから全角の数字まで変わる
+	 */
 	@Test
 	public void testConvertNumToZenkakuForSubtitle() throws Exception {
-		// サブタイトル（中見出し・大見出し）行の数字変換: 漢数字にせず縦中横または全角数字に変換
-		String input =
-				"第12章\n" +                          // 2桁 → 縦中横注記
-				"第1話\n" +                            // 1桁 → 全角数字（漢数字にしない）
-				"第１２話\n" +                         // 全角数字2桁 → 縦中横注記
-				"第3巻\n";                             // 1桁 → 全角数字
+		String[] lines = {
+			"［＃３字下げ］［＃中見出し］第１話　１，０００円［＃中見出し終わり］",
+			"［＃３字下げ］［＃中見出し］第１２話［＃中見出し終わり］",
+			"［＃３字下げ］［＃大見出し］第［＃縦中横］12［＃縦中横終わり］章［＃大見出し終わり］",
+		};
+		for (String line : lines) assertEquals(line, invokeConvertNumToKanji(line));
+	}
 
-		// convertNumToKanji 経由で中見出し行として処理
-		String line12  = "［＃３字下げ］［＃中見出し］第12章［＃中見出し終わり］";
-		String line1   = "［＃３字下げ］［＃中見出し］第1話［＃中見出し終わり］";
-		String lineZ12 = "［＃３字下げ］［＃中見出し］第１２話［＃中見出し終わり］";
-		String line3   = "［＃３字下げ］［＃大見出し］第3巻［＃大見出し終わり］";
-
-		String r12  = invokeConvertNumToKanji(line12);
-		String r1   = invokeConvertNumToKanji(line1);
-		String rZ12 = invokeConvertNumToKanji(lineZ12);
-		String r3   = invokeConvertNumToKanji(line3);
-
-		// 2桁以上 → 縦中横注記で囲む
-		assertTrue("2桁→縦中横", r12.contains("［＃縦中横］12［＃縦中横終わり］"));
-		// 1桁 → 全角数字（漢数字化なし）
-		assertTrue("1桁→全角", r1.contains("第１話"));
-		assertFalse("1桁→漢数字にしない", r1.contains("第一話"));
-		// 全角数字2桁 → 縦中横注記（半角に統一してから変換）
-		assertTrue("全角2桁→縦中横", rZ12.contains("［＃縦中横］12［＃縦中横終わり］"));
-		// 1桁大見出し → 全角数字
-		assertTrue("大見出し1桁→全角", r3.contains("第３巻"));
+	/**
+	 * 改ページの直後の本文の行は、本文として数字を変換してから見出しにする（narou.rb と同じ順。internal #43）。
+	 * 話の題の決まり（先頭の 3 桁を縦中横）は当てない
+	 */
+	@Test
+	public void testLineAfterPageBreakIsConvertedAsBody() throws Exception {
+		writeTestFile("タイトル\n著者名\n\n本文です。\n［＃改ページ］\n100日後のこと\n本文。\n");
+		settings.setEnableConvertNumToKanji(true);
+		settings.setEnableEnchantMidashi(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+		assertTrue(result, result.contains("［＃中見出し］一〇〇日後のこと［＃中見出し終わり］"));
 	}
 
 	/** AozoraTextFinalizer#convertNumToKanji を1行テキストに適用するヘルパー */
@@ -588,8 +585,9 @@ public class AozoraTextFinalizerTest {
 		assertFalse("href に注記が混入している: " + href, href.contains("［＃"));
 		assertEquals(url, href);
 
-		// 表示テキスト側（タグ外）は従来どおり縦中横される
-		assertTrue("表示テキスト側の縦中横が失われている: " + result, result.contains("［＃縦中横］"));
+		// 表示テキスト側（タグ外）の URL もそのまま（narou.rb は URL を退避する。internal #43 までは縦中横になっていた）
+		assertTrue("表示テキスト側の URL が変わった: " + result, result.contains(">" + url + "</a>"));
+		assertFalse("表示テキスト側の URL に注記が入った: " + result, result.contains("［＃縦中横］"));
 	}
 
 	/**
