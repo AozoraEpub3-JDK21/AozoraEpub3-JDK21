@@ -410,6 +410,11 @@ public class AozoraTextFinalizer {
 	 * （現在の 3 つの converter の正規表現はいずれも '&lt;' '&gt;' にマッチしない）。
 	 */
 	private static String convertOutsideChukiAndTags(String line, java.util.function.UnaryOperator<String> converter) {
+		return convertOutsideChukiAndTags(line, (segment, start) -> converter.apply(segment));
+	}
+
+	/** 上と同じ。converter にはセグメントと、その line の中での始まりの位置を渡す */
+	private static String convertOutsideChukiAndTags(String line, java.util.function.BiFunction<String, Integer, String> converter) {
 		StringBuilder sb = new StringBuilder();
 		Matcher tagMatcher = HTML_TAG_PATTERN.matcher(line);
 		int pos = 0;
@@ -417,14 +422,14 @@ public class AozoraTextFinalizer {
 			int chukiStart = line.indexOf("［＃", pos);
 			int tagStart = tagMatcher.find(pos) ? tagMatcher.start() : -1;
 			if (chukiStart < 0 && tagStart < 0) {
-				sb.append(converter.apply(line.substring(pos)));
+				sb.append(converter.apply(line.substring(pos), pos));
 				break;
 			}
 			// 先に現れた方を境界にする
 			boolean isChuki = chukiStart >= 0 && (tagStart < 0 || chukiStart < tagStart);
 			int start = isChuki ? chukiStart : tagStart;
 			if (start > pos) {
-				sb.append(converter.apply(line.substring(pos, start)));
+				sb.append(converter.apply(line.substring(pos, start), pos));
 			}
 			if (isChuki) {
 				int chukiEnd = line.indexOf('］', start);
@@ -443,34 +448,64 @@ public class AozoraTextFinalizer {
 		return sb.toString();
 	}
 
-	/** サブタイトル・章見出し行: 半角数字→縦中横または全角数字変換（漢数字にはしない）
-	 * 2桁以上: ［＃縦中横］...［＃縦中横終わり］で囲む（縦書き時に横組み表示）
-	 * 1桁: 全角数字に変換 */
+	/** 中見出しの始め（話の題）。大見出し（章の題）とは数字の扱いが 1 つ違う */
+	private static final String SUBTITLE_OPEN = "［＃中見出し］";
+
+	/** サブタイトル・章見出し行: 半角数字→縦中横または全角数字変換（漢数字にはしない）。
+	 * narou.rb の hankaku_num_to_zenkaku_num（converterbase.rb:583）と同じ:
+	 * 半角の 2 桁は縦中横、話の題の先頭の半角 3 桁も縦中横、それ以外の半角の数字は全角。もとから全角の数字は変えない。
+	 * 数字の間のカンマ（1,000）は全角にする（narou.rb は記号を全角にする段で全角になる。本文のカンマ区切りの数字と同じ形）。
+	 * 2026-10-12 まで（v1.3.2 から）は 2 桁以上をすべて縦中横にし、カンマを扱わず「１,［＃縦中横］000［＃縦中横終わり］」に割れていた（internal #43）*/
 	private String convertNumToZenkakuLine(String line) {
-		return convertOutsideChukiAndTags(line, this::convertNumsToZenkakuInSegment);
+		//話の題の先頭（中見出しの注記の直後）。大見出しには先頭の 3 桁の決まりは無い
+		int open = line.indexOf(SUBTITLE_OPEN);
+		int subtitleStart = open < 0 ? -1 : open + SUBTITLE_OPEN.length();
+		return convertOutsideChukiAndTags(line, (segment, start) -> convertNumsToZenkakuInSegment(segment, start == subtitleStart));
 	}
 
-	/** 半角数字→縦中横または全角数字変換（注記外セグメント用）
-	 * 2桁以上は縦中横注記で囲み縦書き時に横組み表示、1桁は全角数字に変換 */
-	private String convertNumsToZenkakuInSegment(String segment) {
+	/** 半角数字→縦中横または全角数字変換（注記外セグメント用）。URL の中は変えない
+	 * （narou.rb は URL を先に退避する。replace_url、converterbase.rb:997。奥付の「底本： &lt;a&gt;URL&lt;/a&gt;」は改ページの直後で中見出しになる）
+	 * @param atSubtitleStart このセグメントが話の題の先頭から始まる */
+	private String convertNumsToZenkakuInSegment(String segment, boolean atSubtitleStart) {
+		Matcher url = URL_PATTERN.matcher(segment);
+		if (!url.find()) return convertNumsToZenkakuOutsideUrl(segment, atSubtitleStart);
 		StringBuilder sb = new StringBuilder();
-		Matcher m = Pattern.compile("[\\d０-９]+").matcher(segment);
+		int pos = 0;
+		do {
+			sb.append(convertNumsToZenkakuOutsideUrl(segment.substring(pos, url.start()), atSubtitleStart && pos == 0));
+			sb.append(url.group());
+			pos = url.end();
+		} while (url.find());
+		sb.append(convertNumsToZenkakuOutsideUrl(segment.substring(pos), false));
+		return sb.toString();
+	}
+
+	/** 見出しの中の URL（タグの外の、表示の文字） */
+	private static final Pattern URL_PATTERN = Pattern.compile("https?://[^\\s<>\"［］]+");
+
+	private String convertNumsToZenkakuOutsideUrl(String segment, boolean atSubtitleStart) {
+		StringBuilder sb = new StringBuilder();
+		Matcher m = HANKAKU_DIGITS.matcher(segment);
 		int lastEnd = 0;
 		while (m.find()) {
 			sb.append(segment, lastEnd, m.start());
-			String digits = zenkakuNumToHankaku(m.group()); // 全角数字も半角に統一
-			if (digits.length() >= 2) {
-				// 2桁以上: 縦中横で囲む（縦書き時に横組み表示）
+			String digits = m.group();
+			if (digits.length() == 2 || digits.length() == 3 && atSubtitleStart && m.start() == 0) {
 				sb.append("［＃縦中横］").append(digits).append("［＃縦中横終わり］");
 			} else {
-				// 1桁: 全角数字に変換
 				sb.append(hankakuNumToZenkaku(digits));
 			}
 			lastEnd = m.end();
 		}
 		sb.append(segment, lastEnd, segment.length());
-		return sb.toString();
+		//数字の間のカンマ（縦中横の注記は外で付けるので、ここでは全角の数字と注記の閉じの間も見る）
+		return NUMBER_COMMA.matcher(sb).replaceAll("$1，");
 	}
+
+	/** 半角の数字の並び（narou.rb の \d は半角だけ） */
+	private static final Pattern HANKAKU_DIGITS = Pattern.compile("[0-9]+");
+	/** 数字（全角・縦中横の閉じ）の後の、数字（全角・縦中横の始め）の前のカンマ */
+	private static final Pattern NUMBER_COMMA = Pattern.compile("([０-９]|［＃縦中横終わり］),(?=[０-９]|［＃縦中横］)");
 
 	private String convertNumsInSegment(String segment) {
 		StringBuilder sb = new StringBuilder();

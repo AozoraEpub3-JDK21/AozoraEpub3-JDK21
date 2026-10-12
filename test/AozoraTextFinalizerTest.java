@@ -445,10 +445,30 @@ public class AozoraTextFinalizerTest {
 		// 1桁 → 全角数字（漢数字化なし）
 		assertTrue("1桁→全角", r1.contains("第１話"));
 		assertFalse("1桁→漢数字にしない", r1.contains("第一話"));
-		// 全角数字2桁 → 縦中横注記（半角に統一してから変換）
-		assertTrue("全角2桁→縦中横", rZ12.contains("［＃縦中横］12［＃縦中横終わり］"));
+		// 全角数字はそのまま（narou.rb の hankaku_num_to_zenkaku_num は半角の数字だけを見る。internal #43 で narou.rb に合わせた）
+		assertTrue("全角2桁はそのまま", rZ12.contains("第１２話"));
 		// 1桁大見出し → 全角数字
 		assertTrue("大見出し1桁→全角", r3.contains("第３巻"));
+	}
+
+	/**
+	 * 話の題・章の題の数字は narou.rb の hankaku_num_to_zenkaku_num と同じ（internal #43）。
+	 * 2 桁は縦中横、話の題の先頭の 3 桁も縦中横、それ以外は全角。数字の間のカンマは全角。
+	 * 実機の narou.rb の出力（第［＃縦中横］54［＃縦中横終わり］話・第１００話・４０００・［＃縦中横］300［＃縦中横終わり］年前）と同じ形
+	 */
+	@Test
+	public void testSubtitleNumbersFollowNarouRb() throws Exception {
+		String sub = "［＃３字下げ］［＃中見出し］%s［＃中見出し終わり］";
+		assertEquals(String.format(sub, "第１話　１，０００円"), invokeConvertNumToKanji(String.format(sub, "第1話　1,000円")));
+		assertEquals(String.format(sub, "第［＃縦中横］54［＃縦中横終わり］話　包囲（４対４０００）"), invokeConvertNumToKanji(String.format(sub, "第54話　包囲（4対4000）")));
+		assertEquals("先頭でない 3 桁は全角", String.format(sub, "第１００話"), invokeConvertNumToKanji(String.format(sub, "第100話")));
+		assertEquals("話の題の先頭の 3 桁は縦中横", String.format(sub, "［＃縦中横］300［＃縦中横終わり］年前の遺跡"), invokeConvertNumToKanji(String.format(sub, "300年前の遺跡")));
+		assertEquals("カンマの後ろの 2 桁は縦中横", String.format(sub, "１，［＃縦中横］23［＃縦中横終わり］"), invokeConvertNumToKanji(String.format(sub, "1,23")));
+		assertEquals("数字の間でないカンマは変えない", String.format(sub, "あ,い"), invokeConvertNumToKanji(String.format(sub, "あ,い")));
+		//章の題（大見出し）には先頭の 3 桁の決まりが無い
+		assertEquals("［＃３字下げ］［＃大見出し］１００章［＃大見出し終わり］", invokeConvertNumToKanji("［＃３字下げ］［＃大見出し］100章［＃大見出し終わり］"));
+		//題の中の URL は変えない
+		assertEquals(String.format(sub, "第１話 https://example.com/n1234ab/12"), invokeConvertNumToKanji(String.format(sub, "第1話 https://example.com/n1234ab/12")));
 	}
 
 	/** AozoraTextFinalizer#convertNumToKanji を1行テキストに適用するヘルパー */
@@ -588,8 +608,9 @@ public class AozoraTextFinalizerTest {
 		assertFalse("href に注記が混入している: " + href, href.contains("［＃"));
 		assertEquals(url, href);
 
-		// 表示テキスト側（タグ外）は従来どおり縦中横される
-		assertTrue("表示テキスト側の縦中横が失われている: " + result, result.contains("［＃縦中横］"));
+		// 表示テキスト側（タグ外）の URL もそのまま（narou.rb は URL を退避する。internal #43 までは縦中横になっていた）
+		assertTrue("表示テキスト側の URL が変わった: " + result, result.contains(">" + url + "</a>"));
+		assertFalse("表示テキスト側の URL に注記が入った: " + result, result.contains("［＃縦中横］"));
 	}
 
 	/**
