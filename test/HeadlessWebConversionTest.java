@@ -191,6 +191,22 @@ public class HeadlessWebConversionTest {
 		assertEquals(0, requests.get());
 	}
 
+	/** 本棚の青空文庫の本の新着の確かめは「確かめた・新着なし」（失敗と出さない）。取りに行かない */
+	@Test
+	public void checkingAShelfAozoraBunkoBookFindsNothingNew() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		File book = new File(dst, "[夏目漱石] 吾輩は猫である.epub");
+		java.nio.file.Files.write(book.toPath(), new byte[] { 1 });
+		HeadlessWebConversion conv = conversion(guiDefaults(), basePath);
+		HeadlessWebConversion.Result r = conv.check("https://www.aozora.gr.jp/cards/000148/card789.html", book);
+		assertEquals(r.message(), HeadlessWebConversion.STOP_CHECKED, r.stop());
+		assertTrue(r.message(), r.ok());
+		assertEquals(0, conv.checkedNew);
+		assertEquals(0, conv.checkedRevised);
+		assertEquals(0, requests.get());
+	}
+
 	/**
 	 * 本棚の本は、その本の名前で書き換える（本棚で名前を変えた本・同じ作品の別の名前の本も更新できる）。
 	 * 本の名前は台帳に記録しない（#116 のゲート2）。拡張子が設定と違えば、名前が合わずに書かない
