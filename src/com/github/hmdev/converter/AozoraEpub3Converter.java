@@ -281,6 +281,11 @@ public class AozoraEpub3Converter
 	int lineIdNum;
 	/** タグの階層 */
 	int tagLevel = 0;
+	/** 開いて閉じていないタグ（出力しない表題の間も数える）。改ページと本文の終わりで閉じる。
+	 * 表題を本文の行の前で終えたら、表題の間に開いたものを本文の頭に書き直す（internal #37） */
+	final ArrayList<String> openTags = new ArrayList<String>();
+	/** 本文の頭に書き直す、表題の間に開いたタグ。null なら無し */
+	ArrayList<String> reopenTags = null;
 	
 	/** 画像の次の行にキャプション指定有り */
 	boolean nextLineIsCaption = false;
@@ -834,6 +839,8 @@ public class AozoraEpub3Converter
 		String[] firstLines = new String[10];
 		//先頭行の開始行番号
 		int firstLineStart = -1;
+		//文字のある行を覚え終えたらtrue
+		boolean textLineScanDone = false;
 		
 		//タイトルページ開始行 画像等がなければ-1 タイトルなしは-2
 		//int preTitlePageBreak = titleType==TitleType.NONE ? -2 : -1;
@@ -1135,9 +1142,21 @@ public class AozoraEpub3Converter
 				addNextChapterName = -1;
 			}
 			
+			//文字のある行を覚える（表題の塊の判定と同じ）。表題の後で表題ページを延ばすのを、この行で止める（internal #37）
+			//表題の塊は先頭行から firstLines の長さまでなので、それより後の文字の行が 1 つ見つかるまでで足りる
+			String replaced = null;
+			//表題の前にコメントが始まったら表題は無いので、覚えなくてよい
+			if (firstCommentStarted && firstLineStart < 0) textLineScanDone = true;
+			if (!textLineScanDone && !inComment) {
+				replaced = CharUtils.getChapterName(noRubyLine, 0);
+				if (replaced.length() > 0) {
+					bookInfo.addTextLine(this.lineNum);
+					if (firstLineStart >= 0 && this.lineNum > firstLineStart+firstLines.length) textLineScanDone = true;
+				}
+			}
 			//コメント行の後はタイトル取得はしない
 			if (!firstCommentStarted) {
-				String replaced = CharUtils.getChapterName(noRubyLine, 0);
+				if (replaced == null) replaced = CharUtils.getChapterName(noRubyLine, 0);
 				if (firstLineStart == -1) {
 					//改ページチェック
 					//タイトル前の改ページ位置を保存
@@ -1337,6 +1356,8 @@ public class AozoraEpub3Converter
 		this.lineNum = -1;
 		this.lineIdNum = 1;
 		this.tagLevel = 0;
+		this.openTags.clear();
+		this.reopenTags = null;
 		this.inJisage = -1;
 		//最初のページの改ページフラグを設定
 		this.setPageBreakTrigger(pageBreakNormal);
@@ -1353,6 +1374,8 @@ public class AozoraEpub3Converter
 		
 		//タイトルを出力しない
 		boolean skipTitle = false;
+		//表題ページを延ばし始めたときの空行の数（表題の塊の中の空行）。延ばしていなければ -1
+		int titleEmptyLines = -1;
 		//バッファ中は画像は処理しない
 		boolean noImage = false;
 		
@@ -1395,6 +1418,7 @@ public class AozoraEpub3Converter
 						this.lineNum = 0;
 						this.lineIdNum = 1;
 						this.tagLevel = 0;
+						this.openTags.clear();
 						this.inJisage = -1;
 						int i = 0;
 						while (this.lineNum < lineNumBak) {
@@ -1412,7 +1436,27 @@ public class AozoraEpub3Converter
 				}
 				//タイトルページの改ページ
 				if (bookInfo.titleEndLine+1 == lineNum) {
-					if (tagLevel > 0) bookInfo.titleEndLine++;
+					//表題の前後で開いたブロックの注記は、閉じるまで表題に含める。含めるのは、前走査が表題の塊に数えない文字の無い行まで
+					//（閉じないと最後の行まで含めて本文が空になる。internal #37）。文字の行が来たら表題をここで終え、開いたタグは本文の頭に書き直す
+					if (tagLevel > 0 && bookInfo.isTextLine(lineNum)) {
+						LogAppender.warn(lineNum, "表題の前後で開いたブロックの注記が、表題の後の本文まで続いています。表題をこの行の前で終え、注記は本文で続けます");
+						//タグは開いたまま（tagLevel もそのまま）。まだ書いていないので、本文の頭（改ページの後）に書き直す
+						this.reopenTags = new ArrayList<String>(this.openTags);
+						skipTitle = false;
+						out = orgOut;
+						noImage = false;
+						//表題の後の改ページ。閉じて終える道（addPageBreakLine → isPageBreakLine）と同じく、書いた物があれば改ページする。
+						//改ページの行はタグの中だと次の行へ送られるので、ここで直接指定する
+						//空行は、閉じて終える道と同じく表題の塊の後のものだけ残す（改ページの指定は空行を捨てるので、後で戻す）
+						int emptyLines = this.printEmptyLines - (titleEmptyLines >= 0 ? titleEmptyLines : this.printEmptyLines);
+						if (this.sectionCharLength > 0) this.setPageBreakTrigger(pageBreakNormal);
+						this.printEmptyLines = emptyLines;
+					}
+					else if (tagLevel > 0) {
+						//延ばし始めた所までの空行は表題の塊の中のもの
+						if (titleEmptyLines < 0) titleEmptyLines = this.printEmptyLines;
+						bookInfo.titleEndLine++;
+					}
 					else {
 						skipTitle = false;
 						//ダミーから戻す
@@ -1503,6 +1547,12 @@ public class AozoraEpub3Converter
 			
 			if (tagLevel == 0) lastZeroTagLevelLineNum = lineNum;
 		} while ((line = src.readLine()) != null);
+		
+		//最後まで閉じていないタグを閉じる
+		if (out != null && !this.openTags.isEmpty()) {
+			LogAppender.error(lineNum, "タグが閉じていません");
+			closeOpenTags(out);
+		}
 
 		//フォールバック件数を報告する 無言で本文の表現を変えない
 		if (this.gaijiFallbackCount > 0) {
@@ -3957,6 +4007,34 @@ public class AozoraEpub3Converter
 		if (this.pageBreakTrigger != null && this.pageBreakTrigger.pageType != PageBreakType.PAGE_NORMAL) this.skipMiddleEmpty = true;
 	}
 	
+	/** 開いたままのタグを、後から開いた順に閉じる */
+	private void closeOpenTags(BufferedWriter out) throws IOException
+	{
+		for (int i=this.openTags.size()-1; i>=0; i--) {
+			Matcher m = TAG_NAME.matcher(this.openTags.get(i));
+			if (m.find()) out.write("</"+m.group(1)+">");
+		}
+		out.write("\n");
+		this.openTags.clear();
+	}
+	static final Pattern TAG_NAME = Pattern.compile("^<([A-Za-z][A-Za-z0-9]*)");
+	
+	/** 行の中のタグを順に見て、開いたタグを openTags に積み、閉じたら最後の開きを外す（printLineBuffer と同じく &lt;… /&gt; は数えない） */
+	public static void trackOpenTags(String line, List<String> openTags)
+	{
+		int i = 0, length = line.length();
+		while ((i = line.indexOf('<', i)) >= 0) {
+			int end = line.indexOf('>', i);
+			if (end < 0) break;
+			if (i+1 < length && line.charAt(i+1) == '/') {
+				if (!openTags.isEmpty()) openTags.remove(openTags.size()-1);
+			} else if (line.charAt(end-1) != '/') {
+				openTags.add(line.substring(i, end+1));
+			}
+			i = end+1;
+		}
+	}
+	
 	/** 行の文字列を出力
 	 * 改ページフラグがあれば改ページ処理を行う
 	 * @param out 出力先
@@ -4047,6 +4125,13 @@ public class AozoraEpub3Converter
 			//	out.write(chukiMap.get("改行")[0]);
 			//}
 			
+			//閉じていないタグを閉じてから改ページする（閉じないとページの XHTML が壊れる。internal #37）
+			//表題の後に書き直すタグ（reopenTags）は、まだ書いていないので閉じない
+			boolean reopen = this.reopenTags != null;
+			if (!reopen && !this.openTags.isEmpty()) {
+				LogAppender.error(lineNum, "タグが閉じていません");
+				closeOpenTags(out);
+			}
 			//改ページ処理
 			if (this.pageBreakTrigger.pageType != PageBreakType.PAGE_NORMAL) {
 				//左右中央
@@ -4059,11 +4144,18 @@ public class AozoraEpub3Converter
 			//ページ情報初期化
 			this.pageByteSize = 0;
 			this.sectionCharLength = 0;
-			if (tagLevel > 0) LogAppender.error(lineNum, "タグが閉じていません");
-			this.tagLevel = 0;
+			//改ページで開いたブロックは終わる。表題の後に書き直すタグは改ページの後も開いたまま
+			if (!reopen) this.tagLevel = 0;
 			this.lineIdNum = 0;
 			
 			this.pageBreakTrigger = null;
+		}
+		
+		//表題の間に開いたタグを、本文の頭（改ページの後）に書き直す
+		if (this.reopenTags != null) {
+			out.write(String.join("", this.reopenTags));
+			out.write("\n");
+			this.reopenTags = null;
 		}
 		
 		this.skipMiddleEmpty = false;
@@ -4134,6 +4226,10 @@ public class AozoraEpub3Converter
 		this.sectionCharLength += length;
 		
 		}
+		
+		//開いたタグを覚える。閉じたら外す
+		//表題・著者などの前後に付ける枠（行番号 -1）は前後で対なので数えない（数えると、表題の行の注記の開きの代わりに枠の開きが残る）
+		if (tagStart+tagEnd > 0 && lineNum >= 0) trackOpenTags(line, this.openTags);
 		
 		//タグの階層を変更
 		this.tagLevel += tagStart-tagEnd;
