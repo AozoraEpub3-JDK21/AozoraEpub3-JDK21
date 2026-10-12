@@ -76,6 +76,7 @@ public class WebAozoraConverterRootUrlTest {
 			WebAozoraConverter.createWebAozoraConverter("https://ncode.syosetu.com", webConfig);
 
 		assertNotNull(withPath);
-		assertSame("パスなし URL の fqdn 切り出しがパス付きと一致しない", withPath, rootOnly);
+		//変換器は変換ごとに新しく作る（internal #22）ので、同じサイトの定義（同じ fqdn で読んだもの）を使うかで見る
+		assertSame("パスなし URL の fqdn 切り出しがパス付きと一致しない", withPath.queryMap, rootOnly.queryMap);
 	}
 }

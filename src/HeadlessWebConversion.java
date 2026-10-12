@@ -149,98 +149,90 @@ public class HeadlessWebConversion
 		//確かめるだけなら、書き出しの形（kindle）を問わない（PR のゲート2）
 		if (outExt.startsWith(".mobi") && !this.checkMode) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
 		try {
-			//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、GUI の Web 変換とは 1 つずつ（WebAozoraConverter.WEB_LOCK）
+			//キャッシュの txt と台帳を書き直し、同じサイトへの取得の間隔も守るので、GUI の Web 変換とは 1 つずつ（WebAozoraConverter.WEB_LOCK）
 			File srcFile;
 			synchronized (WebAozoraConverter.WEB_LOCK) {
 				WebAozoraConverter web = WebAozoraConverter.createWebAozoraConverter(url, new File(this.basePath + "web"));
 				if (web == null) return new Result(false, false, null, "このサイトには対応していません: " + url);
-				//WebAozoraConverter は FQDN ごとに使い回されるので、毎回すべて入れ直す（GUI と同じ）
+				//変換器は変換ごとに新しい（internal #22）。設定はここですべて入れる（GUI と同じ）
 				web.updateGuard = updateGuard;
 				web.allowFewerEpisodes = allowFewerEpisodes;
 				web.guardBook = updateGuard ? expectedOutFile : null;
 				web.checkOnly = this.checkMode;
+				web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
+				web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
+				//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
 				try {
-					web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
-					web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
-					//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
-					try {
-						File settingFile = new File(this.basePath + "setting_narourb.ini");
-						NarouFormatSettings.generateDefaultIfMissing(settingFile);
-						web.loadFormatSettings(settingFile);
-						web.getFormatSettings().loadReplacePatterns(new File(this.basePath + "replace_narourb.txt"));
-						String[] styles = { "css", "simple", "plain" };
-						int style = intOf("AuthorCommentStyle", 0);
-						if (style >= 0 && style < styles.length) web.getFormatSettings().setAuthorCommentStyle(styles[style]);
-					} catch (Exception e) {
-						logger.warn("フォーマット設定を読み込めませんでした", e);
-						LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
-					}
-					web.skipImages = GuiConversionSettings.flag(this.props, "WebSkipImages");
+					File settingFile = new File(this.basePath + "setting_narourb.ini");
+					NarouFormatSettings.generateDefaultIfMissing(settingFile);
+					web.loadFormatSettings(settingFile);
+					web.getFormatSettings().loadReplacePatterns(new File(this.basePath + "replace_narourb.txt"));
+					String[] styles = { "css", "simple", "plain" };
+					int style = intOf("AuthorCommentStyle", 0);
+					if (style >= 0 && style < styles.length) web.getFormatSettings().setAuthorCommentStyle(styles[style]);
+				} catch (Exception e) {
+					logger.warn("フォーマット設定を読み込めませんでした", e);
+					LogAppender.println("フォーマット設定読み込みエラー: " + e.getMessage());
+				}
+				web.skipImages = GuiConversionSettings.flag(this.props, "WebSkipImages");
 
-					int interval = 500;
-					try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
-					//本棚の更新と、Web 本棚に新しく落とす本は、作品の全部で作る（PR のゲート2）
-					boolean fullWork = updateGuard || this.newBookName;
-					//本棚の更新は、いつも作品の全部で本を作る。「最新 N 話」「追加更新分のみ」は GUI が 1 回だけ出すファイルのための設定で、
-					//本棚の本に当てると、全話の本が一部の話だけの本で上書きされる（PR の手元の codex）
-					int beforeChapter = !fullWork && GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
-					float modifiedExpire = 0;
-					try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
-					//新しく落とす本は「更新分のみ」も見ない（落とし直したときにキャッシュが同じで「更新はありません」になる）
-					boolean convertUpdated = !this.newBookName && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
-					boolean modifiedOnly = !fullWork && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
+				int interval = 500;
+				try { interval = (int)(Float.parseFloat(GuiConversionSettings.text(this.props, "WebInterval").trim()) * 1000); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 500 */ }
+				//本棚の更新と、Web 本棚に新しく落とす本は、作品の全部で作る（PR のゲート2）
+				boolean fullWork = updateGuard || this.newBookName;
+				//本棚の更新は、いつも作品の全部で本を作る。「最新 N 話」「追加更新分のみ」は GUI が 1 回だけ出すファイルのための設定で、
+				//本棚の本に当てると、全話の本が一部の話だけの本で上書きされる（PR の手元の codex）
+				int beforeChapter = !fullWork && GuiConversionSettings.flag(this.props, "WebBeforeChapter") ? intOf("WebBeforeChapterCount", 0) : 0;
+				float modifiedExpire = 0;
+				try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
+				//新しく落とす本は「更新分のみ」も見ない（落とし直したときにキャッシュが同じで「更新はありません」になる）
+				boolean convertUpdated = !this.newBookName && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
+				boolean modifiedOnly = !fullWork && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
-					srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
-						convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
-					if (srcFile == null) {
-						//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
-						if (updateGuard) {
-							int status = web.listFailure;
-							if ((status == 404 || status == 410) && !web.listFailureOnLaterPage) {
-								return new Result(false, false, null, "掲載元に作品がありません (HTTP " + status + ")", STOP_GONE);
-							}
-							if (status != 0) {
-								return new Result(false, false, null, "目次を取れませんでした" + (status > 0 ? " (HTTP " + status + ")" : ""));
-							}
-							if (this.checkMode && web.checkedEpisodes >= 0) {
-								this.checkedEpisodes = web.checkedEpisodes;
-								this.checkedNew = web.checkedNew;
-								this.checkedRevised = web.checkedRevised;
-								String what = web.checkedNew == 0 && web.checkedRevised == 0 ? "新着はありません"
-									: (web.checkedNew > 0 ? web.checkedNew + " 話新着" : "")
-									+ (web.checkedNew > 0 && web.checkedRevised > 0 ? "・" : "")
-									+ (web.checkedRevised > 0 ? web.checkedRevised + " 話改稿" : "");
-								return new Result(true, false, null, what, STOP_CHECKED);
-							}
-							if (web.shrunkFrom >= 0) {
-								return new Result(false, false, null, "話数が減ったので止めました (" + web.shrunkFrom + " → " + web.shrunkTo + " 話)", STOP_SHRUNK);
-							}
-							if (this.checkMode && web.listFailure == 0) {
-								return new Result(false, false, null, "この作品は確かめられません（話の一覧が無い 1 ページの作品です）");
-							}
+				srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
+					convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
+				if (srcFile == null) {
+					//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
+					if (updateGuard) {
+						int status = web.listFailure;
+						if ((status == 404 || status == 410) && !web.listFailureOnLaterPage) {
+							return new Result(false, false, null, "掲載元に作品がありません (HTTP " + status + ")", STOP_GONE);
 						}
-						if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");
-						return new Result(false, false, null, "取得できませんでした: " + url);
+						if (status != 0) {
+							return new Result(false, false, null, "目次を取れませんでした" + (status > 0 ? " (HTTP " + status + ")" : ""));
+						}
+						if (this.checkMode && web.checkedEpisodes >= 0) {
+							this.checkedEpisodes = web.checkedEpisodes;
+							this.checkedNew = web.checkedNew;
+							this.checkedRevised = web.checkedRevised;
+							String what = web.checkedNew == 0 && web.checkedRevised == 0 ? "新着はありません"
+								: (web.checkedNew > 0 ? web.checkedNew + " 話新着" : "")
+								+ (web.checkedNew > 0 && web.checkedRevised > 0 ? "・" : "")
+								+ (web.checkedRevised > 0 ? web.checkedRevised + " 話改稿" : "");
+							return new Result(true, false, null, what, STOP_CHECKED);
+						}
+						if (web.shrunkFrom >= 0) {
+							return new Result(false, false, null, "話数が減ったので止めました (" + web.shrunkFrom + " → " + web.shrunkTo + " 話)", STOP_SHRUNK);
+						}
+						if (this.checkMode && web.listFailure == 0) {
+							return new Result(false, false, null, "この作品は確かめられません（話の一覧が無い 1 ページの作品です）");
+						}
 					}
-					//新しく落とす本は、短い名前を台帳に記録する（まだ記録が無いときだけ。続きを取っても同じ名前のまま）
-					if (this.newBookName) recordShortName(srcFile, dstPath, outExt());
-					//EPUB を作り終わるまで鍵を持つ。手放すと、同じ作品を GUI が変換したときに、読んでいる途中の txt
-					//（キャッシュ）が書き直される（PR #118 の codex）
-					//EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新が前の話数と比べるように。PR の手元の codex）
-					boolean written = false;
-					try {
-						Result r = convertText(srcFile, dstPath, expectedOutFile, overwrite);
-						written = r.ok();
-						return r;
-					} finally {
-						if (!written && web.episodesRecorded) restoreEpisodes(srcFile, web.ledgerBeforeEpisodes);
-					}
+					if ((convertUpdated || modifiedOnly) && !web.isUpdated()) return new Result(false, true, null, "更新はありません");
+					return new Result(false, false, null, "取得できませんでした: " + url);
+				}
+				//新しく落とす本は、短い名前を台帳に記録する（まだ記録が無いときだけ。続きを取っても同じ名前のまま）
+				if (this.newBookName) recordShortName(srcFile, dstPath, outExt());
+				//EPUB を作り終わるまで鍵を持つ。手放すと、同じ作品を GUI が変換したときに、読んでいる途中の txt
+				//（キャッシュ）が書き直される（PR #118 の codex）
+				//EPUB を作れなかったら、台帳の話数を前に戻す（本は前のままなので、次の更新が前の話数と比べるように。PR の手元の codex）
+				boolean written = false;
+				try {
+					Result r = convertText(srcFile, dstPath, expectedOutFile, overwrite);
+					written = r.ok();
+					return r;
 				} finally {
-					//変換器は GUI と使い回すので、守りは必ず倒す
-					web.updateGuard = false;
-					web.allowFewerEpisodes = false;
-					web.guardBook = null;
-					web.checkOnly = false;
+					if (!written && web.episodesRecorded) restoreEpisodes(srcFile, web.ledgerBeforeEpisodes);
 				}
 			}
 		} catch (Exception e) {

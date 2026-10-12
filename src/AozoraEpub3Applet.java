@@ -457,7 +457,8 @@ public class AozoraEpub3Applet extends JPanel
 	AozoraEpub3Converter aozoraConverter;
 	
 	/** Web小説青空変換クラス */
-	WebAozoraConverter webConverter;
+	//中止のボタン（画面のスレッド）が読むので volatile
+	volatile WebAozoraConverter webConverter;
 	
 	/** ePub3出力クラス */
 	Epub3Writer epub3Writer;
@@ -4712,15 +4713,21 @@ public class AozoraEpub3Applet extends JPanel
 				LogAppender.append(urlString);
 				LogAppender.println(" を読み込みます");
 				
-				//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、本棚の更新（画面なしの変換）とは、
-				//変換器を取ってから EPUB を作り終わるまでを 1 つずつにする（internal #11。PR #118 の codex）
+				//キャッシュの txt と台帳を書き直し、同じサイトへの取得の間隔も守るので、本棚の更新（画面なしの変換）とは、
+				//取得を始めてから EPUB を作り終わるまでを 1 つずつにする（internal #11。PR #118 の codex）。変換器は変換ごとに新しい（internal #22）
 				File srcFile;
+				//変換器は鍵を待つ前に作る。本棚の更新を待っている間に押された中止も、この変換器に届く（internal #22）
+				webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
+				if (webConverter == null) {
+					LogAppender.append(urlString);
+					LogAppender.println(" は変換できませんでした");
+					continue;
+				}
 				synchronized (WebAozoraConverter.WEB_LOCK) {
-					webConverter = WebAozoraConverter.createWebAozoraConverter(urlString, webConfigPath);
-					if (webConverter == null) {
-						LogAppender.append(urlString);
-						LogAppender.println(" は変換できませんでした");
-						continue;
+					//待っている間に中止されたら、取りに行かない（前の URL の変換中に押された中止も見る。変換器は URL ごとに新しい）
+					if (webConverter.isCanceled() || this.convertCanceled || this.convertCanceledInWorker) {
+						LogAppender.println("変換処理を中止しました : "+urlString);
+						break;
 					}
 				
 					// なろうAPI設定を反映

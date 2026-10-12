@@ -42,17 +42,10 @@ public class WebAozoraConverterCloudflareTest {
 	private final AtomicInteger episodeRequests = new AtomicInteger();
 	/** 第1話だけ 200 のエラーページ（本文なし）を返す */
 	private boolean firstEpisodeIsErrorPage = false;
-	private WebAozoraConverter shared;
-	private String sharedBaseUri;
 
 	@After
 	public void tearDown() {
 		if (server != null) server.stop(0);
-		//既存の定義の変換器は static に共有されるので、印と baseUri を戻す
-		if (shared != null) {
-			shared.blockedByChallenge = false;
-			shared.baseUri = sharedBaseUri;
-		}
 		//createWebAozoraConverter が静的な表に登録した手元のサーバ用の変換器を外す
 		if (registeredFqdn != null) WebAozoraConverter.converters.remove(registeredFqdn);
 	}
@@ -97,8 +90,6 @@ public class WebAozoraConverterCloudflareTest {
 		WebAozoraConverter converter = WebAozoraConverter.createWebAozoraConverter(
 			"https://ncode.syosetu.com/n0000xx/", new File("web"));
 		assertNotNull(converter);
-		shared = converter;
-		sharedBaseUri = converter.baseUri;
 		return converter;
 	}
 

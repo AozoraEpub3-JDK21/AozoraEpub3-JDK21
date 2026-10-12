@@ -517,17 +517,17 @@ public class HeadlessWebConversionTest {
 		shelfBook(basePath, tempFolder.newFolder("out2"));
 	}
 
-	/** 変換器は GUI と使い回すので、本棚の更新の後に守りを残さない（残ると GUI の変換までキャッシュの目次を使わなくなる） */
+	/** 本棚の更新の後に GUI が作る変換器に、守りが残らない（残ると GUI の変換までキャッシュの目次を使わなくなる）。
+	 * 変換器は変換ごとに新しく作る（internal #22） */
 	@Test
 	public void theGuardIsOffAgainAfterAnUpdate() throws Exception {
 		String basePath = serveAndBase();
 		File book = shelfBook(basePath, tempFolder.newFolder("out"));
 		assertTrue(guardedUpdate(basePath, book, true).ok());
-		//GUI は守りを立て直さずに同じ変換器を使うので、使い回される変換器そのものを見る
-		com.github.hmdev.web.WebAozoraConverter shared = com.github.hmdev.web.WebAozoraConverter.createWebAozoraConverter(
+		com.github.hmdev.web.WebAozoraConverter next = com.github.hmdev.web.WebAozoraConverter.createWebAozoraConverter(
 			"http://" + fqdn + "/novel/", new File(basePath + "web"));
-		assertFalse(shared.updateGuard);
-		assertFalse(shared.allowFewerEpisodes);
+		assertFalse(next.updateGuard);
+		assertFalse(next.allowFewerEpisodes);
 	}
 
 	/** 目次の話が 0 になって一覧のページが 1 ページの作品に見えるとき（話を消して告知だけ、など）も止める（PR の手元の codex） */
