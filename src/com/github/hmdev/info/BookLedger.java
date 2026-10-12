@@ -120,13 +120,25 @@ public final class BookLedger
 		if (bookInfo == null || bookInfo.ledgerDir == null) return;
 		int episodes = bookInfo.ledgerEpisodes;
 		if (episodes < 0) return;
-		BookLedger ledger = load(bookInfo.ledgerDir);
-		if (ledger == null || ledger.ownEpisodesFor(epub) == episodes) return;
+		//読んでから書くまでを、本棚の更新が台帳を書くのと同じ鍵で守る（間に書かれた本棚の記録を、古い台帳で上書きしない。internal #39）
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
 		try {
+			BookLedger ledger = load(bookInfo.ledgerDir);
+			if (ledger == null || ledger.ownEpisodesFor(epub) == episodes) return;
 			ledger.withBookEpisodes(epub, episodes).save(bookInfo.ledgerDir);
 		} catch (IOException e) {
 			logger.warn("台帳に本の話数を書けませんでした: {}", bookInfo.ledgerDir, e);
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
 		}
+	}
+	
+	/** Web 変換のキャッシュの txt か（同じフォルダに台帳があり、その台帳の txt） */
+	public static boolean isLedgerText(File srcFile)
+	{
+		if (srcFile == null) return false;
+		BookLedger ledger = load(srcFile.getAbsoluteFile().getParentFile());
+		return ledger != null && ledger.isTextFile(srcFile.getName());
 	}
 
 	/** 本棚の本の話数を記録する（-1 なら記録を消す） */

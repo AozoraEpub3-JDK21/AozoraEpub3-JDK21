@@ -4131,17 +4131,34 @@ public class AozoraEpub3Applet extends JPanel
 			return;
 		}
 		
-		//キャッシュパスのファイルならエンコードを変換時のみUTF-8にする
-		String encType = (String)jComboEncType.getSelectedItem();
-		if (this.isCacheFile(srcFile)) jComboEncType.setSelectedItem("UTF-8");
+		//Web 変換のキャッシュの txt（キャッシュのフォルダの中か、隣に台帳がある）は、本棚の更新が書き直すので、Web 変換の鍵を持って読み・書く
+		//（読んでいる途中の txt や、台帳の話数の記録を壊さない。internal #39）。画面の部品を一時的に書き換える前に取る（本棚が一時的な値を写さない）。
+		//GUI の Web 変換の中からは、同じスレッドが鍵を持っているので待たない
+		boolean webLocked = false;
+		if ("txt".equals(ext) && (this.isCacheFile(srcFile) || com.github.hmdev.info.BookLedger.isLedgerText(srcFile))) {
+			webLocked = WebAozoraConverter.lockWebLockWaiting(() -> this.convertCanceled,
+				() -> LogAppender.println("本棚の仕事（更新・確かめ・取り込み）が終わるのを待っています（中止で待つのをやめます）: "+srcFile.getName()),
+				() -> LogAppender.println("本棚の仕事が終わったので、続けます"));
+			if (!webLocked) {
+				LogAppender.println("変換処理を中止しました : "+srcFile.getAbsolutePath());
+				return;
+			}
+		}
 		try {
-			for (int i=0; i<txtCount; i++) {
-				convertFile(srcFile, dstPath, ext, i, imageOnly);
-				if (convertCanceled) return;
+			//キャッシュパスのファイルならエンコードを変換時のみUTF-8にする
+			String encType = (String)jComboEncType.getSelectedItem();
+			if (this.isCacheFile(srcFile)) jComboEncType.setSelectedItem("UTF-8");
+			try {
+				for (int i=0; i<txtCount; i++) {
+					convertFile(srcFile, dstPath, ext, i, imageOnly);
+					if (convertCanceled) return;
+				}
+			} finally {
+				//設定を戻す
+				jComboEncType.setSelectedItem(encType);
 			}
 		} finally {
-			//設定を戻す
-			jComboEncType.setSelectedItem(encType);
+			if (webLocked) WebAozoraConverter.WEB_LOCK.unlock();
 		}
 		
 	}
