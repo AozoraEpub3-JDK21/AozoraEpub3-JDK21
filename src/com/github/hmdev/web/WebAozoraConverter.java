@@ -81,7 +81,7 @@ public class WebAozoraConverter
 	 * WEB_LOCK を、中止を見ながら待って取る（GUI 用。本棚は lock() で待つ）。
 	 * 中止を見るため 250ms ごとに試し直すので、本棚の仕事が続けて来ると、その後になることがある（待っていることは知らせる）。
 	 * しばらく（quietMillis）待っても取れなければ onWaitStart を、その後に取れたら onWaitEnd を呼ぶ（一瞬で取れる待ちは知らせない）。
-	 * 待っている間の割り込みでは止まらない（前の仕事が残した割り込みの印で、中止していないのにやめないため）。印は戻して返る
+	 * 待っている間の割り込みでは待つのをやめない（中止していないのに「中止しました」にしない）。印は戻して返るので、その後の取得は印で止まりうる（master と同じ）
 	 * @return 取れたら true。中止されたら false（鍵は持っていない） */
 	public static boolean lockWebLockWaiting(java.util.function.BooleanSupplier canceled, Runnable onWaitStart, Runnable onWaitEnd)
 	{
