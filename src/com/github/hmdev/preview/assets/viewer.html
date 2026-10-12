@@ -100,7 +100,8 @@
 			<option value="creator">著者順</option>
 		</select>
 		<!-- アプリから開いた本棚だけ viewer-library.js が hidden を外す -->
-		<button id="libraryRankingToggle" type="button" title="小説家になろう・カクヨムのランキングから落とす" aria-pressed="false" hidden>ランキング</button>
+		<!-- ランキングを出している間は「← 本棚に戻る」になる (viewer-ranking.js。押して戻ると分からなかった、internal #49) -->
+		<button id="libraryRankingToggle" type="button" title="小説家になろう・カクヨムのランキングから落とす" hidden>ランキング</button>
 		<button id="libraryDownloadToggle" class="icon" type="button" title="URL から作品を落とす" aria-label="URL から作品を落とす" aria-expanded="false" hidden>＋</button>
 		<!-- Web から取った本があって、アプリから開いた本棚だけ viewer-library.js が hidden を外す -->
 		<button id="libraryCheckAll" type="button" title="Web から取った本の目次を見て、新しい話と改稿された話を数える（話は取らない）" hidden>新着を確かめる</button>
