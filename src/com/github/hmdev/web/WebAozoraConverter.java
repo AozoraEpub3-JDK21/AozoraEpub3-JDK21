@@ -2348,6 +2348,7 @@ public class WebAozoraConverter
 
 	/** 見出しの中の半角の数字の並び（カンマ区切りを 1 つと見る） */
 	private static final Pattern HEADING_NUMBER = Pattern.compile("[0-9]+(?:[,，][0-9]+)*");
+	private static final Pattern HEADING_COMMA = Pattern.compile("[,，]");
 
 	/**
 	 * 話の題・章の題の数字（narou.rb の hankaku_num_to_zenkaku_num、converterbase.rb:583。internal #43）。
@@ -2384,7 +2385,7 @@ public class WebAozoraConverter
 		int last = from;
 		while (m.find()) {
 			sb.append(text, last, m.start());
-			String[] runs = m.group().split("[,，]");
+			String[] runs = HEADING_COMMA.split(m.group());
 			for (int i = 0; i < runs.length; i++) {
 				if (i > 0) sb.append('，');
 				String digits = runs[i];
@@ -3080,11 +3081,13 @@ public class WebAozoraConverter
 		text = addHalfIndentBracket(text);
 		text = convertRomanNumerals(text);
 		text = protectEnglishSentences(text);
-		// narou.rb互換（convert_numbers）: 話の題・章の題は漢数字にせず、半角の数字を縦中横か全角にする（漢数字化の設定に依らない）
-		if (heading != Heading.NONE) text = convertHeadingNumbers(text, heading == Heading.SUBTITLE);
-		else if (formatSettings.isEnableConvertNumToKanji()) text = convertNumbersToKanji(text);
+		if (heading == Heading.NONE && formatSettings.isEnableConvertNumToKanji()) text = convertNumbersToKanji(text);
 		if (formatSettings.isEnableTransformFraction()) text = convertFractions(text);
 		if (formatSettings.isEnableTransformDate()) text = convertDates(text);
+		// narou.rb互換（convert_numbers）: 話の題・章の題は漢数字にせず、半角の数字を縦中横か全角にする（漢数字化の設定に依らない）。
+		// 分数・日付の変換は半角の数字を見るので、その後にする（narou.rb は前だが、全角の数字も分数・日付として読む。
+		// ここで先にすると 1/2 が分数にならず、2 桁が縦中横の注記で囲まれて日付も読めなくなる）
+		if (heading != Heading.NONE) text = convertHeadingNumbers(text, heading == Heading.SUBTITLE);
 		if (formatSettings.isEnableConvertSymbolsToZenkaku()) text = convertSymbolsToZenkaku(text);
 		if (formatSettings.isEnableProlongedSoundMarkToDash()) text = convertProlongedSoundMark(text);
 		if (formatSettings.isEnableConvertHorizontalEllipsis()) text = convertHorizontalEllipsis(text);

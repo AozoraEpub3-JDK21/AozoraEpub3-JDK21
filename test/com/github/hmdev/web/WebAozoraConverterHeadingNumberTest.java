@@ -89,6 +89,24 @@ public class WebAozoraConverterHeadingNumberTest
 	}
 
 	@Test
+	public void fractionsAndDatesStillWork() throws Exception
+	{
+		//分数・日付の変換は半角の数字を見るので、見出しの数字の変換はその後（先にすると 1/2 が分数にならない。/code-review high）
+		WebAozoraConverter c = converter();
+		NarouFormatSettings s = c.getFormatSettings();
+		boolean fraction = s.isEnableTransformFraction(), date = s.isEnableTransformDate();
+		try {
+			s.setEnableTransformFraction(true);
+			s.setEnableTransformDate(true);
+			assertEquals("第１話　２分の１の確率", print(c, "第1話　1/2の確率", WebAozoraConverter.Heading.SUBTITLE));
+			assertEquals("２０２４年［＃縦中横］10［＃縦中横終わり］月［＃縦中横］12［＃縦中横終わり］日", print(c, "2024/10/12", WebAozoraConverter.Heading.SUBTITLE));
+		} finally {
+			s.setEnableTransformFraction(fraction);
+			s.setEnableTransformDate(date);
+		}
+	}
+
+	@Test
 	public void protectedEnglishIsNotLost() throws Exception
 	{
 		//題の英語は退避されて目印になる。目印の中の番号を全角にすると戻らずに消えた（Opus の確かめ。n9623lp の 7 話）
