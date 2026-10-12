@@ -21,17 +21,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.6.1-jdk21 (August 27, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.6.1-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.7.0-jdk21 (October XX, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.0-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.0-jdk21/AozoraEpub3-1.7.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.0-jdk21/AozoraEpub3-1.7.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.0-jdk21/AozoraEpub3-1.7.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -41,11 +41,14 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 
 ---
 
-## What's New in v1.6.1-jdk21
+## What's New in v1.7.0-jdk21
 
-- **New setting: replace gaiji your device cannot display with a readable note.** A JIS level-4 character such as `𢌞` shows up as `?` or a tofu box when the device font has no glyph for it. With this setting on, the character is replaced by a note that says what it is, like `〓（「廴＋囘」）`. **It is off by default** — leave it alone and your output is byte-for-byte what it was before. The setting lives in the "Gaiji" box on the "Style" tab ([how to use it](gaiji-settings.html))
-- **Kana with a dakuten mark stay as they are when a bundled font can render them.** Annotations such as `※［＃半濁点付き平仮名か、1-4-87］` turn into two characters (a kana plus a combining mark), which the bundled dakuten fonts or CSS stacking can display. These are now judged as a pair: kept whole when they can be rendered, replaced as a whole when they cannot
-- **New page on gaiji settings**: which JIS level to pick, where to put single-character fonts (`gaiji/*.ttf`), and the format of the notes
+- **Aozora Bunko work URLs are converted from the text zip on the book card.** Reading the HTML back used to drop emphasis dots, indents, headings and more; now the result is the same as converting the zip directly. The GUI also converts zip URLs instead of only downloading them
+- **Web conversion fixes**: comma-separated numbers in the body (`1,000円`) no longer vanish, and `［＃` in a title or episode title is no longer read as an annotation. Numbers in episode and chapter titles now follow narou.rb
+- **Fixes that change the output**: short centered pages in vertical books (chapter title pages and the like) are now really centered, Web conversion puts a page break after a chapter title page, and the running head (柱) on chapter pages is output as narou.rb does
+- **Fixes for stopped conversions and lost text**: an unclosed block annotation before the title no longer empties the body, an unclosed ruby or gaiji annotation no longer stops the whole conversion, and one failed book no longer stops a CLI batch
+
+See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.0-jdk21) for the full list.
 
 See the [release list](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) for past changes.
 

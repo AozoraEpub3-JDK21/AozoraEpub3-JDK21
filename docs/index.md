@@ -24,17 +24,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.6.1-jdk21 (2026年8月27日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.6.1-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.7.0-jdk21 (2026年10月XX日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.0-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.0-jdk21/AozoraEpub3-1.7.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.0-jdk21/AozoraEpub3-1.7.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.6.1-jdk21/AozoraEpub3-1.6.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.0-jdk21/AozoraEpub3-1.7.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -44,11 +44,14 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.6.1-jdk21 の主な変更
+## v1.7.0-jdk21 の主な変更
 
-- **端末で表示できない外字を、注記表示に置き換える設定を追加**: `𢌞` のような JIS 第4水準の文字は、端末のフォントに無いと `?` や □ になります。この設定を有効にすると、文字の代わりに `〓（「廴＋囘」）` のように何の字かが分かる形で出力します。**既定は無効**で、設定を変えない限り出力はこれまでと変わりません。設定は「スタイル」タブの「外字」欄から行います（[使い方](gaiji-settings.html)）
-- **濁点付きの文字は同梱フォントで表示できるならそのまま出します**: `※［＃半濁点付き平仮名か、1-4-87］` のように仮名＋濁点/半濁点の 2 文字に変換される字は、同梱の濁点フォントや CSS 合成で表示できます。これらを対で扱い、出せるならそのまま、出せないなら対ごと注記表示にします
-- **外字の設定ページを追加**: 水準の選び方、1 文字フォント（`gaiji/*.ttf`）の置き方、注記の書式を日英で説明しています
+- **青空文庫の作品の URL は、図書カードのテキスト（zip）から変換します**: これまでは HTML から読み戻していたので、傍点・字下げ・見出しなどが落ちていました。今は zip を直に変換したのと同じ本になります。GUI でも zip の URL を変換まで進めます
+- **Web 変換の直し**: 本文のカンマ区切りの数字（`1,000円`）が消えていた件、作品名や話の題の `［＃` が注記として読まれていた件などを直しました。話の題・章の題の数字は narou.rb と同じ形になります
+- **出力が変わる直し**: 縦書きの短い左右中央のページ（章の中扉など）が本当に中央に出ます。Web 変換では中扉の後に改ページが入ります。章の扉の柱（作品名）を narou.rb と同じく柱として出します
+- **変換が止まる・本文が消える件の直し**: 表題より前の閉じない注記で本文が空になる件、閉じていないルビ・外字注記で変換全体が止まる件、CLI のまとめての変換が 1 冊の失敗で止まる件などを直しました
+
+変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.0-jdk21) を参照してください。
 
 過去のリリース内容は [リリース一覧](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases) を参照してください。
 
