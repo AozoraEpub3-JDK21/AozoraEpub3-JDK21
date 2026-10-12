@@ -2,6 +2,7 @@ package com.github.hmdev.info;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -239,6 +240,18 @@ public class BookInfo
 	{
 		if (this.mapImageSectionLine == null) return null;
 		return this.mapImageSectionLine.get(lineNum);
+	}
+	
+	/** 前走査が表題の塊の行に数える、文字のある行（コメントの中を除く）。表題の後で表題ページを延ばすのを止める所に使う（internal #37） */
+	private final BitSet textLines = new BitSet();
+	public void addTextLine(int lineNum)
+	{
+		this.textLines.set(lineNum);
+	}
+	/** 前走査が文字のある行と見た行ならtrue */
+	public boolean isTextLine(int lineNum)
+	{
+		return lineNum >= 0 && this.textLines.get(lineNum);
 	}
 	
 	/** 強制改ページ行数を保存 */
