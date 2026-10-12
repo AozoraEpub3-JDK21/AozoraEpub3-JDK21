@@ -626,12 +626,14 @@ public class PreviewSession implements AutoCloseable
 	{
 		Path tmp = Path.of(System.getProperty("java.io.tmpdir", "."));
 		try (Stream<Path> children = Files.list(tmp)) {
-			children.filter(Files::isDirectory)
-				.filter(path -> path.getFileName().toString().startsWith(TEMP_PREFIX + "-"))
+			//名前で先に絞る（文字の比べだけ）。isDirectory は OS への問い合わせなので、一時フォルダに物の多い台で遅い（internal #29）
+			children.filter(path -> path.getFileName().toString().startsWith(TEMP_PREFIX + "-"))
+				.filter(Files::isDirectory)
 				.sorted(Comparator.comparing(Path::toString))
 				.forEach(PreviewSession::deleteIfNotInUse);
-		} catch (IOException e) {
-			/* 意図的: 掃除は best-effort。失敗してもプレビュー自体は継続する */
+		} catch (IOException | java.io.UncheckedIOException e) {
+			/* 意図的: 掃除は best-effort。失敗してもプレビュー自体は継続する
+			 * （並べている途中のエラーは UncheckedIOException で来る。受けないとプレビューの開始が失敗する。internal #29） */
 			logger.debug("プレビュー一時ディレクトリの掃除に失敗しました", e);
 		}
 	}
@@ -706,8 +708,8 @@ public class PreviewSession implements AutoCloseable
 					logger.debug("削除できませんでした: {}", entry);
 				}
 			});
-		} catch (IOException e) {
-			/* 意図的: 同上 */
+		} catch (IOException | java.io.UncheckedIOException e) {
+			/* 意図的: 同上。歩いている途中に別のプロセスが中を消すと UncheckedIOException（NoSuchFileException）で来る */
 			logger.debug("再帰削除に失敗しました: {}", path, e);
 		}
 	}
