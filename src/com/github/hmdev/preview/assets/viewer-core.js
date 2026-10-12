@@ -47,6 +47,11 @@ const state = {
 	spineIndex: 0,
 	/** /inspect のレスポンス。初回表示時に遅延取得 (viewer-inspector.js) */
 	inspection: null,
+	/**
+	 * EPUB 情報の要求の通し番号。本を読み込み直す・切り替えるたびに進め、要求したときと違う返りは捨てる
+	 * (読み込み直しでは bookId が変わらないので、bookId だけ見ると前の版の返りで新しい情報を上書きする。internal #23)
+	 */
+	inspectionSeq: 0,
 	/** 表示設定。localStorage とサーバの両方に保存する (viewer-settings.js) */
 	settings: Object.assign({}, DEFAULT_SETTINGS),
 	/**
