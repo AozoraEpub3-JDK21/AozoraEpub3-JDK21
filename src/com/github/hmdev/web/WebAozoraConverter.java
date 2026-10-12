@@ -197,6 +197,8 @@ public class WebAozoraConverter
 	private HashMap<String, String> nextDataEpisodeDateMap = null;
 	/** 英文保護用リスト（記号全角化処理で使用） */
 	private java.util.ArrayList<String> englishSentences = new java.util.ArrayList<>();
+	/** カンマ区切りの数字の退避（PH_COMMA_NUMBER の出てきた順。printText 1 回ぶん） */
+	private final java.util.ArrayList<String> commaNumbers = new java.util.ArrayList<>();
 	/** 漢数字退避用リスト（数字の漢数字化処理で使用） */
 	private java.util.ArrayList<String> kanjiNumbers = new java.util.ArrayList<>();
 
@@ -2235,6 +2237,20 @@ public class WebAozoraConverter
 	/**
 	 * 保護した英文を復元（narou.rb互換）
 	 */
+	/** 退避したカンマ区切りの数字を、出てきた順に戻す（narou.rb の rebuild_hankaku_num_and_comma） */
+	private String rebuildCommaNumbers(String text) {
+		if (commaNumbers.isEmpty()) return text;
+		StringBuilder sb = new StringBuilder(text.length());
+		int n = 0;
+		for (int i = 0; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			if (ch == PH_COMMA_NUMBER && n < commaNumbers.size()) sb.append(commaNumbers.get(n++));
+			else sb.append(ch);
+		}
+		commaNumbers.clear();
+		return sb.toString();
+	}
+
 	private String rebuildEnglishSentences(String text) {
 		for (int i = 0; i < englishSentences.size(); i++) {
 			text = text.replace(phChuki("英文＝" + i), englishSentences.get(i));
@@ -2323,14 +2339,22 @@ public class WebAozoraConverter
 	 * 4. 単位化（enable_kanji_num_with_units=trueの場合）
 	 * 5. 退避した漢数字を復元
 	 */
+	private static final Pattern COMMA_NUMBER = Pattern.compile("([0-9]{1,3}(?:,[0-9]{3})+)");
+
 	private String convertNumbersToKanji(String text) {
 		// 1. 既存の漢数字を一時退避
 		text = stashKanjiNum(text);
 
-		// 2. カンマ区切りの数字は半角保護（全角化対策）
-		text = text.replaceAll("([0-9]{1,3}(?:,[0-9]{3})+)",
-			Matcher.quoteReplacement(String.valueOf(PH_BRACKET_OPEN) + PH_HASH + "半角数字＝") + "$1" +
-			Matcher.quoteReplacement(String.valueOf(PH_BRACKET_CLOSE)));
+		// 2. カンマ区切りの数字は半角保護（全角化対策）。narou.rb と同じく退避して、printText の最後に半角のまま戻す
+		//（前は［＃半角数字＝1,000］の注記で包んだまま戻さず、AozoraEpub3 が知らない注記として数字ごと捨てていた。internal #40）
+		Matcher comma = COMMA_NUMBER.matcher(text);
+		StringBuilder stashed = new StringBuilder();
+		while (comma.find()) {
+			commaNumbers.add(comma.group(1));
+			comma.appendReplacement(stashed, Matcher.quoteReplacement(String.valueOf(PH_COMMA_NUMBER)));
+		}
+		comma.appendTail(stashed);
+		text = stashed.toString();
 
 		// 3. アラビア数字を漢数字に変換
 		text = arabicToKanji(text);
@@ -2881,6 +2905,9 @@ public class WebAozoraConverter
 	private static final char PH_KOME = '\uE003';
 	/** 逃がした「［」（※［＃始め角括弧、1-1-46］）。数字・記号の変換より前に置くので、注記の中身が変換されないよう 1 字で持つ */
 	private static final char PH_ESCAPED_BRACKET = '\uE004';
+	/** 退避したカンマ区切りの数字（1,000）。中身は commaNumbers に出てきた順に持ち、printText の最後に戻す（internal #40）。
+	 * 中に数字を書くと、後の全角化・縦中横などが中まで変えるので、1 字で持つ */
+	private static final char PH_COMMA_NUMBER = '\uE005';
 
 	static String phChuki(String content) {
 		return String.valueOf(PH_BRACKET_OPEN) + PH_HASH + content +
@@ -2950,6 +2977,7 @@ public class WebAozoraConverter
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle, boolean escapeChukiOpen) throws IOException
 	{
 		text = text.replaceAll("[\r\n]+", "");
+		commaNumbers.clear();
 		//逃がす「［」は 1 字の PH_ESCAPED_BRACKET にして、最後に ※［＃始め角括弧、1-1-46］ に戻す。変換が足す注記は PH_* で書くので逃がさない
 		if (escapeChukiOpen) text = escapeChukiOpenAll(text);
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
@@ -2982,6 +3010,7 @@ public class WebAozoraConverter
 			}
 		}
 		String result = rebuildEnglishSentences(sb.toString());
+		result = rebuildCommaNumbers(result);
 		result = restorePlaceholders(result);
 		bw.append(result);
 	}

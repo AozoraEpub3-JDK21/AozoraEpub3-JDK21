@@ -197,14 +197,16 @@ public class WebAozoraConverterNarouCompatTest {
         String out1 = sw.toString();
         assertTrue("printText -> [" + out1 + "]", out1.contains("一二三"));
 
-        // comma-protected numbers should be wrapped as 半角数字
+        // comma-separated numbers stay half-width as written (narou.rb stashes and restores them).
+        // They used to be left wrapped as ［＃半角数字＝1,000］, an annotation AozoraEpub3 drops (internal #40)
         StringWriter swComma = new StringWriter();
         try (BufferedWriter bw = new BufferedWriter(swComma)) {
-            mPrint.invoke(converter, bw, "1,000");
+            mPrint.invoke(converter, bw, "価格は1,000円と12,345,678円");
             bw.flush();
         }
         String outComma = swComma.toString();
-        assertTrue("printText(comma) -> ["+outComma+"]", outComma.contains("半角数字"));
+        assertTrue("printText(comma) -> ["+outComma+"]", outComma.contains("価格は1,000円と12,345,678円"));
+        assertFalse("printText(comma) -> ["+outComma+"]", outComma.contains("半角数字"));
 
         // units: enable and test 1000 -> 千, 10000 -> 一万
         converter.getFormatSettings().setEnableKanjiNumWithUnits(true);
