@@ -1218,6 +1218,7 @@ $ java -jar AozoraEpub3.jar -url "https://www.aozora.gr.jp/cards/000035/files/15
 > **GUI 側の既知の挙動（本修正では変更なし）**: GUI の zip URL 経路はダウンロードのみを行い、
 > 変換までは実行しない（ダウンロード後に `continue` している）。共通化にあたってもこの挙動は維持した。
 > 変換まで行うべきかは別途判断が必要。
+> **→ 2026-10-12 に変換まで進めるようにした**（利用者の判断。internal の ADR 0001。青空文庫の作品の URL を図書カードの zip に読み替えるのと同時に、CLI と揃えた）。
 
 > **注**: `docs/release-procedure.md` §2.1.1 の「青空文庫 URL 1 件（`_ruby_` を含む zip パターンを推奨）」は
 > **card ページ URL または HTML 単話ページ**を指す。zip URL の直接指定は v1.4.0 以降 CLI でも利用できる。

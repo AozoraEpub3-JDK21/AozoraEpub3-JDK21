@@ -148,6 +148,8 @@ public class HeadlessWebConversion
 		String outExt = outExt();
 		//確かめるだけなら、書き出しの形（kindle）を問わない（PR のゲート2）
 		if (outExt.startsWith(".mobi") && !this.checkMode) return new Result(false, false, null, "kindle（" + outExt + "）の出力は本棚からは作れません");
+		//青空文庫の作品は HTML から作らない（傍点・字下げなどが落ちる。internal の ADR 0001）。完結した作品で続きも無いので、本棚では扱わない
+		if (com.github.hmdev.util.AozoraBunkoUrl.isWorkUrl(url)) return new Result(false, false, null, "青空文庫の作品は Web 本棚では扱いません。画面の変換か CLI の -url で変換してください（図書カードのテキストから作ります）: " + url);
 		try {
 			//変換器は FQDN ごとに使い回され、txt もキャッシュに書き直されるので、GUI の Web 変換とは 1 つずつ（WebAozoraConverter.WEB_LOCK）
 			File srcFile;

@@ -483,6 +483,9 @@ java -jar AozoraEpub3.jar -url https://ncode.syosetu.com/nXXXX/ -narou -d ./outp
 # 青空文庫のテキストzip URLから直接変換（v1.4.0〜。.txtz / .rar も同様）
 java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_ruby_4948.zip -d ./output/
 
+# 青空文庫の作品ページ（XHTML）・図書カードの URL からも変換できる。HTML は読まず、図書カードのテキストzipを取って変換する
+java -jar AozoraEpub3.jar -url https://www.aozora.gr.jp/cards/000035/files/1567_14913.html -d ./output/
+
 # 更新確認（自動更新はしません。更新があればダウンロードページを案内します）
 java -jar AozoraEpub3.jar --check-update
 ```

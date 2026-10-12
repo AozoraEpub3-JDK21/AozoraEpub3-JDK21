@@ -165,6 +165,18 @@ public class HeadlessWebConversionTest {
 		assertEquals("取りに行く前に断る（取ってから断ると、次の更新で更新なしに見える）", 0, requests.get());
 	}
 
+	/** 青空文庫の作品は本棚では扱わない（HTML から作ると傍点・字下げが落ちる。internal の ADR 0001）。取りに行く前に断る */
+	@Test
+	public void aozoraBunkoWorkIsRefused() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).convert("https://www.aozora.gr.jp/cards/000148/files/789_14547.html", dst, null, true);
+		assertFalse(r.ok());
+		assertTrue(r.message(), r.message().contains("青空文庫"));
+		assertEquals(0, dst.list().length);
+		assertEquals(0, requests.get());
+	}
+
 	/**
 	 * 本棚の本は、その本の名前で書き換える（本棚で名前を変えた本・同じ作品の別の名前の本も更新できる）。
 	 * 本の名前は台帳に記録しない（#116 のゲート2）。拡張子が設定と違えば、名前が合わずに書かない

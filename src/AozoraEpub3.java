@@ -26,6 +26,7 @@ import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.util.PathUtils;
 import com.github.hmdev.util.ArchiveUrlUtils;
+import com.github.hmdev.util.AozoraBunkoUrl;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.io.ArchiveTextExtractor;
 import com.github.hmdev.pipeline.ConversionSettings;
@@ -218,7 +219,10 @@ public class AozoraEpub3
 			boolean useFileName = false;//表題に入力ファイル名利用
 			//-c の値。本ごとに解決するので、ここでは書き換えない（internal #32）
 			String coverOption = null;
-			String encType = "MS932";
+			//-enc の値。青空文庫の URL から取った zip だけは MS932 で読む（ファイルごとに決める）
+			String defaultEncType = "MS932";
+			//青空文庫の URL から取った zip（ADR 0001）
+			java.util.Set<String> aozoraFiles = new java.util.HashSet<>();
 			String outExt = ".epub";
 			boolean autoFileName = true; //ファイル名を表題に利用
 			boolean vertical = true;
@@ -226,7 +230,7 @@ public class AozoraEpub3
 			if(commandLine.hasOption("t")) try { titleIndex = Integer.parseInt(commandLine.getOptionValue("t")); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }//表題
 			if(commandLine.hasOption("tf")) useFileName = true;
 			if(commandLine.hasOption("c")) coverOption = commandLine.getOptionValue("c");
-			if(commandLine.hasOption("enc")) encType = commandLine.getOptionValue("enc");
+			if(commandLine.hasOption("enc")) defaultEncType = commandLine.getOptionValue("enc");
 			if(commandLine.hasOption("ext")) outExt = commandLine.getOptionValue("ext");
 			if(commandLine.hasOption("of")) autoFileName = false;
 			//if(commandLine.hasOption("id")) withMarkId = true;
@@ -269,6 +273,22 @@ public class AozoraEpub3
 					LogAppender.println("--------");
 					LogAppender.append(urlString);
 					LogAppender.println(" を読み込みます");
+					//青空文庫の作品の URL（XHTML・図書カード）は、HTML を読まず、図書カードのテキストの zip に読み替える
+					//（HTML から戻すと傍点・字下げなどが落ちる。internal の ADR 0001）。zip が無ければ止める
+					boolean aozoraZip = AozoraBunkoUrl.isWorkUrl(urlString);
+					if (aozoraZip) {
+						try {
+							urlString = AozoraBunkoUrl.resolveZipUrl(urlString);
+							LogAppender.println("図書カードのテキスト（zip）から変換します : "+urlString);
+						} catch (IOException e) {
+							logger.warn("青空文庫の zip を見つけられない: {}", urlString, e);
+							LogAppender.error(e.getMessage());
+							LogAppender.append(urlString);
+							LogAppender.println(" は変換できませんでした");
+							errorCount++;
+							continue;
+						}
+					}
 					//URL が zip / txtz / rar を直接指している場合はスクレイピングせずダウンロードし、
 					//ローカルファイルと同じ変換経路 (下の各ファイル変換処理) に流す
 					if (ArchiveUrlUtils.isArchiveUrl(urlString)) {
@@ -276,6 +296,8 @@ public class AozoraEpub3
 						try {
 							File archiveFile = ArchiveUrlUtils.downloadArchive(urlString, archiveDstPath);
 							targetFileNames.add(archiveFile.getPath());
+							//青空文庫のテキストは Shift_JIS（-enc に依らない）
+							if (aozoraZip) aozoraFiles.add(archiveFile.getPath());
 						} catch (Exception e) {
 							logger.error("アーカイブ URL のダウンロードに失敗: {}", urlString, e);
 							LogAppender.append(urlString);
@@ -348,6 +370,8 @@ public class AozoraEpub3
 			////////////////////////////////
 			for (String fileName : targetFileNames) {
 				LogAppender.println("--------");
+				//青空文庫の URL から取った zip は MS932 で読む。他は -enc のとおり
+				String encType = aozoraFiles.contains(fileName) ? AozoraBunkoUrl.ENCODING : defaultEncType;
 				File srcFile = new File(fileName);
 				if (srcFile == null || !srcFile.isFile()) {
 					LogAppender.error("file not exist. "+srcFile.getAbsolutePath());
