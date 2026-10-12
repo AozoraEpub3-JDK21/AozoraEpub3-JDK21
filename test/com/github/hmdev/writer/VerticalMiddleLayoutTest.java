@@ -118,6 +118,32 @@ public class VerticalMiddleLayoutTest {
 		}
 	}
 
+	/**
+	 * Web 変換と narou.rb の章の中扉（左右中央 → 柱 → 大見出し）: 柱は列の場所を取らない（ページの角に置く）ので、
+	 * 作品名が長くても、短い中扉として横書きの親の中に縦書きのブロックを置く（表組みに倒すと、柱と章題が重なり、章題も中央に来ない）
+	 */
+	@Test
+	public void 長い作品名の柱がある章の中扉も表組みに倒さない() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃ここから柱］声が出せないので無詠唱魔法でもいいですか長い長い作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第１章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
+			assertTrue(chapter, chapter.contains("lang=\"ja\" class=\"hltr\">"));
+			assertTrue(chapter, chapter.contains("<div class=\"vrtl middle\">"));
+			assertFalse(chapter, chapter.contains("<table"));
+			assertTrue(chapter, chapter.contains("running_head"));
+			assertTrue(chapter, chapter.contains("第１章"));
+		}
+	}
+
 	@Test
 	public void 短い中扉だけ横書きの親の中に縦書きのブロックを置く() throws Exception {
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
