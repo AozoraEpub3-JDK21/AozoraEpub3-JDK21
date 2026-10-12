@@ -1795,7 +1795,7 @@ public class WebAozoraConverter
 			bw.append("［＃ここで柱終わり］\n");
 		}
 		bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃大見出し］");
-		printText(bw, chapterTitle);
+		printText(bw, chapterTitle, Heading.CHAPTER);
 		bw.append("［＃大見出し終わり］\n");
 		bw.append('\n');
 	}
@@ -1837,7 +1837,7 @@ public class WebAozoraConverter
 			if (subTitle != null) {
 				// narou.rb互換: 横書き時は1字下げ、縦書き時は3字下げ
 				bw.append("［＃" + formatSettings.getIndent() + "字下げ］［＃中見出し］");
-				printText(bw, subTitle, true);
+				printText(bw, subTitle, Heading.SUBTITLE);
 				bw.append("［＃中見出し終わり］\n");
 			}
 			//公開日付・更新日付
@@ -2344,6 +2344,52 @@ public class WebAozoraConverter
 		text = text.replaceAll("？{2}", Matcher.quoteReplacement(tcyOpen + "??" + tcyClose));
 
 		return text;
+	}
+
+	/** 見出しの中の半角の数字の並び（カンマ区切りを 1 つと見る） */
+	private static final Pattern HEADING_NUMBER = Pattern.compile("[0-9]+(?:[,，][0-9]+)*");
+
+	/**
+	 * 話の題・章の題の数字（narou.rb の hankaku_num_to_zenkaku_num、converterbase.rb:583。internal #43）。
+	 * 半角の 2 桁は縦中横、話の題の先頭の半角 3 桁も縦中横、それ以外の半角の数字は全角。もとから全角の数字は変えない
+	 * （narou.rb の \d は半角だけ）。数字の間のカンマは全角（narou.rb は記号を全角にする段で全角になる。本文のカンマ区切りの数字と同じ形）。
+	 * 2026-10-12 までは、話の題は仕上げ（AozoraTextFinalizer）が 2 桁以上をすべて縦中横にし（「１,」と縦中横の「000」に割れた）、
+	 * 章の題は本文と同じく漢数字にしていた。
+	 * URL は守らない: narou.rb は replace_url で先に退避するが、この Web 変換には URL の退避が無く、ここに来る前に英字が全角になっている
+	 * （docs/code-audit-followups.md 項目 47 の「残り」）
+	 * @param subtitle 話の題（先頭の 3 桁の決まりがある）。false なら章の題
+	 */
+	String convertHeadingNumbers(String text, boolean subtitle)
+	{
+		StringBuilder sb = new StringBuilder();
+		Matcher m = HEADING_NUMBER.matcher(text);
+		int last = 0;
+		while (m.find()) {
+			sb.append(text, last, m.start());
+			String[] runs = m.group().split("[,，]");
+			for (int i = 0; i < runs.length; i++) {
+				if (i > 0) sb.append('，');
+				String digits = runs[i];
+				//「先頭」は題の文字の先頭（narou.rb の $`.empty?）
+				boolean head = subtitle && i == 0 && m.start() == 0;
+				if (digits.length() == 2 || digits.length() == 3 && head) {
+					sb.append(phChuki("縦中横")).append(digits).append(phChuki("縦中横終わり"));
+				} else {
+					sb.append(toFullWidthDigits(digits));
+				}
+			}
+			last = m.end();
+		}
+		sb.append(text, last, text.length());
+		return sb.toString();
+	}
+
+	/** 半角の数字を全角に */
+	private static String toFullWidthDigits(String digits)
+	{
+		StringBuilder sb = new StringBuilder(digits.length());
+		for (int i = 0; i < digits.length(); i++) sb.append((char)(digits.charAt(i) - '0' + '０'));
+		return sb.toString();
 	}
 
 	/** 数字とカンマの並び（narou.rb の num_to_kanji と同じ。仕上げの AozoraTextFinalizer#convertNumsInSegment も同じ並びで見る） */
@@ -2983,25 +3029,29 @@ public class WebAozoraConverter
 		return sb.toString();
 	}
 
+	/** 見出しの種類。narou.rb の text_type の "subtitle"（話の題）と "chapter"（章の題）。数字の扱いが本文と違う */
+	enum Heading { NONE, SUBTITLE, CHAPTER }
+
 	/** 文字を出力 特殊文字は注記に変換。題名など（「［＃」は全部逃がす） */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
-		printText(bw, text, false);
+		printText(bw, text, Heading.NONE);
 	}
 
-	private void printText(BufferedWriter bw, String text, boolean isSubtitle) throws IOException
+	private void printText(BufferedWriter bw, String text, Heading heading) throws IOException
 	{
-		printText(bw, text, isSubtitle, true);
+		printText(bw, text, heading, true);
 	}
 
 	/** 本文の文字を出力（「［＃」は逃がさない。narou.rb と同じ） */
 	private void printBodyText(BufferedWriter bw, String text) throws IOException
 	{
-		printText(bw, text, false, false);
+		printText(bw, text, Heading.NONE, false);
 	}
 
-	/** @param escapeChukiOpen 文字の「［＃」を逃がす（題名） */
-	private void printText(BufferedWriter bw, String text, boolean isSubtitle, boolean escapeChukiOpen) throws IOException
+	/** @param heading 話の題・章の題なら数字を見出しの決まりで変換する
+	 * @param escapeChukiOpen 文字の「［＃」を逃がす（題名） */
+	private void printText(BufferedWriter bw, String text, Heading heading, boolean escapeChukiOpen) throws IOException
 	{
 		text = text.replaceAll("[\r\n]+", "");
 		commaNumbers.clear();
@@ -3013,8 +3063,9 @@ public class WebAozoraConverter
 		text = addHalfIndentBracket(text);
 		text = convertRomanNumerals(text);
 		text = protectEnglishSentences(text);
-		// narou.rb互換: サブタイトル行は漢数字変換せず全角数字変換のみ
-		if (formatSettings.isEnableConvertNumToKanji() && !isSubtitle) text = convertNumbersToKanji(text);
+		// narou.rb互換（convert_numbers）: 話の題・章の題は漢数字にせず、半角の数字を縦中横か全角にする（漢数字化の設定に依らない）
+		if (heading != Heading.NONE) text = convertHeadingNumbers(text, heading == Heading.SUBTITLE);
+		else if (formatSettings.isEnableConvertNumToKanji()) text = convertNumbersToKanji(text);
 		if (formatSettings.isEnableTransformFraction()) text = convertFractions(text);
 		if (formatSettings.isEnableTransformDate()) text = convertDates(text);
 		if (formatSettings.isEnableConvertSymbolsToZenkaku()) text = convertSymbolsToZenkaku(text);

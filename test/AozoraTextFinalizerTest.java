@@ -420,55 +420,32 @@ public class AozoraTextFinalizerTest {
 		assertTrue("注記行は変換しない", result.contains("［＃３字下げ］注記行"));
 	}
 
+	/**
+	 * 話の題・章の題の行の数字は、仕上げでは変えない（internal #43）。Web 変換が見出しの決まりで変換済み
+	 * （WebAozoraConverterHeadingNumberTest）。ここで漢数字・縦中横にすると、もとから全角の数字まで変わる
+	 */
 	@Test
 	public void testConvertNumToZenkakuForSubtitle() throws Exception {
-		// サブタイトル（中見出し・大見出し）行の数字変換: 漢数字にせず縦中横または全角数字に変換
-		String input =
-				"第12章\n" +                          // 2桁 → 縦中横注記
-				"第1話\n" +                            // 1桁 → 全角数字（漢数字にしない）
-				"第１２話\n" +                         // 全角数字2桁 → 縦中横注記
-				"第3巻\n";                             // 1桁 → 全角数字
-
-		// convertNumToKanji 経由で中見出し行として処理
-		String line12  = "［＃３字下げ］［＃中見出し］第12章［＃中見出し終わり］";
-		String line1   = "［＃３字下げ］［＃中見出し］第1話［＃中見出し終わり］";
-		String lineZ12 = "［＃３字下げ］［＃中見出し］第１２話［＃中見出し終わり］";
-		String line3   = "［＃３字下げ］［＃大見出し］第3巻［＃大見出し終わり］";
-
-		String r12  = invokeConvertNumToKanji(line12);
-		String r1   = invokeConvertNumToKanji(line1);
-		String rZ12 = invokeConvertNumToKanji(lineZ12);
-		String r3   = invokeConvertNumToKanji(line3);
-
-		// 2桁以上 → 縦中横注記で囲む
-		assertTrue("2桁→縦中横", r12.contains("［＃縦中横］12［＃縦中横終わり］"));
-		// 1桁 → 全角数字（漢数字化なし）
-		assertTrue("1桁→全角", r1.contains("第１話"));
-		assertFalse("1桁→漢数字にしない", r1.contains("第一話"));
-		// 全角数字はそのまま（narou.rb の hankaku_num_to_zenkaku_num は半角の数字だけを見る。internal #43 で narou.rb に合わせた）
-		assertTrue("全角2桁はそのまま", rZ12.contains("第１２話"));
-		// 1桁大見出し → 全角数字
-		assertTrue("大見出し1桁→全角", r3.contains("第３巻"));
+		String[] lines = {
+			"［＃３字下げ］［＃中見出し］第１話　１，０００円［＃中見出し終わり］",
+			"［＃３字下げ］［＃中見出し］第１２話［＃中見出し終わり］",
+			"［＃３字下げ］［＃大見出し］第［＃縦中横］12［＃縦中横終わり］章［＃大見出し終わり］",
+		};
+		for (String line : lines) assertEquals(line, invokeConvertNumToKanji(line));
 	}
 
 	/**
-	 * 話の題・章の題の数字は narou.rb の hankaku_num_to_zenkaku_num と同じ（internal #43）。
-	 * 2 桁は縦中横、話の題の先頭の 3 桁も縦中横、それ以外は全角。数字の間のカンマは全角。
-	 * 実機の narou.rb の出力（第［＃縦中横］54［＃縦中横終わり］話・第１００話・４０００・［＃縦中横］300［＃縦中横終わり］年前）と同じ形
+	 * 改ページの直後の本文の行は、本文として数字を変換してから見出しにする（narou.rb と同じ順。internal #43）。
+	 * 話の題の決まり（先頭の 3 桁を縦中横）は当てない
 	 */
 	@Test
-	public void testSubtitleNumbersFollowNarouRb() throws Exception {
-		String sub = "［＃３字下げ］［＃中見出し］%s［＃中見出し終わり］";
-		assertEquals(String.format(sub, "第１話　１，０００円"), invokeConvertNumToKanji(String.format(sub, "第1話　1,000円")));
-		assertEquals(String.format(sub, "第［＃縦中横］54［＃縦中横終わり］話　包囲（４対４０００）"), invokeConvertNumToKanji(String.format(sub, "第54話　包囲（4対4000）")));
-		assertEquals("先頭でない 3 桁は全角", String.format(sub, "第１００話"), invokeConvertNumToKanji(String.format(sub, "第100話")));
-		assertEquals("話の題の先頭の 3 桁は縦中横", String.format(sub, "［＃縦中横］300［＃縦中横終わり］年前の遺跡"), invokeConvertNumToKanji(String.format(sub, "300年前の遺跡")));
-		assertEquals("カンマの後ろの 2 桁は縦中横", String.format(sub, "１，［＃縦中横］23［＃縦中横終わり］"), invokeConvertNumToKanji(String.format(sub, "1,23")));
-		assertEquals("数字の間でないカンマは変えない", String.format(sub, "あ,い"), invokeConvertNumToKanji(String.format(sub, "あ,い")));
-		//章の題（大見出し）には先頭の 3 桁の決まりが無い
-		assertEquals("［＃３字下げ］［＃大見出し］１００章［＃大見出し終わり］", invokeConvertNumToKanji("［＃３字下げ］［＃大見出し］100章［＃大見出し終わり］"));
-		//題の中の URL は変えない
-		assertEquals(String.format(sub, "第１話 https://example.com/n1234ab/12"), invokeConvertNumToKanji(String.format(sub, "第1話 https://example.com/n1234ab/12")));
+	public void testLineAfterPageBreakIsConvertedAsBody() throws Exception {
+		writeTestFile("タイトル\n著者名\n\n本文です。\n［＃改ページ］\n100日後のこと\n本文。\n");
+		settings.setEnableConvertNumToKanji(true);
+		settings.setEnableEnchantMidashi(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+		assertTrue(result, result.contains("［＃中見出し］一〇〇日後のこと［＃中見出し終わり］"));
 	}
 
 	/** AozoraTextFinalizer#convertNumToKanji を1行テキストに適用するヘルパー */
