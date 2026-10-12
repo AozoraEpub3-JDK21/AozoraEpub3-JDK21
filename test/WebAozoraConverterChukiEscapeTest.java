@@ -26,12 +26,10 @@ import com.github.hmdev.web.WebAozoraConverter;
 
 /**
  * internal #38: Web 変換は、サイトの文字の「［＃」を逃がさなかったので、注記の始まりとして読まれていた。
- * 作品名が柱に入ると閉じの注記を飲み込んで柱が閉じず、[#1] のような番号（記号を全角にすると［＃１］）は消えた。
- * 逃がすときは「［」を外字の注記（※［＃始め角括弧、1-1-46］）で書いて、ただの文字にする。
- * - 題名（作品名・章題・話の題・著者名・なろうの [chapter:] の見出し）: 全部逃がす
- * - 本文: サイトの文字のまま中がアラビア数字だけのもの（[#1]・［＃１］）だけ逃がす。
- *   作者が書いた注記（［＃改ページ］など）と、漢数字の返り点（［＃一］〜［＃四］）は narou.rb と同じく効かせる。
- *   青空文庫の HTML が span.notes に置く注記（［＃「…」はママ］など）も数字だけではないので、注記のまま
+ * 作品名が柱に入ると閉じの注記を飲み込んで柱が閉じない。
+ * - 題名（作品名・章題・話の題・著者名・なろうの [chapter:] の見出し）: 「［」を外字の注記（※［＃始め角括弧、1-1-46］）で書いて、ただの文字にする
+ * - 本文: 逃がさない（narou.rb と同じ）。作者が書いた注記（［＃改ページ］など）・返り点（［＃一］〜［＃四］）・
+ *   青空文庫の HTML が span.notes に置く注記（［＃「…」はママ］など）は注記として効く
  *
  * 実行方法:
  *   gradlew test --tests WebAozoraConverterChukiEscapeTest
@@ -117,32 +115,15 @@ public class WebAozoraConverterChukiEscapeTest {
 	}
 
 	@Test
-	public void arabicNumberBracketsInTheBodyAreEscaped() throws Exception {
-		//サイトの文字のまま中がアラビア数字だけのものは番号。漢数字にしてからでは返り点（［＃一］）と見分けられないので、その前に逃がす
-		//（［＃1,000］ は、カンマ区切りの数字が［＃半角数字＝…］になって消える別の不具合に当たるので、ここでは使わない）
-		String out = episode("作品", null, "<p id=\"L1\">［＃２］ と ［＃1・2］ と ［＃12］ と ［＃3－4］ の番号。</p>");
-		assertEquals("4 つとも逃がす: " + out, 4, out.split("始め角括弧、1-1-46", -1).length - 1);
-	}
-
-	@Test
-	public void kaeritenInTheBodyStayAnnotations() throws Exception {
-		//返り点（［＃一］〜［＃四］・［＃レ］・［＃上］など。chuki_tag.txt）は漢数字だけでも注記。漢数字の番号も逃がさない
-		String out = episode("作品", null, "<p id=\"L1\">学［＃二］而時習［＃一］之 と ［＃一〇］</p>");
-		assertTrue(out, out.contains("学［＃二］而時習［＃一］之"));
-		assertFalse(out, out.contains("始め角括弧"));
-	}
-
-	@Test
-	public void halfWidthNumberBracketMadeFullWidthIsEscaped() throws Exception {
-		//[#1] は記号を全角にする設定で［＃１］になり、注記に読まれて消えていた
+	public void titleWithHalfWidthBracketIsEscapedOnlyWhenSymbolsGoFullWidth() throws Exception {
+		//題名の [#1] は記号を全角にする設定で［＃１］になる。全角にしない設定なら注記にならないので、そのまま
 		boolean saved = settings.isEnableConvertSymbolsToZenkaku();
 		try {
 			settings.setEnableConvertSymbolsToZenkaku(true);
-			String out = episode("作品", null, "<p id=\"L1\">[#1] 出会い</p>");
+			String out = episode("作品", null, "[#1] 出会い", "<p id=\"L1\">本文。</p>");
 			assertTrue(out, out.matches("(?s).*" + java.util.regex.Pattern.quote(ESCAPED) + "[1１一]］ 出会い.*"));
-			//全角にしない設定なら [#1] は注記にならないので、そのまま
 			settings.setEnableConvertSymbolsToZenkaku(false);
-			out = episode("作品", null, "<p id=\"L1\">[#1] 出会い ［#2］</p>");
+			out = episode("作品", null, "[#1] 出会い ［#2］", "<p id=\"L1\">本文。</p>");
 			assertFalse(out, out.contains("始め角括弧"));
 		} finally {
 			settings.setEnableConvertSymbolsToZenkaku(saved);
@@ -150,19 +131,14 @@ public class WebAozoraConverterChukiEscapeTest {
 	}
 
 	@Test
-	public void annotationsWrittenInTheBodyStayAnnotations() throws Exception {
-		//作者が本文に書いた注記は narou.rb と同じく効かせる（数字で始まっても中に字があれば注記）
-		String out = episode("作品", null, "<p id=\"L1\">前［＃改ページ］後</p><p id=\"L2\">［＃３字下げ］字下げ</p><p id=\"L3\">［＃中見出し］見出し［＃中見出し終わり］</p>");
+	public void bodyIsNotEscaped() throws Exception {
+		//本文は narou.rb と同じく逃がさない。作者が書いた注記・返り点は効く（番号の［＃１］も注記に読まれる。narou.rb と同じ）
+		String out = episode("作品", null, "<p id=\"L1\">前［＃改ページ］後</p><p id=\"L2\">［＃３字下げ］字下げ</p>"
+			+ "<p id=\"L3\">学［＃二］而時習［＃一］之</p><p id=\"L4\">［＃１］と作［＃品</p>");
 		assertTrue(out, out.contains("前［＃改ページ］後"));
 		assertTrue(out, out.contains("［＃３字下げ］字下げ"));
-		assertTrue(out, out.contains("［＃中見出し］見出し［＃中見出し終わり］"));
-		assertFalse(out, out.contains("始め角括弧"));
-	}
-
-	@Test
-	public void unclosedOrNonNumberBracketsInTheBodyAreLeftAlone() throws Exception {
-		//閉じない「［＃１」・数字の後に字がある「［＃１話］」は数字だけではない
-		String out = episode("作品", null, "<p id=\"L1\">［＃１ と ［＃１話］ と ［＃］</p>");
+		assertTrue(out, out.contains("学［＃二］而時習［＃一］之"));
+		assertTrue(out, out.matches("(?s).*［＃[１一]］と作［＃品.*"));
 		assertFalse(out, out.contains("始め角括弧"));
 	}
 
@@ -186,18 +162,17 @@ public class WebAozoraConverterChukiEscapeTest {
 
 	@Test
 	public void aozoraNotesStayAnnotations() throws Exception {
-		//青空文庫の HTML: <span class="notes">［＃…］</span> は注記として読ませる（本文に出さない）。数字だけではないので本文の規則のままで通る
-		String html = "<p>措しい<span class=\"notes\">［＃「措しい」はママ］</span>事を［＃１］する<span class=\"notes\">［＃ルビの「か」は底本では「け」］</span></p>";
+		//青空文庫の HTML: <span class="notes">［＃…］</span> は注記として読ませる（本文に出さない）。本文は逃がさないので、そのまま通る
+		String html = "<p>措しい<span class=\"notes\">［＃「措しい」はママ］</span>事をする<span class=\"notes\">［＃ルビの「か」は底本では「け」］</span></p>";
 		String out = printNode("https://www.aozora.gr.jp/cards/000148/files/789_14547.html", html);
 		assertTrue("span.notes の中は注記のまま: " + out, out.contains("措しい［＃「措しい」はママ］事を"));
 		assertTrue("span.notes の中は注記のまま: " + out, out.contains("する［＃ルビの「か」は底本では「け」］"));
-		assertTrue("本文の番号は逃がす: " + out, out.contains("事を" + ESCAPED + "１］する"));
 	}
 
 	@Test
-	public void noExtraSpaceBeforeAnEscapedNumberAfterAnExclamation() throws Exception {
-		//！？ の後は空けるが、「［」の前は空けない（narou.rb）。逃がした「［」も同じ
-		String out = episode("作品", null, "<p id=\"L1\">すごい！［＃２］ と なに？［注］</p>");
+	public void noExtraSpaceBeforeAnEscapedBracketAfterAnExclamation() throws Exception {
+		//！？ の後は空けるが、「［」の前は空けない（narou.rb）。題名で逃がした「［」も同じ
+		String out = episode("作品", null, "すごい！［＃２］ と なに？［注］", "<p id=\"L1\">本文。</p>");
 		assertTrue(out, out.contains("すごい！" + ESCAPED + "２］"));
 		assertTrue(out, out.contains("なに？［注］"));
 	}
@@ -230,12 +205,11 @@ public class WebAozoraConverterChukiEscapeTest {
 
 	@Test
 	public void escapedTextConvertsToTheLiteralCharacters() throws Exception {
-		//中間テキストを変換して、柱が閉じ、題名と本文の番号に「［＃」がそのまま出て、目次の章の名前にも残ることを見る
-		String text = "作品\n作者\n\n" + episode("作［＃品", "章［＃題", "<p id=\"L1\">［＃１］はじまり。</p><p id=\"L2\">学［＃二］而時習［＃一］之</p>");
+		//中間テキストを変換して、柱が閉じ、題名に「［＃」がそのまま出て、目次の章の名前にも残り、本文の返り点は効くことを見る
+		String text = "作品\n作者\n\n" + episode("作［＃品", "章［＃題", "<p id=\"L1\">学［＃二］而時習［＃一］之</p>");
 		String xhtml = convert(text);
 		assertTrue("柱が閉じていない・作品名が欠けた:\n" + xhtml, xhtml.contains("<div class=\"running_head yoko\">作［＃品</div>"));
 		assertTrue("章題の「［＃」が消えた:\n" + xhtml, xhtml.contains("章［＃題"));
-		assertTrue("本文の番号が消えた:\n" + xhtml, xhtml.matches("(?s).*<p>［＃[１一]］はじまり。</p>.*"));
 		assertTrue("返り点が注記として効いていない:\n" + xhtml, xhtml.contains("学<span class=\"sub\">二</span>而時習<span class=\"sub\">一</span>之"));
 		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains("<text>章［＃題</text>"));
 	}

@@ -2811,7 +2811,7 @@ public class WebAozoraConverter
 		while (matcher.find()) {
 			String marks = matcher.group(1);
 			String next = matcher.group(2);
-			//逃がした「［」（本文の番号の [#1]）も「［」と同じく前を空けない
+			//逃がした「［」（題名の「［＃」）も「［」と同じく前を空けない
 			if (next.charAt(0) == PH_ESCAPED_BRACKET || next.matches("[」］｝\\]\\}』】〉》〕＞>≫)）\u201d\u201c\u2019〟　☆★♪［―]")) {
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(marks + next));
 			} else if (next.matches("[ 、。]")) {
@@ -2888,11 +2888,12 @@ public class WebAozoraConverter
 	}
 
 	private static String restorePlaceholders(String text) {
-		return text.replace(PH_BRACKET_OPEN, '［')
+		text = text.replace(PH_BRACKET_OPEN, '［')
 		           .replace(PH_BRACKET_CLOSE, '］')
 		           .replace(PH_HASH, '＃')
-		           .replace(PH_KOME, '※')
-		           .replace(String.valueOf(PH_ESCAPED_BRACKET), "※［＃始め角括弧、1-1-46］");
+		           .replace(PH_KOME, '※');
+		//逃がした「［」は題名にしか無いので、在るときだけ戻す
+		return text.indexOf(PH_ESCAPED_BRACKET) < 0 ? text : text.replace(String.valueOf(PH_ESCAPED_BRACKET), "※［＃始め角括弧、1-1-46］");
 	}
 
 	/** 中間テキスト先頭のシリーズ名・表題を出力
@@ -2910,21 +2911,10 @@ public class WebAozoraConverter
 		}
 	}
 
-	/** サイトの文字の「［＃」（注記の始まりに読まれる）をどこまで逃がすか（internal #38） */
-	enum ChukiEscape {
-		/** 全部逃がす。作品名・章題・話の題・著者名など。題名に注記を書く作者はいないうえ、柱に入ると閉じを飲み込んで柱が閉じない */
-		ALL,
-		/** サイトの文字のまま中がアラビア数字だけのもの（[#1]・［＃１］・［＃12］）だけ逃がす。本文・ルビ・あらすじ。
-		 * 作者が本文に書いた注記（［＃改ページ］など）は narou.rb と同じく注記として効かせる。
-		 * 漢数字の［＃一］〜［＃四］は返り点の注記なので逃がさない。数字を漢数字にする前のサイトの文字で見るので、番号の [#1] と返り点を取り違えない。
-		 * 青空文庫の HTML が <span class="notes"> に置く注記（［＃「措しい」はママ］など）も数字だけではないので、注記のまま通る */
-		NUMBER_ONLY
-	}
-
-	/** 本文の番号の「［＃」の「［」。半角の「[」「#」は記号を全角にする設定のときだけ「［＃」になる */
-	private static final Pattern NUMBER_CHUKI_OPEN = Pattern.compile("([［\\[])(?=([＃#])[0-9０-９][0-9０-９,，.．・\\-－]*[］\\]])");
-
-	/** 文字の中の「［＃」の「［」を全部 PH_ESCAPED_BRACKET にする。半角の [ # は記号を全角にする設定のときだけ「［＃」になる */
+	/** 題名（作品名・章題・話の題など）の文字の「［＃」の「［」を全部 PH_ESCAPED_BRACKET にする（internal #38）。
+	 * 「［＃」は注記の始まりに読まれ、作品名が柱に入ると閉じの注記を飲み込んで柱が閉じない。題名に注記を書く作者はまずいない。
+	 * 本文は逃がさない（narou.rb と同じ。作者が本文に書いた注記・返り点は効く。2026-10-12 に手元の 74 作品の取ったままの HTML を調べ、本文・題名とも［＃・[# は 0 件）。
+	 * 半角の [ # は記号を全角にする設定のときだけ「［＃」になる */
 	String escapeChukiOpenAll(String text)
 	{
 		if (text.indexOf('［') < 0 && text.indexOf('[') < 0) return text;
@@ -2939,22 +2929,6 @@ public class WebAozoraConverter
 		return sb.toString();
 	}
 
-	/** 本文の番号の「［＃数字］」の「［」を、逃がした「［」の PH_ESCAPED_BRACKET に置き換える。数字の変換より前に呼ぶ */
-	String escapeNumberChukiOpen(String text)
-	{
-		if (text.indexOf('［') < 0 && text.indexOf('[') < 0) return text;
-		boolean zenkaku = formatSettings.isEnableConvertSymbolsToZenkaku();
-		Matcher m = NUMBER_CHUKI_OPEN.matcher(text);
-		StringBuilder sb = new StringBuilder();
-		while (m.find()) {
-			//変換の後に「［＃」の形になるものだけ（全角にしない設定なら半角の [ と # は注記にならない）
-			boolean forms = (m.group(1).equals("［") || zenkaku) && (m.group(2).equals("＃") || zenkaku);
-			m.appendReplacement(sb, Matcher.quoteReplacement(forms ? String.valueOf(PH_ESCAPED_BRACKET) : m.group(1)));
-		}
-		m.appendTail(sb);
-		return sb.toString();
-	}
-
 	/** 文字を出力 特殊文字は注記に変換。題名など（「［＃」は全部逃がす） */
 	private void printText(BufferedWriter bw, String text) throws IOException
 	{
@@ -2963,21 +2937,21 @@ public class WebAozoraConverter
 
 	private void printText(BufferedWriter bw, String text, boolean isSubtitle) throws IOException
 	{
-		printText(bw, text, isSubtitle, ChukiEscape.ALL);
+		printText(bw, text, isSubtitle, true);
 	}
 
-	/** 本文の文字を出力（「［＃」はアラビア数字の番号だけを逃がす） */
+	/** 本文の文字を出力（「［＃」は逃がさない。narou.rb と同じ） */
 	private void printBodyText(BufferedWriter bw, String text) throws IOException
 	{
-		printText(bw, text, false, ChukiEscape.NUMBER_ONLY);
+		printText(bw, text, false, false);
 	}
 
-	private void printText(BufferedWriter bw, String text, boolean isSubtitle, ChukiEscape chukiEscape) throws IOException
+	/** @param escapeChukiOpen 文字の「［＃」を逃がす（題名） */
+	private void printText(BufferedWriter bw, String text, boolean isSubtitle, boolean escapeChukiOpen) throws IOException
 	{
 		text = text.replaceAll("[\r\n]+", "");
-		//サイトの文字の「［＃」は注記の始まりに読まれる（作品名の柱が閉じない・番号が消える。internal #38）。
 		//逃がす「［」は 1 字の PH_ESCAPED_BRACKET にして、最後に ※［＃始め角括弧、1-1-46］ に戻す。変換が足す注記は PH_* で書くので逃がさない
-		text = chukiEscape == ChukiEscape.ALL ? escapeChukiOpenAll(text) : escapeNumberChukiOpen(text);
+		if (escapeChukiOpen) text = escapeChukiOpenAll(text);
 		if (formatSettings.isEnableAutoJoinInBrackets()) text = autoJoinInBrackets(text);
 		if (formatSettings.isEnableAutoJoinLine()) text = autoJoinLine(text);
 		if (formatSettings.isEnableNarouTag()) text = convertNarouTags(text);
