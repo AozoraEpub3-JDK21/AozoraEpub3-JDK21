@@ -92,12 +92,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.7.0-jdk21.zip
+AozoraEpub3-1.7.1-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.7.0-jdk21.tar.gz
+AozoraEpub3-1.7.1-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -148,6 +148,9 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.7.1-jdk21 (2026-10-12)
+- **本棚（裏機能）の直し**: 出力が Kindle（.mobi）の設定で本棚から落とそうとしたときに、断る理由と直し方を出す。ランキングから本棚へ戻るボタンを分かりやすくした
 
 ### v1.7.0-jdk21 (2026-10-12)
 - **青空文庫の作品の URL は、図書カードのテキスト（zip）から変換する**: HTML から読み戻すと傍点・字下げ・見出しなどが落ちていた。GUI でも zip の URL を変換まで進める
