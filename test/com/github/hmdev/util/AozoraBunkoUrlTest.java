@@ -49,6 +49,18 @@ public class AozoraBunkoUrlTest
 	}
 
 	@Test
+	public void aozoraArchivesAreReadAsShiftJis()
+	{
+		//作品の URL から読み替えた zip も、zip の URL を直に渡したときも
+		assertTrue(AozoraBunkoUrl.isTextArchiveUrl("https://www.aozora.gr.jp/cards/000148/files/789_ruby_5639.zip"));
+		assertTrue(AozoraBunkoUrl.isTextArchiveUrl("http://aozora.gr.jp/cards/000148/files/789_ruby_5639.zip"));
+		assertFalse("別のサイトの zip は -enc・画面の文字コードのとおり", AozoraBunkoUrl.isTextArchiveUrl("https://example.com/cards/000148/files/789_ruby_5639.zip"));
+		assertFalse(AozoraBunkoUrl.isTextArchiveUrl("https://www.aozora.gr.jp.example.com/a.zip"));
+		assertFalse("作品の XHTML は書庫でない", AozoraBunkoUrl.isTextArchiveUrl("https://www.aozora.gr.jp/cards/000148/files/789_14547.html"));
+		assertFalse(AozoraBunkoUrl.isTextArchiveUrl(null));
+	}
+
+	@Test
 	public void cardUrlIsBuiltFromTheWorkId()
 	{
 		assertEquals(CARD, AozoraBunkoUrl.cardUrl("https://www.aozora.gr.jp/cards/000148/files/789_14547.html"));

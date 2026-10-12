@@ -4702,8 +4702,7 @@ public class AozoraEpub3Applet extends JPanel
 			if (vecUrlSrcFile != null && vecUrlSrcFile.size() > i) urSrcFile = vecUrlSrcFile.get(i);
 			//青空文庫の作品の URL（XHTML・図書カード）は、HTML を読まず、図書カードのテキストの zip に読み替える
 			//（HTML から戻すと傍点・字下げなどが落ちる。internal の ADR 0001）。zip が無ければ止める
-			boolean aozoraZip = AozoraBunkoUrl.isWorkUrl(urlString);
-			if (aozoraZip) {
+			if (AozoraBunkoUrl.isWorkUrl(urlString)) {
 				LogAppender.println("--------");
 				try {
 					urlString = AozoraBunkoUrl.resolveZipUrl(urlString);
@@ -4714,6 +4713,12 @@ public class AozoraEpub3Applet extends JPanel
 					LogAppender.append(urlString);
 					LogAppender.println(" は変換できませんでした");
 					continue;
+				}
+				//図書カードを取っている間に中止された。zip は取らない
+				if (this.convertCanceled) {
+					this.convertCanceledInWorker = true;
+					LogAppender.println("変換処理を中止しました : "+urlString);
+					return;
 				}
 			}
 			//URL変換 の最後が .zip .txtz .rar
@@ -4730,14 +4735,24 @@ public class AozoraEpub3Applet extends JPanel
 					LogAppender.println(" は変換できませんでした");
 					continue;
 				}
-				//青空文庫のテキストは Shift_JIS（画面の入力文字コードに依らない）
+				//取っている間に中止された（convertFiles は始めに中止の印を消すので、その前に見る）
+				if (this.convertCanceled) {
+					this.convertCanceledInWorker = true;
+					LogAppender.println("変換処理を中止しました : "+urlString);
+					return;
+				}
+				//青空文庫のテキストは Shift_JIS（画面の入力文字コードに依らない。zip の URL を直に渡したときも）
 				String encType = (String)jComboEncType.getSelectedItem();
-				if (aozoraZip) jComboEncType.setSelectedItem(AozoraBunkoUrl.ENCODING);
+				if (AozoraBunkoUrl.isTextArchiveUrl(urlString)) jComboEncType.setSelectedItem(AozoraBunkoUrl.ENCODING);
+				//表紙が「入力と同じ名前」で、ショートカット（.url）から来たなら、ショートカットと同じ名前の画像を使う（Web の経路と同じ）
+				Object coverItem = jComboCover.getSelectedItem();
+				if (jComboCover.getSelectedIndex() == 1 && urSrcFile != null) jComboCover.setSelectedItem(AozoraEpub3.getSameCoverFileName(urSrcFile));
 				try {
 					convertFiles(new File[]{archiveFile}, dstPath);
 				} finally {
 					//設定を戻す（戻さないと、窓が手前から外れたときの保存で一時的な値が ini に残る）
 					jComboEncType.setSelectedItem(encType);
+					jComboCover.setSelectedItem(coverItem);
 				}
 				continue;
 			}

@@ -177,6 +177,20 @@ public class HeadlessWebConversionTest {
 		assertEquals(0, requests.get());
 	}
 
+	/** 前から本棚にある青空文庫の本は、更新では失敗でなく「更新なし」（完結した作品。取りに行かず、本も書き換えない） */
+	@Test
+	public void aShelfAozoraBunkoBookHasNoUpdate() throws Exception {
+		String basePath = serveAndBase();
+		File dst = tempFolder.newFolder("out");
+		File book = new File(dst, "[夏目漱石] 吾輩は猫である.epub");
+		java.nio.file.Files.write(book.toPath(), new byte[] { 1 });
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).convert("https://www.aozora.gr.jp/cards/000148/files/789_14547.html", dst, book, true, true, false);
+		assertFalse(r.ok());
+		assertTrue("更新なし: " + r.message(), r.noUpdate());
+		assertEquals(1, book.length());
+		assertEquals(0, requests.get());
+	}
+
 	/**
 	 * 本棚の本は、その本の名前で書き換える（本棚で名前を変えた本・同じ作品の別の名前の本も更新できる）。
 	 * 本の名前は台帳に記録しない（#116 のゲート2）。拡張子が設定と違えば、名前が合わずに書かない

@@ -33,17 +33,31 @@ public final class AozoraBunkoUrl
 	/** 図書カード。1: 作家ID 2: 作品ID */
 	static final Pattern CARD_PAGE = Pattern.compile("^https?://(?:www\\.)?aozora\\.gr\\.jp/cards/(\\d+)/card(\\d+)\\.html?(?:[?#].*)?$");
 
+	/** 青空文庫のサイトの URL */
+	static final Pattern SITE = Pattern.compile("^https?://(?:www\\.)?aozora\\.gr\\.jp/");
+
 	/** 青空文庫の作品の XHTML か図書カードの URL か */
 	public static boolean isWorkUrl(String url)
 	{
-		return url != null && (WORK_PAGE.matcher(url).matches() || CARD_PAGE.matcher(url).matches());
+		return matcher(url) != null;
+	}
+
+	/** 青空文庫のサイトのテキストの書庫（zip など）の URL か。中のテキストは {@link #ENCODING} で読む
+	 * （作品の URL から読み替えた zip も、zip の URL を直に渡したときも。画面・-enc の文字コードに依らない） */
+	public static boolean isTextArchiveUrl(String url)
+	{
+		return url != null && SITE.matcher(url).find() && ArchiveUrlUtils.isArchiveUrl(url);
 	}
 
 	/** 作品の URL の図書カードの URL（https）。作品の URL でなければ null */
 	static String cardUrl(String url)
 	{
 		Matcher m = matcher(url);
-		if (m == null) return null;
+		return m == null ? null : cardUrl(m);
+	}
+
+	private static String cardUrl(Matcher m)
+	{
 		//http で渡されても https で取る（URLConnection は http から https への転送をたどらない）
 		return "https://www.aozora.gr.jp/cards/"+m.group(1)+"/card"+m.group(2)+".html";
 	}
@@ -69,7 +83,7 @@ public final class AozoraBunkoUrl
 	 * @param workId 作品ID（別の作品の zip を選ばない） */
 	static String zipUrlFromCard(Document card, String workId)
 	{
-		Pattern own = Pattern.compile("/files/"+workId+"_[^/]*\\.zip$", Pattern.CASE_INSENSITIVE);
+		Pattern own = Pattern.compile("/files/"+Pattern.quote(workId)+"_[^/]*\\.zip$", Pattern.CASE_INSENSITIVE);
 		String found = null;
 		for (Element a : card.select("a[href]")) {
 			String href = a.absUrl("href");
@@ -84,8 +98,10 @@ public final class AozoraBunkoUrl
 	 * @throws IOException 図書カードを取れない・zip のリンクが無い。メッセージは利用者に出す理由 */
 	public static String resolveZipUrl(String url) throws IOException
 	{
-		String cardUrl = cardUrl(url);
-		if (cardUrl == null) throw new IOException("青空文庫の作品の URL ではありません: "+url);
+		Matcher m = matcher(url);
+		if (m == null) throw new IOException("青空文庫の作品の URL ではありません: "+url);
+		String cardUrl = cardUrl(m);
+		String workId = m.group(2);
 		Document card;
 		try (InputStream is = NetUtils.openStream(new java.net.URI(cardUrl).toURL())) {
 			//文字コードは図書カードの meta に従う（今は UTF-8）
@@ -98,7 +114,7 @@ public final class AozoraBunkoUrl
 		} catch (IOException e) {
 			throw new IOException("図書カードを取れませんでした: "+cardUrl+" ("+e.getMessage()+")", e);
 		}
-		String zipUrl = zipUrlFromCard(card, workId(url));
+		String zipUrl = zipUrlFromCard(card, workId);
 		if (zipUrl == null) throw new IOException("図書カードにテキストの zip がありません: "+cardUrl);
 		return zipUrl;
 	}
