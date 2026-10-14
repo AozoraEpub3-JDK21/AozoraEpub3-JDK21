@@ -777,6 +777,30 @@ function queueStateOfKey(key)
 }
 
 /**
+ * その作品 (key) の最後の試みが失敗か、進み具合が分からなくなったなら、その 1 件。並び直したら null。
+ * ランキングの札に失敗を出すため (internal #52)
+ */
+function queueFailureOfKey(key)
+{
+	let last = null;
+	for (const item of libraryQueue) if (item.key === key) last = item;
+	// 「確かめられません」は、その作品が本棚に出るまで外さない (出れば札は「本棚にあります」)。読み直しで外すと、
+	// アプリがまだ落としている作品をもう一度頼めた。サーバの重複の判定は URL の文字そのままで、作品では見ない
+	// (PR #171 の codex)
+	return last && (last.state === 'failed' || last.state === 'unknown') ? last : null;
+}
+
+/** ランキングを出している間に失敗が来て、まだ ＋ の欄で見ていない (internal #52、PR #171 の Opus) */
+let libraryFailureUnseen = false;
+
+/** 見ていない失敗の印を ＋ に付ける / 外す */
+function markFailureUnseen(unseen)
+{
+	libraryFailureUnseen = unseen;
+	el.libraryDownloadToggle.dataset.state = unseen ? 'failed' : '';
+}
+
+/**
  * 並びに足す。同じ作品がもう並んでいるか落としている最中なら足さない。
  * 貼った URL も作品の印 (workKeyOfUrl) で見る: ランキングの札に「順番待ち」が付き、書き方の違う同じ作品が
  * 二重に並ばない (PR #169 の Opus レビュー)
@@ -785,11 +809,20 @@ function enqueueDownload(url, label, key)
 {
 	if (!url) return false;
 	key = key || workKeyOfUrl(url);
-	if (libraryQueue.some(i => queueActive(i) && (i.url === url || (key && i.key === key)))) {
-		// 進み具合の行ではすぐ上書きされて読めない (win2 の実機、0.5 秒で消えた)。別の行に出し、次に足すまで残す
-		el.libraryQueueRefusal.textContent = 'その作品はもう順番に入っています';
+	const same = i => i.url === url || (key && i.key === key);
+	// 進み具合の行ではすぐ上書きされて読めない (win2 の実機、0.5 秒で消えた)。別の行に出し、次に足すまで残す
+	const refuse = text => {
+		el.libraryQueueRefusal.textContent = text;
 		el.libraryQueueRefusal.hidden = false;
 		return false;
+	};
+	if (libraryQueue.some(i => queueActive(i) && same(i))) return refuse('その作品はもう順番に入っています');
+	// 進み具合が分からなくなった作品は、本棚に出るまで足さない。アプリがまだ落としているかもしれず、サーバの
+	// 重複の判定は URL の文字そのままなので、書き方の違う URL だと同じ作品を 2 度落とす。ランキングの札だけで
+	// なく ＋ からも同じ (PR #171 の codex)
+	const onShelf = key && state.library ? shelfKeys().has(key) : false;
+	if (!onShelf && libraryQueue.some(i => i.state === 'unknown' && same(i))) {
+		return refuse('その作品はまだ落としているかもしれません。⟳ 一覧を更新で確かめてください (本棚に出なければ、このページを開き直すと落とせます)');
 	}
 	el.libraryQueueRefusal.hidden = true;
 	libraryQueue.push({id: ++libraryQueueSeq, url: url, label: label || url, key: key || null, state: 'waiting', message: ''});
@@ -803,6 +836,7 @@ function openDownloadPanel()
 {
 	el.libraryDownload.hidden = false;
 	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
+	markFailureUnseen(false);
 }
 
 function cancelQueued(id)
@@ -850,8 +884,14 @@ async function runQueue()
 			}
 			item.state = outcome.state;
 			item.message = outcome.message || '';
-			// 失敗はランキングの札からは読めない (札は「落とす」に戻る)。理由の出る ＋ の欄を開く
-			if (outcome.state === 'failed' || outcome.state === 'unknown') openDownloadPanel();
+			// 失敗は理由の出る ＋ の欄を開いて見せる。ただしランキングを出している間は開かない: 開くと一覧が欄の
+			// 高さだけ下がり、そのとき押そうとしていた札が外れる (internal #52、win2 の実機)。そこでは札が失敗を出す
+			// 札が見えないこともある (期間を変えた、貼った URL)。そのときのために ＋ に印を付け、ランキングを
+			// しまったら欄を開く (toggleRanking)
+			if (outcome.state === 'failed' || outcome.state === 'unknown') {
+				if (el.libraryRanking.hidden) openDownloadPanel();
+				else markFailureUnseen(true);
+			}
 			renderQueue();
 		}
 	} finally {
@@ -864,7 +904,8 @@ async function runQueue()
 function renderQueue()
 {
 	// 終わった作品は新しいものから LIBRARY_QUEUE_KEEP_FINISHED 件だけ残す
-	const finished = libraryQueue.filter(i => !queueActive(i));
+	// 進み具合が分からなくなった作品は消さない: 本棚に出るまで、2 度落とさないための印になっている (PR #171 の codex)
+	const finished = libraryQueue.filter(i => !queueActive(i) && i.state !== 'unknown');
 	for (const old of finished.slice(0, Math.max(0, finished.length - LIBRARY_QUEUE_KEEP_FINISHED))) {
 		libraryQueue.splice(libraryQueue.indexOf(old), 1);
 	}
@@ -907,6 +948,7 @@ const LIBRARY_DOWNLOAD_LABELS = {
 function bindDownloadEvents()
 {
 	el.libraryDownloadToggle.addEventListener('click', () => {
+		markFailureUnseen(false);
 		const open = el.libraryDownload.hidden;
 		el.libraryDownload.hidden = !open;
 		el.libraryDownloadToggle.setAttribute('aria-expanded', String(open));
