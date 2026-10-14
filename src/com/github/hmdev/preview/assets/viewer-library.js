@@ -763,11 +763,16 @@ function queueStateOfKey(key)
 	return item ? item.state : null;
 }
 
-/** 並びに足す。同じ URL がもう並んでいるか落としている最中なら足さない */
+/**
+ * 並びに足す。同じ作品がもう並んでいるか落としている最中なら足さない。
+ * 貼った URL も作品の印 (workKeyOfUrl) で見る: ランキングの札に「順番待ち」が付き、書き方の違う同じ作品が
+ * 二重に並ばない (PR #169 の Opus レビュー)
+ */
 function enqueueDownload(url, label, key)
 {
 	if (!url) return;
-	if (libraryQueue.some(i => i.url === url && queueActive(i))) {
+	key = key || workKeyOfUrl(url);
+	if (libraryQueue.some(i => queueActive(i) && (i.url === url || (key && i.key === key)))) {
 		showDownloadStatus('その作品はもう順番に入っています');
 		return;
 	}
@@ -866,7 +871,8 @@ function renderQueue()
 }
 
 const LIBRARY_DOWNLOAD_LABELS = {
-	queued: '順番待ち…',
+	// アプリの列で、⟳ の更新や新着の確認の後ろにいる (並びの一覧では「落としています…」)
+	queued: '始まるのを待っています…',
 	running: '取っています… (話数が多いと時間がかかります)',
 	done: '落としました',
 	failed: '落とせませんでした',
@@ -1008,11 +1014,16 @@ async function useWebShelf(path)
 	if (!response.ok) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
 	el.libraryShelfAsk.hidden = true;
 	showDownloadStatus('Web 本棚: ' + json.location);
-	// Web 本棚が棚に加わったので、本棚を読み直す
-	await loadLibrary(true);
-	// 待っていた作品 (場所を聞いた作品から) を続けて落とす
+	// 場所は決まった。聞いている印は、本棚の読み直しより先に外す: 読み直しが失敗しても列が止まらないように
+	// (PR #169 の Opus レビュー)
 	libraryPendingUrl = null;
-	runQueue();
+	try {
+		// Web 本棚が棚に加わったので、本棚を読み直す
+		await loadLibrary(true);
+	} finally {
+		// 待っていた作品 (場所を聞いた作品から) を続けて落とす
+		runQueue();
+	}
 }
 
 /** アプリにフォルダ選択を出してもらう。選んだ場所は入力欄に入れるだけ (決めるのは「この場所にする」) */
