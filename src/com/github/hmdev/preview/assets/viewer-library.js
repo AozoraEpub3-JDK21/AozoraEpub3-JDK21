@@ -904,7 +904,8 @@ async function runQueue()
 function renderQueue()
 {
 	// 終わった作品は新しいものから LIBRARY_QUEUE_KEEP_FINISHED 件だけ残す
-	const finished = libraryQueue.filter(i => !queueActive(i));
+	// 進み具合が分からなくなった作品は消さない: 本棚に出るまで、2 度落とさないための印になっている (PR #171 の codex)
+	const finished = libraryQueue.filter(i => !queueActive(i) && i.state !== 'unknown');
 	for (const old of finished.slice(0, Math.max(0, finished.length - LIBRARY_QUEUE_KEEP_FINISHED))) {
 		libraryQueue.splice(libraryQueue.indexOf(old), 1);
 	}
