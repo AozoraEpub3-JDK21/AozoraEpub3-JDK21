@@ -69,9 +69,6 @@ let rankingTimer = 0;
 let rankingInFlight = false;
 let rankingWanted = false;
 
-/** ランキングから落としている作品の印 (key)。押した瞬間から持つ (startDownload が仕事を持つのは POST の返り以降) */
-let rankingBusyKey = null;
-
 function bindRankingEvents()
 {
 	fillRankingChoices();
@@ -94,7 +91,7 @@ function bindRankingEvents()
 	el.rankingList.addEventListener('click', event => {
 		const button = event.target.closest('button.ranking-get');
 		if (!button) return;
-		downloadFromRanking(button).catch(err => showDownloadStatus('落とせませんでした: ' + err.message, true));
+		downloadFromRanking(button);
 	});
 }
 
@@ -389,8 +386,9 @@ function rankingCard(work, rank, owned)
 	const action = document.createElement('button');
 	action.type = 'button';
 	action.className = 'ranking-get';
-	// 期間を変えて描き直しても、落としている最中の札は「落としています…」のまま
-	if (work.key === rankingBusyKey) paintRankingBusy(action);
+	// 期間を変えて描き直しても、順番待ちと落としている最中の札はそのまま
+	const queued = queueStateOfKey(work.key);
+	if (queued) paintRankingBusy(action, queued);
 	else paintRankingButton(action, owned.has(work.key));
 	item.appendChild(action);
 	return item;
@@ -403,62 +401,40 @@ function paintRankingButton(button, owned)
 	button.dataset.state = owned ? 'owned' : '';
 }
 
-function paintRankingBusy(button)
+/** 並びにいる札 (internal #50)。取り消しは ＋ の欄から */
+function paintRankingBusy(button, queued)
 {
 	button.disabled = true;
-	button.textContent = '落としています…';
+	button.textContent = queued === 'waiting' ? '順番待ち' : '落としています…';
 	button.dataset.state = 'busy';
 }
 
-/** 本棚を読み込み直すたびに、本棚の印だけ付け直す (開いたあらすじはそのまま) */
+/** 本棚を読み込み直すたびと、落とす並びが動くたびに、札の印を付け直す (開いたあらすじはそのまま) */
 function remarkRanking()
 {
-	// 本棚を読み込めなかった (state.library が null) ときは、印を消さない。消すと本棚にある作品をまた落とせる
-	if (!state.library) return;
-	const owned = shelfKeys();
+	// 本棚を読み込めなかった (state.library が null) ときは、本棚の印を消さない。消すと本棚にある作品をまた
+	// 落とせる。並びから出た札だけは押せる形に戻す (落とせたかは本棚を読み直すまで分からない)
+	const owned = state.library ? shelfKeys() : null;
 	for (const item of el.rankingList.children) {
 		const button = item.querySelector('button.ranking-get');
-		if (button && item.dataset.key !== rankingBusyKey) paintRankingButton(button, owned.has(item.dataset.key));
+		if (!button) continue;
+		const queued = queueStateOfKey(item.dataset.key);
+		if (queued) paintRankingBusy(button, queued);
+		else if (owned) paintRankingButton(button, owned.has(item.dataset.key));
+		else if (button.dataset.state === 'busy') paintRankingButton(button, false);
 	}
 }
 
-async function downloadFromRanking(button)
+/** 札の「落とす」。ほかの作品を落としている最中でも断らず、順番に並べる (internal #50) */
+function downloadFromRanking(button)
 {
-	if (libraryDownloadJob || libraryDownloadPosting || rankingBusyKey) {
-		showDownloadStatus('ほかの作品を落としています。終わってから押してください');
-		el.libraryDownload.hidden = false;
-		el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
-		return;
-	}
-	// Web 本棚の場所を聞いている間は、決めたら落とす URL が 1 つ待っている。上書きすると先に押した作品が消える
-	if (libraryPendingUrl) {
-		el.libraryDownload.hidden = false;
-		el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
-		el.libraryShelfNote.textContent = '先に Web 本棚の場所を決めてください (決めると、先に押した作品を落とします)';
-		return;
-	}
 	const item = button.closest('.ranking-card');
 	const work = rankingWorks.find(w => w.key === item.dataset.key);
 	if (!work) return;
-	// 進み具合と Web 本棚の場所を聞く欄は、URL を貼って落とすのと同じ所に出る
+	// 並びと進み具合、Web 本棚の場所を聞く欄は、URL を貼って落とすのと同じ所に出る
 	el.libraryDownload.hidden = false;
 	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
-	el.libraryDownloadUrl.value = work.url;
-	rankingBusyKey = work.key;
-	paintRankingBusy(button);
-	try {
-		await startDownload(work.url);
-	} finally {
-		// 落とせたときの印は、本棚の読み直し (loadLibrary) が付ける。ここは押せる形に戻すだけ。
-		// 描き直されていれば button はもう画面に無いので、今の札を探して塗る
-		rankingBusyKey = null;
-		const owned = state.library ? shelfKeys() : null;
-		for (const current of el.rankingList.querySelectorAll('.ranking-card')) {
-			if (current.dataset.key !== work.key) continue;
-			const now = current.querySelector('button.ranking-get');
-			if (now) paintRankingButton(now, owned ? owned.has(work.key) : false);
-		}
-	}
+	enqueueDownload(work.url, work.title, work.key);
 }
 
 function rankingGenreName(code)
