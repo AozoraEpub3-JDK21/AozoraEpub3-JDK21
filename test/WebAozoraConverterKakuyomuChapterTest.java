@@ -144,6 +144,25 @@ public class WebAozoraConverterKakuyomuChapterTest {
 	}
 
 	// ---------------------------------------------------------------
+	// 章題の括弧・エスケープした引用符・\\uXXXX で、項目の範囲も章題も切れない
+	// ---------------------------------------------------------------
+	@Test
+	public void titlesWithBracesQuotesAndUnicodeEscapes() throws Exception {
+		String json = "{"
+			+ "\"TableOfContentsChapter:10\":{\"__typename\":\"TableOfContentsChapter\",\"id\":\"10\","
+			+ "\"note\":\"} {\\\"\","
+			+ "\"episodeUnions\":[{\"__ref\":\"Episode:1\"}],\"chapter\":{\"__ref\":\"Chapter:10\"}},"
+			+ episode("2", "第2話") + ","
+			+ tocChapter("20", "2") + ","
+			+ chapter("10", "第一章 {序} \\\"再会\\\" A\\u0026B \\\\n") + ","
+			+ chapter("20", "第二章")
+			+ "}";
+		HashMap<String, String> map = invoke(json);
+		assertEquals("第一章 {序} \"再会\" A&B \\n", map.get("1"));
+		assertEquals("第二章", map.get("2"));
+	}
+
+	// ---------------------------------------------------------------
 	// 章なし作品は空マップ
 	// ---------------------------------------------------------------
 	@Test

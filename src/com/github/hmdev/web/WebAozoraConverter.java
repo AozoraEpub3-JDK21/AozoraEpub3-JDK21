@@ -3341,8 +3341,8 @@ public class WebAozoraConverter
 		Pattern epRefPat = Pattern.compile("\"__ref\":\"Episode:(\\d+)\"");
 		// 章本体 ("Chapter:ID") への参照
 		Pattern chapterRefPat = Pattern.compile("\"chapter\":\\{\"__ref\":\"Chapter:(\\d+)\"\\}");
-		// 章タイトルパターン (拡張文字を除いたシンプルなマッチ)
-		Pattern titlePat = Pattern.compile("\"title\":\"([^\"]*+)\"");
+		// 章タイトルパターン (文字列中のエスケープ \" で切らない)
+		Pattern titlePat = Pattern.compile("\"title\":\"((?:[^\"\\\\]|\\\\.)*+)\"");
 		Matcher chMatcher = chapterKeyPat.matcher(json);
 		while (chMatcher.find()) {
 			// 章の項目 {...} の中だけを見る。次の項目までを見ると、最後の章の範囲が JSON の末尾まで伸び、
@@ -3359,9 +3359,7 @@ public class WebAozoraConverter
 			if (chBody == null) continue;
 			Matcher titleM = titlePat.matcher(chBody);
 			if (!titleM.find()) continue;
-			String chTitle = titleM.group(1)
-				.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
-				.replace("\\\"", "\"").replace("\\\\", "\\").strip();
+			String chTitle = unescapeJsonString(titleM.group(1)).strip();
 			if (chTitle.isEmpty()) continue;
 			// エピソード参照を収集
 			Matcher refM = epRefPat.matcher(block);
@@ -3371,6 +3369,39 @@ public class WebAozoraConverter
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * JSON の文字列の中身のエスケープを 1 回の走査で戻す。Next.js は __NEXT_DATA__ の
+	 * "&amp;" "&lt;" "&gt;" を \\u0026 などで書くので \\uXXXX も戻す。不正な並びはそのまま残す
+	 */
+	static String unescapeJsonString(String s) {
+		if (s.indexOf('\\') < 0) return s;
+		StringBuilder sb = new StringBuilder(s.length());
+		for (int i = 0; i < s.length(); i++) {
+			char c = s.charAt(i);
+			if (c != '\\' || i + 1 >= s.length()) { sb.append(c); continue; }
+			char n = s.charAt(++i);
+			switch (n) {
+			case 'n': sb.append('\n'); break;
+			case 'r': sb.append('\r'); break;
+			case 't': sb.append('\t'); break;
+			case 'b': sb.append('\b'); break;
+			case 'f': sb.append('\f'); break;
+			case 'u':
+				if (i + 4 < s.length()) {
+					try {
+						sb.append((char) Integer.parseInt(s.substring(i + 1, i + 5), 16));
+						i += 4;
+						break;
+					} catch (NumberFormatException e) { /* 意図的: 不正な \\u はそのまま残す */ }
+				}
+				sb.append('\\').append(n);
+				break;
+			default: sb.append(n); break; // \" \\ \/
+			}
+		}
+		return sb.toString();
 	}
 
 	/**

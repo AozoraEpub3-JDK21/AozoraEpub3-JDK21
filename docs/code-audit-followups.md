@@ -2192,13 +2192,15 @@ narou.rb の決まり（`hankaku_num_to_zenkaku_num`、converterbase.rb:583）�
 **原因**: `WebAozoraConverter.buildEpisodeChapterMapFromNextData`（v1.2.7 のマルチサイト対応）が `__NEXT_DATA__` の `"TableOfContentsChapter:ID":` から次の同じ項目までを 1 つの章と見て、その中の最初の `"title"` を章題にしていた。
 しかし `TableOfContentsChapter` は章題を持たず、`"chapter":{"__ref":"Chapter:ID"}` で別の `Chapter:ID` の項目を指している。項目の並びは作品ごとに違い、直後に `Chapter:ID` が来れば正しく読めるが、次の章の `Episode:ID` が来るとその話の題を拾う。
 また、最後の章の範囲が JSON の末尾まで伸びるので、後ろにある `"firstPublicEpisodeUnion":{"__ref":"Episode:…"}` が指す章外の話まで、最後の章に入れていた。
-**対応**: 章題は参照先の `Chapter:ID` の項目から読む。話は章の項目の `{…}` の中だけから拾う。章題の末尾の `\t`（実作品にあった）は落とす。`Chapter:ID` が見つからない章は、別の題で埋めず章なしにする。
+**対応**: 章題は参照先の `Chapter:ID` の項目から読む。話は章の項目の `{…}` の中だけから拾う。章題の末尾の `\t`（実作品にあった）は落とす。
+章題のエスケープは 1 回の走査で戻す（`\"` で切れない、`&` などを戻す。Next.js は `&` `<` `>` をこう書く）。
+`Chapter:ID` が見つからない章には、別の題を当てない（その章の話は対応表に載らず、変換では直前の章の見出しの下に続く。以前と同じ）。
 `__NEXT_DATA__` を持たないなろう・ハーメルンなどはこの経路を通らない。
 `WebAozoraConverterKakuyomuChapterTest` で固定した。ランキングの 15 作品で v1.7.2 と比べ、変わったのは誤っていた 3 作品だけだった。
 **残り（以前から。レビューで見つかった）**:
 - level 2 の章（節）は自分の題だけを使い、親の章の題は付かない
-- 章題の読み取り（`"title":"([^"]*+)"`）は、題に `\"` があるとそこで切れる
-- 戻し方が `\\n` → `\n` の順でないので、題に文字どおりの `\n`（バックスラッシュと n）があると改行に化ける
+- 話の順番は、JSON の中で `"Episode:ID"` が最初に出た順で決めている（`extractEpisodesFromNextData`）。先頭の `firstPublicEpisodeUnion` などがほかの話を指すと、順番が目次とずれうる。章の項目の `episodeUnions` の順に取るのが筋（未確認。/code-review の指摘）
+- `"chapter"` が参照ではなく中身を直接持つ形（Apollo が正規化しない場合）には対応していない。今のカクヨムはその形ではない
 **.NET ポート**: `WebAozoraConverter.cs` は `__NEXT_DATA__` を話の URL の補完にしか使わず、章の対応を作らない（カクヨムの章扉が出ない）ので、この不具合は無い。章を出すよう後追いするときは、この節の読み方にする
 
 ---
