@@ -616,6 +616,8 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 .ranking-card .ranking-get[data-state="busy"] { cursor: progress; }
 /* 最後の試みが失敗した札 (internal #52)。理由は title に出る */
 .ranking-card .ranking-get[data-state="failed"] { background: var(--surface); color: var(--danger); border-color: var(--danger); }
+/* ランキングを出している間に来て、まだ見ていない失敗 (internal #52) */
+#libraryDownloadToggle[data-state="failed"] { color: var(--danger); border-color: var(--danger); }
 /* display を指定した要素は hidden の属性が効かなくなるので、明示する */
 .library-ranking[hidden], .library-status[hidden], .library-grid[hidden] { display: none; }
 /* ランキングを出している間は、本の一覧にだけ効く操作 (絞り込み・並び順・棚・新着・一覧の更新) を隠す (viewer-ranking.js の toggleRanking。internal #49) */

@@ -157,6 +157,8 @@ function toggleRanking(force)
 	// 開くたびに頼む。同じ問い合わせはサーバが 10 分覚えているので、なろうへは行かない。
 	// 前に開いたときの一覧を出したままにすると、日をまたいでも古い順位が残る (PR #127 の codex)
 	if (show) loadRanking();
+	// ランキングを出している間に来た失敗は、しまったときに理由の出る ＋ の欄を開いて見せる (PR #171 の Opus)
+	else if (libraryFailureUnseen) openDownloadPanel();
 }
 
 /** Esc で手前のランキングを先にしまう。しまったら true */
@@ -400,11 +402,15 @@ function rankingCard(work, rank, owned)
  */
 function paintRankingButton(button, owned, failure)
 {
-	const failed = !owned && !!failure;
-	button.disabled = owned;
-	button.textContent = owned ? '本棚にあります' : (failed ? 'もう一度落とす' : '落とす');
-	button.dataset.state = owned ? 'owned' : (failed ? 'failed' : '');
-	button.title = failed ? '落とせませんでした' + (failure.message ? ': ' + failure.message : '') : '';
+	// 進み具合が分からなくなった作品はアプリが落とし続けているかもしれない。もう一度は勧めず、押せなくする
+	// (押すと同じ作品をもう一度頼む。PR #171 の Opus)。本棚を読み直すと外れる (queueFailureOfKey)
+	const unknown = !owned && !!failure && failure.state === 'unknown';
+	const failed = !owned && !!failure && !unknown;
+	button.disabled = owned || unknown;
+	button.textContent = owned ? '本棚にあります' : (unknown ? '確かめられません' : (failed ? 'もう一度落とす' : '落とす'));
+	button.dataset.state = owned ? 'owned' : (unknown ? 'unknown' : (failed ? 'failed' : ''));
+	button.title = unknown ? '落とし続けているかもしれません。⟳ 一覧を更新で確かめてください'
+		: (failed ? '落とせませんでした' + (failure.message ? ': ' + failure.message : '') : '');
 }
 
 /** 並びにいる札 (internal #50)。取り消しは ＋ の欄から */
@@ -413,6 +419,8 @@ function paintRankingBusy(button, queued)
 	button.disabled = true;
 	button.textContent = queued === 'waiting' ? '順番待ち' : '落としています…';
 	button.dataset.state = 'busy';
+	// 前の失敗の理由を残さない
+	button.title = '';
 }
 
 /** 本棚を読み込み直すたびと、落とす並びが動くたびに、札の印を付け直す (開いたあらすじはそのまま) */
@@ -427,7 +435,9 @@ function remarkRanking()
 		const queued = queueStateOfKey(item.dataset.key);
 		if (queued) paintRankingBusy(button, queued);
 		else if (owned) paintRankingButton(button, owned.has(item.dataset.key), queueFailureOfKey(item.dataset.key));
-		else if (button.dataset.state === 'busy') paintRankingButton(button, false, queueFailureOfKey(item.dataset.key));
+		else if (button.dataset.state === 'busy' || button.dataset.state === 'failed' || button.dataset.state === 'unknown') {
+			paintRankingButton(button, false, queueFailureOfKey(item.dataset.key));
+		}
 	}
 }
 

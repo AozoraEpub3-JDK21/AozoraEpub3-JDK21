@@ -249,6 +249,8 @@ async function loadLibrary(keepView)
 	buildShelfSelect();
 	if (keepView) renderLibraryKeepingView();
 	else renderLibrary();
+	// 進み具合が分からなくなった作品は、本棚を読み直したので札の「確かめられません」を外す
+	for (const item of libraryQueue) if (item.state === 'unknown') item.reloaded = true;
 	// ランキングの「本棚にあります」も付け直す。Web 本棚の場所を聞いてから落とした本は
 	// ランキングの札を通らずに落ちる (viewer-ranking.js)
 	remarkRanking();
@@ -784,7 +786,19 @@ function queueFailureOfKey(key)
 {
 	let last = null;
 	for (const item of libraryQueue) if (item.key === key) last = item;
+	// 「確かめられません」は本棚を読み直すまで。読み直せば、落とせていれば「本棚にあります」になる
+	if (last && last.state === 'unknown' && last.reloaded) return null;
 	return last && (last.state === 'failed' || last.state === 'unknown') ? last : null;
+}
+
+/** ランキングを出している間に失敗が来て、まだ ＋ の欄で見ていない (internal #52、PR #171 の Opus) */
+let libraryFailureUnseen = false;
+
+/** 見ていない失敗の印を ＋ に付ける / 外す */
+function markFailureUnseen(unseen)
+{
+	libraryFailureUnseen = unseen;
+	el.libraryDownloadToggle.dataset.state = unseen ? 'failed' : '';
 }
 
 /**
@@ -814,6 +828,7 @@ function openDownloadPanel()
 {
 	el.libraryDownload.hidden = false;
 	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
+	markFailureUnseen(false);
 }
 
 function cancelQueued(id)
@@ -863,7 +878,12 @@ async function runQueue()
 			item.message = outcome.message || '';
 			// 失敗は理由の出る ＋ の欄を開いて見せる。ただしランキングを出している間は開かない: 開くと一覧が欄の
 			// 高さだけ下がり、そのとき押そうとしていた札が外れる (internal #52、win2 の実機)。そこでは札が失敗を出す
-			if ((outcome.state === 'failed' || outcome.state === 'unknown') && el.libraryRanking.hidden) openDownloadPanel();
+			// 札が見えないこともある (期間を変えた、貼った URL)。そのときのために ＋ に印を付け、ランキングを
+			// しまったら欄を開く (toggleRanking)
+			if (outcome.state === 'failed' || outcome.state === 'unknown') {
+				if (el.libraryRanking.hidden) openDownloadPanel();
+				else markFailureUnseen(true);
+			}
 			renderQueue();
 		}
 	} finally {
@@ -919,6 +939,7 @@ const LIBRARY_DOWNLOAD_LABELS = {
 function bindDownloadEvents()
 {
 	el.libraryDownloadToggle.addEventListener('click', () => {
+		markFailureUnseen(false);
 		const open = el.libraryDownload.hidden;
 		el.libraryDownload.hidden = !open;
 		el.libraryDownloadToggle.setAttribute('aria-expanded', String(open));
