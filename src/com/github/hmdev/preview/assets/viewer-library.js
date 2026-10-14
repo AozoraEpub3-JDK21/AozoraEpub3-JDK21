@@ -266,8 +266,11 @@ function renderLibraryKeepingView()
 
 	//開いている名前の欄は、描き直しても残す (打ちかけの名前を消さない。PR のゲート2)
 	const renaming = el.libraryGrid.querySelector('.book-rename-form');
-	const renameState = renaming ? {id: renaming.closest('.book-slot').dataset.bookId, value: renaming.querySelector('input').value,
-		focused: renaming.contains(document.activeElement)} : null;
+	const renamingInput = renaming ? renaming.querySelector('input') : null;
+	const renameState = renaming ? {id: renaming.closest('.book-slot').dataset.bookId, value: renamingInput.value,
+		focused: renaming.contains(document.activeElement),
+		// 打ちかけの位置も戻す (戻さないと全選択になり、次の 1 文字で打った名前が消える。internal #46)
+		selectionStart: renamingInput.selectionStart, selectionEnd: renamingInput.selectionEnd} : null;
 
 	libraryVisible = visibleLibraryBooks();
 	libraryShown = 0;
@@ -287,10 +290,16 @@ function renderLibraryKeepingView()
 		const book = libraryVisible.find(b => b.id === renameState.id);
 		if (slot && book) {
 			openRenameForm(slot, book, renameState.focused);
-			slot.querySelector('.book-rename-form input').value = renameState.value;
+			const input = slot.querySelector('.book-rename-form input');
+			input.value = renameState.value;
+			if (renameState.focused && renameState.selectionStart !== null) {
+				input.setSelectionRange(renameState.selectionStart, renameState.selectionEnd);
+			}
 		}
 	}
-	if (focusId) {
+	// 名前の欄で打っていたなら、フォーカスは欄に置いたまま。カードへ移すと、打った字がどこにも入らない
+	// (本の描き直しは落とし終えるたびに来る。internal #46)
+	if (focusId && !(renameState && renameState.focused)) {
 		const again = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(focusId) + '"]');
 		const target = again ? again.querySelector(focusUpdate ? '.book-update' : '.book-card') : null;
 		if (target) target.focus({preventScroll: true});
