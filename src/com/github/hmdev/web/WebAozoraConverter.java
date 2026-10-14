@@ -3389,14 +3389,13 @@ public class WebAozoraConverter
 			case 'b': sb.append('\b'); break;
 			case 'f': sb.append('\f'); break;
 			case 'u':
-				if (i + 4 < s.length()) {
-					try {
-						sb.append((char) Integer.parseInt(s.substring(i + 1, i + 5), 16));
-						i += 4;
-						break;
-					} catch (NumberFormatException e) { /* 意図的: 不正な \\u はそのまま残す */ }
+				int code = 0;
+				for (int k = 1; k <= 4 && code >= 0; k++) {
+					int d = (i + k < s.length()) ? Character.digit(s.charAt(i + k), 16) : -1;
+					code = (d < 0) ? -1 : (code << 4) | d;
 				}
-				sb.append('\\').append(n);
+				if (code >= 0) { sb.append((char) code); i += 4; }
+				else sb.append('\\').append(n); // 不正な \\u はそのまま残す
 				break;
 			default: sb.append(n); break; // \" \\ \/
 			}
