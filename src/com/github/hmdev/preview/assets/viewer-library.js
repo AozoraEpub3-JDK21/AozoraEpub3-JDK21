@@ -249,8 +249,6 @@ async function loadLibrary(keepView)
 	buildShelfSelect();
 	if (keepView) renderLibraryKeepingView();
 	else renderLibrary();
-	// 進み具合が分からなくなった作品は、本棚を読み直したので札の「確かめられません」を外す
-	for (const item of libraryQueue) if (item.state === 'unknown') item.reloaded = true;
 	// ランキングの「本棚にあります」も付け直す。Web 本棚の場所を聞いてから落とした本は
 	// ランキングの札を通らずに落ちる (viewer-ranking.js)
 	remarkRanking();
@@ -786,8 +784,9 @@ function queueFailureOfKey(key)
 {
 	let last = null;
 	for (const item of libraryQueue) if (item.key === key) last = item;
-	// 「確かめられません」は本棚を読み直すまで。読み直せば、落とせていれば「本棚にあります」になる
-	if (last && last.state === 'unknown' && last.reloaded) return null;
+	// 「確かめられません」は、その作品が本棚に出るまで外さない (出れば札は「本棚にあります」)。読み直しで外すと、
+	// アプリがまだ落としている作品をもう一度頼めた。サーバの重複の判定は URL の文字そのままで、作品では見ない
+	// (PR #171 の codex)
 	return last && (last.state === 'failed' || last.state === 'unknown') ? last : null;
 }
 

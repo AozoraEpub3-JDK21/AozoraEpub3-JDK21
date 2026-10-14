@@ -403,13 +403,13 @@ function rankingCard(work, rank, owned)
 function paintRankingButton(button, owned, failure)
 {
 	// 進み具合が分からなくなった作品はアプリが落とし続けているかもしれない。もう一度は勧めず、押せなくする
-	// (押すと同じ作品をもう一度頼む。PR #171 の Opus)。本棚を読み直すと外れる (queueFailureOfKey)
+	// (押すと同じ作品をもう一度頼む。PR #171 の Opus)。本棚に出れば「本棚にあります」になる (queueFailureOfKey)
 	const unknown = !owned && !!failure && failure.state === 'unknown';
 	const failed = !owned && !!failure && !unknown;
 	button.disabled = owned || unknown;
 	button.textContent = owned ? '本棚にあります' : (unknown ? '確かめられません' : (failed ? 'もう一度落とす' : '落とす'));
 	button.dataset.state = owned ? 'owned' : (unknown ? 'unknown' : (failed ? 'failed' : ''));
-	button.title = unknown ? '落とし続けているかもしれません。⟳ 一覧を更新で確かめてください'
+	button.title = unknown ? '落とし続けているかもしれません。⟳ 一覧を更新で確かめてください (本棚に出なければ、このページを開き直すと、もう一度落とせます)'
 		: (failed ? '落とせませんでした' + (failure.message ? ': ' + failure.message : '') : '');
 }
 
