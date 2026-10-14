@@ -777,6 +777,17 @@ function queueStateOfKey(key)
 }
 
 /**
+ * その作品 (key) の最後の試みが失敗か、進み具合が分からなくなったなら、その 1 件。並び直したら null。
+ * ランキングの札に失敗を出すため (internal #52)
+ */
+function queueFailureOfKey(key)
+{
+	let last = null;
+	for (const item of libraryQueue) if (item.key === key) last = item;
+	return last && (last.state === 'failed' || last.state === 'unknown') ? last : null;
+}
+
+/**
  * 並びに足す。同じ作品がもう並んでいるか落としている最中なら足さない。
  * 貼った URL も作品の印 (workKeyOfUrl) で見る: ランキングの札に「順番待ち」が付き、書き方の違う同じ作品が
  * 二重に並ばない (PR #169 の Opus レビュー)
@@ -850,8 +861,9 @@ async function runQueue()
 			}
 			item.state = outcome.state;
 			item.message = outcome.message || '';
-			// 失敗はランキングの札からは読めない (札は「落とす」に戻る)。理由の出る ＋ の欄を開く
-			if (outcome.state === 'failed' || outcome.state === 'unknown') openDownloadPanel();
+			// 失敗は理由の出る ＋ の欄を開いて見せる。ただしランキングを出している間は開かない: 開くと一覧が欄の
+			// 高さだけ下がり、そのとき押そうとしていた札が外れる (internal #52、win2 の実機)。そこでは札が失敗を出す
+			if ((outcome.state === 'failed' || outcome.state === 'unknown') && el.libraryRanking.hidden) openDownloadPanel();
 			renderQueue();
 		}
 	} finally {

@@ -389,16 +389,22 @@ function rankingCard(work, rank, owned)
 	// 期間を変えて描き直しても、順番待ちと落としている最中の札はそのまま
 	const queued = queueStateOfKey(work.key);
 	if (queued) paintRankingBusy(action, queued);
-	else paintRankingButton(action, owned.has(work.key));
+	else paintRankingButton(action, owned.has(work.key), queueFailureOfKey(work.key));
 	item.appendChild(action);
 	return item;
 }
 
-function paintRankingButton(button, owned)
+/**
+ * 落とせる札。failure は並びの最後の試みが失敗した 1 件 (internal #52): 札に失敗を出し、押せばもう一度並べる。
+ * 理由は札の title に出す (＋ の欄はランキングを出している間は開かない。開くと一覧がずれる)
+ */
+function paintRankingButton(button, owned, failure)
 {
+	const failed = !owned && !!failure;
 	button.disabled = owned;
-	button.textContent = owned ? '本棚にあります' : '落とす';
-	button.dataset.state = owned ? 'owned' : '';
+	button.textContent = owned ? '本棚にあります' : (failed ? 'もう一度落とす' : '落とす');
+	button.dataset.state = owned ? 'owned' : (failed ? 'failed' : '');
+	button.title = failed ? '落とせませんでした' + (failure.message ? ': ' + failure.message : '') : '';
 }
 
 /** 並びにいる札 (internal #50)。取り消しは ＋ の欄から */
@@ -420,8 +426,8 @@ function remarkRanking()
 		if (!button) continue;
 		const queued = queueStateOfKey(item.dataset.key);
 		if (queued) paintRankingBusy(button, queued);
-		else if (owned) paintRankingButton(button, owned.has(item.dataset.key));
-		else if (button.dataset.state === 'busy') paintRankingButton(button, false);
+		else if (owned) paintRankingButton(button, owned.has(item.dataset.key), queueFailureOfKey(item.dataset.key));
+		else if (button.dataset.state === 'busy') paintRankingButton(button, false, queueFailureOfKey(item.dataset.key));
 	}
 }
 
