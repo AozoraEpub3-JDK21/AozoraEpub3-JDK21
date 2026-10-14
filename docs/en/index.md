@@ -43,7 +43,7 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21â€
 
 ## What's New in v1.7.2-jdk21
 
-- **Shelf (hidden feature) improvements**: pressing another work while one is downloading now queues it instead of refusing it, and waiting works can be cancelled. A rename in progress keeps its text when the shelf redraws
+- **Shelf (hidden feature)**: a download queue (reservations). While one work downloads, others can be reserved, and they download one after another. Fixed typed text being lost when the shelf redraws during a rename
 
 See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.2-jdk21) for the full list.
 
