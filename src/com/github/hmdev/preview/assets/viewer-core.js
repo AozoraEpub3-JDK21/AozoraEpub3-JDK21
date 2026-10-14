@@ -206,7 +206,7 @@ function cacheElements()
 		'libraryReload', 'libraryClose', 'libraryStatus', 'libraryGrid',
 		'libraryDownloadToggle', 'libraryDownload', 'libraryDownloadForm', 'libraryDownloadUrl', 'libraryDownloadGo',
 		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
-		'libraryQueueList', 'libraryQueueNote',
+		'libraryQueueList', 'libraryQueueNote', 'libraryQueueRefusal',
 		'libraryCheckAll',
 		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
 		'rankingStatus', 'rankingList'];

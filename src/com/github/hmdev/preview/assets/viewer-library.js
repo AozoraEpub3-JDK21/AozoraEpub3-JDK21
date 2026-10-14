@@ -770,15 +770,26 @@ function queueStateOfKey(key)
  */
 function enqueueDownload(url, label, key)
 {
-	if (!url) return;
+	if (!url) return false;
 	key = key || workKeyOfUrl(url);
 	if (libraryQueue.some(i => queueActive(i) && (i.url === url || (key && i.key === key)))) {
-		showDownloadStatus('その作品はもう順番に入っています');
-		return;
+		// 進み具合の行ではすぐ上書きされて読めない (win2 の実機、0.5 秒で消えた)。別の行に出し、次に足すまで残す
+		el.libraryQueueRefusal.textContent = 'その作品はもう順番に入っています';
+		el.libraryQueueRefusal.hidden = false;
+		return false;
 	}
+	el.libraryQueueRefusal.hidden = true;
 	libraryQueue.push({id: ++libraryQueueSeq, url: url, label: label || url, key: key || null, state: 'waiting', message: ''});
 	renderQueue();
 	runQueue();
+	return true;
+}
+
+/** ＋ の欄を開く。ランキングの札から押したときは開かない (札がずれて、続けて押すと外れる。win2 の実機) */
+function openDownloadPanel()
+{
+	el.libraryDownload.hidden = false;
+	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
 }
 
 function cancelQueued(id)
@@ -826,6 +837,8 @@ async function runQueue()
 			}
 			item.state = outcome.state;
 			item.message = outcome.message || '';
+			// 失敗はランキングの札からは読めない (札は「落とす」に戻る)。理由の出る ＋ の欄を開く
+			if (outcome.state === 'failed' || outcome.state === 'unknown') openDownloadPanel();
 			renderQueue();
 		}
 	} finally {
@@ -889,9 +902,8 @@ function bindDownloadEvents()
 	el.libraryDownloadForm.addEventListener('submit', event => {
 		event.preventDefault();
 		const url = el.libraryDownloadUrl.value.trim();
-		// 並べたら欄は空ける。続けて次の URL を貼れる
-		el.libraryDownloadUrl.value = '';
-		enqueueDownload(url);
+		// 並べたら欄は空ける。続けて次の URL を貼れる。断ったときは残す (何を断ったか分かるように)
+		if (enqueueDownload(url)) el.libraryDownloadUrl.value = '';
 	});
 	el.libraryShelfUse.addEventListener('click', () => {
 		useWebShelf(el.libraryShelfPath.value).catch(err => { el.libraryShelfNote.textContent = err.message; });
@@ -1001,6 +1013,8 @@ async function askWebShelf()
 	el.libraryShelfPick.hidden = !info.canPick;
 	el.libraryShelfNote.textContent = '';
 	el.libraryShelfAsk.hidden = false;
+	// ランキングの札から押したときは欄が閉じている。場所を聞くのはここなので開く
+	openDownloadPanel();
 	el.libraryShelfUse.focus();
 }
 

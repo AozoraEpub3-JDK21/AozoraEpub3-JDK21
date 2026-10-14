@@ -431,9 +431,8 @@ function downloadFromRanking(button)
 	const item = button.closest('.ranking-card');
 	const work = rankingWorks.find(w => w.key === item.dataset.key);
 	if (!work) return;
-	// 並びと進み具合、Web 本棚の場所を聞く欄は、URL を貼って落とすのと同じ所に出る
-	el.libraryDownload.hidden = false;
-	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
+	// ＋ の欄は開かない: 開くと札がずれて、続けて押すと別の札や空いた所に当たる (win2 の実機)。
+	// 並んだことは札が「順番待ち」で示す。場所を聞くときと失敗したときは、viewer-library.js が欄を開く
 	enqueueDownload(work.url, work.title, work.key);
 }
 
