@@ -809,11 +809,20 @@ function enqueueDownload(url, label, key)
 {
 	if (!url) return false;
 	key = key || workKeyOfUrl(url);
-	if (libraryQueue.some(i => queueActive(i) && (i.url === url || (key && i.key === key)))) {
-		// 進み具合の行ではすぐ上書きされて読めない (win2 の実機、0.5 秒で消えた)。別の行に出し、次に足すまで残す
-		el.libraryQueueRefusal.textContent = 'その作品はもう順番に入っています';
+	const same = i => i.url === url || (key && i.key === key);
+	// 進み具合の行ではすぐ上書きされて読めない (win2 の実機、0.5 秒で消えた)。別の行に出し、次に足すまで残す
+	const refuse = text => {
+		el.libraryQueueRefusal.textContent = text;
 		el.libraryQueueRefusal.hidden = false;
 		return false;
+	};
+	if (libraryQueue.some(i => queueActive(i) && same(i))) return refuse('その作品はもう順番に入っています');
+	// 進み具合が分からなくなった作品は、本棚に出るまで足さない。アプリがまだ落としているかもしれず、サーバの
+	// 重複の判定は URL の文字そのままなので、書き方の違う URL だと同じ作品を 2 度落とす。ランキングの札だけで
+	// なく ＋ からも同じ (PR #171 の codex)
+	const onShelf = key && state.library ? shelfKeys().has(key) : false;
+	if (!onShelf && libraryQueue.some(i => i.state === 'unknown' && same(i))) {
+		return refuse('その作品はまだ落としているかもしれません。⟳ 一覧を更新で確かめてください (本棚に出なければ、このページを開き直すと落とせます)');
 	}
 	el.libraryQueueRefusal.hidden = true;
 	libraryQueue.push({id: ++libraryQueueSeq, url: url, label: label || url, key: key || null, state: 'waiting', message: ''});
