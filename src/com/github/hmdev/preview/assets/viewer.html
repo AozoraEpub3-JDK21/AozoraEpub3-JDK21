@@ -113,6 +113,7 @@
 			<input id="libraryDownloadUrl" type="url" placeholder="作品のページの URL（小説家になろう・カクヨムなど）" autocomplete="off" required>
 			<button id="libraryDownloadGo" type="submit">落とす</button>
 		</form>
+		<div id="libraryQueueRefusal" class="note" aria-live="polite" hidden></div>
 		<div id="libraryShelfAsk" class="ask" hidden>
 			<div>落とした本を置く「Web 本棚」のフォルダを決めてください（最初の 1 回だけ）。</div>
 			<div class="row">
@@ -123,6 +124,9 @@
 			<div id="libraryShelfNote" class="note"></div>
 		</div>
 		<div id="libraryDownloadStatus" class="note" aria-live="polite"></div>
+		<!-- 落とす作品の順番待ち (viewer-library.js、internal #50) -->
+		<ul id="libraryQueueList" class="queue" hidden></ul>
+		<div id="libraryQueueNote" class="note" hidden>順番待ちの作品は、このページを閉じると取り消されます（落とし始めた作品は最後まで落とします）。</div>
 	</div>
 	<!-- ランキング (viewer-ranking.js)。出している間は本の一覧を隠す -->
 	<div id="libraryRanking" class="library-ranking" hidden>

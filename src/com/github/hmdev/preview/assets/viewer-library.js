@@ -721,18 +721,171 @@ async function switchBook(bookId)
  *   クリックするまで入力はブラウザに行くので、そう知らせる。パスを打ち込む欄も置く
  */
 
-/** 落とす仕事の ID (問い合わせ中なら)。同時に 1 つだけ */
-let libraryDownloadJob = null;
-/**
- * api/download へ POST している最中か。仕事の ID は POST が返ってからなので、その間は ID だけでは見張れない
- * (＋ とランキングの札の両方から押せる。PR #127 の codex)
- */
-let libraryDownloadPosting = false;
 /** Web 本棚の場所を聞いている間、決めたら続けて落とす URL */
 let libraryPendingUrl = null;
 
+/*
+ * 落とす作品の順番待ち (internal #50)
+ *
+ * 2 つ目の「落とす」や ＋ を断らずに、ここに並べて 1 つずつ落とす。サイトへの負荷は今までと同じ 1 本ずつ。
+ * 並びはこのページが持つ (サーバへ頼むのは順番が来てから)。だから、まだ始まっていない作品は取り消せるが、
+ * ページを閉じると消える。落とし始めた作品はアプリが最後まで落とす。
+ * ⟳ の更新と「新着を確かめる」は、アプリの同じ 1 本の列 (updateExecutor) に押した順に並ぶ。
+ *
+ * 1 件: {id, url, label, key, state, message}。state は waiting / running / done / failed / unknown / cancelled。
+ * key はランキングの札の印 (URL を貼ったときは null)
+ */
+const libraryQueue = [];
+let libraryQueueSeq = 0;
+/** runQueue が回っているか。同時に 2 本回さない */
+let libraryQueueRunning = false;
+/** 一覧に残す終わった作品の数 (古いものから消す) */
+const LIBRARY_QUEUE_KEEP_FINISHED = 10;
+
+const LIBRARY_QUEUE_LABELS = {
+	waiting: '順番待ち',
+	running: '落としています…',
+	done: '落としました',
+	failed: '落とせませんでした',
+	unknown: '確かめられません (⟳ 一覧を更新で確かめてください)',
+	cancelled: '取り消しました',
+};
+
+function queueActive(item)
+{
+	return item.state === 'waiting' || item.state === 'running';
+}
+
+/** ランキングの札の印 (key) が並びのどこにいるか: 'waiting' / 'running' / null */
+function queueStateOfKey(key)
+{
+	const item = libraryQueue.find(i => i.key === key && queueActive(i));
+	return item ? item.state : null;
+}
+
+/**
+ * 並びに足す。同じ作品がもう並んでいるか落としている最中なら足さない。
+ * 貼った URL も作品の印 (workKeyOfUrl) で見る: ランキングの札に「順番待ち」が付き、書き方の違う同じ作品が
+ * 二重に並ばない (PR #169 の Opus レビュー)
+ */
+function enqueueDownload(url, label, key)
+{
+	if (!url) return false;
+	key = key || workKeyOfUrl(url);
+	if (libraryQueue.some(i => queueActive(i) && (i.url === url || (key && i.key === key)))) {
+		// 進み具合の行ではすぐ上書きされて読めない (win2 の実機、0.5 秒で消えた)。別の行に出し、次に足すまで残す
+		el.libraryQueueRefusal.textContent = 'その作品はもう順番に入っています';
+		el.libraryQueueRefusal.hidden = false;
+		return false;
+	}
+	el.libraryQueueRefusal.hidden = true;
+	libraryQueue.push({id: ++libraryQueueSeq, url: url, label: label || url, key: key || null, state: 'waiting', message: ''});
+	renderQueue();
+	runQueue();
+	return true;
+}
+
+/** ＋ の欄を開く。ランキングの札から押したときは開かない (札がずれて、続けて押すと外れる。win2 の実機) */
+function openDownloadPanel()
+{
+	el.libraryDownload.hidden = false;
+	el.libraryDownloadToggle.setAttribute('aria-expanded', 'true');
+}
+
+function cancelQueued(id)
+{
+	const item = libraryQueue.find(i => i.id === id);
+	// 落とし始めた作品はアプリが落としている。ここで止めたことにはしない
+	if (!item || item.state !== 'waiting') return;
+	// Web 本棚の場所を聞いている作品なら、聞くのもやめる (決めても落とさない)
+	if (libraryPendingUrl === item.url) {
+		libraryPendingUrl = null;
+		el.libraryShelfAsk.hidden = true;
+	}
+	item.state = 'cancelled';
+	renderQueue();
+	runQueue();
+}
+
+/** 待っている作品を 1 つずつ落とす。失敗しても次へ進む。Web 本棚の場所を聞いている間は止まる */
+async function runQueue()
+{
+	if (libraryQueueRunning) return;
+	libraryQueueRunning = true;
+	try {
+		for (;;) {
+			// 場所を決めると useWebShelf が呼び直す
+			if (libraryPendingUrl) return;
+			const item = libraryQueue.find(i => i.state === 'waiting');
+			if (!item) return;
+			item.state = 'running';
+			renderQueue();
+			let outcome;
+			try {
+				outcome = await startDownload(item.url);
+			} catch (err) {
+				// 場所を聞く途中で失敗したなら、聞いていないことにする (残すと列が止まったままになる)
+				if (libraryPendingUrl === item.url) libraryPendingUrl = null;
+				outcome = {state: 'failed', message: err.message};
+				showDownloadStatus('落とせませんでした: ' + err.message, true);
+			}
+			if (outcome.state === 'needShelf') {
+				// 場所を決めたら、この作品から続ける
+				item.state = 'waiting';
+				renderQueue();
+				return;
+			}
+			item.state = outcome.state;
+			item.message = outcome.message || '';
+			// 失敗はランキングの札からは読めない (札は「落とす」に戻る)。理由の出る ＋ の欄を開く
+			if (outcome.state === 'failed' || outcome.state === 'unknown') openDownloadPanel();
+			renderQueue();
+		}
+	} finally {
+		libraryQueueRunning = false;
+		renderQueue();
+	}
+}
+
+/** ＋ の欄に並びを出す。ランキングの札も塗り直す */
+function renderQueue()
+{
+	// 終わった作品は新しいものから LIBRARY_QUEUE_KEEP_FINISHED 件だけ残す
+	const finished = libraryQueue.filter(i => !queueActive(i));
+	for (const old of finished.slice(0, Math.max(0, finished.length - LIBRARY_QUEUE_KEEP_FINISHED))) {
+		libraryQueue.splice(libraryQueue.indexOf(old), 1);
+	}
+	const list = el.libraryQueueList;
+	list.replaceChildren();
+	for (const item of libraryQueue) {
+		const row = document.createElement('li');
+		row.dataset.state = item.state;
+		const name = document.createElement('span');
+		name.className = 'name';
+		name.textContent = item.label;
+		name.title = item.url;
+		row.appendChild(name);
+		const status = document.createElement('span');
+		status.className = 'state';
+		status.textContent = LIBRARY_QUEUE_LABELS[item.state] + (item.message ? ': ' + item.message : '');
+		row.appendChild(status);
+		if (item.state === 'waiting') {
+			const cancel = document.createElement('button');
+			cancel.type = 'button';
+			cancel.textContent = '取り消す';
+			cancel.addEventListener('click', () => cancelQueued(item.id));
+			row.appendChild(cancel);
+		}
+		list.appendChild(row);
+	}
+	list.hidden = libraryQueue.length === 0;
+	el.libraryQueueNote.hidden = !libraryQueue.some(i => i.state === 'waiting');
+	if (typeof remarkRanking === 'function') remarkRanking();
+}
+
 const LIBRARY_DOWNLOAD_LABELS = {
-	queued: '順番待ち…',
+	// アプリの列で、⟳ の更新や新着の確認の後ろにいる (並びの一覧では「落としています…」)
+	queued: '始まるのを待っています…',
 	running: '取っています… (話数が多いと時間がかかります)',
 	done: '落としました',
 	failed: '落とせませんでした',
@@ -748,8 +901,9 @@ function bindDownloadEvents()
 	});
 	el.libraryDownloadForm.addEventListener('submit', event => {
 		event.preventDefault();
-		startDownload(el.libraryDownloadUrl.value.trim())
-			.catch(err => showDownloadStatus('落とせませんでした: ' + err.message, true));
+		const url = el.libraryDownloadUrl.value.trim();
+		// 並べたら欄は空ける。続けて次の URL を貼れる。断ったときは残す (何を断ったか分かるように)
+		if (enqueueDownload(url)) el.libraryDownloadUrl.value = '';
 	});
 	el.libraryShelfUse.addEventListener('click', () => {
 		useWebShelf(el.libraryShelfPath.value).catch(err => { el.libraryShelfNote.textContent = err.message; });
@@ -797,40 +951,23 @@ async function postText(path, body)
 	return {response, json};
 }
 
+/**
+ * 1 つ落とす。順番待ちの列 (runQueue) からだけ呼ぶ。
+ * 返り値の state: done / failed / unknown (進み具合が分からなくなった) / needShelf (Web 本棚の場所を聞いた)
+ */
 async function startDownload(url)
 {
-	if (!url || libraryDownloadJob || libraryDownloadPosting) return;
-	// Web 本棚の場所を聞いている間は、決めたら落とす URL が待っている。別の URL で上書きすると、
-	// 先に頼んだ作品 (ランキングの札など) が黙って消える (PR #127 の codex)
-	if (libraryPendingUrl && libraryPendingUrl !== url) {
-		el.libraryShelfNote.textContent = '先に Web 本棚の場所を決めてください (決めると、先に頼んだ作品を落とします)';
-		return;
-	}
-	libraryDownloadPosting = true;
-	let response, json;
-	try {
-		showDownloadStatus('頼んでいます…');
-		({response, json} = await postText('api/download', url));
-	} finally {
-		// ここから libraryDownloadJob を入れるまでに await は無いので、隙間はできない
-		libraryDownloadPosting = false;
-	}
+	showDownloadStatus('頼んでいます…');
+	const {response, json} = await postText('api/download', url);
 	if (response.status === 409 && json && json.needShelf) {
-		//Web 本棚がまだ無い。場所を決めたら、この URL を続けて落とす
+		//Web 本棚がまだ無い。場所を決めたら、この URL から続けて落とす
 		libraryPendingUrl = url;
 		showDownloadStatus('');
 		await askWebShelf();
-		return;
+		return {state: 'needShelf'};
 	}
 	if (!response.ok || !json || !json.job) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
-	libraryDownloadJob = json.job;
-	el.libraryDownloadGo.disabled = true;
-	try {
-		await pollDownload(json.job);
-	} finally {
-		libraryDownloadJob = null;
-		el.libraryDownloadGo.disabled = false;
-	}
+	return pollDownload(json.job);
 }
 
 async function pollDownload(jobId)
@@ -848,22 +985,22 @@ async function pollDownload(jobId)
 				continue;
 			}
 			showDownloadStatus('進み具合を確かめられません (落とし続けているかもしれません。⟳ 一覧を更新で確かめてください): ' + e.message, true);
-			return;
+			return {state: 'unknown', message: e.message};
 		}
 		const label = LIBRARY_DOWNLOAD_LABELS[job.state] || job.state;
 		const failed = job.state === 'failed';
 		showDownloadStatus(failed && job.message ? label + ': ' + job.message : label, failed);
 		if (job.state === 'done') {
-			el.libraryDownloadUrl.value = '';
 			try {
 				await loadLibrary(true);
 			} catch (e) {
 				// 落とせている。本棚の読み直しだけが失敗した (PR のゲート2)
 				showDownloadStatus(label + ' (本棚に出せませんでした。⟳ 一覧を更新を押してください): ' + e.message, true);
 			}
-			return;
+			return {state: 'done'};
 		}
-		if (job.state !== 'queued' && job.state !== 'running') return;
+		if (failed) return {state: 'failed', message: job.message || ''};
+		if (job.state !== 'queued' && job.state !== 'running') return {state: 'unknown', message: job.state};
 		await new Promise(resolve => setTimeout(resolve, LIBRARY_UPDATE_POLL));
 	}
 }
@@ -876,6 +1013,8 @@ async function askWebShelf()
 	el.libraryShelfPick.hidden = !info.canPick;
 	el.libraryShelfNote.textContent = '';
 	el.libraryShelfAsk.hidden = false;
+	// ランキングの札から押したときは欄が閉じている。場所を聞くのはここなので開く
+	openDownloadPanel();
 	el.libraryShelfUse.focus();
 }
 
@@ -889,11 +1028,16 @@ async function useWebShelf(path)
 	if (!response.ok) throw new Error((json && json.error) ? json.error : 'HTTP ' + response.status);
 	el.libraryShelfAsk.hidden = true;
 	showDownloadStatus('Web 本棚: ' + json.location);
-	// Web 本棚が棚に加わったので、本棚を読み直す
-	await loadLibrary(true);
-	const url = libraryPendingUrl;
+	// 場所は決まった。聞いている印は、本棚の読み直しより先に外す: 読み直しが失敗しても列が止まらないように
+	// (PR #169 の Opus レビュー)
 	libraryPendingUrl = null;
-	if (url) await startDownload(url);
+	try {
+		// Web 本棚が棚に加わったので、本棚を読み直す
+		await loadLibrary(true);
+	} finally {
+		// 待っていた作品 (場所を聞いた作品から) を続けて落とす
+		runQueue();
+	}
 }
 
 /** アプリにフォルダ選択を出してもらう。選んだ場所は入力欄に入れるだけ (決めるのは「この場所にする」) */
