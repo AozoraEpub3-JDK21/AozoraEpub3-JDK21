@@ -21,17 +21,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21‚Ä
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.7.2-jdk21 (October 14, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.2-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.7.3-jdk21 (October 14, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.3-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.2-jdk21/AozoraEpub3-1.7.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.3-jdk21/AozoraEpub3-1.7.3-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       üì¶ Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.2-jdk21/AozoraEpub3-1.7.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.3-jdk21/AozoraEpub3-1.7.3-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       üêß Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.2-jdk21/AozoraEpub3-1.7.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.3-jdk21/AozoraEpub3-1.7.3-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       üçé macOS (TAR.GZ)
     </a>
   </div>
@@ -41,11 +41,11 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21‚Ä
 
 ---
 
-## What's New in v1.7.2-jdk21
+## What's New in v1.7.3-jdk21
 
-- **Shelf (hidden feature)**: a download queue (reservations). While one work downloads, others can be reserved, and they download one after another. Fixed typed text being lost when the shelf redraws during a rename
+- **Kakuyomu chapter titles fixed**: for some works, chapter title pages and the table of contents showed the title of the next chapter's first episode instead of the chapter title. A prologue outside any chapter was also put into the last chapter; that is fixed too
 
-See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.2-jdk21) for the full list.
+See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.3-jdk21) for the full list.
 
 ## What's New in v1.7.0-jdk21
 
