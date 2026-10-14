@@ -3326,31 +3326,43 @@ public class WebAozoraConverter
 	/**
 	 * __NEXT_DATA__ JSON から章-エピソード対応マップを構築する (Phase 2-1)
 	 * "TableOfContentsChapter" エントリと各話のepIdの対応を解析する
+	 *
+	 * <p>"TableOfContentsChapter" は章題を持たず、"chapter":{"__ref":"Chapter:ID"} で
+	 * 別の "Chapter:ID" エントリを指す。章題はそちらから読む。エントリの並びは作品ごとに
+	 * 違い、直後に次の章の話 ("Episode:ID") が来ることもあるので、ブロック内の最初の
+	 * "title" を拾うとその話の題を章題にしてしまう。</p>
 	 * @return epId → chapterTitle マップ (章なし作品では空マップ)
 	 */
 	private HashMap<String, String> buildEpisodeChapterMapFromNextData(String json, String workId) {
 		HashMap<String, String> result = new HashMap<String, String>();
-		// "TableOfContentsChapter:ID": エントリを検索
-		Pattern chapterKeyPat = Pattern.compile("\"TableOfContentsChapter:\\d+\":");
+		// "TableOfContentsChapter:ID":{ エントリを検索
+		Pattern chapterKeyPat = Pattern.compile("\"TableOfContentsChapter:\\d+\":\\{");
 		// キャプチャーグループ内のエピソード参照パターン
 		Pattern epRefPat = Pattern.compile("\"__ref\":\"Episode:(\\d+)\"");
+		// 章本体 ("Chapter:ID") への参照
+		Pattern chapterRefPat = Pattern.compile("\"chapter\":\\{\"__ref\":\"Chapter:(\\d+)\"\\}");
 		// 章タイトルパターン (拡張文字を除いたシンプルなマッチ)
 		Pattern titlePat = Pattern.compile("\"title\":\"([^\"]*+)\"");
-		// 全チャプターキーの位置を収集
-		java.util.List<Integer> positions = new java.util.ArrayList<Integer>();
 		Matcher chMatcher = chapterKeyPat.matcher(json);
-		while (chMatcher.find()) { positions.add(chMatcher.start()); }
-		if (positions.isEmpty()) return result;
-		for (int i = 0; i < positions.size(); i++) {
-			int start = positions.get(i);
-			int end = (i + 1 < positions.size()) ? positions.get(i + 1) : json.length();
-			String block = json.substring(start, end);
-			// 章タイトル抽出
-			Matcher titleM = titlePat.matcher(block);
+		while (chMatcher.find()) {
+			// 章の項目 {...} の中だけを見る。次の項目までを見ると、最後の章の範囲が JSON の末尾まで伸び、
+			// 後ろの "firstPublicEpisodeUnion" などが指す章外の話 (プロローグ等) まで拾ってしまう
+			String block = findObjectBody(json, chMatcher.end());
+			if (block == null) continue;
+			// 章タイトル抽出 (参照先の "Chapter:ID" エントリから)
+			Matcher chRefM = chapterRefPat.matcher(block);
+			if (!chRefM.find()) continue;
+			String chKey = "\"Chapter:" + chRefM.group(1) + "\":{";
+			int chPos = json.indexOf(chKey);
+			if (chPos < 0) continue;
+			String chBody = findObjectBody(json, chPos + chKey.length());
+			if (chBody == null) continue;
+			Matcher titleM = titlePat.matcher(chBody);
 			if (!titleM.find()) continue;
 			String chTitle = titleM.group(1)
-				.replace("\\n", "\n").replace("\\r", "\r")
-				.replace("\\\"", "\"").replace("\\\\", "\\");
+				.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
+				.replace("\\\"", "\"").replace("\\\\", "\\").strip();
+			if (chTitle.isEmpty()) continue;
 			// エピソード参照を収集
 			Matcher refM = epRefPat.matcher(block);
 			while (refM.find()) {
@@ -3359,6 +3371,30 @@ public class WebAozoraConverter
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * JSON のオブジェクトの中身 ("{" の直後から対応する "}" の手前まで) を返す。閉じていなければ null。
+	 * 文字列の中の括弧で止まらないよう、引用符の内側は飛ばして対応する "}" を探す
+	 * @param bodyStart 開き "{" の直後の位置
+	 */
+	private static String findObjectBody(String json, int bodyStart) {
+		int depth = 1;
+		boolean inString = false;
+		for (int i = bodyStart; i < json.length(); i++) {
+			char c = json.charAt(i);
+			if (inString) {
+				if (c == '\\') i++;
+				else if (c == '"') inString = false;
+			} else if (c == '"') {
+				inString = true;
+			} else if (c == '{') {
+				depth++;
+			} else if (c == '}') {
+				if (--depth == 0) return json.substring(bodyStart, i);
+			}
+		}
+		return null;
 	}
 
 	/**
