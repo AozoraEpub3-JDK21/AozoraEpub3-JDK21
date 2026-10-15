@@ -746,10 +746,6 @@ public class PreviewServer implements AutoCloseable
 	}
 
 	/**
-	 * Web 本棚（internal #11 の案 A）。GET は今の場所・提案の場所・フォルダ選択を出せるか。
-	 * POST は本文のパスに決める: 絶対パスで、フォルダにでき、書き込めること。棚の上限（{@link LibraryScanner#MAX_SHELVES}）を超えるなら断る
-	 */
-	/**
 	 * 新しい版の知らせ（internal #48）。GET api/update は知らせ（確かめる間隔がたっていれば GitHub に問い合わせる）、
 	 * POST api/update/dismiss は本文の版の知らせを閉じる、POST api/update/enabled は本文の true/false で切り替える
 	 */
@@ -758,9 +754,8 @@ public class PreviewServer implements AutoCloseable
 		UpdateNotice notice = this.updateNotice;
 		boolean read = "GET".equals(method) || "HEAD".equals(method);
 		if (rest.equals("api/update") && read) {
-			//?peek は覚えている版だけで答える（外に通信しない。表示設定の欄を開いたとき）
-			String query = exchange.getRequestURI().getRawQuery();
-			boolean peek = query != null && java.util.Arrays.asList(query.split("&")).contains("peek");
+			//?peek と HEAD は覚えている版だけで答える（外に通信しない。表示設定の欄を開いたとき。HEAD で時刻を進めない）
+			boolean peek = "HEAD".equals(method) || hasQueryFlag(exchange, "peek");
 			respondJson(exchange, notice == null ? "{\"available\":false,\"enabled\":false,\"show\":false}" : notice.json(!peek));
 			return;
 		}
@@ -791,9 +786,14 @@ public class PreviewServer implements AutoCloseable
 			respondJsonStatus(exchange, 400, errorJson("受け付けられませんでした"));
 			return;
 		}
-		respondJson(exchange, notice.json());
+		//応答では問い合わせない（閉じる・切り替えで GitHub を待たせない。PR のゲート2）
+		respondJson(exchange, notice.json(false));
 	}
 
+	/**
+	 * Web 本棚（internal #11 の案 A）。GET は今の場所・提案の場所・フォルダ選択を出せるか。
+	 * POST は本文のパスに決める: 絶対パスで、フォルダにでき、書き込めること。棚の上限（{@link LibraryScanner#MAX_SHELVES}）を超えるなら断る
+	 */
 	private void serveWebShelf(HttpExchange exchange, String method) throws IOException
 	{
 		WebShelf shelf = this.webShelf;

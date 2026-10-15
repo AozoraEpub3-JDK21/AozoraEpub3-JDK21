@@ -70,40 +70,78 @@ public class UpdateNotice
 	}
 
 	/**
-	 * 本棚に出す知らせ（JSON）。mayCheck で、確かめる間隔がたっていれば GitHub に問い合わせる（最大 10 秒、失敗しても
-	 * 止めない）。mayCheck でなければ覚えている版だけで答える（表示設定の欄を開いたとき。本棚を開くまでは通信しない）。
+	 * 本棚に出す知らせ（JSON）。mayCheck で、確かめる間隔がたっていれば GitHub に問い合わせる（最大 15 秒、失敗しても
+	 * 止めない）。mayCheck でなければ覚えている版だけで答える（表示設定の欄を開いたとき・閉じる・切り替えの応答・HEAD）。
 	 * {@code {"available":true,"enabled":bool,"show":bool,"current":"…","latest":"…"|null,"url":"…"}}
+	 *
+	 * <p>問い合わせは鍵の外でする。鍵を持ったまま待つと、通信しない覗き・閉じる・切り替えまで最大 15 秒止まる
+	 * （PR のゲート2）。同時に 2 つ目が来たら、問い合わせ中なので覚えている版で答える。結果を書くときはファイルを
+	 * 読み直し、確かめた時刻と最新の版だけを書く（待っている間にほかの起動が書いた「閉じた版」などを消さない）。</p>
 	 */
-	public synchronized String json(boolean mayCheck)
+	public String json(boolean mayCheck)
 	{
-		Properties p = load();
-		boolean enabled = !"false".equals(p.getProperty(KEY_ENABLED));
-		String latest = p.getProperty(KEY_LATEST);
-		if (enabled && mayCheck) {
-			long now = this.clock.getAsLong();
-			long checkedAt = parseLong(p.getProperty(KEY_CHECKED));
-			//時計が戻ったとき（前の確認が未来）も確かめ直す
-			if (checkedAt <= 0 || now - checkedAt >= INTERVAL_MS || now < checkedAt) {
-				UpdateChecker.Result r = this.checker.get();
-				if (r.isSuccess() && r.latestVersion() != null && VERSION.matcher(r.latestVersion()).matches()) {
-					latest = r.latestVersion();
-					p.setProperty(KEY_LATEST, latest);
-				} else {
-					logger.debug("新しい版を確かめられませんでした: {}", r.error());
+		long now = this.clock.getAsLong();
+		boolean due;
+		synchronized (this) {
+			Properties p = load();
+			due = mayCheck && !this.checking && isEnabled(p) && isDue(p, now);
+			if (due) this.checking = true;
+		}
+		if (due) {
+			UpdateChecker.Result r = null;
+			try {
+				r = this.checker.get();
+			} catch (RuntimeException e) {
+				logger.debug("新しい版を確かめられませんでした", e);
+			}
+			synchronized (this) {
+				try {
+					Properties p = load();
+					if (r != null && r.isSuccess() && r.latestVersion() != null && VERSION.matcher(r.latestVersion()).matches()) {
+						p.setProperty(KEY_LATEST, r.latestVersion());
+					} else if (r != null) {
+						logger.debug("新しい版を確かめられませんでした: {}", r.error());
+					}
+					//失敗しても時刻は進める（つながらない台で、本棚を開くたびに待たせない）
+					p.setProperty(KEY_CHECKED, Long.toString(now));
+					save(p);
+				} finally {
+					this.checking = false;
 				}
-				//失敗しても時刻は進める（つながらない台で、本棚を開くたびに 10 秒待たせない）
-				p.setProperty(KEY_CHECKED, Long.toString(now));
-				save(p);
 			}
 		}
+		synchronized (this) {
+			return answer(load());
+		}
+	}
+
+	/** 問い合わせ中か（2 つ目の問い合わせを出さない） */
+	private boolean checking;
+
+	private static boolean isEnabled(Properties p)
+	{
+		return !"false".equals(p.getProperty(KEY_ENABLED));
+	}
+
+	/** 確かめる間隔がたったか。時計が戻ったとき（前の確認が未来）も確かめ直す */
+	private static boolean isDue(Properties p, long now)
+	{
+		long checkedAt = parseLong(p.getProperty(KEY_CHECKED));
+		return checkedAt <= 0 || now - checkedAt >= INTERVAL_MS || now < checkedAt;
+	}
+
+	private String answer(Properties p)
+	{
+		boolean enabled = isEnabled(p);
+		String latest = p.getProperty(KEY_LATEST);
 		String dismissed = p.getProperty(KEY_DISMISSED);
 		boolean show = enabled && latest != null
 			&& UpdateChecker.compareVersions(latest, this.currentVersion) > 0
 			&& (dismissed == null || UpdateChecker.compareVersions(latest, dismissed) > 0);
 		return "{\"available\":true,\"enabled\":" + enabled + ",\"show\":" + show
-			+ ",\"current\":" + quote(this.currentVersion)
-			+ ",\"latest\":" + (latest == null ? "null" : quote(latest))
-			+ ",\"url\":" + quote(UpdateChecker.DOWNLOAD_PAGE_URL) + "}";
+			+ ",\"current\":" + Json.str(this.currentVersion)
+			+ ",\"latest\":" + Json.str(latest)
+			+ ",\"url\":" + Json.str(UpdateChecker.DOWNLOAD_PAGE_URL) + "}";
 	}
 
 	/** その版の知らせを閉じる。その版より新しい版が出るまで出さない。版として読めなければ false */
@@ -115,7 +153,7 @@ public class UpdateNotice
 		return save(p);
 	}
 
-	/** 確かめに行くかを切り替える。オンに戻したときは、次に本棚を開いたときに確かめ直す */
+	/** 確かめに行くかを切り替える。オンに戻したときは、次に本棚を開いたときに（24 時間たっていなくても）確かめ直す */
 	public synchronized boolean setEnabled(boolean enabled)
 	{
 		Properties p = load();
@@ -168,16 +206,5 @@ public class UpdateNotice
 	private static long parseLong(String s)
 	{
 		try { return s == null ? 0 : Long.parseLong(s.trim()); } catch (NumberFormatException e) { return 0; }
-	}
-
-	private static String quote(String s)
-	{
-		StringBuilder b = new StringBuilder("\"");
-		for (char c : s.toCharArray()) {
-			if (c == '"' || c == '\\') b.append('\\').append(c);
-			else if (c < 0x20) b.append(String.format("\\u%04x", (int) c));
-			else b.append(c);
-		}
-		return b.append('"').toString();
 	}
 }

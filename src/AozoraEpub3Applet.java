@@ -817,7 +817,7 @@ public class AozoraEpub3Applet extends JPanel
 		}});
 		panel.add(jButtonLanguage);
 
-		// 更新確認 (手動のみ。自動更新も起動時チェックも行わない。本棚は開いたときに 1 日 1 回確かめる＝internal #48)
+		// 更新確認ボタン (手動。自動更新はせず、起動時にも確かめない。本棚だけは開いたときに 1 日 1 回確かめる＝internal #48)
 		panel.add(Box.createHorizontalStrut(4));
 		jButtonUpdate = new JButton(I18n.t("ui.update.button"));
 		jButtonUpdate.setToolTipText(I18n.t("ui.update.tooltip"));

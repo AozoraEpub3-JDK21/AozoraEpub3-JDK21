@@ -873,6 +873,17 @@ public class PreviewServerTest
 		HttpResponse<String> off = postFrom(base() + "api/update/enabled", "false", "Origin", origin());
 		assertEquals(200, off.statusCode());
 		assertTrue(off.body(), off.body().contains("\"enabled\":false"));
+		//入れ直しの応答では問い合わせない（次に本棚を開いたときに確かめる。PR のゲート2）
+		HttpResponse<String> on = postFrom(base() + "api/update/enabled", "true", "Origin", origin());
+		assertEquals(200, on.statusCode());
+		assertEquals("応答では問い合わせない", 1, calls.get());
+		//HEAD は覚えている版で答える（時刻を進めない）
+		HttpResponse<Void> head = this.client.send(java.net.http.HttpRequest.newBuilder(URI.create(base() + "api/update"))
+			.method("HEAD", java.net.http.HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());
+		assertEquals(200, head.statusCode());
+		assertEquals("HEAD では問い合わせない", 1, calls.get());
+		get(base() + "api/update");
+		assertEquals("入れ直した後の本棚を開いたときに確かめ直す", 2, calls.get());
 		assertEquals(404, get(base() + "api/update/else").statusCode());
 	}
 

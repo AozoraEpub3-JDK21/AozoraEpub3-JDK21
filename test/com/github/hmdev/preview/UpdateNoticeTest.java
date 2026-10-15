@@ -134,6 +134,53 @@ public class UpdateNoticeTest
 		assertTrue(peek, peek.contains("\"enabled\":true") && peek.contains("\"show\":false") && peek.contains("\"latest\":null"));
 	}
 
+	/**
+	 * 問い合わせは鍵の外。問い合わせ中でも、覗く・閉じる・切り替えは待たない。2 つ目の問い合わせは出さない。
+	 * 問い合わせ中に閉じた版は、結果を書いた後も残る（PR のゲート2）
+	 */
+	@Test
+	public void aSlowCheckBlocksNothingElseAndKeepsWhatWasWrittenMeanwhile() throws Exception
+	{
+		java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		Path file = temp.getRoot().toPath().resolve("home/.aozoraepub3/update-check.properties");
+		UpdateNotice n = new UpdateNotice(file, "1.7.3-jdk21", () -> {
+			calls.incrementAndGet();
+			entered.countDown();
+			try { release.await(10, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+			return new UpdateChecker.Result("1.7.3-jdk21", "v1.8.0-jdk21", true, UpdateChecker.DOWNLOAD_PAGE_URL, null);
+		}, now::get);
+		java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+		try {
+			java.util.concurrent.Future<String> slow = pool.submit(() -> n.json());
+			assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+			long t0 = System.nanoTime();
+			n.json(false);
+			assertTrue(n.dismiss("v1.8.0-jdk21"));
+			String second = n.json();
+			long ms = (System.nanoTime() - t0) / 1_000_000;
+			assertTrue("問い合わせ中でも待たない: " + ms + " ms", ms < 2000);
+			assertEquals("2 つ目の問い合わせは出さない", 1, calls.get());
+			assertTrue(second, second.contains("\"show\":false"));
+			release.countDown();
+			String done = slow.get(5, java.util.concurrent.TimeUnit.SECONDS);
+			assertTrue("閉じた版は消えない: " + done, done.contains("\"latest\":\"v1.8.0-jdk21\"") && done.contains("\"show\":false"));
+		} finally {
+			release.countDown();
+			pool.shutdownNow();
+		}
+	}
+
+	@Test
+	public void aCheckerThatThrowsIsAFailedCheck() throws Exception
+	{
+		Path file = temp.getRoot().toPath().resolve("home/.aozoraepub3/update-check.properties");
+		UpdateNotice n = new UpdateNotice(file, "1.7.3-jdk21", () -> { calls.incrementAndGet(); throw new IllegalStateException("x"); }, now::get);
+		assertTrue(n.json().contains("\"show\":false"));
+		n.json();
+		assertEquals("投げても時刻は進む", 1, calls.get());
+	}
+
 	@Test
 	public void aClockThatWentBackChecksAgain() throws Exception
 	{

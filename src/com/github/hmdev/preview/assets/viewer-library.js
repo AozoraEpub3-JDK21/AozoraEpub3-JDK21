@@ -203,6 +203,8 @@ async function openLibrary()
 	el.settingsPopover.hidden = true;
 	// 本が開かれていないときは戻る先が無いので閉じるボタンを出さない
 	el.libraryClose.hidden = !state.bookId;
+	// 新しい版は本棚を開くたびに問い合わせる (1 日 1 回の制限はサーバが持つ。タブを開いたままでも次の日に確かめる。PR のゲート2)
+	libraryUpdateChecked = false;
 	// 開くたびに取り直す。変換し直した本の書名・表紙・更新日時を古いまま出さないため
 	await loadLibrary();
 	// ランキングを出したまま本棚を閉じていたら、開き直したときに頼み直す (古い順位を出したままにしない)
@@ -1038,7 +1040,9 @@ function showUpdateNotice(info)
 	libraryUpdateShown = available && info.show ? info.latest : null;
 	el.libraryUpdateBand.hidden = !libraryUpdateShown;
 	if (libraryUpdateShown) {
-		el.libraryUpdateText.textContent = '新しい版 ' + info.latest + ' があります（使っているのは ' + info.current + '）';
+		// タグは v1.8.0-jdk21、今の版は 1.7.3-jdk21。頭の v をそろえて出す (PR のゲート2)
+		const plain = v => String(v).replace(/^v(?=\d)/, '');
+		el.libraryUpdateText.textContent = '新しい版 ' + plain(info.latest) + ' があります（使っているのは ' + plain(info.current) + '）';
 		el.libraryUpdateLink.href = info.url;
 	}
 }
