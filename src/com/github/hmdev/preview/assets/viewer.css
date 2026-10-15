@@ -551,6 +551,24 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 .library-download[hidden], .library-download .ask[hidden] { display: none; }
 .library-download .note[data-state="failed"] { color: var(--danger); }
 
+/* 新しい版の知らせ (viewer-library.js、internal #48) */
+.update-band {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 8px;
+	padding: 6px 8px;
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+	font-size: 13px;
+}
+.update-band .spacer { flex: 1 1 auto; }
+.update-band button { height: 24px; }
+.field.check { display: flex; align-items: center; gap: 6px; }
+.field.check > span { display: inline; margin-bottom: 0; }
+/* display を指定した要素は hidden の属性が効かなくなるので、明示する */
+.update-band[hidden], .field.check[hidden] { display: none; }
+
 /* ランキング (viewer-ranking.js)。出している間は本の一覧を隠す */
 .library-ranking {
 	flex: 1 1 auto;

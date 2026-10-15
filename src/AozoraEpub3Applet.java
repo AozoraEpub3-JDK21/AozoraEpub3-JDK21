@@ -817,7 +817,7 @@ public class AozoraEpub3Applet extends JPanel
 		}});
 		panel.add(jButtonLanguage);
 
-		// 更新確認 (手動のみ。自動更新も起動時チェックも行わない)
+		// 更新確認ボタン (手動。自動更新はせず、起動時にも確かめない。本棚だけは開いたときに 1 日 1 回確かめる＝internal #48)
 		panel.add(Box.createHorizontalStrut(4));
 		jButtonUpdate = new JButton(I18n.t("ui.update.button"));
 		jButtonUpdate.setToolTipText(I18n.t("ui.update.tooltip"));
@@ -2866,6 +2866,8 @@ public class AozoraEpub3Applet extends JPanel
 		//本棚の「続きを取る」は、画面の今の設定で、画面を使わずに変換する（internal #11）。
 		//設定は更新のたびに画面から写す（ini は終了するときと窓が手前から外れたときにしか書かれないので、ini を読むと古いことがある）
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(this::snapshotSettings, this.jarPath));
+		//本棚の上の「新しい版があります」（internal #48）。状態はホームに置く（ini は画面が書き戻すので使わない）
+		com.github.hmdev.preview.PreviewLauncher.setUpdateNotice(new com.github.hmdev.preview.UpdateNotice(AozoraEpub3.VERSION));
 		//Web 本棚の場所は画面の設定（全体設定）に持ち、棚の一覧にも足す（internal #11 の案 A）。ini は終了するときと窓が手前から外れたときに書かれる
 		com.github.hmdev.preview.PreviewLauncher.setWebShelf(new com.github.hmdev.preview.WebShelf() {
 			@Override

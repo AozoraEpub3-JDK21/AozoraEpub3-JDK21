@@ -838,6 +838,75 @@ public class PreviewServerTest
 		assertTrue("フォルダが無いのにファイラを起動している", opened.isEmpty());
 	}
 
+	/** 開く側が渡した知らせを、PreviewLauncher が起動するサーバに渡す（internal #48 の検証で、外しても赤にならなかった） */
+	@Test
+	public void theLauncherHandsTheUpdateNoticeToTheServerItStarts() throws Exception
+	{
+		UpdateNotice notice = new UpdateNotice(temp.getRoot().toPath().resolve("w/update-check.properties"), "1.7.3-jdk21",
+			() -> null, System::currentTimeMillis);
+		PreviewLauncher.setUpdateNotice(notice);
+		PreviewLauncher launcher = null;
+		try {
+			launcher = PreviewLauncher.startServer(null);
+			org.junit.Assert.assertSame(notice, launcher.getServer().getUpdateNotice());
+		} finally {
+			PreviewLauncher.setUpdateNotice(null);
+			if (launcher != null) {
+				launcher.getServer().close();
+				launcher.getSession().close();
+			}
+		}
+	}
+
+	/** 本棚の新しい版の知らせ（internal #48）。アプリから開いた本棚（UpdateNotice が渡されたとき）だけ答える */
+	@Test
+	public void theUpdateNoticeIsServedOnlyWhenTheAppGaveOne() throws Exception
+	{
+		String none = get(base() + "api/update").body();
+		assertTrue(none, none.contains("\"available\":false"));
+		assertEquals("渡されていなければ閉じられない", 503, postFrom(base() + "api/update/dismiss", "v9", "Origin", origin()).statusCode());
+
+		java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+		this.server.setUpdateNotice(new UpdateNotice(temp.getRoot().toPath().resolve("u/update-check.properties"), "1.7.3-jdk21",
+			() -> {
+				calls.incrementAndGet();
+				return new com.github.hmdev.update.UpdateChecker.Result("1.7.3-jdk21", "v1.8.0-jdk21", true,
+					com.github.hmdev.update.UpdateChecker.DOWNLOAD_PAGE_URL, null);
+			}, System::currentTimeMillis));
+
+		String peek = get(base() + "api/update?peek").body();
+		assertTrue(peek, peek.contains("\"available\":true") && peek.contains("\"show\":false"));
+		assertEquals("?peek は外に通信しない", 0, calls.get());
+
+		String shown = get(base() + "api/update").body();
+		assertTrue(shown, shown.contains("\"show\":true") && shown.contains("\"latest\":\"v1.8.0-jdk21\""));
+		assertEquals(1, calls.get());
+
+		assertEquals("ほかのオリジンからは閉じられない", 403,
+			postFrom(base() + "api/update/dismiss", "v1.8.0-jdk21", "Origin", "http://evil.example").statusCode());
+		assertEquals(405, get(base() + "api/update/dismiss").statusCode());
+		HttpResponse<String> dismissed = postFrom(base() + "api/update/dismiss", "v1.8.0-jdk21", "Origin", origin());
+		assertEquals(200, dismissed.statusCode());
+		assertTrue(dismissed.body(), dismissed.body().contains("\"show\":false"));
+
+		assertEquals(400, postFrom(base() + "api/update/enabled", "maybe", "Origin", origin()).statusCode());
+		HttpResponse<String> off = postFrom(base() + "api/update/enabled", "false", "Origin", origin());
+		assertEquals(200, off.statusCode());
+		assertTrue(off.body(), off.body().contains("\"enabled\":false"));
+		//入れ直しの応答では問い合わせない（次に本棚を開いたときに確かめる。PR のゲート2）
+		HttpResponse<String> on = postFrom(base() + "api/update/enabled", "true", "Origin", origin());
+		assertEquals(200, on.statusCode());
+		assertEquals("応答では問い合わせない", 1, calls.get());
+		//HEAD は覚えている版で答える（時刻を進めない）
+		HttpResponse<Void> head = this.client.send(java.net.http.HttpRequest.newBuilder(URI.create(base() + "api/update"))
+			.method("HEAD", java.net.http.HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());
+		assertEquals(200, head.statusCode());
+		assertEquals("HEAD では問い合わせない", 1, calls.get());
+		get(base() + "api/update");
+		assertEquals("入れ直した後の本棚を開いたときに確かめ直す", 2, calls.get());
+		assertEquals(404, get(base() + "api/update/else").statusCode());
+	}
+
 	/** ヘッダ付きの POST。ブラウザからのクロスオリジン POST を再現する */
 	private HttpResponse<String> postFrom(String path, String body, String... headers)
 		throws IOException, InterruptedException

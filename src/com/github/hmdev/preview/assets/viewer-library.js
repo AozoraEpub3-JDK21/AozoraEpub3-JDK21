@@ -85,6 +85,8 @@ function bindLibraryEvents()
 		loadLibrary().catch(err => showLibraryStatus('本棚を読み込めませんでした: ' + err.message));
 	});
 
+	bindUpdateNoticeEvents();
+
 	el.libraryFilter.addEventListener('input', () => {
 		// 打鍵ごとに 2000 冊を並べ替えると入力が引っ掛かる
 		clearTimeout(libraryFilterTimer);
@@ -201,6 +203,8 @@ async function openLibrary()
 	el.settingsPopover.hidden = true;
 	// 本が開かれていないときは戻る先が無いので閉じるボタンを出さない
 	el.libraryClose.hidden = !state.bookId;
+	// 新しい版は本棚を開くたびに問い合わせる (1 日 1 回の制限はサーバが持つ。タブを開いたままでも次の日に確かめる。PR のゲート2)
+	libraryUpdateChecked = false;
 	// 開くたびに取り直す。変換し直した本の書名・表紙・更新日時を古いまま出さないため
 	await loadLibrary();
 	// ランキングを出したまま本棚を閉じていたら、開き直したときに頼み直す (古い順位を出したままにしない)
@@ -241,6 +245,7 @@ async function loadLibrary(keepView)
 	if (seq !== libraryLoadSeq) return;
 	state.library = library;
 	checkDownloadAvailable();
+	checkUpdateNotice();
 	updateCheckAllButton();
 	state.libraryFolder = library.folderName || null;
 	state.libraryShelfCount = library.shelves ? library.shelves.length : state.libraryShelfCount;
@@ -994,6 +999,79 @@ function showDownloadStatus(text, failed)
 {
 	el.libraryDownloadStatus.textContent = text;
 	el.libraryDownloadStatus.dataset.state = failed ? 'failed' : '';
+}
+
+/** 新しい版を確かめたか (本棚を読み直すたびに問い合わせない。internal #48) */
+let libraryUpdateChecked = false;
+/** 帯に出している版 (閉じるときに送る) */
+let libraryUpdateShown = null;
+
+/**
+ * 本棚を開いたときに、新しい版の知らせを問い合わせる (internal #48)。サーバが 1 日 1 回までに抑えるので、
+ * ここでは本棚を開いて最初の 1 回だけ問い合わせる。失敗しても本棚は使える
+ */
+async function checkUpdateNotice()
+{
+	if (libraryUpdateChecked) return;
+	libraryUpdateChecked = true;
+	try {
+		const response = await fetch('api/update', {cache: 'no-store'});
+		showUpdateNotice(response.ok ? await response.json() : null);
+	} catch (e) {
+		libraryUpdateChecked = false;
+	}
+}
+
+/** 表示設定の欄を開いたとき、確かめるかの印だけを読む (外に通信しない) */
+async function peekUpdateNotice()
+{
+	try {
+		const response = await fetch('api/update?peek', {cache: 'no-store'});
+		if (response.ok) showUpdateNotice(await response.json());
+	} catch (e) { /* 読めなければ印は出さないまま */ }
+}
+
+/** 知らせを帯と表示設定の欄に出す。アプリから開いた本棚でなければ (available でなければ) どちらも出さない */
+function showUpdateNotice(info)
+{
+	const available = !!(info && info.available);
+	el.updateCheckField.hidden = !available;
+	el.updateCheckEnabled.checked = !!(info && info.enabled);
+	libraryUpdateShown = available && info.show ? info.latest : null;
+	el.libraryUpdateBand.hidden = !libraryUpdateShown;
+	if (libraryUpdateShown) {
+		// タグは v1.8.0-jdk21、今の版は 1.7.3-jdk21。頭の v をそろえて出す (PR のゲート2)
+		const plain = v => String(v).replace(/^v(?=\d)/, '');
+		el.libraryUpdateText.textContent = '新しい版 ' + plain(info.latest) + ' があります（使っているのは ' + plain(info.current) + '）';
+		el.libraryUpdateLink.href = info.url;
+	}
+}
+
+function bindUpdateNoticeEvents()
+{
+	el.libraryUpdateClose.addEventListener('click', async () => {
+		if (!libraryUpdateShown) return;
+		el.libraryUpdateBand.hidden = true;
+		const {response, json} = await postText('api/update/dismiss', libraryUpdateShown).catch(() => ({}));
+		if (response && response.ok && json) {
+			showUpdateNotice(json);
+		} else {
+			// 閉じたことを書けなかったら、帯を戻す (次に開いたときにまた出るので、閉じたように見せない。PR の codex)
+			el.libraryUpdateBand.hidden = false;
+			el.libraryUpdateClose.title = '閉じたことを保存できませんでした';
+		}
+	});
+	el.updateCheckEnabled.addEventListener('change', async () => {
+		const wanted = el.updateCheckEnabled.checked;
+		const {response, json} = await postText('api/update/enabled', String(wanted)).catch(() => ({}));
+		if (response && response.ok && json) {
+			showUpdateNotice(json);
+		} else {
+			// 書けなかった (記録の場所に書けないなど) なら、印を元に戻す。切り替わったように見せない (PR の codex)
+			el.updateCheckEnabled.checked = !wanted;
+			el.updateCheckField.title = '切り替えを保存できませんでした';
+		}
+	});
 }
 
 /** 本文を 1 つ POST して、JSON (読めなければ null) と状態を返す */

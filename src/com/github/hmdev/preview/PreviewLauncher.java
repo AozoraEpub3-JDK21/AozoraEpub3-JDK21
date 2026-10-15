@@ -37,6 +37,16 @@ public class PreviewLauncher
 		if (current != null) current.server.setBookUpdater(updater);
 	}
 
+	/** 本棚の「新しい版があります」（internal #48）。本棚を開く側（GUI・CLI）が渡す。後から起動するサーバにも渡す */
+	private static volatile UpdateNotice updateNotice;
+
+	/** 本棚の新しい版の知らせを渡す（internal #48）。起動中のサーバにも、後で起動するサーバにも効く */
+	public static synchronized void setUpdateNotice(UpdateNotice notice)
+	{
+		updateNotice = notice;
+		if (current != null) current.server.setUpdateNotice(notice);
+	}
+
 	/** Web 本棚の場所の読み書き。本棚を開く側（GUI・CLI）が渡す。後から起動するサーバにも渡す */
 	private static volatile WebShelf webShelf;
 
@@ -90,6 +100,7 @@ public class PreviewLauncher
 			server = new PreviewServer(session);
 			server.setBookUpdater(bookUpdater);
 		server.setWebShelf(webShelf);
+			server.setUpdateNotice(updateNotice);
 			// 本を伴わない起動 (本棚だけを開く) を許す。既定の本が無い場合、
 			// ビューアーは本棚を開いた状態で始まる
 			if (epubFile != null) session.addBook(epubFile);

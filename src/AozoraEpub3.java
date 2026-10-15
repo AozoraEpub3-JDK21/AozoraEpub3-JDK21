@@ -727,6 +727,8 @@ public class AozoraEpub3
 		//Web 本棚の場所も同じ ini に持つ（internal #11 の案 A）
 		cliWebShelf = new IniWebShelf(ini);
 		com.github.hmdev.preview.PreviewLauncher.setWebShelf(cliWebShelf);
+		//本棚の上の「新しい版があります」（internal #48）。状態はホームに置く（ini には書かない）
+		com.github.hmdev.preview.PreviewLauncher.setUpdateNotice(new com.github.hmdev.preview.UpdateNotice(VERSION));
 		com.github.hmdev.preview.PreviewLauncher.setBookUpdater(new HeadlessBookUpdater(() -> {
 			Properties props = new Properties();
 			try (java.io.InputStream in = Files.newInputStream(ini.toPath())) {
