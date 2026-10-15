@@ -760,6 +760,26 @@ public class HeadlessWebConversionTest {
 		assertEquals("古い控えは消える", 0, ledgerDir().listFiles((d, n) -> n.startsWith(".previous.")).length);
 	}
 
+	/** 1 つ前の版を残せない回が続いても、控えは本ごとに 1 つ（いちばん新しい前の本）だけ残る（internal #26 の PR のゲート2） */
+	@Test
+	public void repeatedFailuresKeepOneBackupPerBook() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		File previous = new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), book));
+		assertTrue(previous.mkdir());
+		Files.write(new File(previous, "x").toPath(), new byte[]{1});
+		episodes = 2;
+		assertTrue(guardedUpdate(basePath, book, false).ok());
+		byte[] v2 = Files.readAllBytes(book.toPath());
+		episodes = 3;
+		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
+		assertTrue(r.message(), r.ok() && r.message().contains("残せませんでした"));
+		File[] kept = ledgerDir().listFiles((d, n) -> n.startsWith(".previous."));
+		assertEquals("控えは 1 つ", 1, kept.length);
+		org.junit.Assert.assertArrayEquals("残るのは今回の前の本（v2）", v2, Files.readAllBytes(kept[0].toPath()));
+	}
+
 	/** 同じ作品のもう 1 冊の控え、印の無い古い形の控えは消さない（どちらも、この本の古い版ではない）（internal #26） */
 	@Test
 	public void anotherBooksBackupAndAnUnmarkedOneAreKept() throws Exception {
