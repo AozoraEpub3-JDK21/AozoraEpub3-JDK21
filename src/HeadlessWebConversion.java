@@ -43,8 +43,78 @@ public class HeadlessWebConversion
 		//（PR のゲート2）。長い題は、その場所で作れる長さに切る
 		String name = book.getName();
 		int dot = name.toLowerCase(java.util.Locale.ROOT).endsWith(".kepub.epub") ? name.length() - ".kepub.epub".length() : name.lastIndexOf('.');
-		String base = "previous " + com.github.hmdev.info.BookLedger.bookKey(book).substring(0, 8) + " " + (dot > 0 ? name.substring(0, dot) : name);
+		String base = "previous " + keyTag(book) + " " + (dot > 0 ? name.substring(0, dot) : name);
 		return com.github.hmdev.util.PathUtils.fitFileNameIn(workDir, base, ".epub") + ".epub";
+	}
+
+	/**
+	 * 1 つ前の版を残す前の控えの名前の頭。本の印の頭 8 桁を入れて、どの本の控えかを名前で分かるようにする（internal #26）。
+	 * 1 つ前の版の名前に動かせなかった控えは残るので、次に残せたとき、同じ本の古い控えを消すのに使う
+	 */
+	static String backupPrefix(File book)
+	{
+		return ".previous." + keyTag(book) + ".";
+	}
+
+	/** 1 つ前の版と控えの名前に入れる本の印（本の印の頭 8 桁）。両方で同じ印を使う（名前を変えたときに一緒に動かすため） */
+	static String keyTag(File book)
+	{
+		return com.github.hmdev.info.BookLedger.bookKey(book).substring(0, 8);
+	}
+
+	/** 作品のフォルダにある、その本の控え */
+	static File[] backupsOf(File workDir, File book)
+	{
+		String prefix = backupPrefix(book);
+		File[] found = workDir.listFiles((d, n) -> n.startsWith(prefix) && n.endsWith(".tmp"));
+		return found == null ? new File[0] : found;
+	}
+
+	/**
+	 * 同じ本の古い控えを消す（internal #26）。`keep` 以外の控えは、今残した 1 つ前の版か `keep` より前の版なので要らない。
+	 * 1 つ前の版を残せたときは keep なし、残せなかったときは今の控えを keep にする（失敗が続いても、控えは本ごとに 1 つ）。
+	 * 消したことはログに書く（前の回に「前の本は … にあります」と言った控えを、黙って消さない）。消せない控えはそのまま。
+	 * 印の無い古い形の控え（.previous.<数字>.tmp、v1.7.3 まで）は、どの本のものか分からないので触らない。
+	 * 本はもう置き換えた後に呼ぶので、ここで何が起きても更新は失敗にしない（PR のゲート2）
+	 */
+	static void dropOlderBackups(File workDir, File book, File keep)
+	{
+		try {
+			for (File old : backupsOf(workDir, book)) {
+				if (keep != null && old.getName().equals(keep.getName())) continue;
+				try {
+					if (java.nio.file.Files.deleteIfExists(old.toPath())) LogAppender.println("古い控え " + old.getName() + " を片付けました");
+				} catch (IOException e) {
+					logger.warn("古い控えを消せませんでした: {}", old, e);
+				}
+			}
+		} catch (RuntimeException e) {
+			logger.warn("古い控えを片付けられませんでした: {}", workDir, e);
+		}
+	}
+
+	/**
+	 * 本の名前を変えたとき、その本の控えの名前の印も新しい本の印にする（PR のゲート2）。動かさないと、次に片付けるときに
+	 * 新しい印で探すので、古い印の控えが残り続ける。1 つ前の版を動かすのと同じく、失敗してもログだけ。
+	 * 古い印（fromPrefix）は動かす前に決めたものを渡す（動かした後では、大文字小文字だけの変更で古い名前も新しい綴りに正規化される）
+	 */
+	static void moveBackups(File workDir, String fromPrefix, File to)
+	{
+		String toPrefix = backupPrefix(to);
+		if (fromPrefix.equals(toPrefix)) return;
+		try {
+			File[] olds = workDir.listFiles((d, n) -> n.startsWith(fromPrefix) && n.endsWith(".tmp"));
+			for (File old : olds == null ? new File[0] : olds) {
+				File moved = new File(workDir, toPrefix + old.getName().substring(fromPrefix.length()));
+				try {
+					java.nio.file.Files.move(old.toPath(), moved.toPath());
+				} catch (IOException e) {
+					logger.warn("控えを新しい名前に動かせませんでした: {}", old, e);
+				}
+			}
+		} catch (RuntimeException e) {
+			logger.warn("控えを新しい名前に動かせませんでした: {}", workDir, e);
+		}
 	}
 
 	/** 守りで止めた理由: 掲載元で作品が見つからない（404・410） */
@@ -375,7 +445,7 @@ public class HeadlessWebConversion
 			//いったん控えに写し、本を置き換えられてから 1 つ前の版の名前にする（先に上書きすると、変換や置き換えに
 			//失敗したとき＝Windows で本が開かれていたときなど、本は元のままなのに、もっと前の版を失う。PR のゲート2・#121 の codex）
 			if (outFile.exists()) {
-				backup = File.createTempFile(".previous.", ".tmp", workDir);
+				backup = File.createTempFile(backupPrefix(outFile), ".tmp", workDir);
 				java.nio.file.Files.copy(outFile.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
 			//前の本の権限を引き継ぐ（一時ファイルの既定の権限にしない。PR #118 の codex）
@@ -394,17 +464,23 @@ public class HeadlessWebConversion
 			}
 			//本はもう置き換えたので、ここから先の失敗で更新を失敗にしない（台帳の話数が戻って、本と食い違う。#121 の codex）
 			String note = "";
+			File leftover = null;
+			boolean previousKept = false;
 			if (backup != null) {
 				File previous = new File(workDir, previousEpubName(workDir, outFile));
 				try {
 					java.nio.file.Files.move(backup.toPath(), previous.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+					previousKept = true;
 				} catch (IOException e) {
 					//前の版が開かれている（Windows）など。控えは消さずに残す（前の本はそこから戻せる）
 					logger.warn("1 つ前の版を残せませんでした: {}", previous, e);
 					LogAppender.println("1 つ前の版を " + previous.getName() + " に残せませんでした。前の本は " + backup.getName() + " にあります");
 					note = "（1 つ前の版は残せませんでした）";
+					leftover = backup;
 					backup = null;
 				}
+				//同じ本の古い控えを片付ける（internal #26）。残せたなら全部、残せなかったなら今の控えだけを残す
+				if (previousKept || leftover != null) dropOlderBackups(workDir, outFile, leftover);
 			}
 			//置き換えた本の話数を記録する（書き出しは一時ファイルなので convertFile は記録しない）
 			com.github.hmdev.info.BookLedger.recordBookEpisodes(bookInfo, outFile);

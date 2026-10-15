@@ -256,6 +256,7 @@ public class HeadlessBookUpdater implements BookUpdater
 			Path ledgerDir = ledgerDirOf(cache.toPath(), sourceUrl);
 			String fromKey = com.github.hmdev.info.BookLedger.bookKey(epubFile.toFile());
 			String fromPrevious = ledgerDir != null ? HeadlessWebConversion.previousEpubName(ledgerDir.toFile(), epubFile.toFile()) : null;
+			String fromBackupPrefix = HeadlessWebConversion.backupPrefix(epubFile.toFile());
 			//大文字と小文字だけを変えるとき（同じファイルと見なす Windows・mac）は、いったん別の名前を経る（PR のゲート2）
 			if (sameFile) {
 				Path step = java.nio.file.Files.createTempFile(epubFile.toAbsolutePath().getParent(), ".rename.", ".tmp");
@@ -271,7 +272,7 @@ public class HeadlessBookUpdater implements BookUpdater
 			} else {
 				java.nio.file.Files.move(epubFile, target);
 			}
-			if (ledgerDir != null) moveRecords(ledgerDir, fromKey, fromPrevious, epubFile, target, oldBase, newBaseName, extForFit, shelfLedger);
+			if (ledgerDir != null) moveRecords(ledgerDir, fromKey, fromPrevious, fromBackupPrefix, epubFile, target, oldBase, newBaseName, extForFit, shelfLedger);
 			return new Result(true, false, "名前を変えました: " + target.getFileName());
 		} finally {
 			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
@@ -282,7 +283,7 @@ public class HeadlessBookUpdater implements BookUpdater
 	 * 台帳の本ごとの記録を、新しい名前の本に動かす（失敗しても名前は変わっている。記録が古い名前のまま残るだけ）。
 	 * 1 つ前の版と台帳は別々に動かす（片方の失敗で、もう片方＝話数の守りが動かないことのないように。PR のゲート2）
 	 */
-	private static void moveRecords(Path ledgerDir, String fromKey, String fromPrevious, Path from, Path to, String oldBase, String newBase,
+	private static void moveRecords(Path ledgerDir, String fromKey, String fromPrevious, String fromBackupPrefix, Path from, Path to, String oldBase, String newBase,
 		String ext, boolean shelfLedger)
 	{
 		File dir = ledgerDir.toFile();
@@ -296,6 +297,8 @@ public class HeadlessBookUpdater implements BookUpdater
 		} catch (java.io.IOException e) {
 			log.warn("1 つ前の版を新しい名前に動かせませんでした: {}", ledgerDir, e);
 		}
+		//残っている控えの印も新しい本の印にする（internal #26 の PR のゲート2）
+		HeadlessWebConversion.moveBackups(dir, fromBackupPrefix, to.toFile());
 		try {
 			com.github.hmdev.info.BookLedger ledger = com.github.hmdev.info.BookLedger.load(dir);
 			if (ledger == null) return;

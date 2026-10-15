@@ -395,6 +395,35 @@ public class HeadlessBookUpdaterTest {
 	 * 大文字小文字だけを変えても、本ごとの話数と 1 つ前の版が新しい名前に動く（古い印は動かす前に取る。
 	 * 動かした後では古い名前も新しい綴りに正規化される。win2 が Windows で実測。mac の APFS でも同じ）
 	 */
+	/**
+	 * 名前を変えると、残っている控えの印も新しい本の印になる。動かさないと、次に片付けるときに新しい印で探すので残り続ける
+	 * （internal #26 の PR のゲート2）。大文字小文字だけの変更でも、古い印は動かす前に取る
+	 */
+	@Test
+	public void aRenameMovesTheLeftoverBackups() throws Exception {
+		for (String newName : new String[]{ "xyz", "ABC" }) {
+			File shelf = tempFolder.newFolder("backupshelf-" + newName);
+			File work = new File(shelf, ".aozora/example.com/novel");
+			assertTrue(work.mkdirs());
+			File abc = new File(shelf, "abc.epub");
+			Files.write(abc.toPath(), new byte[]{1});
+			com.github.hmdev.info.BookLedger.create("https://example.com/novel/", "[a] 題").withOutputBaseName("abc")
+				.withBookEpisodes(abc, 7).save(work);
+			File leftover = new File(work, HeadlessWebConversion.backupPrefix(abc) + "123.tmp");
+			Files.write(leftover.toPath(), new byte[]{3});
+			Properties props = new Properties();
+			props.setProperty("CachePath", tempFolder.newFolder("c-" + newName).getAbsolutePath());
+			HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, "");
+			String oldPrefix = HeadlessWebConversion.backupPrefix(abc);
+			assertTrue(updater.rename("https://example.com/novel/", abc.toPath(), newName).ok());
+			File renamed = new File(shelf, newName + ".epub");
+			File moved = new File(work, HeadlessWebConversion.backupPrefix(renamed) + "123.tmp");
+			assertTrue(newName + ": 控えは新しい印の名前になる", moved.isFile());
+			org.junit.Assert.assertArrayEquals(new byte[]{3}, Files.readAllBytes(moved.toPath()));
+			org.junit.Assert.assertEquals(newName + ": 古い印の控えは残らない", 0, work.listFiles((d, n) -> n.startsWith(oldPrefix)).length);
+		}
+	}
+
 	@Test
 	public void aCaseOnlyRenameMovesTheRecords() throws Exception {
 		File shelf = tempFolder.newFolder("caseshelf");

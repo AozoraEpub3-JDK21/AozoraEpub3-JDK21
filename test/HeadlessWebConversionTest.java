@@ -733,6 +733,73 @@ public class HeadlessWebConversionTest {
 		org.junit.Assert.assertArrayEquals(v1, Files.readAllBytes(kept[0].toPath()));
 	}
 
+	/**
+	 * 1 つ前の版を残せなかった控えは、次に残せたときに片付く（internal #26）。控えの名前には本の印が入り、
+	 * 同じ本の控えだけを消す
+	 */
+	@Test
+	public void aLeftoverBackupIsDroppedWhenTheNextPreviousIsKept() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		File previous = new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), book));
+		assertTrue(previous.mkdir());
+		Files.write(new File(previous, "x").toPath(), new byte[]{1});
+		episodes = 2;
+		assertTrue(guardedUpdate(basePath, book, false).ok());
+		File[] kept = ledgerDir().listFiles((d, n) -> n.startsWith(".previous."));
+		assertEquals("前の回は控えが残る", 1, kept.length);
+		assertTrue("控えの名前で本が分かる: " + kept[0].getName(), kept[0].getName().startsWith(HeadlessWebConversion.backupPrefix(book)));
+		//置き換えられないものを取り除くと、次の更新で 1 つ前の版を残せる
+		Files.delete(new File(previous, "x").toPath());
+		Files.delete(previous.toPath());
+		byte[] v2 = Files.readAllBytes(book.toPath());
+		episodes = 3;
+		assertTrue(guardedUpdate(basePath, book, false).ok());
+		org.junit.Assert.assertArrayEquals("1 つ前の版は v2", v2, Files.readAllBytes(previous.toPath()));
+		assertEquals("古い控えは消える", 0, ledgerDir().listFiles((d, n) -> n.startsWith(".previous.")).length);
+	}
+
+	/** 1 つ前の版を残せない回が続いても、控えは本ごとに 1 つ（いちばん新しい前の本）だけ残る（internal #26 の PR のゲート2） */
+	@Test
+	public void repeatedFailuresKeepOneBackupPerBook() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		File previous = new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), book));
+		assertTrue(previous.mkdir());
+		Files.write(new File(previous, "x").toPath(), new byte[]{1});
+		episodes = 2;
+		assertTrue(guardedUpdate(basePath, book, false).ok());
+		byte[] v2 = Files.readAllBytes(book.toPath());
+		episodes = 3;
+		HeadlessWebConversion.Result r = guardedUpdate(basePath, book, false);
+		assertTrue(r.message(), r.ok() && r.message().contains("残せませんでした"));
+		File[] kept = ledgerDir().listFiles((d, n) -> n.startsWith(".previous."));
+		assertEquals("控えは 1 つ", 1, kept.length);
+		org.junit.Assert.assertArrayEquals("残るのは今回の前の本（v2）", v2, Files.readAllBytes(kept[0].toPath()));
+	}
+
+	/** 同じ作品のもう 1 冊の控え、印の無い古い形の控えは消さない（どちらも、この本の古い版ではない）（internal #26） */
+	@Test
+	public void anotherBooksBackupAndAnUnmarkedOneAreKept() throws Exception {
+		String basePath = serveAndBase();
+		episodes = 1;
+		File a = shelfBook(basePath, tempFolder.newFolder("a"));
+		episodes = 2;
+		File b = shelfBook(basePath, tempFolder.newFolder("b"));
+		File aOther = new File(ledgerDir(), HeadlessWebConversion.backupPrefix(a) + "123.tmp");
+		File unmarked = new File(ledgerDir(), ".previous.4567.tmp");
+		Files.write(aOther.toPath(), new byte[]{1});
+		Files.write(unmarked.toPath(), new byte[]{2});
+		assertFalse("2 冊の印は違う", HeadlessWebConversion.backupPrefix(a).equals(HeadlessWebConversion.backupPrefix(b)));
+		episodes = 3;
+		assertTrue(guardedUpdate(basePath, b, false).ok());
+		assertTrue("b の 1 つ前の版を残せた", new File(ledgerDir(), HeadlessWebConversion.previousEpubName(ledgerDir(), b)).exists());
+		assertTrue("a の控えは残る", aOther.exists());
+		assertTrue("印の無い控えは残る", unmarked.exists());
+	}
+
 	/** 新着を確かめる: 目次だけを読み、新しい話を数える。話は取らず、本も台帳も txt も書かない（internal #11） */
 	@Test
 	public void checkingCountsNewEpisodesWithoutWriting() throws Exception {
