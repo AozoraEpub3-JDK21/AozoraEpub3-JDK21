@@ -227,6 +227,22 @@ public class UpdateNoticeTest
 		assertEquals("フォルダになっていても、開くたびに確かめに行かない", 0, calls.get());
 	}
 
+	/** 問い合わせの間に記録が壊れても（ほかの起動・手で書いた）、確かめた結果で上書きしない */
+	@Test
+	public void aRecordThatBreaksDuringTheCheckIsNotOverwritten() throws Exception
+	{
+		Path file = temp.getRoot().toPath().resolve("home/.aozoraepub3/update-check.properties");
+		String broken = "enabled=false\nlatest=\\uZZZZ\n";
+		UpdateNotice n = new UpdateNotice(file, "1.7.3-jdk21", () -> {
+			calls.incrementAndGet();
+			try { Files.createDirectories(file.getParent()); Files.writeString(file, broken); } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+			return new UpdateChecker.Result("1.7.3-jdk21", "v1.8.0-jdk21", true, UpdateChecker.DOWNLOAD_PAGE_URL, null);
+		}, now::get);
+		n.json();
+		assertEquals(1, calls.get());
+		assertEquals("壊れた記録は自動では上書きしない", broken, Files.readString(file));
+	}
+
 	/** 閉じた版より古い版を閉じても、閉じた版は戻らない（古い画面から届いても、新しい版の帯を出し直さない。PR の検証） */
 	@Test
 	public void dismissingAnOlderVersionDoesNotBringTheBandBack() throws Exception
