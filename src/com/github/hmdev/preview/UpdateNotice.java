@@ -84,12 +84,23 @@ public class UpdateNotice
 	public String json(boolean mayCheck)
 	{
 		long now = this.clock.getAsLong();
-		boolean due;
-		synchronized (this) {
-			//読めない記録（壊れた・フォルダになった）なら確かめに行かない。上書きもしない（止めた設定を消さない。PR の検証）
-			Properties p = read();
-			due = mayCheck && p != null && !this.checking && isEnabled(p) && isDue(p, now);
-			if (due) this.checking = true;
+		boolean due = false;
+		if (mayCheck) {
+			synchronized (this) {
+				if (!this.checking) {
+					//確かめる番は、ファイルの鍵の中で時刻を先に書いて取る。GUI と CLI の本棚が同時に開いても、問い合わせは 1 つ
+					//（PR の codex）。読めない記録（壊れた・フォルダになった）なら確かめに行かず、上書きもしない（PR の検証）
+					boolean[] claimed = {false};
+					update(false, p -> {
+						if (!isEnabled(p) || !isDue(p, now)) return false;
+						p.setProperty(KEY_CHECKED, Long.toString(now));
+						claimed[0] = true;
+						return true;
+					});
+					due = claimed[0];
+					if (due) this.checking = true;
+				}
+			}
 		}
 		if (due) {
 			UpdateChecker.Result r = null;
@@ -106,8 +117,7 @@ public class UpdateNotice
 					} else if (result != null) {
 						logger.debug("新しい版を確かめられませんでした: {}", result.error());
 					}
-					//失敗しても時刻は進める（つながらない台で、本棚を開くたびに待たせない）
-					p.setProperty(KEY_CHECKED, Long.toString(now));
+					//確かめた時刻は番を取ったときに書いた（失敗しても進める。つながらない台で、本棚を開くたびに待たせない）
 					return true;
 				});
 			} finally {

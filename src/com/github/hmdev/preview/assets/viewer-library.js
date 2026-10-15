@@ -1053,7 +1053,13 @@ function bindUpdateNoticeEvents()
 		if (!libraryUpdateShown) return;
 		el.libraryUpdateBand.hidden = true;
 		const {response, json} = await postText('api/update/dismiss', libraryUpdateShown).catch(() => ({}));
-		if (response && response.ok && json) showUpdateNotice(json);
+		if (response && response.ok && json) {
+			showUpdateNotice(json);
+		} else {
+			// 閉じたことを書けなかったら、帯を戻す (次に開いたときにまた出るので、閉じたように見せない。PR の codex)
+			el.libraryUpdateBand.hidden = false;
+			el.libraryUpdateClose.title = '閉じたことを保存できませんでした';
+		}
 	});
 	el.updateCheckEnabled.addEventListener('change', async () => {
 		const wanted = el.updateCheckEnabled.checked;

@@ -243,6 +243,35 @@ public class UpdateNoticeTest
 		assertEquals("壊れた記録は自動では上書きしない", broken, Files.readString(file));
 	}
 
+	/** 確かめる番は記録に書いて取る。別の起動（別のインスタンス）が同時に開いても、問い合わせは 1 つ（PR の codex） */
+	@Test
+	public void twoInstancesOpeningTogetherCheckOnce() throws Exception
+	{
+		java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		Path file = temp.getRoot().toPath().resolve("home/.aozoraepub3/update-check.properties");
+		java.util.function.Supplier<UpdateChecker.Result> slow = () -> {
+			calls.incrementAndGet();
+			entered.countDown();
+			try { release.await(10, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+			return new UpdateChecker.Result("1.7.3-jdk21", "v1.8.0-jdk21", true, UpdateChecker.DOWNLOAD_PAGE_URL, null);
+		};
+		UpdateNotice gui = new UpdateNotice(file, "1.7.3-jdk21", slow, now::get);
+		UpdateNotice cli = new UpdateNotice(file, "1.7.3-jdk21", slow, now::get);
+		java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+		try {
+			java.util.concurrent.Future<String> first = pool.submit(() -> gui.json());
+			assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+			cli.json();
+			assertEquals("問い合わせは 1 つ", 1, calls.get());
+			release.countDown();
+			assertTrue(first.get(5, java.util.concurrent.TimeUnit.SECONDS).contains("\"show\":true"));
+		} finally {
+			release.countDown();
+			pool.shutdownNow();
+		}
+	}
+
 	/** 閉じた版より古い版を閉じても、閉じた版は戻らない（古い画面から届いても、新しい版の帯を出し直さない。PR の検証） */
 	@Test
 	public void dismissingAnOlderVersionDoesNotBringTheBandBack() throws Exception
