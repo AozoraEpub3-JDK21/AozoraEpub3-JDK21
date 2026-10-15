@@ -47,6 +47,33 @@ public class HeadlessWebConversion
 		return com.github.hmdev.util.PathUtils.fitFileNameIn(workDir, base, ".epub") + ".epub";
 	}
 
+	/**
+	 * 1 つ前の版を残す前の控えの名前の頭。本の印の頭 8 桁を入れて、どの本の控えかを名前で分かるようにする（internal #26）。
+	 * 1 つ前の版の名前に動かせなかった控えは残るので、次に残せたとき、同じ本の古い控えを消すのに使う
+	 */
+	static String backupPrefix(File book)
+	{
+		return ".previous." + com.github.hmdev.info.BookLedger.bookKey(book).substring(0, 8) + ".";
+	}
+
+	/**
+	 * 同じ本の古い控えを消す（internal #26）。1 つ前の版を残せたときに呼ぶ。残っている控えは、それより前の版なので要らない。
+	 * 消せない控え（開かれているなど）はそのまま。印の無い古い形の控え（.previous.<数字>.tmp）は、どの本のものか分からないので触らない
+	 */
+	static void dropOlderBackups(File workDir, File book)
+	{
+		String prefix = backupPrefix(book);
+		File[] olds = workDir.listFiles((d, n) -> n.startsWith(prefix) && n.endsWith(".tmp"));
+		if (olds == null) return;
+		for (File old : olds) {
+			try {
+				java.nio.file.Files.deleteIfExists(old.toPath());
+			} catch (IOException e) {
+				logger.warn("古い控えを消せませんでした: {}", old, e);
+			}
+		}
+	}
+
 	/** 守りで止めた理由: 掲載元で作品が見つからない（404・410） */
 	public static final String STOP_GONE = "gone";
 	/** 守りで止めた理由: 目次の話数が前より減った */
@@ -375,7 +402,7 @@ public class HeadlessWebConversion
 			//いったん控えに写し、本を置き換えられてから 1 つ前の版の名前にする（先に上書きすると、変換や置き換えに
 			//失敗したとき＝Windows で本が開かれていたときなど、本は元のままなのに、もっと前の版を失う。PR のゲート2・#121 の codex）
 			if (outFile.exists()) {
-				backup = File.createTempFile(".previous.", ".tmp", workDir);
+				backup = File.createTempFile(backupPrefix(outFile), ".tmp", workDir);
 				java.nio.file.Files.copy(outFile.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}
 			//前の本の権限を引き継ぐ（一時ファイルの既定の権限にしない。PR #118 の codex）
@@ -398,6 +425,8 @@ public class HeadlessWebConversion
 				File previous = new File(workDir, previousEpubName(workDir, outFile));
 				try {
 					java.nio.file.Files.move(backup.toPath(), previous.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+					//前の回に残せなかった控えは、今残した版より古いので片付ける（internal #26）
+					dropOlderBackups(workDir, outFile);
 				} catch (IOException e) {
 					//前の版が開かれている（Windows）など。控えは消さずに残す（前の本はそこから戻せる）
 					logger.warn("1 つ前の版を残せませんでした: {}", previous, e);
