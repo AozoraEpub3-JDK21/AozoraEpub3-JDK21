@@ -108,6 +108,13 @@
 		<button id="libraryReload" class="icon" type="button" title="一覧を更新 (フォルダの再スキャンは行いません)" aria-label="一覧を更新">⟳</button>
 		<button id="libraryClose" class="icon" type="button" title="本棚を閉じる" aria-label="本棚を閉じる">✕</button>
 	</div>
+	<!-- 新しい版の知らせ (viewer-library.js、internal #48)。本棚を開いたときに確かめる (1 日 1 回まで) -->
+	<div id="libraryUpdateBand" class="update-band" role="status" hidden>
+		<span id="libraryUpdateText"></span>
+		<a id="libraryUpdateLink" target="_blank" rel="noopener">紹介ページを開く</a>
+		<span class="spacer"></span>
+		<button id="libraryUpdateClose" class="icon" type="button" title="この版では知らせない" aria-label="この版では知らせない">✕</button>
+	</div>
 	<div id="libraryDownload" class="library-download" hidden>
 		<form id="libraryDownloadForm" class="row">
 			<input id="libraryDownloadUrl" type="url" placeholder="作品のページの URL（小説家になろう・カクヨムなど）" autocomplete="off" required>
@@ -183,6 +190,12 @@
 			<option value="light">ライト</option>
 			<option value="dark">ダーク</option>
 		</select>
+	</label>
+
+	<!-- 新しい版を確かめるか (internal #48)。アプリから開いた本棚だけ viewer-library.js が hidden を外す -->
+	<label id="updateCheckField" class="field check" hidden>
+		<input id="updateCheckEnabled" type="checkbox">
+		<span>本棚を開いたときに新しい版を確かめる（1 日 1 回）</span>
 	</label>
 
 	<button id="settingsReset" type="button" class="reset">既定に戻す</button>

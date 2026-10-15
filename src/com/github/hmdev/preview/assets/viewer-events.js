@@ -25,6 +25,8 @@ function bindEvents()
 
 	el.settingsToggle.addEventListener('click', () => {
 		el.settingsPopover.hidden = !el.settingsPopover.hidden;
+		// 新しい版を確かめるかの印 (internal #48)。開いたときに読み直す (外に通信しない)
+		if (!el.settingsPopover.hidden) peekUpdateNotice();
 	});
 
 	el.themeToggle.addEventListener('click', () => {

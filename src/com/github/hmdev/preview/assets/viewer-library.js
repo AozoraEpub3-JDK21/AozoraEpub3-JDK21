@@ -85,6 +85,8 @@ function bindLibraryEvents()
 		loadLibrary().catch(err => showLibraryStatus('本棚を読み込めませんでした: ' + err.message));
 	});
 
+	bindUpdateNoticeEvents();
+
 	el.libraryFilter.addEventListener('input', () => {
 		// 打鍵ごとに 2000 冊を並べ替えると入力が引っ掛かる
 		clearTimeout(libraryFilterTimer);
@@ -241,6 +243,7 @@ async function loadLibrary(keepView)
 	if (seq !== libraryLoadSeq) return;
 	state.library = library;
 	checkDownloadAvailable();
+	checkUpdateNotice();
 	updateCheckAllButton();
 	state.libraryFolder = library.folderName || null;
 	state.libraryShelfCount = library.shelves ? library.shelves.length : state.libraryShelfCount;
@@ -994,6 +997,64 @@ function showDownloadStatus(text, failed)
 {
 	el.libraryDownloadStatus.textContent = text;
 	el.libraryDownloadStatus.dataset.state = failed ? 'failed' : '';
+}
+
+/** 新しい版を確かめたか (本棚を読み直すたびに問い合わせない。internal #48) */
+let libraryUpdateChecked = false;
+/** 帯に出している版 (閉じるときに送る) */
+let libraryUpdateShown = null;
+
+/**
+ * 本棚を開いたときに、新しい版の知らせを問い合わせる (internal #48)。サーバが 1 日 1 回までに抑えるので、
+ * ここでは本棚を開いて最初の 1 回だけ問い合わせる。失敗しても本棚は使える
+ */
+async function checkUpdateNotice()
+{
+	if (libraryUpdateChecked) return;
+	libraryUpdateChecked = true;
+	try {
+		const response = await fetch('api/update', {cache: 'no-store'});
+		showUpdateNotice(response.ok ? await response.json() : null);
+	} catch (e) {
+		libraryUpdateChecked = false;
+	}
+}
+
+/** 表示設定の欄を開いたとき、確かめるかの印だけを読む (外に通信しない) */
+async function peekUpdateNotice()
+{
+	try {
+		const response = await fetch('api/update?peek', {cache: 'no-store'});
+		if (response.ok) showUpdateNotice(await response.json());
+	} catch (e) { /* 読めなければ印は出さないまま */ }
+}
+
+/** 知らせを帯と表示設定の欄に出す。アプリから開いた本棚でなければ (available でなければ) どちらも出さない */
+function showUpdateNotice(info)
+{
+	const available = !!(info && info.available);
+	el.updateCheckField.hidden = !available;
+	el.updateCheckEnabled.checked = !!(info && info.enabled);
+	libraryUpdateShown = available && info.show ? info.latest : null;
+	el.libraryUpdateBand.hidden = !libraryUpdateShown;
+	if (libraryUpdateShown) {
+		el.libraryUpdateText.textContent = '新しい版 ' + info.latest + ' があります（使っているのは ' + info.current + '）';
+		el.libraryUpdateLink.href = info.url;
+	}
+}
+
+function bindUpdateNoticeEvents()
+{
+	el.libraryUpdateClose.addEventListener('click', async () => {
+		if (!libraryUpdateShown) return;
+		el.libraryUpdateBand.hidden = true;
+		const {response, json} = await postText('api/update/dismiss', libraryUpdateShown).catch(() => ({}));
+		if (response && response.ok && json) showUpdateNotice(json);
+	});
+	el.updateCheckEnabled.addEventListener('change', async () => {
+		const {response, json} = await postText('api/update/enabled', String(el.updateCheckEnabled.checked)).catch(() => ({}));
+		if (response && response.ok && json) showUpdateNotice(json);
+	});
 }
 
 /** 本文を 1 つ POST して、JSON (読めなければ null) と状態を返す */

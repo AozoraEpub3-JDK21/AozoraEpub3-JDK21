@@ -200,6 +200,14 @@ public class PreviewServer implements AutoCloseable
 
 	/** Web 本棚の場所の読み書き（開く側が渡す。無ければ Web 本棚は使えない） */
 	private volatile WebShelf webShelf;
+
+	/** 本棚の「新しい版があります」（internal #48）。本棚を開く側（GUI・CLI）が渡す。無ければ知らせない */
+	private volatile UpdateNotice updateNotice;
+
+	public void setUpdateNotice(UpdateNotice updateNotice)
+	{
+		this.updateNotice = updateNotice;
+	}
 	/** フォルダ選択を出している最中か（同時に 2 つ出さない） */
 	private final java.util.concurrent.atomic.AtomicBoolean picking = new java.util.concurrent.atomic.AtomicBoolean();
 	/** Web 本棚のパスとして受け取る本文の上限（バイト） */
@@ -552,6 +560,11 @@ public class PreviewServer implements AutoCloseable
 				serveWebShelf(exchange, method);
 				return;
 			}
+			//新しい版の知らせ（internal #48）。閉じる・切り替えるのは POST なので、下の read 判定より前に処理する
+			if (rest.equals("api/update") || rest.startsWith("api/update/")) {
+				serveUpdateNotice(exchange, method, rest);
+				return;
+			}
 			if (rest.equals("api/download")) {
 				serveDownload(exchange, method);
 				return;
@@ -736,6 +749,51 @@ public class PreviewServer implements AutoCloseable
 	 * Web 本棚（internal #11 の案 A）。GET は今の場所・提案の場所・フォルダ選択を出せるか。
 	 * POST は本文のパスに決める: 絶対パスで、フォルダにでき、書き込めること。棚の上限（{@link LibraryScanner#MAX_SHELVES}）を超えるなら断る
 	 */
+	/**
+	 * 新しい版の知らせ（internal #48）。GET api/update は知らせ（確かめる間隔がたっていれば GitHub に問い合わせる）、
+	 * POST api/update/dismiss は本文の版の知らせを閉じる、POST api/update/enabled は本文の true/false で切り替える
+	 */
+	private void serveUpdateNotice(HttpExchange exchange, String method, String rest) throws IOException
+	{
+		UpdateNotice notice = this.updateNotice;
+		boolean read = "GET".equals(method) || "HEAD".equals(method);
+		if (rest.equals("api/update") && read) {
+			//?peek は覚えている版だけで答える（外に通信しない。表示設定の欄を開いたとき）
+			String query = exchange.getRequestURI().getRawQuery();
+			boolean peek = query != null && java.util.Arrays.asList(query.split("&")).contains("peek");
+			respondJson(exchange, notice == null ? "{\"available\":false,\"enabled\":false,\"show\":false}" : notice.json(!peek));
+			return;
+		}
+		boolean dismiss = rest.equals("api/update/dismiss");
+		boolean enable = rest.equals("api/update/enabled");
+		if (!(dismiss || enable)) {
+			respondJsonStatus(exchange, 404, errorJson("見つかりません"));
+			return;
+		}
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		if (notice == null) {
+			respondJsonStatus(exchange, 503, errorJson("この本棚では新しい版の知らせを使えません（アプリから本棚を開いてください）"));
+			return;
+		}
+		String body = new String(exchange.getRequestBody().readNBytes(64), StandardCharsets.UTF_8).trim();
+		boolean ok;
+		if (dismiss) {
+			ok = notice.dismiss(body);
+		} else if (body.equals("true") || body.equals("false")) {
+			ok = notice.setEnabled(Boolean.parseBoolean(body));
+		} else {
+			ok = false;
+		}
+		if (!ok) {
+			respondJsonStatus(exchange, 400, errorJson("受け付けられませんでした"));
+			return;
+		}
+		respondJson(exchange, notice.json());
+	}
+
 	private void serveWebShelf(HttpExchange exchange, String method) throws IOException
 	{
 		WebShelf shelf = this.webShelf;

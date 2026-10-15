@@ -208,6 +208,7 @@ function cacheElements()
 		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
 		'libraryQueueList', 'libraryQueueNote', 'libraryQueueRefusal',
 		'libraryCheckAll',
+		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled',
 		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
 		'rankingStatus', 'rankingList'];
 	for (const id of ids) el[id] = document.getElementById(id);
