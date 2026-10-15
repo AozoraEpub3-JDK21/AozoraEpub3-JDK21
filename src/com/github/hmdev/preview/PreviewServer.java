@@ -208,6 +208,12 @@ public class PreviewServer implements AutoCloseable
 	{
 		this.updateNotice = updateNotice;
 	}
+
+	/** 試験から: 渡された知らせ（PreviewLauncher が起動するサーバに渡しているかを確かめる） */
+	UpdateNotice getUpdateNotice()
+	{
+		return this.updateNotice;
+	}
 	/** フォルダ選択を出している最中か（同時に 2 つ出さない） */
 	private final java.util.concurrent.atomic.AtomicBoolean picking = new java.util.concurrent.atomic.AtomicBoolean();
 	/** Web 本棚のパスとして受け取る本文の上限（バイト） */

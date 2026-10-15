@@ -1056,8 +1056,15 @@ function bindUpdateNoticeEvents()
 		if (response && response.ok && json) showUpdateNotice(json);
 	});
 	el.updateCheckEnabled.addEventListener('change', async () => {
-		const {response, json} = await postText('api/update/enabled', String(el.updateCheckEnabled.checked)).catch(() => ({}));
-		if (response && response.ok && json) showUpdateNotice(json);
+		const wanted = el.updateCheckEnabled.checked;
+		const {response, json} = await postText('api/update/enabled', String(wanted)).catch(() => ({}));
+		if (response && response.ok && json) {
+			showUpdateNotice(json);
+		} else {
+			// 書けなかった (記録の場所に書けないなど) なら、印を元に戻す。切り替わったように見せない (PR の codex)
+			el.updateCheckEnabled.checked = !wanted;
+			el.updateCheckField.title = '切り替えを保存できませんでした';
+		}
 	});
 }
 

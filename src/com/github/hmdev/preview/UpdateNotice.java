@@ -3,10 +3,13 @@ package com.github.hmdev.preview;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Properties;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -83,8 +86,9 @@ public class UpdateNotice
 		long now = this.clock.getAsLong();
 		boolean due;
 		synchronized (this) {
-			Properties p = load();
-			due = mayCheck && !this.checking && isEnabled(p) && isDue(p, now);
+			//読めない記録（壊れた・フォルダになった）なら確かめに行かない。上書きもしない（止めた設定を消さない。PR の検証）
+			Properties p = read();
+			due = mayCheck && p != null && !this.checking && isEnabled(p) && isDue(p, now);
 			if (due) this.checking = true;
 		}
 		if (due) {
@@ -94,24 +98,27 @@ public class UpdateNotice
 			} catch (RuntimeException e) {
 				logger.debug("新しい版を確かめられませんでした", e);
 			}
-			synchronized (this) {
-				try {
-					Properties p = load();
-					if (r != null && r.isSuccess() && r.latestVersion() != null && VERSION.matcher(r.latestVersion()).matches()) {
-						p.setProperty(KEY_LATEST, r.latestVersion());
-					} else if (r != null) {
-						logger.debug("新しい版を確かめられませんでした: {}", r.error());
+			UpdateChecker.Result result = r;
+			try {
+				update(false, p -> {
+					if (result != null && result.isSuccess() && result.latestVersion() != null && VERSION.matcher(result.latestVersion()).matches()) {
+						p.setProperty(KEY_LATEST, result.latestVersion());
+					} else if (result != null) {
+						logger.debug("新しい版を確かめられませんでした: {}", result.error());
 					}
 					//失敗しても時刻は進める（つながらない台で、本棚を開くたびに待たせない）
 					p.setProperty(KEY_CHECKED, Long.toString(now));
-					save(p);
-				} finally {
+					return true;
+				});
+			} finally {
+				synchronized (this) {
 					this.checking = false;
 				}
 			}
 		}
-		synchronized (this) {
-			return answer(load());
+		synchronized (FILE_LOCK) {
+			Properties p = read();
+			return answer(p == null ? new Properties() : p);
 		}
 	}
 
@@ -144,34 +151,76 @@ public class UpdateNotice
 			+ ",\"url\":" + Json.str(UpdateChecker.DOWNLOAD_PAGE_URL) + "}";
 	}
 
-	/** その版の知らせを閉じる。その版より新しい版が出るまで出さない。版として読めなければ false */
-	public synchronized boolean dismiss(String version)
+	/**
+	 * その版の知らせを閉じる。その版より新しい版が出るまで出さない。版として読めなければ false。
+	 * 閉じた版より古い版を閉じても、閉じた版は戻さない（古い画面から届いても、新しい版の帯を出し直さない。PR の検証）
+	 */
+	public boolean dismiss(String version)
 	{
 		if (version == null || !VERSION.matcher(version).matches()) return false;
-		Properties p = load();
-		p.setProperty(KEY_DISMISSED, version);
-		return save(p);
+		return update(true, p -> {
+			String dismissed = p.getProperty(KEY_DISMISSED);
+			if (dismissed == null || UpdateChecker.compareVersions(version, dismissed) > 0) p.setProperty(KEY_DISMISSED, version);
+			return true;
+		});
 	}
 
 	/** 確かめに行くかを切り替える。オンに戻したときは、次に本棚を開いたときに（24 時間たっていなくても）確かめ直す */
-	public synchronized boolean setEnabled(boolean enabled)
+	public boolean setEnabled(boolean enabled)
 	{
-		Properties p = load();
-		p.setProperty(KEY_ENABLED, Boolean.toString(enabled));
-		if (enabled) p.remove(KEY_CHECKED);
-		return save(p);
+		return update(true, p -> {
+			p.setProperty(KEY_ENABLED, Boolean.toString(enabled));
+			if (enabled) p.remove(KEY_CHECKED);
+			return true;
+		});
 	}
 
-	private Properties load()
+	/**
+	 * 同じ JVM の中の読み書きをそろえる鍵。ファイルの鍵（{@link FileChannel#lock}）は同じ JVM の中では重ねて取れない
+	 * （OverlappingFileLockException）ので、インスタンスではなくクラスで持つ
+	 */
+	private static final Object FILE_LOCK = new Object();
+
+	/**
+	 * 記録を読み直して変え、書く。ほかのプロセス（GUI と CLI の本棚）とは、隣の update-check.lock の鍵でそろえる
+	 * （読んでから書くまでに、ほかの起動の書いた値を消さない。PR の codex）。
+	 * 読めない記録は、explicit（利用者が切り替えた・閉じた）のときだけ新しく書き直す。自動の確認では触らない
+	 */
+	private boolean update(boolean explicit, java.util.function.Predicate<Properties> change)
+	{
+		synchronized (FILE_LOCK) {
+			Path parent = this.file.toAbsolutePath().getParent();
+			try {
+				Files.createDirectories(parent);
+				try (FileChannel channel = FileChannel.open(parent.resolve("update-check.lock"),
+						StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+					FileLock lock = channel.lock()) {
+					Properties p = read();
+					if (p == null) {
+						if (!explicit) return false;
+						p = new Properties();
+					}
+					return change.test(p) && save(p);
+				}
+			} catch (IOException | RuntimeException e) {
+				/* 意図的: 鍵を取れなくても本棚は使える（次も確かめに行くだけ） */
+				logger.debug("更新の確認の記録を書けませんでした: {}", this.file, e);
+				return false;
+			}
+		}
+	}
+
+	/** 記録。無ければ空。あるのに読めない（壊れた・フォルダ・読む権限が無い）なら null */
+	private Properties read()
 	{
 		Properties p = new Properties();
-		if (!Files.isRegularFile(this.file)) return p;
+		if (!Files.exists(this.file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return p;
+		if (!Files.isRegularFile(this.file)) return null;
 		try (Reader r = Files.newBufferedReader(this.file, StandardCharsets.UTF_8)) {
 			p.load(r);
 		} catch (IOException | IllegalArgumentException e) {
-			/* 意図的: 読めなければ何も覚えていないとして動かす */
 			logger.debug("更新の確認の記録を読めませんでした: {}", this.file, e);
-			return new Properties();
+			return null;
 		}
 		return p;
 	}

@@ -838,6 +838,26 @@ public class PreviewServerTest
 		assertTrue("フォルダが無いのにファイラを起動している", opened.isEmpty());
 	}
 
+	/** 開く側が渡した知らせを、PreviewLauncher が起動するサーバに渡す（internal #48 の検証で、外しても赤にならなかった） */
+	@Test
+	public void theLauncherHandsTheUpdateNoticeToTheServerItStarts() throws Exception
+	{
+		UpdateNotice notice = new UpdateNotice(temp.getRoot().toPath().resolve("w/update-check.properties"), "1.7.3-jdk21",
+			() -> null, System::currentTimeMillis);
+		PreviewLauncher.setUpdateNotice(notice);
+		PreviewLauncher launcher = null;
+		try {
+			launcher = PreviewLauncher.startServer(null);
+			org.junit.Assert.assertSame(notice, launcher.getServer().getUpdateNotice());
+		} finally {
+			PreviewLauncher.setUpdateNotice(null);
+			if (launcher != null) {
+				launcher.getServer().close();
+				launcher.getSession().close();
+			}
+		}
+	}
+
 	/** 本棚の新しい版の知らせ（internal #48）。アプリから開いた本棚（UpdateNotice が渡されたとき）だけ答える */
 	@Test
 	public void theUpdateNoticeIsServedOnlyWhenTheAppGaveOne() throws Exception

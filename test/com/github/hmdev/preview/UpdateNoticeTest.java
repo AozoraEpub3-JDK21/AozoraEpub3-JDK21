@@ -192,16 +192,49 @@ public class UpdateNoticeTest
 	}
 
 	@Test
-	public void refusesWhatIsNotAVersionAndAnUnreadableFile() throws Exception
+	public void refusesWhatIsNotAVersion() throws Exception
 	{
 		UpdateNotice n = notice();
 		assertFalse(n.dismiss(""));
 		assertFalse(n.dismiss("v1\nenabled=false"));
 		assertFalse(n.dismiss(null));
-		//壊れた記録は、何も覚えていないとして読む
+	}
+
+	/**
+	 * 読めない記録（壊れた・フォルダ）は、自動の確認では確かめにも行かず上書きもしない（止めた設定を消さない。PR の検証）。
+	 * 利用者が切り替えたときだけ新しく書き直す
+	 */
+	@Test
+	public void anUnreadableRecordIsNeitherCheckedNorOverwrittenUntilTheUserActs() throws Exception
+	{
 		Path file = temp.getRoot().toPath().resolve("home/.aozoraepub3/update-check.properties");
 		Files.createDirectories(file.getParent());
-		Files.writeString(file, "checkedAt=\\uZZZZ\n");
-		assertTrue(notice().json().contains("\"show\":true"));
+		String broken = "enabled=false\nlatest=\\uZZZZ\n";
+		Files.writeString(file, broken);
+		UpdateNotice n = notice();
+		String answer = n.json();
+		assertEquals("確かめに行かない", 0, calls.get());
+		assertTrue(answer, answer.contains("\"show\":false"));
+		assertEquals("上書きしない", broken, Files.readString(file));
+		assertTrue("切り替えたときは書き直す", n.setEnabled(false));
+		assertTrue(Files.readString(file).contains("enabled=false"));
+
+		Path dir = temp.getRoot().toPath().resolve("home2/.aozoraepub3/update-check.properties");
+		Files.createDirectories(dir);
+		UpdateNotice d = new UpdateNotice(dir, "1.7.3-jdk21", () -> { calls.incrementAndGet(); return null; }, now::get);
+		d.json();
+		d.json();
+		assertEquals("フォルダになっていても、開くたびに確かめに行かない", 0, calls.get());
 	}
-}
+
+	/** 閉じた版より古い版を閉じても、閉じた版は戻らない（古い画面から届いても、新しい版の帯を出し直さない。PR の検証） */
+	@Test
+	public void dismissingAnOlderVersionDoesNotBringTheBandBack() throws Exception
+	{
+		upstream = "v1.8.1-jdk21";
+		UpdateNotice n = notice();
+		n.json();
+		assertTrue(n.dismiss("v1.8.1-jdk21"));
+		assertTrue(n.dismiss("v1.8.0-jdk21"));
+		assertTrue(n.json().contains("\"show\":false"));
+	}}
