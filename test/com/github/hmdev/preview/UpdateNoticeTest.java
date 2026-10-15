@@ -117,6 +117,12 @@ public class UpdateNoticeTest
 		assertTrue(n.setEnabled(true));
 		n.json();
 		assertEquals("入れ直したら確かめ直す", 2, calls.get());
+		//24 時間たっていなくても、入れ直したときは確かめ直す（48 時間後の上の升では、時間で確かめ直すのと見分けられない）
+		now.addAndGet(HOUR);
+		assertTrue(n.setEnabled(false));
+		assertTrue(n.setEnabled(true));
+		n.json();
+		assertEquals("1 時間後に入れ直しても確かめ直す", 3, calls.get());
 	}
 
 	@Test
