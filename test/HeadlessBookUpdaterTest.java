@@ -400,13 +400,26 @@ public class HeadlessBookUpdaterTest {
 		org.junit.Assert.assertEquals("", retried.message());
 		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
 
+		//キャッシュに無い話を、掲載元が 200 で本文の無いページで返す: 置かず、取れたと数えない（書き出しの周の取り直しでも）（codex P1）
+		assertTrue(ep2.delete());
+		maintenance.add("/ep/2/");
+		BookUpdater.Result uncachedGate = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(uncachedGate.message(), uncachedGate.message().contains("1 話は取り直せませんでした"));
+		assertFalse("本文の無いページをキャッシュに置かない", ep2.exists());
+		assertFalse(textOf(first.epub()).contains("メンテナンス"));
+		maintenance.clear();
+		BookUpdater.Result refilled = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(refilled.message(), refilled.ok());
+		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
+
 		//掲載元が落ちていて 1 話も取れない: 「取り直しました」と言わず、本も txt も書き換えない
 		body.set("四度目の本文");
 		broken.add("/ep/1/");
 		broken.add("/ep/2/");
 		File work = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel");
-		File[] txts = work.listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"));
-		org.junit.Assert.assertEquals(1, txts.length);
+		//failed_downloads.txt は、上で飛ばした話の記録（本の txt ではない）
+		File[] txts = work.listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt") && !n.equals("failed_downloads.txt"));
+		org.junit.Assert.assertEquals(java.util.Arrays.toString(work.list()), 1, txts.length);
 		byte[] txtBeforeDown = Files.readAllBytes(txts[0].toPath());
 		byte[] beforeDown = Files.readAllBytes(first.epub().toPath());
 		BookUpdater.Result down = updater.refetch(base + "/novel/", first.epub().toPath(), false);

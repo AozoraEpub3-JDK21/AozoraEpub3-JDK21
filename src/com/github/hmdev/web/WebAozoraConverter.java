@@ -1408,7 +1408,8 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								if (this.refetchAll && chapterCacheFile.isFile()) refetchOver(chapterHref, chapterCacheFile, urlString);
+								//全話を取り直すときは、キャッシュに無い話も本文を確かめてから置く（本文の無いページを取れたと数えない）
+								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
 								else cacheFile(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り
@@ -1550,7 +1551,9 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								cacheFile(chapterHref, chapterCacheFile, urlString);
+								//全話を取り直すときは、ここでも本文の無いページを置かない（下の本文の確かめは取り直しでは取り直さない）
+								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
+								else cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 								//再試行で取れた話は、更新情報に新しい日付を書いてよい
 								this.confirmedHrefs.add(chapterHref);
