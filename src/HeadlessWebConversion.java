@@ -220,10 +220,12 @@ public class HeadlessWebConversion
 		this.refetchFailures = 0;
 		try {
 			Result r = convert(url, book.getAbsoluteFile().getParentFile(), book, true, true, allowFewerEpisodes);
-			if (r.ok() && this.refetchFailures > 0) {
-				return new Result(true, false, r.epub(), this.refetchFailures + " 話は取り直せませんでした（前のキャッシュで作りました）", r.stop());
-			}
-			return r;
+			if (!r.ok()) return r;
+			//本棚のカードには、取り直せなかった話と、変換の但し書き（1 つ前の版を残せなかった、など）だけを出す。
+			//すべて取れたら空（「変換しました」を「全話を取り直しました」の後ろに重ねない）
+			String note = r.message() != null && r.message().startsWith("変換しました") ? r.message().substring("変換しました".length()) : "";
+			String failures = this.refetchFailures > 0 ? this.refetchFailures + " 話は取り直せませんでした" : "";
+			return new Result(true, false, r.epub(), failures + note, r.stop());
 		} finally {
 			this.refetchMode = false;
 		}
@@ -322,10 +324,10 @@ public class HeadlessWebConversion
 
 				srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
 					convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
-				this.refetchFailures = web.refetchFailures;
+				this.refetchFailures = web.refetchFailures();
 				if (srcFile == null) {
 					//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
-					if (this.refetchMode && web.refetchFailures > 0) {
+					if (this.refetchMode && web.refetchFailures() > 0) {
 						return new Result(false, false, null, "掲載元から 1 話も取り直せませんでした（本は前のままです）");
 					}
 					if (this.offlineMode && web.offlineMisses > 0) {

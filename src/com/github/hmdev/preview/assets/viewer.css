@@ -780,6 +780,8 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 }
 .book-menu [role="menuitem"][aria-disabled="true"] { opacity: 0.5; cursor: default; }
 .book-menu-separator { height: 1px; margin: 4px 6px; background: var(--border); }
+/* 確かめの文の読み上げだけに使う。見えない */
+.book-menu-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .book-rename-form { display: flex; flex-wrap: wrap; gap: 4px; }
 .book-rename-form input {

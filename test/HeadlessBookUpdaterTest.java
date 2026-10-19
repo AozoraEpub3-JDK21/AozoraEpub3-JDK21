@@ -291,13 +291,19 @@ public class HeadlessBookUpdaterTest {
 		java.util.Map<String, Integer> hits = new java.util.concurrent.ConcurrentHashMap<>();
 		java.util.concurrent.atomic.AtomicReference<String> body = new java.util.concurrent.atomic.AtomicReference<>("はじめの本文");
 		java.util.Set<String> broken = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//200 で本文の無いページ（メンテナンス・年齢確認など）を返す話
+		java.util.Set<String> maintenance = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//次の 1 回だけ取れない話
+		java.util.Set<String> failOnce = java.util.concurrent.ConcurrentHashMap.newKeySet();
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
 		server.createContext("/", exchange -> {
 			String path = exchange.getRequestURI().getPath();
 			hits.merge(path, 1, Integer::sum);
-			if (broken.contains(path)) {
+			if (broken.contains(path) || failOnce.remove(path)) {
 				exchange.sendResponseHeaders(500, -1);
 				exchange.close();
+			} else if (maintenance.contains(path)) {
+				respond(exchange, "<html><body><h2>メンテナンス中</h2><p>ただいまメンテナンス中です</p></body></html>");
 			} else if (path.equals("/novel/")) {
 				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
 			} else if (path.equals("/single/")) {
@@ -351,6 +357,7 @@ public class HeadlessBookUpdaterTest {
 		//全話を取り直すと、印が無くても両方の話を取り直す（「更新分のみ」の設定でも本を作る）
 		BookUpdater.Result r = updater.refetch(base + "/novel/", first.epub().toPath(), false);
 		assertTrue(r.message(), r.ok());
+		org.junit.Assert.assertEquals("すべて取れたら、カードに足す文は無い（「変換しました」を重ねない）", "", r.message());
 		org.junit.Assert.assertEquals(Integer.valueOf(2), hits.get("/ep/1/"));
 		org.junit.Assert.assertEquals(Integer.valueOf(2), hits.get("/ep/2/"));
 		String text = textOf(first.epub());
@@ -366,14 +373,42 @@ public class HeadlessBookUpdaterTest {
 		text = textOf(first.epub());
 		assertTrue(text, text.contains("甲三度目の本文") && text.contains("乙直した本文"));
 
-		//掲載元が落ちていて 1 話も取れない: 「取り直しました」と言わず、本も書き換えない
+		//2 話目が 200 で本文の無いページを返す: よいキャッシュを上書きせず、取り直せなかった話に数える
+		broken.clear();
+		maintenance.add("/ep/2/");
+		File ep2 = new File(root, "cache/" + fqdn.replace(':', '_') + "/ep/2/index.html");
+		byte[] ep2Before = Files.readAllBytes(ep2.toPath());
+		BookUpdater.Result gate = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(gate.message(), gate.ok());
+		assertTrue(gate.message(), gate.message().contains("1 話は取り直せませんでした"));
+		assertArrayEquals("キャッシュは前のまま", ep2Before, Files.readAllBytes(ep2.toPath()));
+		text = textOf(first.epub());
+		assertTrue(text, text.contains("乙直した本文"));
+		assertFalse(text.contains("メンテナンス"));
+		maintenance.clear();
+
+		//目次の周で取れなかった話も、書き出しの周の取り直しで取れたら、取り直せなかったとは言わない
+		assertTrue(ep2.delete());
+		failOnce.add("/ep/2/");
+		BookUpdater.Result retried = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(retried.message(), retried.ok());
+		org.junit.Assert.assertEquals("", retried.message());
+		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
+
+		//掲載元が落ちていて 1 話も取れない: 「取り直しました」と言わず、本も txt も書き換えない
 		body.set("四度目の本文");
 		broken.add("/ep/1/");
+		broken.add("/ep/2/");
+		File work = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel");
+		File[] txts = work.listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt"));
+		org.junit.Assert.assertEquals(1, txts.length);
+		byte[] txtBeforeDown = Files.readAllBytes(txts[0].toPath());
 		byte[] beforeDown = Files.readAllBytes(first.epub().toPath());
 		BookUpdater.Result down = updater.refetch(base + "/novel/", first.epub().toPath(), false);
 		assertFalse(down.message(), down.ok());
 		assertTrue(down.message(), down.message().contains("1 話も取り直せませんでした"));
 		assertArrayEquals("本は前のまま", beforeDown, Files.readAllBytes(first.epub().toPath()));
+		assertArrayEquals("txt も前のまま", txtBeforeDown, Files.readAllBytes(txts[0].toPath()));
 
 		//話の一覧の無い 1 ページの作品も、「更新分のみ」の設定のまま取り直して本を作る（更新なしで止めない）
 		HeadlessWebConversion.Result single = conversion(props, basePath, new File(root, "cache"))

@@ -1434,6 +1434,11 @@ function openBookMenu(book, event)
 	menu.setAttribute('role', 'menu');
 	menu.setAttribute('aria-label', (book.title || book.fileName) + ' の操作');
 	const entries = [];
+	// 確かめの文を読み上げる場所 (押した項目の文を変えるだけでは、読み上げないことが多い)
+	const live = document.createElement('div');
+	live.className = 'book-menu-live';
+	live.setAttribute('role', 'status');
+	menu.appendChild(live);
 	for (const item of bookMenuItems(book)) {
 		if (!item) {
 			const line = document.createElement('div');
@@ -1447,15 +1452,27 @@ function openBookMenu(book, event)
 		button.setAttribute('role', 'menuitem');
 		button.textContent = item.label;
 		entries.push({button: button, item: item});
-		button.addEventListener('click', () => {
+		if (item.confirm) {
+			// メニューのほかの項目へ移ったら、確かめは最初から (メニューの外へ出たら、メニューごと閉じる。
+			// Safari はボタンを押してもフォーカスを移さず、行き先の無い blur になるので、それでは戻さない)
+			button.addEventListener('blur', event => {
+				if (!button.dataset.armed || !event.relatedTarget || !menu.contains(event.relatedTarget)) return;
+				delete button.dataset.armed;
+				button.textContent = item.label;
+				live.textContent = '';
+			});
+		}
+		button.addEventListener('click', event => {
 			if (item.disabled && item.disabled()) {
 				button.setAttribute('aria-disabled', 'true');
 				return;
 			}
 			// 確かめの要る項目は、1 回目は文を変えるだけ (ブラウザの確認の窓は使わない)
-			if (item.confirm && !button.dataset.armed) {
+			// ダブルクリックの 2 回目 (detail が 2) では始めない。2 回目は離して押す
+			if (item.confirm && (!button.dataset.armed || event.detail > 1)) {
 				button.dataset.armed = '1';
 				button.textContent = item.confirm;
+				live.textContent = item.confirm;
 				// 文が長くなって画面の右へはみ出したら、内側へ寄せ直す。右端に寄っていると幅が縮んで測れるので、
 				// 左へ置いてから本来の幅を測る (描く前なので、動いて見えない)
 				const left = parseFloat(menu.style.left) || 0;
