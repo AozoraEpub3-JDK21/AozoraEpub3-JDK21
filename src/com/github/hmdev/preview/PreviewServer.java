@@ -96,6 +96,10 @@ public class PreviewServer implements AutoCloseable
 	 */
 	static void moveToTrash(Path file) throws IOException
 	{
+		if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
+			String refusal = windowsTrashRefusal(file.toAbsolutePath().toString(), PreviewServer::windowsDriveType);
+			if (refusal != null) throw new IOException(refusal);
+		}
 		java.awt.Desktop desktop;
 		try {
 			desktop = java.awt.Desktop.isDesktopSupported() ? java.awt.Desktop.getDesktop() : null;
@@ -106,6 +110,47 @@ public class PreviewServer implements AutoCloseable
 			throw new IOException("この環境ではゴミ箱へ移せないので、消しませんでした");
 		}
 		if (!desktop.moveToTrash(file.toFile())) throw new IOException("ゴミ箱へ移せませんでした");
+	}
+
+	/**
+	 * Windows でゴミ箱へ移さない本の理由。移せないときは null。JDK の moveToTrash は SHFileOperation を
+	 * FOF_ALLOWUNDO・FOF_NOCONFIRMATION で呼ぶので、ゴミ箱の無い場所（ネットワーク・USB などの取り外せるドライブ）では
+	 * <b>確かめずに完全に消し</b>、それでも成功を返す。260 文字以上のパスは JDK が黙って切り詰めるので、別の物を消しうる。
+	 * ローカルの固定ドライブ（DriveType が Fixed）の、短いパスだけを移す
+	 * @param driveType ドライブ文字（大文字）から .NET の DriveType の名前（Fixed・Network・Removable…）。分からなければ null
+	 */
+	static String windowsTrashRefusal(String path, java.util.function.Function<Character, String> driveType)
+	{
+		if (path.length() >= 259) return "パスが長すぎるので、消しませんでした（ゴミ箱へ正しく移せません）";
+		if (path.length() < 3 || path.charAt(1) != ':' || !Character.isLetter(path.charAt(0))) {
+			return "ネットワーク上の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
+		}
+		String type = driveType.apply(Character.toUpperCase(path.charAt(0)));
+		if (!"Fixed".equals(type)) {
+			return "このドライブ（ネットワーク・USB など）の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
+		}
+		return null;
+	}
+
+	/** ドライブの種類（.NET の DriveType の名前。訳されない）。分からなければ null */
+	private static String windowsDriveType(char letter)
+	{
+		try {
+			Process p = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+				"[System.IO.DriveInfo]::new('" + letter + "').DriveType").redirectErrorStream(true).start();
+			p.getOutputStream().close();
+			if (!p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
+				p.destroyForcibly();
+				return null;
+			}
+			String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.US_ASCII).trim();
+			return p.exitValue() == 0 ? out : null;
+		} catch (IOException e) {
+			return null;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return null;
+		}
 	}
 
 	private final PreviewSession session;
@@ -198,6 +243,8 @@ public class PreviewServer implements AutoCloseable
 	static final String JOB_UPDATE = "update";
 	static final String JOB_REGENERATE = "regenerate";
 	static final String JOB_REFETCH = "refetch";
+	/** 本棚から消している印（列には積まない。消している間、その本の仕事を断るため） */
+	static final String JOB_TRASH = "trash";
 
 	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed、守りで止めたら gone・shrunk */
 	static final class UpdateJob
@@ -747,7 +794,9 @@ public class PreviewServer implements AutoCloseable
 			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
 			return;
 		}
-		//仕事の列を握ったまま移す（確かめてから移すまでの間に、その本の仕事が積まれない）
+		//確かめてから移すまでの間に、その本の仕事が積まれないよう、消している印の仕事を列に置く。
+		//移す間は列を握らない（macOS の JDK はゴミ箱へ移すのをアプリの主スレッドで待つ。ほかの本の仕事まで止めない）
+		UpdateJob marker;
 		synchronized (this.jobs) {
 			if (this.jobs.values().stream().anyMatch(j -> (j.bookId.equals(bookId) || j.bookId.equals("check:" + bookId)) && j.active())) {
 				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから消してください"));
@@ -759,15 +808,25 @@ public class PreviewServer implements AutoCloseable
 				respondJsonStatus(exchange, 200, "{\"ok\":true}");
 				return;
 			}
-			try {
-				this.trasher.moveToTrash(entry.file());
-			} catch (IOException | RuntimeException e) {
-				logger.warn("本をゴミ箱へ移せませんでした: {}", entry.file(), e);
-				respondJsonStatus(exchange, 500, errorJson(e.getMessage() == null ? "ゴミ箱へ移せませんでした" : e.getMessage()));
-				return;
-			}
-			this.session.removeLibraryEntry(bookId);
+			forgetOldJobs();
+			marker = new UpdateJob(newJobId(), bookId, false, JOB_TRASH);
+			marker.state = "running";
+			this.jobs.put(marker.id, marker);
 		}
+		try {
+			this.trasher.moveToTrash(entry.file());
+		} catch (IOException | RuntimeException e) {
+			logger.warn("本をゴミ箱へ移せませんでした: {}", entry.file(), e);
+			marker.message = String.valueOf(e.getMessage());
+			marker.state = "failed";
+			respondJsonStatus(exchange, 500, errorJson(e.getMessage() == null ? "ゴミ箱へ移せませんでした" : e.getMessage()));
+			return;
+		} catch (Error e) {
+			marker.state = "failed";
+			throw e;
+		}
+		this.session.removeLibraryEntry(bookId);
+		marker.state = "done";
 		respondJsonStatus(exchange, 200, "{\"ok\":true}");
 	}
 

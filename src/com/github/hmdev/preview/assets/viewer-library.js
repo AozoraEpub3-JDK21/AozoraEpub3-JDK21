@@ -1683,6 +1683,8 @@ async function checkAllBooks()
 	try {
 		for (let i = 0; i < books.length; i++) {
 			const book = books[i];
+			// 確かめている間に本棚から消した本は飛ばす (確かめられなかった本に数えない)
+			if (!libraryBookById(book.id)) continue;
 			el.libraryCheckAll.textContent = '確かめています… (' + (i + 1) + '/' + books.length + ')';
 			const result = await checkOneBook(book);
 			if (result === 'found') found++;

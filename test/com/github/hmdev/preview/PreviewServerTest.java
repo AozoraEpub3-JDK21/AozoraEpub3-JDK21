@@ -1484,6 +1484,71 @@ public class PreviewServerTest
 		assertFalse(get(base() + "api/library").body().contains("web.epub"));
 	}
 
+	/** Windows では、ゴミ箱に入らずに消える場所（ネットワーク・取り外せるドライブ・長いパス）の本は消さない */
+	@Test
+	public void windowsTrashOnlyOnShortPathsOfFixedDrives()
+	{
+		java.util.function.Function<Character, String> drives = c -> switch (c) {
+			case 'C' -> "Fixed";
+			case 'E' -> "Removable";
+			case 'Z' -> "Network";
+			default -> null;
+		};
+		assertEquals(null, PreviewServer.windowsTrashRefusal("C:\\books\\a.epub", drives));
+		assertEquals("小文字のドライブ文字", null, PreviewServer.windowsTrashRefusal("c:\\books\\a.epub", drives));
+		assertTrue(PreviewServer.windowsTrashRefusal("E:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue(PreviewServer.windowsTrashRefusal("Z:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue("種類が分からないドライブも消さない", PreviewServer.windowsTrashRefusal("Q:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue(PreviewServer.windowsTrashRefusal("\\\\server\\share\\a.epub", drives).contains("ネットワーク"));
+		String longPath = "C:\\" + "あ".repeat(251) + ".epub";
+		assertTrue(PreviewServer.windowsTrashRefusal(longPath, drives).contains("長すぎる"));
+		assertEquals("258 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), drives));
+	}
+
+	/** ゴミ箱へ移している間も、ほかの本の仕事は待たせない。その本の仕事は断る */
+	@Test
+	public void trashingDoesNotHoldUpOtherBooks() throws Exception
+	{
+		//Web から取った本を 2 冊にする（1 冊を消している間に、もう 1 冊の続きを取る）
+		Path shelf = temp.getRoot().toPath().resolve("upd");
+		EpubFixture.withSource("https://ncode.syosetu.com/n9999zz/").writeTo(shelf.resolve("web2.epub"));
+		String[] ids = shelfForUpdate();
+		java.util.regex.Matcher web2 = java.util.regex.Pattern.compile("\"id\":\"([^\"]+)\"[^}]*\"fileName\":\"web2.epub\"")
+			.matcher(get(base() + "api/library").body());
+		assertTrue(web2.find());
+		String other = web2.group(1);
+		java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setTrasher(file -> {
+			entered.countDown();
+			try {
+				release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			}
+			Files.delete(file);
+		});
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		java.util.concurrent.CompletableFuture<HttpResponse<String>> trashing =
+			java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+				try {
+					return post(base() + "api/book/" + ids[0] + "/trash");
+				} catch (Exception e) {
+					throw new IllegalStateException(e);
+				}
+			});
+		assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+		long start = System.nanoTime();
+		HttpResponse<String> otherUpdate = post(base() + "api/book/" + other + "/update");
+		assertEquals(otherUpdate.body(), 202, otherUpdate.statusCode());
+		assertTrue("ほかの本の仕事を待たせない", System.nanoTime() - start < 2_000_000_000L);
+		assertEquals("消している本は続きを取らない", 409, post(base() + "api/book/" + ids[0] + "/update").statusCode());
+		assertEquals("消している本は確かめない", 409, post(base() + "api/book/" + ids[0] + "/check").statusCode());
+		release.countDown();
+		assertEquals(200, trashing.get(10, java.util.concurrent.TimeUnit.SECONDS).statusCode());
+		waitForJob(otherUpdate.body());
+	}
+
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */
 	@Test
 	public void theSameBookIsNotQueuedTwice() throws Exception

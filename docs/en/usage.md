@@ -282,7 +282,8 @@ rewrites the book with the current settings from the cached table of contents an
 previous cache and counted on the card (if the previous cache has no text for one either, the book is left as it is); if the episode count has dropped, it stops the same way as ⟳.
 "本棚から消す…" (remove from the library) moves the book to the OS trash and takes it off the shelf (click it a second
 time; you can restore it from the trash). The cache and records stay, so the same work can be fetched again with +.
-Where there is no trash, nothing is removed.
+Where there is no trash, nothing is removed. On Windows, books in places where a file would be deleted instead of
+recycled (network or USB drives, very long paths) are not removed.
 "ランキング" in the header lists Shōsetsuka ni Narō and Kakuyomu works by period (daily to all-time) and genre;
 "落とす" on a card fetches the work the same way as + ("本棚にあります" marks works already on the shelf).
 Narō's order follows current points, so it can differ slightly from the site's ranking pages. Kakuyomu shows
