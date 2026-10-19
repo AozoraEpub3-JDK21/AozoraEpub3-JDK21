@@ -300,6 +300,9 @@ public class HeadlessBookUpdaterTest {
 				exchange.close();
 			} else if (path.equals("/novel/")) {
 				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
+			} else if (path.equals("/single/")) {
+				//話の一覧の無い 1 ページの作品
+				respond(exchange, "<html><body><h1>短編</h1><p class=\"author\">著者</p><div class=\"body\"><p>丙" + body.get() + "</p></div></body></html>");
 			} else {
 				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + (path.contains("/1/") ? "甲" : "乙") + body.get() + "</p></div></body></html>");
 			}
@@ -362,6 +365,22 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(partial.message(), partial.message().contains("1 話は取り直せませんでした"));
 		text = textOf(first.epub());
 		assertTrue(text, text.contains("甲三度目の本文") && text.contains("乙直した本文"));
+
+		//掲載元が落ちていて 1 話も取れない: 「取り直しました」と言わず、本も書き換えない
+		body.set("四度目の本文");
+		broken.add("/ep/1/");
+		byte[] beforeDown = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result down = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(down.message(), down.ok());
+		assertTrue(down.message(), down.message().contains("1 話も取り直せませんでした"));
+		assertArrayEquals("本は前のまま", beforeDown, Files.readAllBytes(first.epub().toPath()));
+
+		//話の一覧の無い 1 ページの作品も、「更新分のみ」の設定のまま取り直して本を作る（更新なしで止めない）
+		HeadlessWebConversion.Result single = conversion(props, basePath, new File(root, "cache"))
+			.convert(base + "/single/", tempFolder.newFolder("shelf2"), null, true);
+		assertTrue(single.message(), single.ok());
+		BookUpdater.Result singleRefetch = updater.refetch(base + "/single/", single.epub().toPath(), false);
+		assertTrue(singleRefetch.message(), singleRefetch.ok());
 
 		//掲載元で 2 話目が消えた: 書かずに止める。「減ったまま」を選べば取り直す
 		broken.clear();

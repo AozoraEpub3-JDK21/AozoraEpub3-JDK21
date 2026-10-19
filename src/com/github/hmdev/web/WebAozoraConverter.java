@@ -1321,6 +1321,8 @@ public class WebAozoraConverter
 			List<String> failedHrefs = new ArrayList<>();
 			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
 			HashSet<String> failedReloads = new HashSet<>();
+			//取れた話の数（全話を取り直して 1 話も取れなかったかを見る）
+			int loadedChapters = 0;
 			//止められたときに「対象の話を 1 つも書けなかったか」を見るための数（最新 N 話などで対象は目次の一部）
 			int selectedChapters = 0;
 			int writtenChapters = 0;
@@ -1384,6 +1386,7 @@ public class WebAozoraConverter
 								//ファイルがロードされたら更新有り
 								this.updated = true;
 								loaded = true;
+								loadedChapters++;
 							} catch (CloudflareChallengeException e) {
 								//理由は cacheFile が出した。以降の話は取りに行かない（キャッシュにある話で本を作る）
 							} catch (Exception e) {
@@ -1420,6 +1423,12 @@ public class WebAozoraConverter
 					chapterIdx++;
 				}
 				if (this.refetchAll) this.refetchFailures = failedReloads.size();
+				//全話を取り直して 1 話も取れなかった（掲載元が落ちている・止められた）。前と同じキャッシュで本を書き直して
+				//「取り直しました」とは言わない。本は前のまま、取り直せなかったと返す
+				if (this.refetchAll && loadedChapters == 0 && !failedReloads.isEmpty()) {
+					LogAppender.println("掲載元から 1 話も取り直せなかったので、本は前のままにします");
+					return blockedUpdateCheck(true);
+				}
 				if (!failedReloads.isEmpty() && this.refetchAll) {
 					LogAppender.println(failedReloads.size() + " 話を取り直せませんでした（前のキャッシュで本を作ります）: " + String.join(" ", failedReloads));
 				} else if (!failedReloads.isEmpty()) {
