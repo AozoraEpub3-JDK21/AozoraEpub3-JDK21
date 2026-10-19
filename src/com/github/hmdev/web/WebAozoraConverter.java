@@ -1567,8 +1567,10 @@ public class WebAozoraConverter
 						// キャッシュファイルに本文が無い場合（ダウンロード失敗・エラーページ等）は再ダウンロード
 						{
 							Elements contentCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+							//全話を取り直すときは、目次の周で本文を確かめて取り直した（本文の無いページは取らなかった）ので、ここでは取り直さない。
+							//取り直すと本文の無いページで上書きし、取れたと数えてしまう
 							if ((contentCheck == null || contentCheck.size() == 0) && this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)
-								&& !this.blockedByChallenge && !this.offline) {
+								&& !this.blockedByChallenge && !this.offline && !this.refetchAll) {
 								LogAppender.println("本文が取得できないためキャッシュを削除して再ダウンロードします: " + chapterHref);
 								chapterCacheFile.delete();
 								try {

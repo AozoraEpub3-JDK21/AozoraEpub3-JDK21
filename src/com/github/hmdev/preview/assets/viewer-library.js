@@ -687,7 +687,8 @@ function paintLibraryUpdate(slot, update)
 	if ((update.state === 'gone' || update.state === 'shrunk' || update.state === 'checked') && update.message) text = update.message;
 	else if ((update.state === 'failed' || update.state === 'checkFailed') && update.message) text += ': ' + update.message;
 	// 全話を取り直して、取り直せなかった話があったとき (n 話は前のキャッシュで作った)
-	else if (update.state === 'done' && update.mode === 'refetch' && update.message) text += ' (' + update.message + ')';
+	// 但し書きがもう括弧で始まるとき (（1 つ前の版は残せませんでした）) は、括弧を重ねない
+	else if (update.state === 'done' && update.mode === 'refetch' && update.message) text += /^[（(]/.test(update.message) ? update.message : ' (' + update.message + ')';
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
 	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
@@ -1434,11 +1435,12 @@ function openBookMenu(book, event)
 	menu.setAttribute('role', 'menu');
 	menu.setAttribute('aria-label', (book.title || book.fileName) + ' の操作');
 	const entries = [];
-	// 確かめの文を読み上げる場所 (押した項目の文を変えるだけでは、読み上げないことが多い)
+	// 確かめの文を読み上げる場所 (押した項目の文を変えるだけでは、読み上げないことが多い)。
+	// menu の子に置けるのは項目と区切りだけなので、メニューの外に置き、閉じるときに一緒に外す
 	const live = document.createElement('div');
 	live.className = 'book-menu-live';
 	live.setAttribute('role', 'status');
-	menu.appendChild(live);
+	document.body.appendChild(live);
 	for (const item of bookMenuItems(book)) {
 		if (!item) {
 			const line = document.createElement('div');
@@ -1468,9 +1470,9 @@ function openBookMenu(book, event)
 				return;
 			}
 			// 確かめの要る項目は、1 回目は文を変えるだけ (ブラウザの確認の窓は使わない)
-			// ダブルクリックの 2 回目 (detail が 2) では始めない。2 回目は離して押す
-			if (item.confirm && (!button.dataset.armed || event.detail > 1)) {
-				button.dataset.armed = '1';
+			// ダブルクリックの 2 回目 (detail が 2)・Enter の押しっぱなしや素早い 2 回では始めない。2 回目は間を空けて押す
+			if (item.confirm && (!button.dataset.armed || event.detail > 1 || Date.now() - Number(button.dataset.armed) < 500)) {
+				if (!button.dataset.armed) button.dataset.armed = String(Date.now());
 				button.textContent = item.confirm;
 				live.textContent = item.confirm;
 				// 文が長くなって画面の右へはみ出したら、内側へ寄せ直す。右端に寄っていると幅が縮んで測れるので、
@@ -1492,7 +1494,7 @@ function openBookMenu(book, event)
 		});
 		menu.appendChild(button);
 	}
-	bookMenu = {menu: menu, bookId: book.id, entries: entries};
+	bookMenu = {menu: menu, live: live, bookId: book.id, entries: entries};
 	refreshBookMenu();
 	menu.addEventListener('keydown', onBookMenuKeyDown);
 	// メニューの上ではブラウザのメニューを出さない (Windows のメニューキーは keyup で contextmenu を起こし、
@@ -1549,8 +1551,9 @@ function refreshBookMenu()
 function closeBookMenu(returnFocus)
 {
 	if (!bookMenu) return;
-	const {menu, bookId} = bookMenu;
+	const {menu, live, bookId} = bookMenu;
 	bookMenu = null;
+	live.remove();
 	document.removeEventListener('pointerdown', onBookMenuOutside, true);
 	window.removeEventListener('blur', onBookMenuDismiss);
 	window.removeEventListener('resize', onBookMenuDismiss);

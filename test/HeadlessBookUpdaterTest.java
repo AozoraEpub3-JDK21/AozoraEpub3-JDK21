@@ -385,6 +385,11 @@ public class HeadlessBookUpdaterTest {
 		text = textOf(first.epub());
 		assertTrue(text, text.contains("乙直した本文"));
 		assertFalse(text.contains("メンテナンス"));
+		//キャッシュがもう壊れていて（本文の無いページ）、掲載元もまだ本文の無いページを返す: 取れたと数えない
+		Files.write(ep2.toPath(), "<html><body><h2>メンテナンス中</h2></body></html>".getBytes(StandardCharsets.UTF_8));
+		BookUpdater.Result stillBroken = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(stillBroken.message(), stillBroken.message().contains("1 話は取り直せませんでした"));
+		Files.write(ep2.toPath(), ep2Before);
 		maintenance.clear();
 
 		//目次の周で取れなかった話も、書き出しの周の取り直しで取れたら、取り直せなかったとは言わない
