@@ -117,10 +117,13 @@ function bindLibraryEvents()
 	});
 	// Shift+F10・メニューキーは自分で受ける (mac の Chrome は contextmenu を起こさなかった)。
 	// あとから contextmenu を起こすブラウザでも、そのときフォーカスはメニューの中 (本棚の外) なので二重に開かない
+	// (ブラウザのメニューはメニュー側で止める)
 	el.libraryGrid.addEventListener('keydown', event => {
 		if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
-		const card = event.target.closest('button.book-card');
-		const book = card && libraryBookById(card.dataset.bookId);
+		// ⟳ ✎ にフォーカスがあるときも開く (右クリックと同じく枠で見る)。名前の欄の中はブラウザに任せる
+		const slot = event.target.closest('.book-slot');
+		if (!slot || event.target.closest('.book-rename-form')) return;
+		const book = libraryBookById(slot.dataset.bookId);
 		if (!book) return;
 		event.preventDefault();
 		openBookMenu(book, null);
@@ -1337,31 +1340,42 @@ function isWebSource(source)
 	}
 }
 
+/** その本の更新・確かめる仕事が、順番待ちか動いている最中か */
+function libraryBookBusy(bookId)
+{
+	const update = libraryUpdates.get(bookId);
+	return !!(update && (update.state === 'queued' || update.state === 'running'));
+}
+
+/**
+ * メニューの項目。disabled は開いたときと押したときの両方で見る (開いている間に仕事が終わる・始まる)。
+ * run には押したときの本を渡す (開いている間に本棚が読み直されることがある)。
+ * keepFocus の項目は自分でフォーカスを動かすので、カードへ戻さない
+ */
 function bookMenuItems(book)
 {
 	const items = [];
 	if (book.source) {
-		const update = libraryUpdates.get(book.id);
-		const busy = update && (update.state === 'queued' || update.state === 'running');
-		items.push({label: '続きを取る', disabled: busy, run: () => {
-			startLibraryUpdate(book).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
+		items.push({label: '続きを取る', disabled: () => libraryBookBusy(book.id), run: current => {
+			startLibraryUpdate(current).catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message}));
 		}});
 		if (libraryCanCheck) {
 			// 結果の文 (n 話新着・新着なし) はサーバが作り、カードの下に出る
-			items.push({label: 'この本の新着を確かめる', disabled: busy || libraryChecking, run: () => checkOneBook(book)});
+			items.push({label: 'この本の新着を確かめる', disabled: () => libraryBookBusy(book.id) || libraryChecking,
+				run: current => checkSingleBook(current)});
 		}
-		items.push({label: '名前を変える…', run: () => {
-			const slot = librarySlotOf(book.id);
-			if (slot) openRenameForm(slot, book);
+		items.push({label: '名前を変える…', keepFocus: true, run: current => {
+			const slot = librarySlotOf(current.id);
+			if (slot) openRenameForm(slot, current);
 		}});
 		items.push(null);
 	}
-	items.push({label: '保存フォルダを開く', run: () => {
-		revealBook(book.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
+	items.push({label: '保存フォルダを開く', run: current => {
+		revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
 	}});
 	if (book.source && isWebSource(book.source)) {
-		items.push({label: '作品ページを開く', run: () => {
-			window.open(book.source, '_blank', 'noopener');
+		items.push({label: '作品ページを開く', run: current => {
+			window.open(current.source, '_blank', 'noopener');
 		}});
 	}
 	return items;
@@ -1390,16 +1404,27 @@ function openBookMenu(book, event)
 		button.type = 'button';
 		button.setAttribute('role', 'menuitem');
 		button.textContent = item.label;
-		if (item.disabled) button.setAttribute('aria-disabled', 'true');
+		if (item.disabled && item.disabled()) button.setAttribute('aria-disabled', 'true');
 		button.addEventListener('click', () => {
-			if (item.disabled) return;
-			// 名前を変える欄へフォーカスを渡すので、カードへ戻さずに閉じる
-			closeBookMenu(false);
-			item.run();
+			if (item.disabled && item.disabled()) {
+				button.setAttribute('aria-disabled', 'true');
+				return;
+			}
+			// 開いている間に本棚が読み直され、本が消えた・名前が変わった (id が変わる) ときは何もしない
+			const current = libraryBookById(book.id);
+			closeBookMenu(!item.keepFocus && !!current);
+			if (!current) {
+				showLibraryStatus('この本は本棚から無くなりました (一覧が読み直されました)');
+				return;
+			}
+			item.run(current);
 		});
 		menu.appendChild(button);
 	}
 	menu.addEventListener('keydown', onBookMenuKeyDown);
+	// メニューの上ではブラウザのメニューを出さない (Windows のメニューキーは keyup で contextmenu を起こし、
+	// そのときフォーカスはこのメニューにある)
+	menu.addEventListener('contextmenu', event => event.preventDefault());
 	document.body.appendChild(menu);
 
 	// キーボードで開いたときは座標が 0 か、カードの外になることがある。そのときはカードの左上に出す
@@ -1503,17 +1528,32 @@ function onBookMenuKeyDown(event)
 let libraryCanCheck = false;
 /** 確かめている最中か */
 let libraryChecking = false;
+/** メニューから 1 冊だけ確かめている本の数。その間は見出しの「新着を確かめる」を押せない (数えた結果から漏れるので) */
+let librarySingleChecks = 0;
 
 function updateCheckAllButton()
 {
 	const books = (state.library && state.library.books) || [];
 	el.libraryCheckAll.hidden = !libraryCanCheck || !books.some(b => b.source);
-	el.libraryCheckAll.disabled = libraryChecking;
+	el.libraryCheckAll.disabled = libraryChecking || librarySingleChecks > 0;
+}
+
+/** メニューから 1 冊だけ確かめる */
+async function checkSingleBook(book)
+{
+	librarySingleChecks++;
+	updateCheckAllButton();
+	try {
+		await checkOneBook(book);
+	} finally {
+		librarySingleChecks--;
+		updateCheckAllButton();
+	}
 }
 
 async function checkAllBooks()
 {
-	if (libraryChecking) return;
+	if (libraryChecking || librarySingleChecks > 0) return;
 	const books = ((state.library && state.library.books) || []).filter(b => b.source);
 	if (!books.length) return;
 	libraryChecking = true;
