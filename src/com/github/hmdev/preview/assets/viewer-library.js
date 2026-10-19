@@ -82,6 +82,10 @@ const LIBRARY_MODE_LABELS = {
 		done: '全話を取り直しました',
 		failed: '取り直せませんでした',
 	},
+	trash: {
+		running: '本棚から消しています…',
+		failed: '消せませんでした',
+	},
 };
 
 function bindLibraryEvents()
@@ -1424,7 +1428,7 @@ function bookMenuItems(book)
 	items.push(null);
 	items.push({label: '本棚から消す…', confirm: 'もう一度押すと、この本をゴミ箱へ移します',
 		disabled: () => libraryBookBusy(book.id), run: current => {
-			trashBook(current).catch(err => showLibraryStatus('消せませんでした: ' + err.message));
+			trashBook(current).catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message, mode: 'trash'}));
 		}});
 	return items;
 }
@@ -1432,6 +1436,8 @@ function bookMenuItems(book)
 /** 本をゴミ箱へ移し、本棚を読み直す (internal #54) */
 async function trashBook(book)
 {
+	// 消している間は、その本の ⟳・確かめる・もう一度消すを押せなくする (Windows はドライブを確かめるので数秒かかる)
+	setLibraryUpdate(book.id, {state: 'running', message: '', mode: 'trash'});
 	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/trash', {method: 'POST', cache: 'no-store'});
 	if (!response.ok) {
 		let body = null;

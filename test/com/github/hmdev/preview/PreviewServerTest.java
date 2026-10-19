@@ -1494,16 +1494,23 @@ public class PreviewServerTest
 			case 'Z' -> "Network";
 			default -> null;
 		};
-		assertEquals(null, PreviewServer.windowsTrashRefusal("C:\\books\\a.epub", drives));
-		assertEquals("小文字のドライブ文字", null, PreviewServer.windowsTrashRefusal("c:\\books\\a.epub", drives));
-		assertTrue(PreviewServer.windowsTrashRefusal("E:\\a.epub", drives).contains("ゴミ箱に入らずに"));
-		assertTrue(PreviewServer.windowsTrashRefusal("Z:\\a.epub", drives).contains("ゴミ箱に入らずに"));
-		assertTrue("種類が分からないドライブも消さない", PreviewServer.windowsTrashRefusal("Q:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertEquals(null, PreviewServer.windowsTrashRefusal("C:\\books\\a.epub", "C:\\books\\a.epub", drives));
+		assertEquals("小文字のドライブ文字", null, PreviewServer.windowsTrashRefusal("c:\\books\\a.epub", "c:\\books\\a.epub", drives));
+		assertTrue(PreviewServer.windowsTrashRefusal("E:\\a.epub", "E:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue(PreviewServer.windowsTrashRefusal("Z:\\a.epub", "Z:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue("種類が分からないドライブも消さない", PreviewServer.windowsTrashRefusal("Q:\\a.epub", "Q:\\a.epub", drives).contains("ゴミ箱に入らずに"));
 		//UNC はドライブの種類を訊かずに断る
-		assertTrue(PreviewServer.windowsTrashRefusal("\\\\server\\share\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		assertTrue(PreviewServer.windowsTrashRefusal("\\\\server\\share\\a.epub", "\\\\server\\share\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		//実体が別のドライブ（SUBST・リンク）・ドライブ文字の無い場所（フォルダに付けたドライブ）なら断る
+		assertTrue(PreviewServer.windowsTrashRefusal("X:\\a.epub", "C:\\tmp\\a.epub", c -> "Fixed").contains("別のドライブ"));
+		assertTrue(PreviewServer.windowsTrashRefusal("C:\\mnt\\usb\\a.epub", "\\\\?\\Volume{1234}\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		assertEquals("同じドライブの中のリンクは移す", null, PreviewServer.windowsTrashRefusal("C:\\shelf\\a.epub", "c:\\real\\a.epub", drives));
+		//A〜Z のドライブ文字だけ
+		assertTrue(PreviewServer.windowsTrashRefusal("é:\\a.epub", "é:\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		assertTrue(PreviewServer.windowsTrashRefusal("ａ:\\a.epub", "ａ:\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
 		String longPath = "C:\\" + "あ".repeat(251) + ".epub";
-		assertTrue(PreviewServer.windowsTrashRefusal(longPath, drives).contains("長すぎる"));
-		assertEquals("258 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), drives));
+		assertTrue(PreviewServer.windowsTrashRefusal(longPath, longPath, drives).contains("長すぎる"));
+		assertEquals("258 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), "C:\\" + "a".repeat(255), drives));
 	}
 
 	/** ゴミ箱へ移している間も、ほかの本の仕事は待たせない。その本の仕事は断る */
@@ -1545,6 +1552,9 @@ public class PreviewServerTest
 		assertTrue("ほかの本の仕事を待たせない", System.nanoTime() - start < 2_000_000_000L);
 		assertEquals("消している本は続きを取らない", 409, post(base() + "api/book/" + ids[0] + "/update").statusCode());
 		assertEquals("消している本は確かめない", 409, post(base() + "api/book/" + ids[0] + "/check").statusCode());
+		HttpResponse<String> again = post(base() + "api/book/" + ids[0] + "/trash");
+		assertEquals(409, again.statusCode());
+		assertTrue("更新しているとは言わない: " + again.body(), again.body().contains("本棚から消しています"));
 		release.countDown();
 		HttpResponse<String> trashed = trashing.get(10, java.util.concurrent.TimeUnit.SECONDS);
 		assertEquals(200, trashed.statusCode());

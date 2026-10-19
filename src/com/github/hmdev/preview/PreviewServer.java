@@ -97,7 +97,8 @@ public class PreviewServer implements AutoCloseable
 	static void moveToTrash(Path file) throws IOException
 	{
 		if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
-			String refusal = windowsTrashRefusal(file.toAbsolutePath().toString(), PreviewServer::windowsDriveType);
+			//見えているパスと、実体のパス（SUBST のドライブ・リンク・フォルダに付けたドライブの先）の両方で確かめる
+			String refusal = windowsTrashRefusal(file.toAbsolutePath().toString(), file.toRealPath().toString(), PreviewServer::windowsDriveType);
 			if (refusal != null) throw new IOException(refusal);
 		}
 		java.awt.Desktop desktop;
@@ -119,17 +120,36 @@ public class PreviewServer implements AutoCloseable
 	 * ローカルの固定ドライブ（DriveType が Fixed）の、短いパスだけを移す
 	 * @param driveType ドライブ文字（大文字）から .NET の DriveType の名前（Fixed・Network・Removable…）。分からなければ null
 	 */
-	static String windowsTrashRefusal(String path, java.util.function.Function<Character, String> driveType)
+	static String windowsTrashRefusal(String path, String realPath, java.util.function.Function<Character, String> driveType)
 	{
-		if (path.length() >= 259) return "パスが長すぎるので、消しませんでした（ゴミ箱へ正しく移せません）";
-		if (path.length() < 3 || path.charAt(1) != ':' || !Character.isLetter(path.charAt(0))) {
+		if (path.length() >= 259 || realPath.length() >= 259) return "パスが長すぎるので、消しませんでした（ゴミ箱へ正しく移せません）";
+		if (!onDriveLetter(path) || !onDriveLetter(realPath)) {
 			return "ネットワーク上の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
+		}
+		//SUBST のドライブ・別のドライブへのリンクは、実体のドライブにゴミ箱があるとは限らない（SUBST にはゴミ箱が無い）
+		if (Character.toUpperCase(path.charAt(0)) != Character.toUpperCase(realPath.charAt(0))) {
+			return "別のドライブにつながった場所の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
 		}
 		String type = driveType.apply(Character.toUpperCase(path.charAt(0)));
 		if (!"Fixed".equals(type)) {
 			return "このドライブ（ネットワーク・USB など）の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
 		}
 		return null;
+	}
+
+	/** A:〜Z: で始まるパスか（UNC・\\?\Volume{…} などは違う） */
+	private static boolean onDriveLetter(String path)
+	{
+		if (path.length() < 3 || path.charAt(1) != ':' || (path.charAt(2) != '\\' && path.charAt(2) != '/')) return false;
+		char c = Character.toUpperCase(path.charAt(0));
+		return c >= 'A' && c <= 'Z';
+	}
+
+	/** その本を消している最中なら、断る文を言い換える（「更新しています」と言わない） */
+	private String busyMessage(String bookId, String whileUpdating)
+	{
+		boolean trashing = this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active() && JOB_TRASH.equals(j.kind));
+		return trashing ? "この本はいま本棚から消しています" : whileUpdating;
 	}
 
 	/** ドライブの種類（.NET の DriveType の名前。訳されない）。分からなければ null */
@@ -799,7 +819,7 @@ public class PreviewServer implements AutoCloseable
 		UpdateJob marker;
 		synchronized (this.jobs) {
 			if (this.jobs.values().stream().anyMatch(j -> (j.bookId.equals(bookId) || j.bookId.equals("check:" + bookId)) && j.active())) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから消してください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから消してください")));
 				return;
 			}
 			if (!Files.isRegularFile(entry.file())) {
@@ -872,7 +892,7 @@ public class PreviewServer implements AutoCloseable
 			//「減ったまま更新」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
 			//種類の違う仕事（続きを取る・作り直す・全話を取り直す）も、互いにまとめない（頼んだのと違う仕事の結果を返さない）
 			if (job != null && (job.allowFewer != allowFewer || !job.kind.equals(kind))) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから選び直してください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから選び直してください")));
 				return;
 			}
 			if (job == null) {
@@ -1201,7 +1221,7 @@ public class PreviewServer implements AutoCloseable
 		synchronized (this.jobs) {
 			//更新・名前を変える・新着を確かめる仕事のどれかがまだなら断る（PR のゲート2）
 			if (this.jobs.values().stream().anyMatch(j -> (j.bookId.equals(bookId) || j.bookId.equals("check:" + bookId)) && j.active())) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから変えてください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから変えてください")));
 				return;
 			}
 			forgetOldJobs();
@@ -1274,7 +1294,7 @@ public class PreviewServer implements AutoCloseable
 		synchronized (this.jobs) {
 			//更新・名前を変えている最中の本は確かめない（名前が変わると、積んだ確かめる仕事が古い名前を見る。PR の codex）
 			if (this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active())) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから確かめてください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから確かめてください")));
 				return;
 			}
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(key) && j.active()).findFirst().orElse(null);
