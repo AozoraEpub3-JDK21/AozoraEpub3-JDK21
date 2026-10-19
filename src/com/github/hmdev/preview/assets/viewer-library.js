@@ -481,6 +481,7 @@ function libraryCard(book)
 	// 進み具合の行は、掲載元の無い本にも空で置く (同じ列のカードの高さを揃える)
 	const status = document.createElement('div');
 	status.className = 'book-update-status';
+	status.setAttribute('aria-live', 'polite');
 	if (book.source) {
 		const update = document.createElement('button');
 		update.type = 'button';
@@ -492,7 +493,6 @@ function libraryCard(book)
 			event.stopPropagation();
 			startLibraryUpdate(book).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
 		});
-		status.setAttribute('aria-live', 'polite');
 		//話数が減って止めたときだけ出す。掲載先で話がまとめられただけ、などのとき利用者が選んで取り直す
 		const fewer = document.createElement('button');
 		fewer.type = 'button';
@@ -673,11 +673,12 @@ function setLibraryUpdate(bookId, update)
 function paintLibraryUpdate(slot, update)
 {
 	const status = slot.querySelector('.book-update-status');
+	// ⟳ の無い本 (掲載元の無い本) にも、本棚から消す途中・断った理由は出す
 	const button = slot.querySelector('.book-update');
-	if (!status || !button) return;
+	if (!status) return;
 	const busy = update && (update.state === 'queued' || update.state === 'running');
 	// disabled にするとフォーカスが外れる (キーボードで押した人が先頭へ戻される)。連打は startLibraryUpdate が断る
-	button.setAttribute('aria-disabled', busy ? 'true' : 'false');
+	if (button) button.setAttribute('aria-disabled', busy ? 'true' : 'false');
 	slot.classList.toggle('updating', !!busy);
 	if (!update) {
 		status.textContent = '';

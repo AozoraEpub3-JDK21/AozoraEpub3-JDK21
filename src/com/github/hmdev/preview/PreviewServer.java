@@ -117,12 +117,15 @@ public class PreviewServer implements AutoCloseable
 	 * Windows でゴミ箱へ移さない本の理由。移せないときは null。JDK の moveToTrash は SHFileOperation を
 	 * FOF_ALLOWUNDO・FOF_NOCONFIRMATION で呼ぶので、ゴミ箱の無い場所（ネットワーク・USB などの取り外せるドライブ）では
 	 * <b>確かめずに完全に消し</b>、それでも成功を返す。260 文字以上のパスは JDK が黙って切り詰めるので、別の物を消しうる。
-	 * ローカルの固定ドライブ（DriveType が Fixed）の、短いパスだけを移す
-	 * @param driveType ドライブ文字（大文字）から .NET の DriveType の名前（Fixed・Network・Removable…）。分からなければ null
+	 * ローカルの固定ドライブ（DriveType が Fixed）の、短いパスだけを移す。
+	 * SUBST のドライブは DriveType が Fixed で、toRealPath も実体をたどらない（X:\ のまま）。ゴミ箱が無く完全に消えるので、
+	 * 種類を "Subst" として受け取って断る（win の確認、2026-10-20）
+	 * @param driveType ドライブ文字（大文字）から .NET の DriveType の名前（Fixed・Network・Removable…）か "Subst"。分からなければ null
 	 */
 	static String windowsTrashRefusal(String path, String realPath, java.util.function.Function<Character, String> driveType)
 	{
-		if (path.length() >= 259 || realPath.length() >= 259) return "パスが長すぎるので、消しませんでした（ゴミ箱へ正しく移せません）";
+		//258 文字は、JDK の moveToTrash が false を返すことが多い（win で 14 回中 4 回だけ移せた。257 文字は 8/8）
+		if (path.length() >= 258 || realPath.length() >= 258) return "パスが長すぎるので、消しませんでした（ゴミ箱へ正しく移せません）";
 		if (!onDriveLetter(path) || !onDriveLetter(realPath)) {
 			return "ネットワーク上の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
 		}
@@ -131,6 +134,9 @@ public class PreviewServer implements AutoCloseable
 			return "別のドライブにつながった場所の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
 		}
 		String type = driveType.apply(Character.toUpperCase(path.charAt(0)));
+		if ("Subst".equals(type)) {
+			return "SUBST で作ったドライブの本は、ゴミ箱に入らずに消えるので、消しませんでした";
+		}
 		if (!"Fixed".equals(type)) {
 			return "このドライブ（ネットワーク・USB など）の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
 		}
@@ -152,12 +158,13 @@ public class PreviewServer implements AutoCloseable
 		return trashing ? "この本はいま本棚から消しています" : whileUpdating;
 	}
 
-	/** ドライブの種類（.NET の DriveType の名前。訳されない）。分からなければ null */
+	/** ドライブの種類（.NET の DriveType の名前。訳されない）。SUBST のドライブなら "Subst"（subst の一覧の「X:\: =>」）。分からなければ null */
 	private static String windowsDriveType(char letter)
 	{
 		try {
 			Process p = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-				"[System.IO.DriveInfo]::new('" + letter + "').DriveType").redirectErrorStream(true).start();
+				"if (@(subst) -match '^" + letter + ":\\\\: =>') { 'Subst' } else { [System.IO.DriveInfo]::new('" + letter + "').DriveType }")
+				.redirectErrorStream(true).start();
 			p.getOutputStream().close();
 			if (!p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
 				p.destroyForcibly();

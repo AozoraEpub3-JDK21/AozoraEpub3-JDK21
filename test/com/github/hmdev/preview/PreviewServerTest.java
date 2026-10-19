@@ -1510,7 +1510,11 @@ public class PreviewServerTest
 		assertTrue(PreviewServer.windowsTrashRefusal("ａ:\\a.epub", "ａ:\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
 		String longPath = "C:\\" + "あ".repeat(251) + ".epub";
 		assertTrue(PreviewServer.windowsTrashRefusal(longPath, longPath, drives).contains("長すぎる"));
-		assertEquals("258 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), "C:\\" + "a".repeat(255), drives));
+		assertEquals("257 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(254), "C:\\" + "a".repeat(254), drives));
+		//258 文字は JDK が移せないことが多い（win の確認）
+		assertTrue(PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), "C:\\" + "a".repeat(255), drives).contains("長すぎる"));
+		//SUBST のドライブは、DriveType が Fixed でも、見えているパスと実体のパスが同じでも断る
+		assertTrue(PreviewServer.windowsTrashRefusal("X:\\a.epub", "X:\\a.epub", c -> c == 'X' ? "Subst" : "Fixed").contains("SUBST"));
 	}
 
 	/** ゴミ箱へ移している間も、ほかの本の仕事は待たせない。その本の仕事は断る */
