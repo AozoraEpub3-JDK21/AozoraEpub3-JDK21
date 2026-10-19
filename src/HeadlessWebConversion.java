@@ -315,7 +315,8 @@ public class HeadlessWebConversion
 				try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
 				//新しく落とす本は「更新分のみ」も見ない（落とし直したときにキャッシュが同じで「更新はありません」になる）
 				//作り直すときも見ない（何も取らないので、いつも「更新はありません」になる）
-				//全話を取り直すときも見ない（取り直せなかった話があっても、取れた話で本を作る）
+				//全話を取り直すときも見ない（本を作るための操作。今は 1 話でも取れれば更新ありになり、1 話も取れなければ
+				//その前で止めるので、これが無くても同じに動く。「更新分のみ」の判定が変わったときの守り）
 				boolean convertUpdated = !this.newBookName && !this.offlineMode && !this.refetchMode && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
 				boolean modifiedOnly = !fullWork && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
