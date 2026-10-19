@@ -271,6 +271,9 @@ be renamed with ✎ on its cover (the extension stays; fetching new chapters kee
 "新着を確かめる" in the header reads only the table of contents of each book taken from the web and shows
 the number of new and revised episodes on its card (nothing is fetched; ⟳ fetches them; revisions are
 known only on sites whose table of contents shows a date per episode).
+Right-clicking a book card (Shift+F10 from the keyboard) shows a menu for that book: "保存フォルダを開く"
+(open its folder) for every book, and for a book taken from the web also fetching new chapters, checking only
+that book for new episodes, renaming, and opening the work's page.
 "ランキング" in the header lists Shōsetsuka ni Narō and Kakuyomu works by period (daily to all-time) and genre;
 "落とす" on a card fetches the work the same way as + ("本棚にあります" marks works already on the shelf).
 Narō's order follows current points, so it can differ slightly from the site's ranking pages. Kakuyomu shows
