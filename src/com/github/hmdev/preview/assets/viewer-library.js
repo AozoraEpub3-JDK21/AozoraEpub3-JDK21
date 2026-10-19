@@ -106,6 +106,29 @@ function bindLibraryEvents()
 			.catch(err => showLibraryStatus('本を開けませんでした: ' + err.message));
 	});
 
+	// 右クリック・Shift+F10・メニューキーで、その本の操作を出す (internal #54)
+	el.libraryGrid.addEventListener('contextmenu', event => {
+		const slot = event.target.closest('.book-slot');
+		if (!slot || event.target.closest('.book-rename-form')) return;
+		const book = libraryBookById(slot.dataset.bookId);
+		if (!book) return;
+		event.preventDefault();
+		openBookMenu(book, event);
+	});
+	// Shift+F10・メニューキーは自分で受ける (mac の Chrome は contextmenu を起こさなかった)。
+	// あとから contextmenu を起こすブラウザでも、そのときフォーカスはメニューの中 (本棚の外) なので二重に開かない
+	// (ブラウザのメニューはメニュー側で止める)
+	el.libraryGrid.addEventListener('keydown', event => {
+		if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
+		// ⟳ ✎ にフォーカスがあるときも開く (右クリックと同じく枠で見る)。名前の欄の中はブラウザに任せる
+		const slot = event.target.closest('.book-slot');
+		if (!slot || event.target.closest('.book-rename-form')) return;
+		const book = libraryBookById(slot.dataset.bookId);
+		if (!book) return;
+		event.preventDefault();
+		openBookMenu(book, null);
+	});
+
 	// 本棚のキー操作は自分で持つ。本文側の onKeyDown は本棚表示中は何もしない
 	document.addEventListener('keydown', onLibraryKeyDown);
 }
@@ -313,6 +336,7 @@ function renderLibraryKeepingView()
 		const target = again ? again.querySelector(focusUpdate ? '.book-update' : '.book-card') : null;
 		if (target) target.focus({preventScroll: true});
 	}
+	closeBookMenuIfCardGone();
 }
 
 function clearLibraryGrid()
@@ -320,6 +344,7 @@ function clearLibraryGrid()
 	libraryVisible = [];
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
+	closeBookMenuIfCardGone();
 }
 
 /** 棚の選択・絞り込み・並べ替えを適用した本の配列を返す */
@@ -374,6 +399,7 @@ function renderLibrary()
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
 	appendLibraryCards();
+	closeBookMenuIfCardGone();
 }
 
 /** 続きのカードを描き足す (既定は 1 ページぶん)。全部描き切るまで「さらに表示」を出す */
@@ -615,6 +641,7 @@ async function reloadOpenBook(bookId)
 function setLibraryUpdate(bookId, update)
 {
 	libraryUpdates.set(bookId, update);
+	if (bookMenu && bookMenu.bookId === bookId) refreshBookMenu();
 	const slot = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(bookId) + '"]');
 	if (slot) paintLibraryUpdate(slot, update);
 }
@@ -1287,6 +1314,240 @@ function openRenameForm(slot, book, focus = true)
 }
 
 /*
+ * 本の右クリックのメニュー (internal #54)
+ * カードのボタン (⟳ ✎) はそのまま残し、同じ操作とボタンの無い操作をここに並べる。
+ * メニューは body に 1 つだけ置く (カードの中に置くと、本棚の描き直しで消える)
+ */
+
+/** 開いているメニュー。閉じているときは null */
+let bookMenu = null;
+
+function libraryBookById(bookId)
+{
+	return ((state.library && state.library.books) || []).find(b => b.id === bookId) || null;
+}
+
+/** いま描かれている、その本の枠。描き直しの後でも引けるよう、押したときに探す */
+function librarySlotOf(bookId)
+{
+	return el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(bookId) + '"]');
+}
+
+/** 掲載元のページとして開いてよい URL か (台帳の値をそのまま開かない) */
+function isWebSource(source)
+{
+	try {
+		const url = new URL(source);
+		return url.protocol === 'https:' || url.protocol === 'http:';
+	} catch (e) {
+		return false;
+	}
+}
+
+/** その本の更新・確かめる仕事が、順番待ちか動いている最中か */
+function libraryBookBusy(bookId)
+{
+	const update = libraryUpdates.get(bookId);
+	return !!(update && (update.state === 'queued' || update.state === 'running'));
+}
+
+/**
+ * メニューの項目。disabled は開いたときと押したときの両方で見る (開いている間に仕事が終わる・始まる)。
+ * run には押したときの本を渡す (開いている間に本棚が読み直されることがある)。
+ * keepFocus の項目は自分でフォーカスを動かすので、カードへ戻さない
+ */
+function bookMenuItems(book)
+{
+	const items = [];
+	if (book.source) {
+		items.push({label: '続きを取る', disabled: () => libraryBookBusy(book.id), run: current => {
+			startLibraryUpdate(current).catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message}));
+		}});
+		if (libraryCanCheck) {
+			// 結果の文 (n 話新着・新着なし) はサーバが作り、カードの下に出る
+			items.push({label: 'この本の新着を確かめる', disabled: () => libraryBookBusy(book.id) || libraryChecking,
+				run: current => checkSingleBook(current)});
+		}
+		items.push({label: '名前を変える…', keepFocus: true, run: current => {
+			const slot = librarySlotOf(current.id);
+			if (slot) openRenameForm(slot, current);
+			else showLibraryStatus('この本のカードが一覧に出ていません (絞り込みを解いてください)');
+		}});
+		items.push(null);
+	}
+	items.push({label: '保存フォルダを開く', run: current => {
+		revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
+	}});
+	if (book.source && isWebSource(book.source)) {
+		items.push({label: '作品ページを開く', run: current => {
+			window.open(current.source, '_blank', 'noopener');
+		}});
+	}
+	return items;
+}
+
+/**
+ * メニューを開く。マウスなら押した所に、キーボード (Shift+F10・メニューキー) ならカードの左上に出す
+ */
+function openBookMenu(book, event)
+{
+	closeBookMenu(false);
+	const slot = librarySlotOf(book.id);
+	const menu = document.createElement('div');
+	menu.className = 'book-menu';
+	menu.setAttribute('role', 'menu');
+	menu.setAttribute('aria-label', (book.title || book.fileName) + ' の操作');
+	const entries = [];
+	for (const item of bookMenuItems(book)) {
+		if (!item) {
+			const line = document.createElement('div');
+			line.className = 'book-menu-separator';
+			line.setAttribute('role', 'separator');
+			menu.appendChild(line);
+			continue;
+		}
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.setAttribute('role', 'menuitem');
+		button.textContent = item.label;
+		entries.push({button: button, item: item});
+		button.addEventListener('click', () => {
+			if (item.disabled && item.disabled()) {
+				button.setAttribute('aria-disabled', 'true');
+				return;
+			}
+			// 開いている間に本棚が読み直され、本が消えた・名前が変わった (id が変わる) ときは何もしない
+			const current = libraryBookById(book.id);
+			closeBookMenu(!item.keepFocus && !!current);
+			if (!current) {
+				showLibraryStatus('この本は本棚から無くなりました (一覧が読み直されました)');
+				return;
+			}
+			item.run(current);
+		});
+		menu.appendChild(button);
+	}
+	bookMenu = {menu: menu, bookId: book.id, entries: entries};
+	refreshBookMenu();
+	menu.addEventListener('keydown', onBookMenuKeyDown);
+	// メニューの上ではブラウザのメニューを出さない (Windows のメニューキーは keyup で contextmenu を起こし、
+	// そのときフォーカスはこのメニューにある)
+	menu.addEventListener('contextmenu', event => event.preventDefault());
+	document.body.appendChild(menu);
+
+	// キーボードで開いたときは座標が 0 か、カードの外になることがある。そのときはカードの左上に出す
+	// (mac の control+クリックは button が 0 なので、ボタンでは見分けない)
+	let x = event ? event.clientX : 0;
+	let y = event ? event.clientY : 0;
+	if (slot) {
+		const rect = slot.getBoundingClientRect();
+		if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+			x = rect.left + 8;
+			y = rect.top + 8;
+		}
+	}
+	// 画面の端ではみ出さないよう、内側へ寄せる
+	const size = menu.getBoundingClientRect();
+	x = Math.max(4, Math.min(x, window.innerWidth - size.width - 4));
+	y = Math.max(4, Math.min(y, window.innerHeight - size.height - 4));
+	menu.style.left = x + 'px';
+	menu.style.top = y + 'px';
+
+	const first = menu.querySelector('[role="menuitem"]:not([aria-disabled="true"])');
+	if (first) first.focus();
+	// 開いた右クリックそのものの mousedown で閉じないよう、次の周から外の操作を見る
+	setTimeout(() => {
+		if (!bookMenu || bookMenu.menu !== menu) return;
+		document.addEventListener('pointerdown', onBookMenuOutside, true);
+		window.addEventListener('blur', onBookMenuDismiss);
+		window.addEventListener('resize', onBookMenuDismiss);
+		el.libraryGrid.addEventListener('scroll', onBookMenuDismiss);
+	}, 0);
+}
+
+/**
+ * 押せない項目の印を、いまの状態に合わせ直す。開いている間に、その本の仕事・新着の確かめが始まる・終わる
+ * (印が古いままだと、押せるのに淡いまま・押せないと読み上げられる)
+ */
+function refreshBookMenu()
+{
+	if (!bookMenu) return;
+	for (const {button, item} of bookMenu.entries) {
+		if (item.disabled && item.disabled()) button.setAttribute('aria-disabled', 'true');
+		else button.removeAttribute('aria-disabled');
+	}
+}
+
+/**
+ * @param {boolean} returnFocus カードへフォーカスを戻すか (Esc で閉じたとき)
+ */
+function closeBookMenu(returnFocus)
+{
+	if (!bookMenu) return;
+	const {menu, bookId} = bookMenu;
+	bookMenu = null;
+	document.removeEventListener('pointerdown', onBookMenuOutside, true);
+	window.removeEventListener('blur', onBookMenuDismiss);
+	window.removeEventListener('resize', onBookMenuDismiss);
+	el.libraryGrid.removeEventListener('scroll', onBookMenuDismiss);
+	menu.remove();
+	if (returnFocus) {
+		const slot = librarySlotOf(bookId);
+		const card = slot && slot.querySelector('.book-card');
+		if (card) card.focus({preventScroll: true});
+	}
+}
+
+/**
+ * 描き直しでその本のカードが一覧から外れたら (絞り込み・並べ替え・裏の仕事の後の読み直し)、メニューも閉じる。
+ * 残すと、カードの無い本のメニューが浮いたままになり、「名前を変える…」が黙って何もしない
+ */
+function closeBookMenuIfCardGone()
+{
+	if (bookMenu && !librarySlotOf(bookMenu.bookId)) closeBookMenu(false);
+}
+
+function onBookMenuOutside(event)
+{
+	if (bookMenu && !bookMenu.menu.contains(event.target)) closeBookMenu(false);
+}
+
+function onBookMenuDismiss()
+{
+	closeBookMenu(false);
+}
+
+function onBookMenuKeyDown(event)
+{
+	// 本棚のキー操作 (Esc で本棚を閉じる・L) に渡さない
+	event.stopPropagation();
+	const items = [...event.currentTarget.querySelectorAll('[role="menuitem"]')];
+	const index = items.indexOf(document.activeElement);
+	let next = -1;
+	if (event.key === 'Escape') {
+		event.preventDefault();
+		closeBookMenu(true);
+		return;
+	} else if (event.key === 'Tab') {
+		event.preventDefault();
+		closeBookMenu(true);
+		return;
+	} else if (event.key === 'ArrowDown') {
+		next = (index + 1) % items.length;
+	} else if (event.key === 'ArrowUp') {
+		next = (index - 1 + items.length) % items.length;
+	} else if (event.key === 'Home') {
+		next = 0;
+	} else if (event.key === 'End') {
+		next = items.length - 1;
+	} else {
+		return;
+	}
+	event.preventDefault();
+	if (items[next]) items[next].focus();
+}
+
+/*
  * 新着を確かめる (internal #11)
  * Web から取った本の目次だけを読み、新しい話と改稿された話を数えてカードに出す。話は取らない (取るのは ⟳)。
  * 1 冊ずつ順に頼む (アプリも 1 冊ずつ、間隔を空けて確かめる)
@@ -1296,17 +1557,34 @@ function openRenameForm(slot, book, focus = true)
 let libraryCanCheck = false;
 /** 確かめている最中か */
 let libraryChecking = false;
+/** メニューから 1 冊だけ確かめている本の数。その間は見出しの「新着を確かめる」を押せない (数えた結果から漏れるので) */
+let librarySingleChecks = 0;
 
 function updateCheckAllButton()
 {
 	const books = (state.library && state.library.books) || [];
 	el.libraryCheckAll.hidden = !libraryCanCheck || !books.some(b => b.source);
-	el.libraryCheckAll.disabled = libraryChecking;
+	el.libraryCheckAll.disabled = libraryChecking || librarySingleChecks > 0;
+	// 「この本の新着を確かめる」は、全体を確かめている間は押せない
+	refreshBookMenu();
+}
+
+/** メニューから 1 冊だけ確かめる */
+async function checkSingleBook(book)
+{
+	librarySingleChecks++;
+	updateCheckAllButton();
+	try {
+		await checkOneBook(book);
+	} finally {
+		librarySingleChecks--;
+		updateCheckAllButton();
+	}
 }
 
 async function checkAllBooks()
 {
-	if (libraryChecking) return;
+	if (libraryChecking || librarySingleChecks > 0) return;
 	const books = ((state.library && state.library.books) || []).filter(b => b.source);
 	if (!books.length) return;
 	libraryChecking = true;
@@ -1317,22 +1595,9 @@ async function checkAllBooks()
 		for (let i = 0; i < books.length; i++) {
 			const book = books[i];
 			el.libraryCheckAll.textContent = '確かめています… (' + (i + 1) + '/' + books.length + ')';
-			// ⟳ で更新している本は飛ばす (その結果を上書きしない。PR のゲート2)
-			const current = libraryUpdates.get(book.id);
-			if (current && (current.state === 'queued' || current.state === 'running')) continue;
-			setLibraryUpdate(book.id, {state: 'queued', message: ''});
-			try {
-				const job = await checkBook(book);
-				// 確かめるのに失敗したのを「更新できませんでした」と言わない
-				const state = job.state === 'failed' ? 'checkFailed' : job.state;
-				setLibraryUpdate(book.id, {state: state, message: job.message || '',
-					newEpisodes: job.newEpisodes, revisedEpisodes: job.revisedEpisodes});
-				if (job.state === 'checked' && (job.newEpisodes > 0 || job.revisedEpisodes > 0)) found++;
-				else if (job.state !== 'checked') failed++;
-			} catch (err) {
-				setLibraryUpdate(book.id, {state: 'checkFailed', message: err.message});
-				failed++;
-			}
+			const result = await checkOneBook(book);
+			if (result === 'found') found++;
+			else if (result === 'failed') failed++;
 		}
 		// 確かめられなかった本があるときは「新着は無い」と言い切らない (PR の codex)
 		let summary = found ? '新着のある本: ' + found + ' 冊 (⟳ で取れます)' : (failed ? '' : '新着のある本はありません');
@@ -1342,6 +1607,30 @@ async function checkAllBooks()
 		libraryChecking = false;
 		el.libraryCheckAll.textContent = '新着を確かめる';
 		updateCheckAllButton();
+	}
+}
+
+/**
+ * 1 冊を確かめて、カードに出す
+ * @return {Promise<string>} found (新着あり)・none (新着なし)・failed・skipped (更新中なので飛ばした)
+ */
+async function checkOneBook(book)
+{
+	// ⟳ で更新している本は飛ばす (その結果を上書きしない。PR のゲート2)
+	const current = libraryUpdates.get(book.id);
+	if (current && (current.state === 'queued' || current.state === 'running')) return 'skipped';
+	setLibraryUpdate(book.id, {state: 'queued', message: ''});
+	try {
+		const job = await checkBook(book);
+		// 確かめるのに失敗したのを「更新できませんでした」と言わない
+		const state = job.state === 'failed' ? 'checkFailed' : job.state;
+		setLibraryUpdate(book.id, {state: state, message: job.message || '',
+			newEpisodes: job.newEpisodes, revisedEpisodes: job.revisedEpisodes});
+		if (job.state !== 'checked') return 'failed';
+		return (job.newEpisodes > 0 || job.revisedEpisodes > 0) ? 'found' : 'none';
+	} catch (err) {
+		setLibraryUpdate(book.id, {state: 'checkFailed', message: err.message});
+		return 'failed';
 	}
 }
 
