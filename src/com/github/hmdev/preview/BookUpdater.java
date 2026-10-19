@@ -56,6 +56,15 @@ public interface BookUpdater
 		throw new UnsupportedOperationException();
 	}
 
+	/**
+	 * 本棚の本を作り直す（internal #54）。掲載元へは取りに行かず、キャッシュの目次と話から、今の設定で本を書き直す。
+	 * キャッシュに無い話があれば書かない。作り直せない実装は {@link UnsupportedOperationException}
+	 */
+	default Result regenerate(String sourceUrl, Path epubFile) throws Exception
+	{
+		throw new UnsupportedOperationException();
+	}
+
 	/** 新着を確かめた結果。ok なら新しい話・改稿された話の数（目次の話数も）。stop は守りで止めた理由（減った・見つからない） */
 	record CheckResult(boolean ok, String message, int episodes, int newEpisodes, int revisedEpisodes, String stop) {}
 

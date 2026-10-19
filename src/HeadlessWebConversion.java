@@ -189,6 +189,23 @@ public class HeadlessWebConversion
 		}
 	}
 
+	/** 作り直す（regenerate の間だけ立てる） */
+	private boolean offlineMode = false;
+
+	/**
+	 * 本棚の本を作り直す（internal #54）。サイトへは取りに行かず、キャッシュの目次と話から、今の設定で本を書き直す。
+	 * キャッシュに無い話があれば書かずに止める。話数が減っていたら更新と同じく止める（減った目次のキャッシュで作り直さない）
+	 */
+	public Result regenerate(String url, File book)
+	{
+		this.offlineMode = true;
+		try {
+			return convert(url, book.getAbsoluteFile().getParentFile(), book, true, true, false);
+		} finally {
+			this.offlineMode = false;
+		}
+	}
+
 	/**
 	 * Web 本棚に新しく落とす（internal #11 の案 A）。名前は短い名前（{@link com.github.hmdev.info.ShelfNames}）を台帳に記録して使い、
 	 * 「出力ファイル名に表題利用」の設定に依らない。もう同じ名前の本があれば書かない
@@ -242,6 +259,7 @@ public class HeadlessWebConversion
 				web.allowFewerEpisodes = allowFewerEpisodes;
 				web.guardBook = updateGuard ? expectedOutFile : null;
 				web.checkOnly = this.checkMode;
+				web.offline = this.offlineMode;
 				web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
 				web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
 				//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
@@ -269,13 +287,17 @@ public class HeadlessWebConversion
 				float modifiedExpire = 0;
 				try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
 				//新しく落とす本は「更新分のみ」も見ない（落とし直したときにキャッシュが同じで「更新はありません」になる）
-				boolean convertUpdated = !this.newBookName && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
+				//作り直すときも見ない（何も取らないので、いつも「更新はありません」になる）
+				boolean convertUpdated = !this.newBookName && !this.offlineMode && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
 				boolean modifiedOnly = !fullWork && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
 				srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
 					convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
 				if (srcFile == null) {
 					//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
+					if (this.offlineMode && web.offlineMisses > 0) {
+						return new Result(false, false, null, "キャッシュに無い目次・話が " + web.offlineMisses + " 件あります。⟳ で取ってから作り直してください");
+					}
 					if (updateGuard) {
 						int status = web.listFailure;
 						if ((status == 404 || status == 410) && !web.listFailureOnLaterPage) {
@@ -444,7 +466,10 @@ public class HeadlessWebConversion
 			//今の本を作品のフォルダに 1 つ前の版として残す（internal #11。続きを取って何かが消えても戻せるように）。
 			//いったん控えに写し、本を置き換えられてから 1 つ前の版の名前にする（先に上書きすると、変換や置き換えに
 			//失敗したとき＝Windows で本が開かれていたときなど、本は元のままなのに、もっと前の版を失う。PR のゲート2・#121 の codex）
-			if (outFile.exists()) {
+			//作り直すときは、1 つ前の版がもうあれば回さない（取り直す前の版を、設定を変えただけの作り直しで失わない。
+			//減ったまま更新した後は、消えた話の入った唯一の本のことがある）。無ければ今の本を残す（作り直しを戻せるように）
+			boolean keepPrevious = this.offlineMode && new File(workDir, previousEpubName(workDir, outFile)).isFile();
+			if (outFile.exists() && !keepPrevious) {
 				backup = File.createTempFile(backupPrefix(outFile), ".tmp", workDir);
 				java.nio.file.Files.copy(outFile.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 			}

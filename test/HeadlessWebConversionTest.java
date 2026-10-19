@@ -533,6 +533,34 @@ public class HeadlessWebConversionTest {
 		org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(book.toPath()));
 	}
 
+	/**
+	 * 目次が複数ページの作品も作り直せる（internal #54）。目次の続きのページはキャッシュに残り、作り直しはそれを読んで、
+	 * 掲載元へは取りに行かない。続きのページのキャッシュが無ければ、本を前のまま止める
+	 */
+	@Test
+	public void aPagedWorkIsRegeneratedFromTheCachedTocPages() throws Exception {
+		String basePath = serveAndBase();
+		paged = true;
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		File page2 = new File(ledgerDir(), "p=2.tocpage.html");
+		assertTrue("目次の 2 ページ目をキャッシュに残す: " + page2, page2.isFile());
+		int before = requests.get();
+		HeadlessWebConversion.Result r = conversion(guiDefaults(), basePath).regenerate("http://" + fqdn + "/novel/", book);
+		assertTrue(r.message(), r.ok());
+		assertEquals("掲載元へは取りに行かない", before, requests.get());
+		String text = epubText(book);
+		for (String n : new String[] { "1", "2", "3" }) assertTrue("第" + n + "話（2 ページ目の話も）", text.contains(marker(n)));
+
+		byte[] bookBefore = Files.readAllBytes(book.toPath());
+		assertTrue(page2.delete());
+		HeadlessWebConversion.Result missing = conversion(guiDefaults(), basePath).regenerate("http://" + fqdn + "/novel/", book);
+		assertFalse(missing.ok());
+		assertTrue(missing.message(), missing.message().contains("キャッシュに無い目次・話"));
+		assertEquals("欠けていても取りに行かない", before, requests.get());
+		org.junit.Assert.assertArrayEquals("本は前のまま", bookBefore, Files.readAllBytes(book.toPath()));
+	}
+
 	/** 目次が 404 なら「作品が見つからない」で止め、キャッシュの古い目次で作り直さない */
 	@Test
 	public void aMissingWorkStopsTheUpdate() throws Exception {

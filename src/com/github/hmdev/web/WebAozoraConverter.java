@@ -186,6 +186,14 @@ public class WebAozoraConverter
 	 * 前に記録したものと違う話）を数え、話は取らず、何も書かずに止める。守り（updateGuard）と一緒に立てる
 	 */
 	public boolean checkOnly = false;
+	/**
+	 * 作り直す（internal #54）。サイトへは取りに行かず、キャッシュの目次と話だけで、今の設定で txt を作り直す。
+	 * キャッシュに無い目次・話があれば、何も書かずに止める（offlineMisses）。更新情報（update.txt）は書かない。
+	 * 守り（updateGuard）と一緒に立てる（止めたときに txt を前に戻す・話数が減っていたら止める）
+	 */
+	public boolean offline = false;
+	/** 結果: offline のとき、キャッシュに無くて取りに行かなかった目次・話の数 */
+	public int offlineMisses = 0;
 	/** 結果: 確かめたときの、目次の話数・新しい話・改稿された話。確かめていなければ -1 */
 	public int checkedEpisodes = -1;
 	public int checkedNew = -1;
@@ -635,6 +643,7 @@ public class WebAozoraConverter
 		this.pendingEpisodes = -1;
 		this.pendingLastEpisodes = -1;
 		this.guardStopped = false;
+		this.offlineMisses = 0;
 		// 前の作品の状態をリセット（変換器は変換ごとに新しいので、もとから空。同じ変換器で 2 回呼ぶ呼び手のために残す）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
@@ -662,9 +671,9 @@ public class WebAozoraConverter
 		this.pendingUpdateInfo = null;
 		this.confirmedHrefs.clear();
 		
-		//末尾の / をリダイレクトで取得
+		//末尾の / をリダイレクトで取得。作り直すときは問い合わせない（本の記録の URL は、取ったときにこの補正を済ませた形）
 		urlString = urlString.trim();
-		if (!urlString.endsWith("/") && !urlString.endsWith(".html") && !urlString.endsWith(".htm") && urlString.indexOf("?") == -1 ) {
+		if (!this.offline && !urlString.endsWith("/") && !urlString.endsWith(".html") && !urlString.endsWith(".htm") && urlString.indexOf("?") == -1 ) {
 			try {
 				HttpRequest request = HttpRequest.newBuilder()
 					.uri(new URI(urlString+"/"))
@@ -680,6 +689,20 @@ public class WebAozoraConverter
 			}
 		}
 		
+		//作り直すときは問い合わせない代わりに、取ったときの形を、台帳のある作業フォルダで選ぶ（/ を補った作品は「…/」に、
+		//補えなかった作品＝カクヨムの works/ID などは「…_converted/」に台帳がある。違う形を選ぶと別の作業フォルダに書く）
+		if (this.offline && !urlString.endsWith("/") && !urlString.endsWith(".html") && !urlString.endsWith(".htm") && urlString.indexOf("?") == -1
+			&& urlString.indexOf('/', urlString.indexOf("//")+2) != -1) {
+			try {
+				String rel = CharUtils.escapeUrlToFile(urlString.substring(urlString.indexOf("//")+2));
+				File plain = safeResolve(cachePath.toPath(), rel + "_converted/" + BookLedger.FILE_NAME);
+				File slashed = safeResolve(cachePath.toPath(), rel + "/" + BookLedger.FILE_NAME);
+				if (!plain.isFile() && slashed.isFile()) urlString += "/";
+			} catch (IOException | RuntimeException e) {
+				/* 意図的: 置けない名前なら、渡された形のまま（キャッシュの目次が見つからなければ止まる） */
+			}
+		}
+
 		//オフライン等で末尾スラッシュ補正ができなかった場合も、パスなし URL はルート扱いにする
 		//(補正が成功した場合と同じ結果に収束させ、以降の substring が例外にならないようにする)
 		if (urlString.indexOf('/', urlString.indexOf("//")+2) == -1) urlString += "/";
@@ -718,7 +741,8 @@ public class WebAozoraConverter
 		
 		// なろうAPI処理: メタデータ取得を試行
 		NovelMetadata apiMetadata = null;
-		if (useApi) {
+		//作り直すときは API にも問い合わせない（表題などは目次のページから読む）
+		if (useApi && !this.offline) {
 			String ncode = extractNcode(urlString);
 			if (ncode != null) {
 				LogAppender.println("なろうAPI: Nコード検出 - " + ncode);
@@ -733,7 +757,16 @@ public class WebAozoraConverter
 			}
 		}
 		
-		try {
+		if (this.offline) {
+			//作り直すときは、キャッシュの目次だけを読む。無ければ何も書かずに止める
+			File cachedList = cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
+			if (!cachedList.isFile()) {
+				LogAppender.println("キャッシュに目次がありません : " + urlString);
+				this.offlineMisses++;
+				return null;
+			}
+			LogAppender.println("キャッシュの目次から作り直します : " + urlString);
+		} else try {
 			LogAppender.append(urlString);
 			cacheFile(urlString, cacheFile, null);
 			LogAppender.println(" : List Loaded.");
@@ -869,6 +902,8 @@ public class WebAozoraConverter
 			Files.copy(txtFile.toPath(), guardBackup.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(txtFile.toPath()), "UTF-8"));
+		//txt を最後まで書けたか。作り直すときは、途中の例外・中止でも txt を前に戻す（キャッシュの txt を書きかけで残さない）
+		boolean textWritten = false;
 		try {
 			
 			//表紙画像
@@ -1078,9 +1113,27 @@ public class WebAozoraConverter
 									else nextTocUrl = listBaseUrl + nextTocUrl;
 								}
 								LogAppender.println("目次ページ " + pageIdx + "/" + tocTotalPages + " 取得: " + nextTocUrl);
-								File tocPageFile = Files.createTempFile(cachePath.toPath(), "tocpage", ".html").toFile();
+								//目次の続きのページも、話と同じ規則でキャッシュに残す（作り直すときに読む。internal #54）。
+								//置けない名前のときだけ、前のように一時ファイルに取って捨てる
+								File tocPageFile;
+								boolean tempTocPage = false;
 								try {
-									cacheFile(nextTocUrl, tocPageFile, urlString);
+									//名前に印を付ける（?p=2 と、/p=2 という話の URL が、同じ名前にならないように）
+									tocPageFile = safeResolve(cachePath.toPath(),
+										CharUtils.escapeUrlToFile(nextTocUrl.substring(nextTocUrl.indexOf("//")+2)) + ".tocpage.html");
+								} catch (IOException | RuntimeException e) {
+									tocPageFile = Files.createTempFile(cachePath.toPath(), "tocpage", ".html").toFile();
+									tempTocPage = true;
+								}
+								try {
+									if (this.offline && !tempTocPage) {
+										if (!tocPageFile.isFile()) {
+											this.offlineMisses++;
+											throw new IOException("キャッシュに目次の続きのページがありません（この版より前に取った本は、⟳ で一度取ると作り直せます）: " + nextTocUrl);
+										}
+									} else {
+										cacheFile(nextTocUrl, tocPageFile, urlString);
+									}
 									Document tocPageDoc = Jsoup.parse(tocPageFile, null, nextTocUrl);
 									Elements nextHrefs = getExtractElements(tocPageDoc, this.queryMap.get(ExtractId.HREF));
 									if (nextHrefs != null) {
@@ -1117,7 +1170,7 @@ public class WebAozoraConverter
 										return null;
 									}
 								} finally {
-									tocPageFile.delete();
+									if (tempTocPage) tocPageFile.delete();
 								}
 							}
 						}
@@ -1234,6 +1287,28 @@ public class WebAozoraConverter
 				return null;
 			}
 
+			//作り直すときは、本文を書く前に、キャッシュに無い話を数える。1 話でも無ければ何も書かずに止める
+			//（書きながら見つけると、話ごとに取り直しの待ちが入り、数も重なる）
+			if (this.offline) {
+				for (String chapterHref : chapterHrefs) {
+					if (chapterHref == null || chapterHref.isEmpty()) continue;
+					try {
+						String chapterPath = CharUtils.escapeUrlToFile(chapterHref.substring(chapterHref.indexOf("//")+2));
+						File chapterCacheFile = resolveHtmlCacheFile(safeResolve(cachePath.toPath(), chapterPath+(chapterPath.endsWith("/")?"index.html":"")));
+						if (!chapterCacheFile.isFile()) this.offlineMisses++;
+					} catch (IOException | RuntimeException e) {
+						/* 意図的: 置けないパスの話は、取ったときも飛ばした（下の本文のループも飛ばす）。欠けとは数えない */
+					}
+				}
+				if (this.offlineMisses > 0) {
+					LogAppender.println("キャッシュに無い話が " + this.offlineMisses + " 話あるので、作り直しをやめました");
+					this.pendingEpisodes = -1;
+					this.pendingLastEpisodes = -1;
+					this.guardStopped = true;
+					return null;
+				}
+			}
+
 			List<String> failedHrefs = new ArrayList<>();
 			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
 			HashSet<String> failedReloads = new HashSet<>();
@@ -1280,7 +1355,8 @@ public class WebAozoraConverter
 						//更新対象ならtrueに変更
 						boolean reload = false;
 						//nullでなく更新無しに含まれなければ再読込
-						if (noUpdateUrls != null && !noUpdateUrls.contains(chapterHref)) reload = true;
+						//作り直すときは、改稿された話も取り直さない（キャッシュにある話で作る）
+						if (noUpdateUrls != null && !noUpdateUrls.contains(chapterHref) && !this.offline) reload = true;
 						
 						if ((reload || !chapterCacheFile.exists()) && !this.blockedByChallenge) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
@@ -1336,8 +1412,8 @@ public class WebAozoraConverter
 					//改稿・追加された話を取り損ねた。前のキャッシュがあればそれで本を作る。次の変換でもう一度取りに行く
 					LogAppender.println("改稿・追加された " + failedReloads.size() + " 話を取得できませんでした（次の変換でもう一度取りに行きます）: " + String.join(" ", failedReloads));
 				}
-				//更新が無くて変換もなければ終了
-				if (!this.updated) {
+				//更新が無くて変換もなければ終了（作り直すときは何も取らないので、いつも「更新なし」になる。言わない）
+				if (!this.updated && !this.offline) {
 					LogAppender.append("「"+title+"」");
 					//止められた・取り損ねたのを「更新なし」と言わない
 					if (this.blockedByChallenge) LogAppender.println("の更新は、サイトに止められたため確かめられませんでした");
@@ -1439,7 +1515,7 @@ public class WebAozoraConverter
 						{
 							Elements contentCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
 							if ((contentCheck == null || contentCheck.size() == 0) && this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)
-								&& !this.blockedByChallenge) {
+								&& !this.blockedByChallenge && !this.offline) {
 								LogAppender.println("本文が取得できないためキャッシュを削除して再ダウンロードします: " + chapterHref);
 								chapterCacheFile.delete();
 								try {
@@ -1515,6 +1591,15 @@ public class WebAozoraConverter
 					LogAppender.println(buf+"話を変換します");
 				}
 			}
+			//作り直すときに、本文のループで取りに行こうとした話があったら（先の数え上げで止まるので、いまは届かない最後の止め）、
+			//書きかけの txt を前に戻して止める（話の欠けた本で上書きしない）
+			if (this.offline && this.offlineMisses > 0) {
+				LogAppender.println("キャッシュに無い話が " + this.offlineMisses + " 件あるので、作り直しをやめました");
+				this.pendingEpisodes = -1;
+				this.pendingLastEpisodes = -1;
+				this.guardStopped = true;
+				return null;
+			}
 			//止められて 1 話も取れなかったら、本文の無い本を作らずに失敗にする
 			if (this.blockedByChallenge && selectedChapters > 0 && writtenChapters == 0) {
 				LogAppender.println("サイトに止められて、1 話も取得できませんでした");
@@ -1546,16 +1631,18 @@ public class WebAozoraConverter
 			bw.append('\n');
 
 			// 読了表示は AozoraTextFinalizer.appendEndOfBook() に統一
+			textWritten = true;
 
 		} finally {
 			bw.close();
-			if (this.guardStopped) {
+			if (this.guardStopped || (this.offline && !textWritten)) {
 				//守りで止めたら、txt も更新情報も変換の前のまま（キャッシュの txt から作り直しても、前の本になるように）。
 				//更新情報は書かない（下の else を通らない）
 				if (guardBackup != null) Files.move(guardBackup.toPath(), txtFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 				else Files.deleteIfExists(txtFile.toPath());
-			} else {
-				//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す
+			} else if (!this.offline) {
+				//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す。
+				//作り直すときは書かない（何も取っていないので、記録は前のままが正しい）
 				writePendingUpdateInfo();
 			}
 			if (guardBackup != null) Files.deleteIfExists(guardBackup.toPath());
@@ -2172,7 +2259,10 @@ public class WebAozoraConverter
 			}
 		}
 
-		try {
+		if (this.offline) {
+			//作り直すときは、キャッシュにある画像だけを使う（表紙は消さない）。無い挿絵は取りに行かず、作り直しも止めない
+			if (imageOutFile == null && !imageFile.exists()) LogAppender.println("キャッシュに無い挿絵です（取りに行きません） : "+src);
+		} else try {
 			if (imageOutFile != null) {
 				if (imageOutFile.exists()) imageOutFile.delete();
 				cacheFile(src, imageOutFile, this.urlString);
@@ -3579,6 +3669,11 @@ public class WebAozoraConverter
 	
 	private boolean cacheFile(String urlString, File cacheFile, String referer) throws IOException
 	{
+		//作り直すときは取りに行かない。呼び手は「取れなかった」として扱い、話なら作り直しを止める（数は offlineMisses）
+		if (this.offline) {
+			this.offlineMisses++;
+			throw new IOException("作り直しではサイトへ取りに行きません: " + urlString);
+		}
 		try { if (cacheFile.isDirectory()) cacheFile.delete(); } catch (Exception e) { /* 意図的: 削除失敗時は直後のディレクトリチェックで対処 */ }
 		if (cacheFile.isDirectory()) {
 			LogAppender.println("フォルダがあるためキャッシュできません : "+cacheFile.getAbsolutePath());
