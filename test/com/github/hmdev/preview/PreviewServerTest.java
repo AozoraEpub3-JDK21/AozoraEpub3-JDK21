@@ -1499,7 +1499,8 @@ public class PreviewServerTest
 		assertTrue(PreviewServer.windowsTrashRefusal("E:\\a.epub", drives).contains("ゴミ箱に入らずに"));
 		assertTrue(PreviewServer.windowsTrashRefusal("Z:\\a.epub", drives).contains("ゴミ箱に入らずに"));
 		assertTrue("種類が分からないドライブも消さない", PreviewServer.windowsTrashRefusal("Q:\\a.epub", drives).contains("ゴミ箱に入らずに"));
-		assertTrue(PreviewServer.windowsTrashRefusal("\\\\server\\share\\a.epub", drives).contains("ネットワーク"));
+		//UNC はドライブの種類を訊かずに断る
+		assertTrue(PreviewServer.windowsTrashRefusal("\\\\server\\share\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
 		String longPath = "C:\\" + "あ".repeat(251) + ".epub";
 		assertTrue(PreviewServer.windowsTrashRefusal(longPath, drives).contains("長すぎる"));
 		assertEquals("258 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), drives));
@@ -1545,8 +1546,14 @@ public class PreviewServerTest
 		assertEquals("消している本は続きを取らない", 409, post(base() + "api/book/" + ids[0] + "/update").statusCode());
 		assertEquals("消している本は確かめない", 409, post(base() + "api/book/" + ids[0] + "/check").statusCode());
 		release.countDown();
-		assertEquals(200, trashing.get(10, java.util.concurrent.TimeUnit.SECONDS).statusCode());
+		HttpResponse<String> trashed = trashing.get(10, java.util.concurrent.TimeUnit.SECONDS);
+		assertEquals(200, trashed.statusCode());
 		waitForJob(otherUpdate.body());
+		//消している印は終わっている（残ると、終わっていない仕事として列の上限を食い続ける）
+		assertTrue(trashed.body(), trashed.body().contains("\"state\":\"done\""));
+		java.util.regex.Matcher job = java.util.regex.Pattern.compile("\"job\":\"([0-9a-f]+)\"").matcher(trashed.body());
+		assertTrue(trashed.body(), job.find());
+		assertTrue(get(base() + "api/jobs/" + job.group(1)).body().contains("\"state\":\"done\""));
 	}
 
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */

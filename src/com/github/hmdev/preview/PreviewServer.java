@@ -826,8 +826,9 @@ public class PreviewServer implements AutoCloseable
 			throw e;
 		}
 		this.session.removeLibraryEntry(bookId);
+		//印を終わらせる（残ると、まだ終わっていない仕事として数え続け、列の上限を食う）
 		marker.state = "done";
-		respondJsonStatus(exchange, 200, "{\"ok\":true}");
+		respondJsonStatus(exchange, 200, jobJson(marker));
 	}
 
 	/**
