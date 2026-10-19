@@ -70,11 +70,18 @@ const LIBRARY_UPDATE_LABELS = {
 	checkFailed: '確かめられませんでした',
 };
 
-/** 作り直す仕事 (internal #54) で、文を変える状態 */
-const LIBRARY_REGENERATE_LABELS = {
-	running: '作り直しています…',
-	done: '作り直しました',
-	failed: '作り直せませんでした',
+/** 作り直す・全話を取り直す仕事 (internal #54) で、文を変える状態 */
+const LIBRARY_MODE_LABELS = {
+	regenerate: {
+		running: '作り直しています…',
+		done: '作り直しました',
+		failed: '作り直せませんでした',
+	},
+	refetch: {
+		running: '全話を取り直しています…',
+		done: '全話を取り直しました',
+		failed: '取り直せませんでした',
+	},
 };
 
 function bindLibraryEvents()
@@ -491,7 +498,10 @@ function libraryCard(book)
 		fewer.hidden = true;
 		fewer.addEventListener('click', event => {
 			event.stopPropagation();
-			startLibraryUpdate(book, true).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
+			// 全話を取り直して止めたときは、全話を取り直す仕事のまま続ける
+			const last = libraryUpdates.get(book.id);
+			const mode = last && last.mode === 'refetch' ? 'refetch' : undefined;
+			startLibraryUpdate(book, true, mode).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message, mode: mode}));
 		});
 		//名前を変える (Web から取った本だけ。台帳も一緒に書き換えるので、続きを取るのはそのまま効く)
 		const rename = document.createElement('button');
@@ -573,15 +583,16 @@ function libraryBookButton(book)
 /**
  * 「続きを取る」を頼み、終わるまで状態を問い合わせる
  * @param {boolean} [allowFewer] 話数が減っていても取り直す (利用者が「減ったまま更新」を押した)
- * @param {boolean} [regenerate] 取りに行かず、キャッシュから今の設定で作り直す (internal #54)
+ * @param {string} [mode] regenerate: 取りに行かず、キャッシュから今の設定で作り直す。refetch: 全話を取り直す (internal #54)
  */
-async function startLibraryUpdate(book, allowFewer, regenerate)
+async function startLibraryUpdate(book, allowFewer, mode)
 {
 	const current = libraryUpdates.get(book.id);
 	if (current && (current.state === 'queued' || current.state === 'running')) return;
-	const kind = regenerate ? {regenerate: true} : {};
+	const kind = mode ? {mode: mode} : {};
 	setLibraryUpdate(book.id, {state: 'queued', message: '', ...kind});
-	const path = regenerate ? '/regenerate' : '/update' + (allowFewer ? '?allowFewer=1' : '');
+	const path = mode === 'regenerate' ? '/regenerate'
+		: (mode === 'refetch' ? '/refetch' : '/update') + (allowFewer ? '?allowFewer=1' : '');
 	const response = await fetch('api/book/' + encodeURIComponent(book.id) + path, {method: 'POST', cache: 'no-store'});
 	let body = null;
 	try { body = await response.json(); } catch (e) { /* 本文の無い応答 */ }
@@ -670,11 +681,13 @@ function paintLibraryUpdate(slot, update)
 	}
 	const fewer = slot.querySelector('.book-update-anyway');
 	// 作り直しで止めたときは出さない (押すと掲載元から取り直す。作り直しは取りに行かない操作)
-	if (fewer) fewer.hidden = update.state !== 'shrunk' || !!update.regenerate;
-	let text = (update.regenerate && LIBRARY_REGENERATE_LABELS[update.state]) || LIBRARY_UPDATE_LABELS[update.state] || update.state;
+	if (fewer) fewer.hidden = update.state !== 'shrunk' || update.mode === 'regenerate';
+	let text = (update.mode && LIBRARY_MODE_LABELS[update.mode][update.state]) || LIBRARY_UPDATE_LABELS[update.state] || update.state;
 	//守りで止めたとき・新着を確かめたときは、サーバの文 (N → M 話・HTTP の状態・n 話新着) をそのまま出す
 	if ((update.state === 'gone' || update.state === 'shrunk' || update.state === 'checked') && update.message) text = update.message;
 	else if ((update.state === 'failed' || update.state === 'checkFailed') && update.message) text += ': ' + update.message;
+	// 全話を取り直して、取り直せなかった話があったとき (n 話は前のキャッシュで作った)
+	else if (update.state === 'done' && update.mode === 'refetch' && update.message) text += ' (' + update.message + ')';
 	if (update.state === 'done' && update.reloaded) text += ' (開いている本も新しい版にしました)';
 	else if (update.state === 'done' && libraryStale.has(slot.dataset.bookId)) text += ' (押すと新しい版を開きます)';
 	status.textContent = text;
@@ -1376,9 +1389,15 @@ function bookMenuItems(book)
 		// 掲載元へは取りに行かず、キャッシュから今の設定で作り直す (設定を変えたあとに)。アプリから開いた本棚だけ
 		if (libraryCanCheck) {
 			items.push({label: '作り直す (今の設定で)', disabled: () => libraryBookBusy(book.id), run: current => {
-				startLibraryUpdate(current, false, true)
-					.catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message, regenerate: true}));
+				startLibraryUpdate(current, false, 'regenerate')
+					.catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message, mode: 'regenerate'}));
 			}});
+			// キャッシュにある話も掲載元から取り直す。話の数だけサイトに頼むので、もう一度押して決める
+			items.push({label: '全話を取り直す…', confirm: 'もう一度押すと、全話を掲載元から取り直します',
+				disabled: () => libraryBookBusy(book.id), run: current => {
+					startLibraryUpdate(current, false, 'refetch')
+						.catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message, mode: 'refetch'}));
+				}});
 		}
 		if (libraryCanCheck) {
 			// 結果の文 (n 話新着・新着なし) はサーバが作り、カードの下に出る
@@ -1431,6 +1450,18 @@ function openBookMenu(book, event)
 		button.addEventListener('click', () => {
 			if (item.disabled && item.disabled()) {
 				button.setAttribute('aria-disabled', 'true');
+				return;
+			}
+			// 確かめの要る項目は、1 回目は文を変えるだけ (ブラウザの確認の窓は使わない)
+			if (item.confirm && !button.dataset.armed) {
+				button.dataset.armed = '1';
+				button.textContent = item.confirm;
+				// 文が長くなって画面の右へはみ出したら、内側へ寄せ直す。右端に寄っていると幅が縮んで測れるので、
+				// 左へ置いてから本来の幅を測る (描く前なので、動いて見えない)
+				const left = parseFloat(menu.style.left) || 0;
+				menu.style.left = '4px';
+				const width = menu.getBoundingClientRect().width;
+				menu.style.left = Math.max(4, Math.min(left, window.innerWidth - width - 4)) + 'px';
 				return;
 			}
 			// 開いている間に本棚が読み直され、本が消えた・名前が変わった (id が変わる) ときは何もしない

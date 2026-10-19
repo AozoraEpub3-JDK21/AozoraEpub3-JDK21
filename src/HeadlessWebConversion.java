@@ -206,6 +206,32 @@ public class HeadlessWebConversion
 		}
 	}
 
+	/** 全話を取り直す（refetch の間だけ立てる） */
+	private boolean refetchMode = false;
+
+	/**
+	 * 本棚の本の全話を取り直す（internal #54）。キャッシュにある話も掲載元から取り直して、今の設定で本を作る。
+	 * 取れなかった話は前のキャッシュで作り、その数を知らせる。話数が減っていたら更新と同じく止める
+	 * @param allowFewerEpisodes 話数が減っていても続ける（利用者が「減ったまま更新」を選んだとき）
+	 */
+	public Result refetch(String url, File book, boolean allowFewerEpisodes)
+	{
+		this.refetchMode = true;
+		this.refetchFailures = 0;
+		try {
+			Result r = convert(url, book.getAbsoluteFile().getParentFile(), book, true, true, allowFewerEpisodes);
+			if (r.ok() && this.refetchFailures > 0) {
+				return new Result(true, false, r.epub(), this.refetchFailures + " 話は取り直せませんでした（前のキャッシュで作りました）", r.stop());
+			}
+			return r;
+		} finally {
+			this.refetchMode = false;
+		}
+	}
+
+	/** 結果: 全話を取り直したときの、取り直せなかった話の数 */
+	int refetchFailures = 0;
+
 	/**
 	 * Web 本棚に新しく落とす（internal #11 の案 A）。名前は短い名前（{@link com.github.hmdev.info.ShelfNames}）を台帳に記録して使い、
 	 * 「出力ファイル名に表題利用」の設定に依らない。もう同じ名前の本があれば書かない
@@ -260,6 +286,7 @@ public class HeadlessWebConversion
 				web.guardBook = updateGuard ? expectedOutFile : null;
 				web.checkOnly = this.checkMode;
 				web.offline = this.offlineMode;
+				web.refetchAll = this.refetchMode;
 				web.setUseApi(GuiConversionSettings.flag(this.props, "UseNarouApi"));
 				web.setApiFallbackEnabled(GuiConversionSettings.flag(this.props, "ApiFallback"));
 				//narou.rb 互換の整形。読めなくても GUI と同じく、知らせて既定のまま続ける（#116 のゲート2）
@@ -288,11 +315,13 @@ public class HeadlessWebConversion
 				try { modifiedExpire = Float.parseFloat(GuiConversionSettings.text(this.props, "WebModifiedExpire").trim()); } catch (Exception e) { /* 意図的: GUI と同じく読めなければ 0 */ }
 				//新しく落とす本は「更新分のみ」も見ない（落とし直したときにキャッシュが同じで「更新はありません」になる）
 				//作り直すときも見ない（何も取らないので、いつも「更新はありません」になる）
-				boolean convertUpdated = !this.newBookName && !this.offlineMode && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
+				//全話を取り直すときも見ない（取り直せなかった話があっても、取れた話で本を作る）
+				boolean convertUpdated = !this.newBookName && !this.offlineMode && !this.refetchMode && GuiConversionSettings.flag(this.props, "WebConvertUpdated");
 				boolean modifiedOnly = !fullWork && GuiConversionSettings.flag(this.props, "WebModifiedOnly");
 
 				srcFile = web.convertToAozoraText(url, this.cachePath, interval, modifiedExpire,
 					convertUpdated, modifiedOnly, modifiedOnly && GuiConversionSettings.flag(this.props, "WebModifiedTail"), beforeChapter);
+				this.refetchFailures = web.refetchFailures;
 				if (srcFile == null) {
 					//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
 					if (this.offlineMode && web.offlineMisses > 0) {

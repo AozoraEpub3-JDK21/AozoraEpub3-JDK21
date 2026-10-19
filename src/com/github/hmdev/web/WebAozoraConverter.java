@@ -194,6 +194,14 @@ public class WebAozoraConverter
 	public boolean offline = false;
 	/** 結果: offline のとき、キャッシュに無くて取りに行かなかった目次・話の数 */
 	public int offlineMisses = 0;
+	/**
+	 * 全話を取り直す（internal #54）。キャッシュにある話も、改稿の印が無くても、目次の話をすべて取り直す
+	 * （キャッシュが壊れた・サイトが改稿の日付を変えずに直した、など）。取れなかった話は前のキャッシュで本を作る（refetchFailures）。
+	 * 挿絵は取り直さない。守り（updateGuard）と一緒に立てる（話数が減っていたら止める）
+	 */
+	public boolean refetchAll = false;
+	/** 結果: refetchAll のとき、取り直せずに前のキャッシュで作った話の数 */
+	public int refetchFailures = 0;
 	/** 結果: 確かめたときの、目次の話数・新しい話・改稿された話。確かめていなければ -1 */
 	public int checkedEpisodes = -1;
 	public int checkedNew = -1;
@@ -644,6 +652,7 @@ public class WebAozoraConverter
 		this.pendingLastEpisodes = -1;
 		this.guardStopped = false;
 		this.offlineMisses = 0;
+		this.refetchFailures = 0;
 		// 前の作品の状態をリセット（変換器は変換ごとに新しいので、もとから空。同じ変換器で 2 回呼ぶ呼び手のために残す）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
@@ -1357,6 +1366,8 @@ public class WebAozoraConverter
 						//nullでなく更新無しに含まれなければ再読込
 						//作り直すときは、改稿された話も取り直さない（キャッシュにある話で作る）
 						if (noUpdateUrls != null && !noUpdateUrls.contains(chapterHref) && !this.offline) reload = true;
+						//全話を取り直すときは、キャッシュにある話も取り直す
+						if (this.refetchAll && !this.offline) reload = true;
 						
 						if ((reload || !chapterCacheFile.exists()) && !this.blockedByChallenge) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
@@ -1408,7 +1419,10 @@ public class WebAozoraConverter
 					}
 					chapterIdx++;
 				}
-				if (!failedReloads.isEmpty()) {
+				if (this.refetchAll) this.refetchFailures = failedReloads.size();
+				if (!failedReloads.isEmpty() && this.refetchAll) {
+					LogAppender.println(failedReloads.size() + " 話を取り直せませんでした（前のキャッシュで本を作ります）: " + String.join(" ", failedReloads));
+				} else if (!failedReloads.isEmpty()) {
 					//改稿・追加された話を取り損ねた。前のキャッシュがあればそれで本を作る。次の変換でもう一度取りに行く
 					LogAppender.println("改稿・追加された " + failedReloads.size() + " 話を取得できませんでした（次の変換でもう一度取りに行きます）: " + String.join(" ", failedReloads));
 				}

@@ -91,6 +91,25 @@ public class HeadlessBookUpdater implements BookUpdater
 		}
 	}
 
+	/** 全話を取り直す（internal #54）。宛先の確かめ・鍵・本の有無は更新と同じ */
+	@Override
+	public Result refetch(String sourceUrl, Path epubFile, boolean allowFewerEpisodes) throws Exception
+	{
+		if (isLocalOrPrivate(sourceUrl) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
+			return new Result(false, false, "手元・内部の宛先は取りに行きません: " + sourceUrl);
+		}
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
+		try {
+			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません（名前を変えたか、消しました）");
+			Properties props = this.settings.get();
+			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl))
+				.refetch(sourceUrl, epubFile.toFile(), allowFewerEpisodes);
+			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
+		}
+	}
+
 	/**
 	 * Web 本棚に新しく落とす。キャッシュは Web 本棚の .aozora（本と記録を一緒に写せる。設定のキャッシュの場所に依らない）
 	 */

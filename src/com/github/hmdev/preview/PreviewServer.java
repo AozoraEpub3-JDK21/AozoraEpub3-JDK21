@@ -170,6 +170,10 @@ public class PreviewServer implements AutoCloseable
 	static final int MAX_JOBS = 64;
 	private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
 
+	static final String JOB_UPDATE = "update";
+	static final String JOB_REGENERATE = "regenerate";
+	static final String JOB_REFETCH = "refetch";
+
 	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed、守りで止めたら gone・shrunk */
 	static final class UpdateJob
 	{
@@ -180,8 +184,8 @@ public class PreviewServer implements AutoCloseable
 		volatile String message = "";
 		/** 「減ったまま更新」で頼まれた仕事 */
 		final boolean allowFewer;
-		/** 作り直す仕事（internal #54。取りに行かずにキャッシュから本を書き直す） */
-		final boolean regenerate;
+		/** 仕事の種類: update（続きを取る）・regenerate（取りに行かずにキャッシュから作り直す）・refetch（全話を取り直す）。internal #54 */
+		final String kind;
 		/** 新着を確かめた結果（目次の話数・新しい話・改稿された話）。確かめる仕事でなければ -1 */
 		volatile int episodes = -1;
 		volatile int newEpisodes = -1;
@@ -189,15 +193,15 @@ public class PreviewServer implements AutoCloseable
 
 		UpdateJob(String id, String bookId, boolean allowFewer)
 		{
-			this(id, bookId, allowFewer, false);
+			this(id, bookId, allowFewer, JOB_UPDATE);
 		}
 
-		UpdateJob(String id, String bookId, boolean allowFewer, boolean regenerate)
+		UpdateJob(String id, String bookId, boolean allowFewer, String kind)
 		{
 			this.id = id;
 			this.bookId = bookId;
 			this.allowFewer = allowFewer;
-			this.regenerate = regenerate;
+			this.kind = kind;
 		}
 
 		boolean active()
@@ -601,13 +605,19 @@ public class PreviewServer implements AutoCloseable
 				&& rest.length() > "api/book/".length() + "/update".length()) {
 				//POST なので、下の read 判定より前に処理する（reveal と同じ）
 				serveUpdate(exchange, method,
-					rest.substring("api/book/".length(), rest.length() - "/update".length()), false);
+					rest.substring("api/book/".length(), rest.length() - "/update".length()), JOB_UPDATE);
 				return;
 			}
 			if (rest.startsWith("api/book/") && rest.endsWith("/regenerate")
 				&& rest.length() > "api/book/".length() + "/regenerate".length()) {
 				serveUpdate(exchange, method,
-					rest.substring("api/book/".length(), rest.length() - "/regenerate".length()), true);
+					rest.substring("api/book/".length(), rest.length() - "/regenerate".length()), JOB_REGENERATE);
+				return;
+			}
+			if (rest.startsWith("api/book/") && rest.endsWith("/refetch")
+				&& rest.length() > "api/book/".length() + "/refetch".length()) {
+				serveUpdate(exchange, method,
+					rest.substring("api/book/".length(), rest.length() - "/refetch".length()), JOB_REFETCH);
 				return;
 			}
 			if (!read) {
@@ -693,9 +703,9 @@ public class PreviewServer implements AutoCloseable
 	 */
 	/**
 	 * 本棚の 1 冊を、掲載元から取り直して上書きする仕事を列に積む（internal #11）。202 と仕事の ID を返す。
-	 * 同じ本の仕事がまだ終わっていなければ、その仕事を返す。regenerate なら、取りに行かずにキャッシュから作り直す仕事（internal #54）
+	 * 同じ本の仕事がまだ終わっていなければ、その仕事を返す。kind は仕事の種類（JOB_*。作り直す・全話を取り直すは internal #54）
 	 */
-	private void serveUpdate(HttpExchange exchange, String method, String bookId, boolean regenerate) throws IOException
+	private void serveUpdate(HttpExchange exchange, String method, String bookId, String kind) throws IOException
 	{
 		if (!"POST".equals(method)) {
 			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
@@ -712,18 +722,19 @@ public class PreviewServer implements AutoCloseable
 			return;
 		}
 		if (entry.source() == null) {
-			respondJsonStatus(exchange, 400, errorJson(regenerate ? "Web から取った本ではないので、作り直せません"
+			respondJsonStatus(exchange, 400, errorJson(JOB_REGENERATE.equals(kind) ? "Web から取った本ではないので、作り直せません"
+				: JOB_REFETCH.equals(kind) ? "Web から取った本ではないので、取り直せません"
 				: "Web から取った本ではないので、続きを取れません"));
 			return;
 		}
 		//利用者が「減ったまま更新」を選んだ（話数が減って止めた本を、それでも取り直す）。作り直すときは使わない
-		boolean allowFewer = !regenerate && hasQueryFlag(exchange, "allowFewer=1");
+		boolean allowFewer = !JOB_REGENERATE.equals(kind) && hasQueryFlag(exchange, "allowFewer=1");
 		UpdateJob job;
 		synchronized (this.jobs) {
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(bookId) && j.active()).findFirst().orElse(null);
 			//「減ったまま更新」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
-			//作り直すと続きを取るも、互いにまとめない（頼んだのと違う仕事の結果を返さない）
-			if (job != null && (job.allowFewer != allowFewer || job.regenerate != regenerate)) {
+			//種類の違う仕事（続きを取る・作り直す・全話を取り直す）も、互いにまとめない（頼んだのと違う仕事の結果を返さない）
+			if (job != null && (job.allowFewer != allowFewer || !job.kind.equals(kind))) {
 				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから選び直してください"));
 				return;
 			}
@@ -734,7 +745,7 @@ public class PreviewServer implements AutoCloseable
 					respondJsonStatus(exchange, 503, errorJson("更新の順番待ちがいっぱいです。しばらくしてから試してください"));
 					return;
 				}
-				job = new UpdateJob(newJobId(), bookId, allowFewer, regenerate);
+				job = new UpdateJob(newJobId(), bookId, allowFewer, kind);
 				this.jobs.put(job.id, job);
 				UpdateJob submitted = job;
 				this.updateExecutor.submit(() -> runUpdate(submitted, updater, entry, allowFewer));
@@ -747,7 +758,8 @@ public class PreviewServer implements AutoCloseable
 	{
 		job.state = "running";
 		try {
-			BookUpdater.Result result = job.regenerate ? updater.regenerate(entry.source(), entry.file())
+			BookUpdater.Result result = JOB_REGENERATE.equals(job.kind) ? updater.regenerate(entry.source(), entry.file())
+				: JOB_REFETCH.equals(job.kind) ? updater.refetch(entry.source(), entry.file(), allowFewer)
 				: updater.update(entry.source(), entry.file(), allowFewer);
 			job.message = result.message() == null ? "" : result.message();
 			if (result.ok()) {
@@ -760,7 +772,7 @@ public class PreviewServer implements AutoCloseable
 				job.state = result.noUpdate() ? "noUpdate" : "failed";
 			}
 		} catch (UnsupportedOperationException e) {
-			job.message = "この本棚からは作り直せません";
+			job.message = JOB_REFETCH.equals(job.kind) ? "この本棚からは取り直せません" : "この本棚からは作り直せません";
 			job.state = "failed";
 		} catch (Throwable e) {
 			//Error（メモリ不足など）でも「実行中」のまま残さない。残ると、同じ本の仕事として返し続けて二度と更新できない（PR #118 のゲート2）
