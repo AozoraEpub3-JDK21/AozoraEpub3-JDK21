@@ -556,7 +556,7 @@ public class HeadlessWebConversionTest {
 		assertTrue(page2.delete());
 		HeadlessWebConversion.Result missing = conversion(guiDefaults(), basePath).regenerate("http://" + fqdn + "/novel/", book);
 		assertFalse(missing.ok());
-		assertTrue(missing.message(), missing.message().contains("キャッシュに無い目次・話"));
+		assertTrue(missing.message(), missing.message().contains("キャッシュに無い（または本文の無い）目次・話"));
 		assertEquals("欠けていても取りに行かない", before, requests.get());
 		org.junit.Assert.assertArrayEquals("本は前のまま", bookBefore, Files.readAllBytes(book.toPath()));
 	}

@@ -243,11 +243,21 @@ public class HeadlessBookUpdaterTest {
 		byte[] bookBefore = Files.readAllBytes(first.epub().toPath());
 		File ep2 = new File(root, "cache/" + fqdn.replace(':', '_') + "/ep/2/index.html");
 		assertTrue("2 話目のキャッシュ: " + ep2, ep2.isFile());
+		//2 話目のキャッシュが本文の無いページ（200 で返ったエラーページ）になった: 取り直せないので、同じく何も書かずに止める（codex P1）
+		byte[] ep2Before = Files.readAllBytes(ep2.toPath());
+		Files.write(ep2.toPath(), "<html><body><h2>メンテナンス中</h2></body></html>".getBytes(StandardCharsets.UTF_8));
+		BookUpdater.Result bodyless = updater.regenerate(base + "/novel/", first.epub().toPath());
+		assertFalse(bodyless.message(), bodyless.ok());
+		assertTrue(bodyless.message(), bodyless.message().contains("本文の無い"));
+		org.junit.Assert.assertEquals("本文が無くても取りに行かない", before, requests.get());
+		assertArrayEquals("本は前のまま", bookBefore, Files.readAllBytes(first.epub().toPath()));
+		assertArrayEquals("txt も前のまま", txtBefore, Files.readAllBytes(txts[0].toPath()));
+		Files.write(ep2.toPath(), ep2Before);
 		assertTrue(ep2.delete());
 		props.setProperty("Vertical", "1");
 		BookUpdater.Result missing = updater.regenerate(base + "/novel/", first.epub().toPath());
 		assertFalse(missing.ok());
-		assertTrue(missing.message(), missing.message().contains("キャッシュに無い目次・話"));
+		assertTrue(missing.message(), missing.message().contains("キャッシュに無い（または本文の無い）目次・話"));
 		org.junit.Assert.assertEquals("欠けていても取りに行かない", before, requests.get());
 		assertArrayEquals("本は前のまま", bookBefore, Files.readAllBytes(first.epub().toPath()));
 		assertArrayEquals("txt も前のまま", txtBefore, Files.readAllBytes(txts[0].toPath()));

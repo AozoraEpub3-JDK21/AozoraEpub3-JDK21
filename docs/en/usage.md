@@ -276,7 +276,7 @@ Right-clicking a book card (Shift+F10 from the keyboard) shows a menu for that b
 and opening the work's page (plus checking only that book for new episodes, in a library opened from the GUI
 or the CLI, like "新着を確かめる"). In such a library the menu also has "作り直す (今の設定で)" (regenerate): it
 rewrites the book with the current settings from the cached table of contents and episodes, without contacting the site
-(for after you change settings). If an episode is missing from the cache, the book is left as it is; fetch with ⟳ first.
+(for after you change settings). If an episode is missing from the cache, or its cached page has no text (an error page, say), the book is left as it is; fetch with ⟳ first.
 "ランキング" in the header lists Shōsetsuka ni Narō and Kakuyomu works by period (daily to all-time) and genre;
 "落とす" on a card fetches the work the same way as + ("本棚にあります" marks works already on the shelf).
 Narō's order follows current points, so it can differ slightly from the site's ranking pages. Kakuyomu shows

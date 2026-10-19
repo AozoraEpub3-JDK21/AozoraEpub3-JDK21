@@ -296,7 +296,7 @@ public class HeadlessWebConversion
 				if (srcFile == null) {
 					//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
 					if (this.offlineMode && web.offlineMisses > 0) {
-						return new Result(false, false, null, "キャッシュに無い目次・話が " + web.offlineMisses + " 件あります。⟳ で取ってから作り直してください");
+						return new Result(false, false, null, "キャッシュに無い（または本文の無い）目次・話が " + web.offlineMisses + " 件あります。⟳ で取ってから作り直してください");
 					}
 					if (updateGuard) {
 						int status = web.listFailure;

@@ -188,7 +188,7 @@ public class WebAozoraConverter
 	public boolean checkOnly = false;
 	/**
 	 * 作り直す（internal #54）。サイトへは取りに行かず、キャッシュの目次と話だけで、今の設定で txt を作り直す。
-	 * キャッシュに無い目次・話があれば、何も書かずに止める（offlineMisses）。更新情報（update.txt）は書かない。
+	 * キャッシュに無い目次・話、本文の無い話のキャッシュがあれば、何も書かずに止める（offlineMisses）。更新情報（update.txt）は書かない。
 	 * 守り（updateGuard）と一緒に立てる（止めたときに txt を前に戻す・話数が減っていたら止める）
 	 */
 	public boolean offline = false;
@@ -1532,6 +1532,14 @@ public class WebAozoraConverter
 						//止められた後、本文の無いキャッシュ（エラーページなど）は話として数えない
 						Elements articleCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
 						boolean hasArticle = (articleCheck != null && articleCheck.size() > 0) || !this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE);
+						//作り直すときは取り直せないので、本文の無いキャッシュは欠けとして数える（下の止めで、話の欠けた本で上書きしない）
+						if (!hasArticle && this.offline) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュに本文が無いため、作り直しをやめます: "+chapterHref);
+							this.offlineMisses++;
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
 						if (!hasArticle && this.blockedByChallenge) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 本文が無く、取得もできないためスキップします: "+chapterHref);
 							failedHrefs.add(chapterHref);
@@ -1591,10 +1599,10 @@ public class WebAozoraConverter
 					LogAppender.println(buf+"話を変換します");
 				}
 			}
-			//作り直すときに、本文のループで取りに行こうとした話があったら（先の数え上げで止まるので、いまは届かない最後の止め）、
+			//作り直すときに、本文のループで欠けを見つけたら（本文の無いキャッシュ。キャッシュに無い話は先の数え上げで止まる）、
 			//書きかけの txt を前に戻して止める（話の欠けた本で上書きしない）
 			if (this.offline && this.offlineMisses > 0) {
-				LogAppender.println("キャッシュに無い話が " + this.offlineMisses + " 件あるので、作り直しをやめました");
+				LogAppender.println("キャッシュに無い（または本文の無い）話が " + this.offlineMisses + " 件あるので、作り直しをやめました");
 				this.pendingEpisodes = -1;
 				this.pendingLastEpisodes = -1;
 				this.guardStopped = true;
