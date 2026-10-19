@@ -203,6 +203,9 @@ public class WebAozoraConverter
 	/** refetchAll のとき、目次を読んだ周で取り直せなかった話 */
 	private final HashSet<String> refetchFailedHrefs = new HashSet<>();
 
+	/** 結果: refetchAll のとき、取り直せず、本文のあるキャッシュも無かった話の数。1 話でもあれば本は書かずに止める */
+	public int refetchUnusable = 0;
+
 	/** 結果: refetchAll のとき、取り直せなかった話の数（前のキャッシュがあれば、それで作った）。書き出しの周で取れた話は数えない */
 	public int refetchFailures()
 	{
@@ -679,6 +682,7 @@ public class WebAozoraConverter
 		this.pendingLastEpisodes = -1;
 		this.guardStopped = false;
 		this.offlineMisses = 0;
+		this.refetchUnusable = 0;
 		this.refetchFailedHrefs.clear();
 		// 前の作品の状態をリセット（変換器は変換ごとに新しいので、もとから空。同じ変換器で 2 回呼ぶ呼び手のために残す）
 		this.nextDataEpisodeChapterMap = null;
@@ -1560,6 +1564,8 @@ public class WebAozoraConverter
 							} catch (Exception e) {
 								logger.warn("章の再ダウンロードに失敗、スキップ: {}", chapterHref, e);
 								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
+								//全話を取り直すときは、話の抜けた本で上書きしない（下で止める）
+								if (this.refetchAll) this.refetchUnusable++;
 								failedHrefs.add(chapterHref);
 								chapterIdx++;
 								continue;
@@ -1594,6 +1600,14 @@ public class WebAozoraConverter
 						if (!hasArticle && this.offline) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュに本文が無いため、作り直しをやめます: "+chapterHref);
 							this.offlineMisses++;
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
+						//全話を取り直すときも、取り直せず、キャッシュにも本文が無い話があれば、話の抜けた本で上書きしない（下で止める）
+						if (!hasArticle && this.refetchAll) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 取り直せず、キャッシュにも本文が無いため、本は前のままにします: "+chapterHref);
+							this.refetchUnusable++;
 							failedHrefs.add(chapterHref);
 							chapterIdx++;
 							continue;
@@ -1665,6 +1679,14 @@ public class WebAozoraConverter
 				this.pendingLastEpisodes = -1;
 				this.guardStopped = true;
 				return null;
+			}
+			//全話を取り直して、本文のある版がどこにも無い話が残ったら、txt を前に戻して止める（話の欠けた本で上書きしない）
+			if (this.refetchAll && this.refetchUnusable > 0) {
+				LogAppender.println("取り直せず、キャッシュにも本文の無い話が " + this.refetchUnusable + " 話あるので、本は前のままにします");
+				this.pendingEpisodes = -1;
+				this.pendingLastEpisodes = -1;
+				this.guardStopped = true;
+				return blockedUpdateCheck(true);
 			}
 			//止められて 1 話も取れなかったら、本文の無い本を作らずに失敗にする
 			if (this.blockedByChallenge && selectedChapters > 0 && writtenChapters == 0) {

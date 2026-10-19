@@ -279,7 +279,7 @@ rewrites the book with the current settings from the cached table of contents an
 (for after you change settings). If an episode is missing from the cache, or its cached page has no text (an error page, say), the book is left as it is; fetch with ⟳ first.
 "全話を取り直す…" (refetch all) fetches every episode from the site again, cached or not, and rebuilds the book
 (click it a second time to start; illustrations are not refetched). Episodes that cannot be fetched are taken from the
-previous cache and counted on the card; if the episode count has dropped, it stops the same way as ⟳.
+previous cache and counted on the card (if the previous cache has no text for one either, the book is left as it is); if the episode count has dropped, it stops the same way as ⟳.
 "ランキング" in the header lists Shōsetsuka ni Narō and Kakuyomu works by period (daily to all-time) and genre;
 "落とす" on a card fetches the work the same way as + ("本棚にあります" marks works already on the shelf).
 Narō's order follows current points, so it can differ slightly from the site's ranking pages. Kakuyomu shows

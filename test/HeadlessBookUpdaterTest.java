@@ -385,10 +385,18 @@ public class HeadlessBookUpdaterTest {
 		text = textOf(first.epub());
 		assertTrue(text, text.contains("乙直した本文"));
 		assertFalse(text.contains("メンテナンス"));
-		//キャッシュがもう壊れていて（本文の無いページ）、掲載元もまだ本文の無いページを返す: 取れたと数えない
+		//キャッシュがもう壊れていて（本文の無いページ）、掲載元もまだ本文の無いページを返す: 取れたと数えず、
+		//その話の抜けた本で上書きしない。本も txt も前のまま（codex P1）
 		Files.write(ep2.toPath(), "<html><body><h2>メンテナンス中</h2></body></html>".getBytes(StandardCharsets.UTF_8));
+		File workDir = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel");
+		java.io.FileFilter bookTxt = f -> f.getName().endsWith(".txt") && !f.getName().equals("update.txt") && !f.getName().equals("failed_downloads.txt");
+		byte[] bookBeforeBroken = Files.readAllBytes(first.epub().toPath());
+		byte[] txtBeforeBroken = Files.readAllBytes(workDir.listFiles(bookTxt)[0].toPath());
 		BookUpdater.Result stillBroken = updater.refetch(base + "/novel/", first.epub().toPath(), false);
-		assertTrue(stillBroken.message(), stillBroken.message().contains("1 話は取り直せませんでした"));
+		assertFalse(stillBroken.message(), stillBroken.ok());
+		assertTrue(stillBroken.message(), stillBroken.message().contains("1 話は取り直せず、本文のあるキャッシュも無い"));
+		assertArrayEquals("本は前のまま", bookBeforeBroken, Files.readAllBytes(first.epub().toPath()));
+		assertArrayEquals("txt も前のまま", txtBeforeBroken, Files.readAllBytes(workDir.listFiles(bookTxt)[0].toPath()));
 		Files.write(ep2.toPath(), ep2Before);
 		maintenance.clear();
 
@@ -403,10 +411,12 @@ public class HeadlessBookUpdaterTest {
 		//キャッシュに無い話を、掲載元が 200 で本文の無いページで返す: 置かず、取れたと数えない（書き出しの周の取り直しでも）（codex P1）
 		assertTrue(ep2.delete());
 		maintenance.add("/ep/2/");
+		byte[] bookBeforeGate = Files.readAllBytes(first.epub().toPath());
 		BookUpdater.Result uncachedGate = updater.refetch(base + "/novel/", first.epub().toPath(), false);
-		assertTrue(uncachedGate.message(), uncachedGate.message().contains("1 話は取り直せませんでした"));
+		assertFalse(uncachedGate.message(), uncachedGate.ok());
+		assertTrue(uncachedGate.message(), uncachedGate.message().contains("1 話は取り直せず、本文のあるキャッシュも無い"));
 		assertFalse("本文の無いページをキャッシュに置かない", ep2.exists());
-		assertFalse(textOf(first.epub()).contains("メンテナンス"));
+		assertArrayEquals("話の抜けた本で上書きしない", bookBeforeGate, Files.readAllBytes(first.epub().toPath()));
 		maintenance.clear();
 		BookUpdater.Result refilled = updater.refetch(base + "/novel/", first.epub().toPath(), false);
 		assertTrue(refilled.message(), refilled.ok());

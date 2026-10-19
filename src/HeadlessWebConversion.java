@@ -327,6 +327,9 @@ public class HeadlessWebConversion
 				this.refetchFailures = web.refetchFailures();
 				if (srcFile == null) {
 					//本棚のカードの 2 行に収まる長さにする。どれも本は書き換えていない
+					if (this.refetchMode && web.refetchUnusable > 0) {
+						return new Result(false, false, null, web.refetchUnusable + " 話は取り直せず、本文のあるキャッシュも無いので、本は前のままです");
+					}
 					if (this.refetchMode && web.refetchFailures() > 0) {
 						return new Result(false, false, null, "掲載元から 1 話も取り直せませんでした（本は前のままです）");
 					}
