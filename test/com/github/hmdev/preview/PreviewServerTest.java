@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -1426,6 +1427,61 @@ public class PreviewServerTest
 		String failed = waitForJob(post(base() + "api/book/" + ids[0] + "/refetch").body());
 		assertTrue(failed, failed.contains("\"state\":\"failed\""));
 		assertTrue(failed, failed.contains("取り直せません"));
+	}
+
+	/**
+	 * 本棚から消す（internal #54）: 本をゴミ箱へ移して本棚から外す。その本の仕事がまだなら断る。
+	 * ゴミ箱へ移せなければ消さずにそう言う。もう無い本は外すだけ
+	 */
+	@Test
+	public void trashingMovesTheBookAndTakesItOffTheShelf() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		Path shelf = temp.getRoot().toPath().resolve("upd");
+		java.util.List<String> trashed = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.concurrent.atomic.AtomicReference<IOException> refuse = new java.util.concurrent.atomic.AtomicReference<>();
+		this.server.setTrasher(file -> {
+			if (refuse.get() != null) throw refuse.get();
+			trashed.add(file.getFileName().toString());
+			Files.delete(file);
+		});
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater((url, file) -> {
+			release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+			return new BookUpdater.Result(true, false, "ok");
+		});
+		assertEquals("GET では消さない", 405, get(base() + "api/book/" + ids[1] + "/trash").statusCode());
+		assertEquals(404, post(base() + "api/book/nosuchbook/trash").statusCode());
+
+		//続きを取っている最中の本は消さない
+		String running = post(base() + "api/book/" + ids[0] + "/update").body();
+		HttpResponse<String> busy = post(base() + "api/book/" + ids[0] + "/trash");
+		assertEquals(busy.body(), 409, busy.statusCode());
+		assertTrue(Files.isRegularFile(shelf.resolve("web.epub")));
+		release.countDown();
+		waitForJob(running);
+
+		//ゴミ箱へ移せない環境では、消さずにそう言う
+		refuse.set(new IOException("この環境ではゴミ箱へ移せないので、消しませんでした"));
+		HttpResponse<String> refused = post(base() + "api/book/" + ids[1] + "/trash");
+		assertEquals(500, refused.statusCode());
+		assertTrue(refused.body(), refused.body().contains("ゴミ箱へ移せない"));
+		assertTrue(get(base() + "api/library").body().contains("local.epub"));
+		refuse.set(null);
+
+		//Web から取っていない本も消せる。本棚からも外れる
+		assertEquals(200, post(base() + "api/book/" + ids[1] + "/trash").statusCode());
+		assertEquals(List.of("local.epub"), trashed);
+		assertFalse(Files.exists(shelf.resolve("local.epub")));
+		String library = get(base() + "api/library").body();
+		assertFalse(library, library.contains("local.epub"));
+		assertTrue(library, library.contains("web.epub"));
+
+		//もう無い本は、ゴミ箱へは移さず本棚から外すだけ
+		Files.delete(shelf.resolve("web.epub"));
+		assertEquals(200, post(base() + "api/book/" + ids[0] + "/trash").statusCode());
+		assertEquals(List.of("local.epub"), trashed);
+		assertFalse(get(base() + "api/library").body().contains("web.epub"));
 	}
 
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */

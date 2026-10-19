@@ -1420,7 +1420,28 @@ function bookMenuItems(book)
 			window.open(current.source, '_blank', 'noopener');
 		}});
 	}
+	// 本を OS のゴミ箱へ移す (ゴミ箱から戻せる)。キャッシュと台帳は残る
+	items.push(null);
+	items.push({label: '本棚から消す…', confirm: 'もう一度押すと、この本をゴミ箱へ移します',
+		disabled: () => libraryBookBusy(book.id), run: current => {
+			trashBook(current).catch(err => showLibraryStatus('消せませんでした: ' + err.message));
+		}});
 	return items;
+}
+
+/** 本をゴミ箱へ移し、本棚を読み直す (internal #54) */
+async function trashBook(book)
+{
+	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/trash', {method: 'POST', cache: 'no-store'});
+	if (!response.ok) {
+		let body = null;
+		try { body = await response.json(); } catch (e) { /* 本文の無い応答 */ }
+		throw new Error((body && body.error) ? body.error : 'HTTP ' + response.status);
+	}
+	libraryUpdates.delete(book.id);
+	await loadLibrary(true);
+	// 冊数と「さらに表示」は残し、その前に書く
+	el.libraryStatus.prepend('「' + (book.title || book.fileName) + '」をゴミ箱へ移しました。');
 }
 
 /**

@@ -84,6 +84,30 @@ public class PreviewServer implements AutoCloseable
 		void reveal(Path file) throws IOException;
 	}
 
+	/** 本をゴミ箱へ移す処理。テストが実際にゴミ箱へ移さないよう差し替えられるようにする */
+	interface Trasher
+	{
+		void moveToTrash(Path file) throws IOException;
+	}
+
+	/**
+	 * OS のゴミ箱へ移す（internal #54）。完全には消さない（ゴミ箱から戻せる）。ゴミ箱が使えない環境（画面の無い環境など）では
+	 * 消さずに投げる
+	 */
+	static void moveToTrash(Path file) throws IOException
+	{
+		java.awt.Desktop desktop;
+		try {
+			desktop = java.awt.Desktop.isDesktopSupported() ? java.awt.Desktop.getDesktop() : null;
+		} catch (RuntimeException e) {
+			desktop = null;
+		}
+		if (desktop == null || !desktop.isSupported(java.awt.Desktop.Action.MOVE_TO_TRASH)) {
+			throw new IOException("この環境ではゴミ箱へ移せないので、消しませんでした");
+		}
+		if (!desktop.moveToTrash(file.toFile())) throw new IOException("ゴミ箱へ移せませんでした");
+	}
+
 	private final PreviewSession session;
 	private final HttpServer server;
 	private final ExecutorService executor;
@@ -93,6 +117,7 @@ public class PreviewServer implements AutoCloseable
 	private final LibraryCovers covers = new LibraryCovers();
 	/** テストスレッドが書き HTTP スレッドが読むので volatile */
 	private volatile Revealer revealer = FileRevealer::reveal;
+	private volatile Trasher trasher = PreviewServer::moveToTrash;
 	/** URL に載せるホスト表記。IPv6 なら角括弧付き */
 	private final String host;
 	/**
@@ -574,6 +599,12 @@ public class PreviewServer implements AutoCloseable
 					rest.substring("api/book/".length(), rest.length() - "/reveal".length()));
 				return;
 			}
+			if (rest.startsWith("api/book/") && rest.endsWith("/trash")
+				&& rest.length() > "api/book/".length() + "/trash".length()) {
+				serveTrash(exchange, method,
+					rest.substring("api/book/".length(), rest.length() - "/trash".length()));
+				return;
+			}
 			if (rest.equals("api/webshelf")) {
 				serveWebShelf(exchange, method);
 				return;
@@ -692,6 +723,52 @@ public class PreviewServer implements AutoCloseable
 	void setRevealer(Revealer revealer)
 	{
 		this.revealer = revealer;
+	}
+
+	/** テスト用。実際にゴミ箱へ移さず呼び出しだけ記録できるようにする */
+	void setTrasher(Trasher trasher)
+	{
+		this.trasher = trasher;
+	}
+
+	/**
+	 * /api/book/{bookId}/trash — 本棚の本を OS のゴミ箱へ移し、本棚から外す (POST。internal #54)。
+	 * 消す対象はリクエストから受け取らず、本棚に載っている本の記録から引く。キャッシュと台帳は残す
+	 * （同じ作品を ＋ で落とし直せる）。その本の仕事（更新・名前を変える・確かめる）がまだなら断る
+	 */
+	private void serveTrash(HttpExchange exchange, String method, String bookId) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		if (entry == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		//仕事の列を握ったまま移す（確かめてから移すまでの間に、その本の仕事が積まれない）
+		synchronized (this.jobs) {
+			if (this.jobs.values().stream().anyMatch(j -> (j.bookId.equals(bookId) || j.bookId.equals("check:" + bookId)) && j.active())) {
+				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから消してください"));
+				return;
+			}
+			if (!Files.isRegularFile(entry.file())) {
+				//もう無い本は、本棚から外すだけ
+				this.session.removeLibraryEntry(bookId);
+				respondJsonStatus(exchange, 200, "{\"ok\":true}");
+				return;
+			}
+			try {
+				this.trasher.moveToTrash(entry.file());
+			} catch (IOException | RuntimeException e) {
+				logger.warn("本をゴミ箱へ移せませんでした: {}", entry.file(), e);
+				respondJsonStatus(exchange, 500, errorJson(e.getMessage() == null ? "ゴミ箱へ移せませんでした" : e.getMessage()));
+				return;
+			}
+			this.session.removeLibraryEntry(bookId);
+		}
+		respondJsonStatus(exchange, 200, "{\"ok\":true}");
 	}
 
 	/**
