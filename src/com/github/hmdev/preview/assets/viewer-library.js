@@ -641,6 +641,7 @@ async function reloadOpenBook(bookId)
 function setLibraryUpdate(bookId, update)
 {
 	libraryUpdates.set(bookId, update);
+	if (bookMenu && bookMenu.bookId === bookId) refreshBookMenu();
 	const slot = el.libraryGrid.querySelector('.book-slot[data-book-id="' + CSS.escape(bookId) + '"]');
 	if (slot) paintLibraryUpdate(slot, update);
 }
@@ -1396,6 +1397,7 @@ function openBookMenu(book, event)
 	menu.className = 'book-menu';
 	menu.setAttribute('role', 'menu');
 	menu.setAttribute('aria-label', (book.title || book.fileName) + ' の操作');
+	const entries = [];
 	for (const item of bookMenuItems(book)) {
 		if (!item) {
 			const line = document.createElement('div');
@@ -1408,7 +1410,7 @@ function openBookMenu(book, event)
 		button.type = 'button';
 		button.setAttribute('role', 'menuitem');
 		button.textContent = item.label;
-		if (item.disabled && item.disabled()) button.setAttribute('aria-disabled', 'true');
+		entries.push({button: button, item: item});
 		button.addEventListener('click', () => {
 			if (item.disabled && item.disabled()) {
 				button.setAttribute('aria-disabled', 'true');
@@ -1425,6 +1427,8 @@ function openBookMenu(book, event)
 		});
 		menu.appendChild(button);
 	}
+	bookMenu = {menu: menu, bookId: book.id, entries: entries};
+	refreshBookMenu();
 	menu.addEventListener('keydown', onBookMenuKeyDown);
 	// メニューの上ではブラウザのメニューを出さない (Windows のメニューキーは keyup で contextmenu を起こし、
 	// そのときフォーカスはこのメニューにある)
@@ -1449,7 +1453,6 @@ function openBookMenu(book, event)
 	menu.style.left = x + 'px';
 	menu.style.top = y + 'px';
 
-	bookMenu = {menu: menu, bookId: book.id};
 	const first = menu.querySelector('[role="menuitem"]:not([aria-disabled="true"])');
 	if (first) first.focus();
 	// 開いた右クリックそのものの mousedown で閉じないよう、次の周から外の操作を見る
@@ -1460,6 +1463,19 @@ function openBookMenu(book, event)
 		window.addEventListener('resize', onBookMenuDismiss);
 		el.libraryGrid.addEventListener('scroll', onBookMenuDismiss);
 	}, 0);
+}
+
+/**
+ * 押せない項目の印を、いまの状態に合わせ直す。開いている間に、その本の仕事・新着の確かめが始まる・終わる
+ * (印が古いままだと、押せるのに淡いまま・押せないと読み上げられる)
+ */
+function refreshBookMenu()
+{
+	if (!bookMenu) return;
+	for (const {button, item} of bookMenu.entries) {
+		if (item.disabled && item.disabled()) button.setAttribute('aria-disabled', 'true');
+		else button.removeAttribute('aria-disabled');
+	}
 }
 
 /**
@@ -1549,6 +1565,8 @@ function updateCheckAllButton()
 	const books = (state.library && state.library.books) || [];
 	el.libraryCheckAll.hidden = !libraryCanCheck || !books.some(b => b.source);
 	el.libraryCheckAll.disabled = libraryChecking || librarySingleChecks > 0;
+	// 「この本の新着を確かめる」は、全体を確かめている間は押せない
+	refreshBookMenu();
 }
 
 /** メニューから 1 冊だけ確かめる */
