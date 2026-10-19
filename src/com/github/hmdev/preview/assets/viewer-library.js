@@ -336,6 +336,7 @@ function renderLibraryKeepingView()
 		const target = again ? again.querySelector(focusUpdate ? '.book-update' : '.book-card') : null;
 		if (target) target.focus({preventScroll: true});
 	}
+	closeBookMenuIfCardGone();
 }
 
 function clearLibraryGrid()
@@ -343,6 +344,7 @@ function clearLibraryGrid()
 	libraryVisible = [];
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
+	closeBookMenuIfCardGone();
 }
 
 /** 棚の選択・絞り込み・並べ替えを適用した本の配列を返す */
@@ -397,6 +399,7 @@ function renderLibrary()
 	libraryShown = 0;
 	el.libraryGrid.textContent = '';
 	appendLibraryCards();
+	closeBookMenuIfCardGone();
 }
 
 /** 続きのカードを描き足す (既定は 1 ページぶん)。全部描き切るまで「さらに表示」を出す */
@@ -1367,6 +1370,7 @@ function bookMenuItems(book)
 		items.push({label: '名前を変える…', keepFocus: true, run: current => {
 			const slot = librarySlotOf(current.id);
 			if (slot) openRenameForm(slot, current);
+			else showLibraryStatus('この本のカードが一覧に出ていません (絞り込みを解いてください)');
 		}});
 		items.push(null);
 	}
@@ -1476,6 +1480,15 @@ function closeBookMenu(returnFocus)
 		const card = slot && slot.querySelector('.book-card');
 		if (card) card.focus({preventScroll: true});
 	}
+}
+
+/**
+ * 描き直しでその本のカードが一覧から外れたら (絞り込み・並べ替え・裏の仕事の後の読み直し)、メニューも閉じる。
+ * 残すと、カードの無い本のメニューが浮いたままになり、「名前を変える…」が黙って何もしない
+ */
+function closeBookMenuIfCardGone()
+{
+	if (bookMenu && !librarySlotOf(bookMenu.bookId)) closeBookMenu(false);
 }
 
 function onBookMenuOutside(event)
