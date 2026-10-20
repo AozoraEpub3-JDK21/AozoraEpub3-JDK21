@@ -43,8 +43,8 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21â€
 
 ## What's New in v1.7.5-jdk21
 
-- **A right-click menu on the shelf**: right-click a book card (Shift+F10) to open its folder, regenerate it with the current settings, refetch every episode, or move it to the OS trash
-- **Updates no longer lose text**: when the site returns a page with no text (a maintenance notice, say) during an update, the episodes fetched before are kept
+- **A right-click menu on the shelf**: right-click a book card (or press Shift+F10 with the card focused) to open its folder, move the book to the OS trash, and more. On shelves opened from the GUI or CLI, books downloaded from the web can also be regenerated with the current settings or have every episode refetched
+- **Protecting downloaded text during updates**: when the site returns a page without episode text (such as a maintenance notice), the update now keeps the cached episode instead of overwriting it
 
 See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.5-jdk21) for the full list.
 
