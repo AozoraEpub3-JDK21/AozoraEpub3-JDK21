@@ -24,17 +24,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.7.4-jdk21 (2026年10月15日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.4-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.7.5-jdk21 (2026年10月20日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.5-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.4-jdk21/AozoraEpub3-1.7.4-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.5-jdk21/AozoraEpub3-1.7.5-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.4-jdk21/AozoraEpub3-1.7.4-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.5-jdk21/AozoraEpub3-1.7.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.4-jdk21/AozoraEpub3-1.7.4-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.5-jdk21/AozoraEpub3-1.7.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -44,12 +44,12 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 ---
 
-## v1.7.4-jdk21 の主な変更
+## v1.7.5-jdk21 の主な変更
 
-- **本棚で新しい版を知らせる**: 本棚を開いたときに新しい版があるかを確かめ、本棚の上に知らせます（1 日 1 回まで。表示設定で止められます）
-- **本棚の控えが溜まる問題の直し**: 更新のときに前の版を残せなかったとき、作品のフォルダに控えが溜まっていくのを直しました
+- **本棚の右クリックメニュー**: 本のカードを右クリック（Shift+F10）すると、保存フォルダを開く・作り直す（今の設定で）・全話を取り直す・本棚から消す（OS のゴミ箱へ）などを選べます
+- **更新で本文を失わないように**: 更新のときに掲載元が本文の無いページ（メンテナンス中の案内など）を返しても、前に取った話を残します
 
-変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.4-jdk21) を参照してください。
+変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.5-jdk21) を参照してください。
 
 ## v1.7.0-jdk21 の主な変更
 
