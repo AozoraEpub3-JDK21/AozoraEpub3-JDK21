@@ -1540,6 +1540,8 @@ public class WebAozoraConverter
 						//止められた後はキャッシュの無い話を取りに行かない（取れなかった話として記録する）
 						if (!chapterCacheFile.exists() && this.blockedByChallenge) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、取得できないためスキップします: "+chapterHref);
+							//全話を取り直すときは、話の抜けた本で上書きしない（下で止める）。扱えないパスの話はどの変換でも本に入らないので数えない
+							if (this.refetchAll) this.refetchUnusable++;
 							failedHrefs.add(chapterHref);
 							chapterIdx++;
 							continue;

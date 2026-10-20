@@ -295,11 +295,19 @@ public class HeadlessBookUpdaterTest {
 		java.util.Set<String> maintenance = java.util.concurrent.ConcurrentHashMap.newKeySet();
 		//次の 1 回だけ取れない話
 		java.util.Set<String> failOnce = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//Cloudflare の確認画面（403 + cf-mitigated: challenge）を返す話
+		java.util.Set<String> challenged = java.util.concurrent.ConcurrentHashMap.newKeySet();
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
 		server.createContext("/", exchange -> {
 			String path = exchange.getRequestURI().getPath();
 			hits.merge(path, 1, Integer::sum);
-			if (broken.contains(path) || failOnce.remove(path)) {
+			if (challenged.contains(path)) {
+				exchange.getResponseHeaders().add("cf-mitigated", "challenge");
+				byte[] page = "<html><title>Just a moment...</title></html>".getBytes(StandardCharsets.UTF_8);
+				exchange.sendResponseHeaders(403, page.length);
+				exchange.getResponseBody().write(page);
+				exchange.close();
+			} else if (broken.contains(path) || failOnce.remove(path)) {
 				exchange.sendResponseHeaders(500, -1);
 				exchange.close();
 			} else if (maintenance.contains(path)) {
@@ -420,6 +428,18 @@ public class HeadlessBookUpdaterTest {
 		maintenance.clear();
 		BookUpdater.Result refilled = updater.refetch(base + "/novel/", first.epub().toPath(), false);
 		assertTrue(refilled.message(), refilled.ok());
+		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
+
+		//1 話目を取り直したあと、キャッシュに無い 2 話目でサイトに止められた: 話の抜けた本で上書きしない（codex P1）
+		assertTrue(ep2.delete());
+		challenged.add("/ep/2/");
+		byte[] bookBeforeChallenge = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result challengedRun = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(challengedRun.message(), challengedRun.ok());
+		assertArrayEquals("話の抜けた本で上書きしない", bookBeforeChallenge, Files.readAllBytes(first.epub().toPath()));
+		challenged.clear();
+		BookUpdater.Result afterChallenge = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(afterChallenge.message(), afterChallenge.ok());
 		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
 
 		//掲載元が落ちていて 1 話も取れない: 「取り直しました」と言わず、本も txt も書き換えない
