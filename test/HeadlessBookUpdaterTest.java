@@ -478,6 +478,109 @@ public class HeadlessBookUpdaterTest {
 		assertFalse(textOf(first.epub()).contains("乙"));
 	}
 
+	/**
+	 * internal #56: ⟳（続きを取る）が、200 で返る本文の無いページでよいキャッシュを上書きしない。
+	 * 「更新分のみ」で止まっても txt を見出しだけにしない。1 ページの作品のただ 1 つのキャッシュも守る
+	 */
+	@Test
+	public void updatesKeepGoodCachesAgainstBodylessPages() throws Exception {
+		java.util.Map<String, Integer> hits = new java.util.concurrent.ConcurrentHashMap<>();
+		java.util.concurrent.atomic.AtomicReference<String> body = new java.util.concurrent.atomic.AtomicReference<>("はじめの本文");
+		//200 で本文の無いページ（メンテナンス・年齢確認など）を返すパス
+		java.util.Set<String> maintenance = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+		server.createContext("/", exchange -> {
+			String path = exchange.getRequestURI().getPath();
+			hits.merge(path, 1, Integer::sum);
+			if (maintenance.contains(path)) {
+				respond(exchange, "<html><body><h2>メンテナンス中</h2><p>ただいまメンテナンス中です</p></body></html>");
+			} else if (path.equals("/novel/")) {
+				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
+			} else if (path.equals("/single/")) {
+				respond(exchange, "<html><body><h1>短編</h1><p class=\"author\">著者</p><div class=\"body\"><p>丙" + body.get() + "</p></div></body></html>");
+			} else {
+				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + (path.contains("/1/") ? "甲" : "乙") + body.get() + "</p></div></body></html>");
+			}
+		});
+		server.start();
+		String base = "http://127.0.0.1:" + server.getAddress().getPort();
+		fqdn = base.substring(base.indexOf("//") + 2);
+		File root = tempFolder.newFolder("base");
+		File siteDir = new File(root, "web/" + fqdn.substring(0, fqdn.lastIndexOf(':')));
+		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
+		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
+			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a", "SUB_UPDATE\t.list .up", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
+			.getBytes(StandardCharsets.UTF_8));
+		File repo = VelocityTestUtils.templateDir().getParent().toFile();
+		for (File f : repo.listFiles((d, n) -> n.startsWith("chuki_") && n.endsWith(".txt"))) {
+			Files.copy(f.toPath(), new File(root, f.getName()).toPath());
+		}
+		String basePath = root.getAbsolutePath() + File.separator;
+		Properties props = new Properties();
+		props.load(Files.newInputStream(new File(repo, "test_data/gui_default_settings.ini").toPath()));
+		props.setProperty("CachePath", new File(root, "cache").getAbsolutePath());
+		System.setProperty(HeadlessBookUpdater.ALLOW_LOCAL_PROPERTY, "true");
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
+		updater.conversions = (p, cache) -> conversion(p, basePath, cache);
+
+		episodes = "<li><a href=\"/ep/1/\">第1話</a><span class=\"up\">2026/01/01</span></li>"
+			+ "<li><a href=\"/ep/2/\">第2話</a><span class=\"up\">2026/01/01</span></li>";
+		HeadlessWebConversion.Result first = conversion(props, basePath, new File(root, "cache"))
+			.convert(base + "/novel/", tempFolder.newFolder("shelf"), null, true);
+		assertTrue(first.message(), first.ok());
+		File site = new File(root, "cache/" + fqdn.replace(':', '_'));
+		File work = new File(site, "novel");
+		java.io.FileFilter bookTxt = f -> f.getName().endsWith(".txt") && !f.getName().equals("update.txt") && !f.getName().equals("failed_downloads.txt");
+
+		//1.「更新分のみ」の設定で、更新が無くて止まった: txt は前のまま（見出しだけにしない）
+		props.setProperty("WebConvertUpdated", "1");
+		props.setProperty("WebModifiedExpire", "0");
+		byte[] txtBefore = Files.readAllBytes(work.listFiles(bookTxt)[0].toPath());
+		BookUpdater.Result none = updater.update(base + "/novel/", first.epub().toPath());
+		assertTrue(none.message(), none.noUpdate());
+		assertArrayEquals("txt は前のまま", txtBefore, Files.readAllBytes(work.listFiles(bookTxt)[0].toPath()));
+		props.setProperty("WebConvertUpdated", "0");
+
+		//2. 改稿された 2 話目を取り直すと、掲載元が 200 で本文の無いページを返す: よいキャッシュを上書きしない
+		File ep2 = new File(site, "ep/2/index.html");
+		byte[] ep2Before = Files.readAllBytes(ep2.toPath());
+		body.set("直した本文");
+		maintenance.add("/ep/2/");
+		episodes = "<li><a href=\"/ep/1/\">第1話</a><span class=\"up\">2026/01/01</span></li>"
+			+ "<li><a href=\"/ep/2/\">第2話</a><span class=\"up\">2026/02/01</span></li>";
+		updater.update(base + "/novel/", first.epub().toPath());
+		assertArrayEquals("2 話目のキャッシュは前のまま", ep2Before, Files.readAllBytes(ep2.toPath()));
+		String text = textOf(first.epub());
+		assertTrue(text, text.contains("乙はじめの本文"));
+		assertFalse(text.contains("メンテナンス"));
+		//取れなかったので、次の ⟳ でもう一度取りに行き、本文が戻ったら取り込む
+		maintenance.clear();
+		int hitsBefore = hits.getOrDefault("/ep/2/", 0);
+		BookUpdater.Result retried = updater.update(base + "/novel/", first.epub().toPath());
+		assertTrue(retried.message(), retried.ok());
+		assertTrue("取りに行った", hits.getOrDefault("/ep/2/", 0) > hitsBefore);
+		assertTrue(textOf(first.epub()).contains("乙直した本文"));
+
+		//3. 1 ページの作品: 目次のページ（＝本文のただ 1 つのキャッシュ）を本文の無いページで上書きしない
+		HeadlessWebConversion.Result single = conversion(props, basePath, new File(root, "cache"))
+			.convert(base + "/single/", tempFolder.newFolder("shelf2"), null, true);
+		assertTrue(single.message(), single.ok());
+		File singleCache = new File(site, "single/index.html");
+		assertTrue("1 ページの作品のキャッシュ: " + singleCache, singleCache.isFile());
+		byte[] singleBefore = Files.readAllBytes(singleCache.toPath());
+		byte[] singleBook = Files.readAllBytes(single.epub().toPath());
+		maintenance.add("/single/");
+		BookUpdater.Result singleRun = updater.update(base + "/single/", single.epub().toPath());
+		assertFalse(singleRun.message(), singleRun.ok());
+		assertArrayEquals("1 ページの作品のキャッシュは前のまま", singleBefore, Files.readAllBytes(singleCache.toPath()));
+		assertArrayEquals("本も前のまま", singleBook, Files.readAllBytes(single.epub().toPath()));
+		//取れなかった後も、作り直しはキャッシュの本文で本を作る
+		BookUpdater.Result regenerated = updater.regenerate(base + "/single/", single.epub().toPath());
+		assertTrue(regenerated.message(), regenerated.ok());
+		assertTrue(textOf(single.epub()).contains("丙直した本文"));
+		maintenance.clear();
+	}
+
 	private static String opfOf(File epub) throws IOException {
 		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(epub)) {
 			java.util.zip.ZipEntry e = zip.stream().filter(z -> z.getName().endsWith(".opf")).findFirst().orElseThrow();
