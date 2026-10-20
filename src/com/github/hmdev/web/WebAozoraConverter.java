@@ -237,12 +237,25 @@ public class WebAozoraConverter
 	 */
 	private void refetchOver(String href, File cache, String referer) throws IOException
 	{
+		refetchOver(href, cache, referer, false);
+	}
+
+	/**
+	 * @param listPage 目次のページ（1 ページの作品の本文のキャッシュ）。本文が無くても、話の一覧があれば受け入れる
+	 *                 （1 ページの作品が連載になったとき、新しい目次を拒み続けない。internal #56 の Opus のレビュー）
+	 */
+	private void refetchOver(String href, File cache, String referer, boolean listPage) throws IOException
+	{
 		File fresh = new File(cache.getPath() + ".refetch");
 		try {
 			cacheFile(href, fresh, referer);
 			if (this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) {
-				Elements article = getExtractElements(Jsoup.parse(fresh, null, href), this.queryMap.get(ExtractId.CONTENT_ARTICLE));
-				if (article == null || article.size() == 0) throw new IOException("本文の無いページが返りました: " + href);
+				Document page = Jsoup.parse(fresh, null, href);
+				Elements article = getExtractElements(page, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+				Elements episodes = listPage ? getExtractElements(page, this.queryMap.get(ExtractId.HREF)) : null;
+				boolean hasArticle = article != null && article.size() > 0;
+				boolean hasEpisodes = episodes != null && episodes.size() > 0;
+				if (!hasArticle && !hasEpisodes) throw new IOException("本文の無いページが返りました: " + href);
 			}
 			Files.move(fresh.toPath(), cache.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		} finally {
@@ -828,7 +841,7 @@ public class WebAozoraConverter
 			//1 ページの作品は、目次のページが本文のただ 1 つのキャッシュ。200 で返る本文の無いページ（メンテナンス・年齢確認など）で
 			//上書きしない。本文が無ければ前のキャッシュのまま、取れなかったとして下へ（internal #56）
 			File cachedPage = cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
-			if (isSinglePageCache(cachedPage, urlString)) refetchOver(urlString, cachedPage, null);
+			if (isSinglePageCache(cachedPage, urlString)) refetchOver(urlString, cachedPage, null, true);
 			else cacheFile(urlString, cacheFile, null);
 			LogAppender.println(" : List Loaded.");
 		} catch (Exception e) {
@@ -1433,10 +1446,9 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								//全話を取り直すときは、キャッシュに無い話も本文を確かめてから置く（本文の無いページを取れたと数えない）。
-								//⟳ で改稿された話を取り直すときも、よいキャッシュを本文の無いページで上書きしない（internal #56）
-								if (this.refetchAll || chapterCacheFile.isFile()) refetchOver(chapterHref, chapterCacheFile, urlString);
-								else cacheFile(chapterHref, chapterCacheFile, urlString);
+								//話は本文を確かめてから置く（internal #56）。⟳ で改稿された話を取り直すとき、よいキャッシュを本文の無いページ
+								//（メンテナンス・年齢確認などが 200 で返る）で上書きしない。新しい話も、本文の無いページを取れたと数えない
+								refetchOver(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り
 								this.updated = true;
@@ -1579,9 +1591,8 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								//全話を取り直すときは、ここでも本文の無いページを置かない（下の本文の確かめは取り直しでは取り直さない）
-								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
-								else cacheFile(chapterHref, chapterCacheFile, urlString);
+								//ここでも本文の無いページを置かない（取れなければ、この話を飛ばして記録に残す）
+								refetchOver(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 								//再試行で取れた話は、更新情報に新しい日付を書いてよい
 								this.confirmedHrefs.add(chapterHref);

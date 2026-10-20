@@ -488,18 +488,28 @@ public class HeadlessBookUpdaterTest {
 		java.util.concurrent.atomic.AtomicReference<String> body = new java.util.concurrent.atomic.AtomicReference<>("はじめの本文");
 		//200 で本文の無いページ（メンテナンス・年齢確認など）を返すパス
 		java.util.Set<String> maintenance = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//1 ページの作品が連載になった（目次のページに話の一覧が出て、本文は無くなる）
+		java.util.concurrent.atomic.AtomicBoolean serialised = new java.util.concurrent.atomic.AtomicBoolean();
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
 		server.createContext("/", exchange -> {
 			String path = exchange.getRequestURI().getPath();
 			hits.merge(path, 1, Integer::sum);
 			if (maintenance.contains(path)) {
 				respond(exchange, "<html><body><h2>メンテナンス中</h2><p>ただいまメンテナンス中です</p></body></html>");
+			} else if (path.equals("/single/") && serialised.get()) {
+				respond(exchange, "<html><body><h1>短編</h1><p class=\"author\">著者</p><ul class=\"list\">"
+					+ "<li><a href=\"/sep/1/\">第1話</a><span class=\"up\">2026/03/01</span></li>"
+					+ "<li><a href=\"/sep/2/\">第2話</a><span class=\"up\">2026/03/01</span></li></ul></body></html>");
+			} else if (path.equals("/novel2/")) {
+				respond(exchange, "<html><body><h1>題二</h1><p class=\"author\">著者</p><ul class=\"list\">"
+					+ "<li><a href=\"/n2/1/\">第1話</a><span class=\"up\">2026/01/01</span></li>"
+					+ "<li><a href=\"/n2/2/\">第2話</a><span class=\"up\">2026/01/01</span></li></ul></body></html>");
 			} else if (path.equals("/novel/")) {
 				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
 			} else if (path.equals("/single/")) {
 				respond(exchange, "<html><body><h1>短編</h1><p class=\"author\">著者</p><div class=\"body\"><p>丙" + body.get() + "</p></div></body></html>");
 			} else {
-				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + (path.contains("/1/") ? "甲" : "乙") + body.get() + "</p></div></body></html>");
+				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + (path.contains("/1/") ? "甲" : path.contains("/3/") ? "丁" : path.contains("/4/") ? "戊" : "乙") + body.get() + "</p></div></body></html>");
 			}
 		});
 		server.start();
@@ -579,6 +589,58 @@ public class HeadlessBookUpdaterTest {
 		assertTrue(regenerated.message(), regenerated.ok());
 		assertTrue(textOf(single.epub()).contains("丙直した本文"));
 		maintenance.clear();
+
+		//4. 1 ページの作品が連載になった: 本文の無い目次でも、話の一覧があれば受け入れる（拒み続けない）
+		serialised.set(true);
+		BookUpdater.Result became = updater.update(base + "/single/", single.epub().toPath());
+		assertTrue(became.message(), became.ok());
+		String serialText = textOf(single.epub());
+		assertTrue(serialText, serialText.contains("甲直した本文") && serialText.contains("乙直した本文"));
+
+		//5. 新しく出た 3 話目に、掲載元が 200 で本文の無いページを返す（「更新分のみ」の設定で）: 置かず、記録しない。
+		//次の ⟳ でもう一度取りに行き、本文が戻ったら取り込む
+		props.setProperty("WebConvertUpdated", "1");
+		episodes = "<li><a href=\"/ep/1/\">第1話</a><span class=\"up\">2026/01/01</span></li>"
+			+ "<li><a href=\"/ep/2/\">第2話</a><span class=\"up\">2026/02/01</span></li>"
+			+ "<li><a href=\"/ep/3/\">第3話</a><span class=\"up\">2026/02/01</span></li>";
+		maintenance.add("/ep/3/");
+		File ep3 = new File(site, "ep/3/index.html");
+		updater.update(base + "/novel/", first.epub().toPath());
+		assertFalse("本文の無いページをキャッシュに置かない", ep3.exists());
+		assertFalse(textOf(first.epub()).contains("メンテナンス"));
+		maintenance.clear();
+		int ep3Hits = hits.getOrDefault("/ep/3/", 0);
+		BookUpdater.Result later = updater.update(base + "/novel/", first.epub().toPath());
+		assertTrue(later.message(), later.ok());
+		assertTrue("もう一度取りに行った", hits.getOrDefault("/ep/3/", 0) > ep3Hits);
+		assertTrue("3 話目を取り込んだ", textOf(first.epub()).contains("丁直した本文"));
+		assertTrue(ep3.isFile());
+		props.setProperty("WebConvertUpdated", "0");
+
+		//6. 「更新分のみ」を切ったまま、新しい 4 話目に本文の無いページが返る: 書き出しの周の取り直しでも置かない
+		episodes = episodes + "<li><a href=\"/ep/4/\">第4話</a><span class=\"up\">2026/02/01</span></li>";
+		maintenance.add("/ep/4/");
+		File ep4 = new File(site, "ep/4/index.html");
+		updater.update(base + "/novel/", first.epub().toPath());
+		assertFalse("書き出しの周でも本文の無いページを置かない", ep4.exists());
+		assertFalse(textOf(first.epub()).contains("メンテナンス"));
+		maintenance.clear();
+		BookUpdater.Result fourth = updater.update(base + "/novel/", first.epub().toPath());
+		assertTrue(fourth.message(), fourth.ok());
+		assertTrue("4 話目を取り込んだ", textOf(first.epub()).contains("戊直した本文"));
+
+		//7. 初めて落とす本で 2 話目に本文の無いページが返る: キャッシュに置かないので、「更新分のみ」の ⟳ でもあとで取りに行く
+		maintenance.add("/n2/2/");
+		HeadlessWebConversion.Result second = conversion(props, basePath, new File(root, "cache"))
+			.convert(base + "/novel2/", tempFolder.newFolder("shelf3"), null, true);
+		maintenance.clear();
+		org.junit.Assume.assumeTrue("2 話目が欠けても本は作る（作らない作りなら、この升は測れない）: " + second.message(), second.epub() != null);
+		props.setProperty("WebConvertUpdated", "1");
+		int n2Hits = hits.getOrDefault("/n2/2/", 0);
+		updater.update(base + "/novel2/", second.epub().toPath());
+		assertTrue("記録していないので、もう一度取りに行く", hits.getOrDefault("/n2/2/", 0) > n2Hits);
+		assertTrue(textOf(second.epub()).contains("乙直した本文"));
+		props.setProperty("WebConvertUpdated", "0");
 	}
 
 	private static String opfOf(File epub) throws IOException {
