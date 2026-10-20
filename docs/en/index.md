@@ -21,17 +21,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21‚Ä
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.7.5-jdk21 (October 20, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.5-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.7.6-jdk21 (October 20, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.6-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.5-jdk21/AozoraEpub3-1.7.5-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       üì¶ Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.5-jdk21/AozoraEpub3-1.7.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       üêß Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.5-jdk21/AozoraEpub3-1.7.5-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       üçé macOS (TAR.GZ)
     </a>
   </div>
@@ -40,6 +40,12 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21‚Ä
 </div>
 
 ---
+
+## What's New in v1.7.6-jdk21
+
+- **Correct title and author when regenerating books**: regenerating a Narou or Nocturne work whose author name had no My Page link put the work title in the author field and left only the series name as the title. This has been fixed
+
+See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.6-jdk21) for the full list.
 
 ## What's New in v1.7.5-jdk21
 
