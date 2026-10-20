@@ -1483,6 +1483,11 @@ function openBookMenu(book, event)
 		button.textContent = item.label;
 		entries.push({button: button, item: item});
 		if (item.confirm) {
+			// Enter の押しっぱなしは、キーの繰り返しのたびにクリックを起こす。確かめの要る項目では繰り返しを捨て、
+			// 2 回目はキーを離して押し直したときだけにする (経過時間だけでは、500 ms を過ぎた押しっぱなしが通る。internal #59)
+			button.addEventListener('keydown', event => {
+				if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault();
+			});
 			// メニューのほかの項目へ移ったら、確かめは最初から (メニューの外へ出たら、メニューごと閉じる。
 			// Safari はボタンを押してもフォーカスを移さず、行き先の無い blur になるので、それでは戻さない)
 			button.addEventListener('blur', event => {
@@ -1498,7 +1503,7 @@ function openBookMenu(book, event)
 				return;
 			}
 			// 確かめの要る項目は、1 回目は文を変えるだけ (ブラウザの確認の窓は使わない)
-			// ダブルクリックの 2 回目 (detail が 2)・Enter の押しっぱなしや素早い 2 回では始めない。2 回目は間を空けて押す
+			// ダブルクリックの 2 回目 (detail が 2)・素早い 2 回では始めない。2 回目は間を空けて押す (押しっぱなしは上の keydown が捨てる)
 			if (item.confirm && (!button.dataset.armed || event.detail > 1 || Date.now() - Number(button.dataset.armed) < 500)) {
 				if (!button.dataset.armed) button.dataset.armed = String(Date.now());
 				button.textContent = item.confirm;
