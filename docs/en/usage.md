@@ -275,7 +275,7 @@ Right-clicking a book card (Shift+F10 from the keyboard) shows a menu for that b
 (open its folder) for every book, and for a book taken from the web also fetching new chapters, renaming,
 and opening the work's page (plus checking only that book for new episodes, in a library opened from the GUI
 or the CLI, like "新着を確かめる"). In such a library the menu also has "作り直す (今の設定で)" (regenerate): it
-rewrites the book with the current settings from the cached table of contents and episodes, without contacting the site
+rewrites the book with the current settings from the cached table of contents and episodes, without fetching any text from the site
 (for after you change settings). If an episode is missing from the cache, or its cached page has no text (an error page, say), the book is left as it is; fetch with ⟳ first.
 "全話を取り直す…" (refetch all) fetches every episode from the site again, cached or not, and rebuilds the book
 (click it a second time to start; illustrations are not refetched). Episodes that cannot be fetched are taken from the
