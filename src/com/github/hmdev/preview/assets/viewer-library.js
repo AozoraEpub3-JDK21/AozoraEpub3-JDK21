@@ -82,6 +82,10 @@ const LIBRARY_MODE_LABELS = {
 		done: '全話を取り直しました',
 		failed: '取り直せませんでした',
 	},
+	trash: {
+		running: '本棚から消しています…',
+		failed: '消せませんでした',
+	},
 };
 
 function bindLibraryEvents()
@@ -477,6 +481,7 @@ function libraryCard(book)
 	// 進み具合の行は、掲載元の無い本にも空で置く (同じ列のカードの高さを揃える)
 	const status = document.createElement('div');
 	status.className = 'book-update-status';
+	status.setAttribute('aria-live', 'polite');
 	if (book.source) {
 		const update = document.createElement('button');
 		update.type = 'button';
@@ -488,7 +493,6 @@ function libraryCard(book)
 			event.stopPropagation();
 			startLibraryUpdate(book).catch(err => setLibraryUpdate(book.id, {state: 'failed', message: err.message}));
 		});
-		status.setAttribute('aria-live', 'polite');
 		//話数が減って止めたときだけ出す。掲載先で話がまとめられただけ、などのとき利用者が選んで取り直す
 		const fewer = document.createElement('button');
 		fewer.type = 'button';
@@ -669,11 +673,12 @@ function setLibraryUpdate(bookId, update)
 function paintLibraryUpdate(slot, update)
 {
 	const status = slot.querySelector('.book-update-status');
+	// ⟳ の無い本 (掲載元の無い本) にも、本棚から消す途中・断った理由は出す
 	const button = slot.querySelector('.book-update');
-	if (!status || !button) return;
+	if (!status) return;
 	const busy = update && (update.state === 'queued' || update.state === 'running');
 	// disabled にするとフォーカスが外れる (キーボードで押した人が先頭へ戻される)。連打は startLibraryUpdate が断る
-	button.setAttribute('aria-disabled', busy ? 'true' : 'false');
+	if (button) button.setAttribute('aria-disabled', busy ? 'true' : 'false');
 	slot.classList.toggle('updating', !!busy);
 	if (!update) {
 		status.textContent = '';
@@ -1420,7 +1425,30 @@ function bookMenuItems(book)
 			window.open(current.source, '_blank', 'noopener');
 		}});
 	}
+	// 本を OS のゴミ箱へ移す (ゴミ箱から戻せる)。キャッシュと台帳は残る
+	items.push(null);
+	items.push({label: '本棚から消す…', confirm: 'もう一度押すと、この本をゴミ箱へ移します',
+		disabled: () => libraryBookBusy(book.id), run: current => {
+			trashBook(current).catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message, mode: 'trash'}));
+		}});
 	return items;
+}
+
+/** 本をゴミ箱へ移し、本棚を読み直す (internal #54) */
+async function trashBook(book)
+{
+	// 消している間は、その本の ⟳・確かめる・もう一度消すを押せなくする (Windows はドライブを確かめるので数秒かかる)
+	setLibraryUpdate(book.id, {state: 'running', message: '', mode: 'trash'});
+	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/trash', {method: 'POST', cache: 'no-store'});
+	if (!response.ok) {
+		let body = null;
+		try { body = await response.json(); } catch (e) { /* 本文の無い応答 */ }
+		throw new Error((body && body.error) ? body.error : 'HTTP ' + response.status);
+	}
+	libraryUpdates.delete(book.id);
+	await loadLibrary(true);
+	// 冊数と「さらに表示」は残し、その前に書く
+	el.libraryStatus.prepend('「' + (book.title || book.fileName) + '」をゴミ箱へ移しました。');
 }
 
 /**
@@ -1662,6 +1690,8 @@ async function checkAllBooks()
 	try {
 		for (let i = 0; i < books.length; i++) {
 			const book = books[i];
+			// 確かめている間に本棚から消した本は飛ばす (確かめられなかった本に数えない)
+			if (!libraryBookById(book.id)) continue;
 			el.libraryCheckAll.textContent = '確かめています… (' + (i + 1) + '/' + books.length + ')';
 			const result = await checkOneBook(book);
 			if (result === 'found') found++;

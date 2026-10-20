@@ -271,6 +271,17 @@ public class PreviewSession implements AutoCloseable
 		}
 	}
 
+	/**
+	 * 本棚から 1 冊を外す（ゴミ箱へ移したあと。internal #54）。開いている本・既定の本の登録は残す
+	 * （ビューアーが開いているページを 404 にしない）
+	 */
+	public synchronized void removeLibraryEntry(String bookId)
+	{
+		if (this.library.remove(bookId) == null) return;
+		this.libraryShelfIndex.remove(bookId);
+		forgetUnusedLibraryBooks(Set.of(bookId));
+	}
+
 	/** 本棚として走査したフォルダ。棚が無ければ空 */
 	public synchronized List<Path> getLibraryFolders() { return new ArrayList<>(this.libraryFolders); }
 

@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -1426,6 +1427,147 @@ public class PreviewServerTest
 		String failed = waitForJob(post(base() + "api/book/" + ids[0] + "/refetch").body());
 		assertTrue(failed, failed.contains("\"state\":\"failed\""));
 		assertTrue(failed, failed.contains("取り直せません"));
+	}
+
+	/**
+	 * 本棚から消す（internal #54）: 本をゴミ箱へ移して本棚から外す。その本の仕事がまだなら断る。
+	 * ゴミ箱へ移せなければ消さずにそう言う。もう無い本は外すだけ
+	 */
+	@Test
+	public void trashingMovesTheBookAndTakesItOffTheShelf() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		Path shelf = temp.getRoot().toPath().resolve("upd");
+		java.util.List<String> trashed = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.concurrent.atomic.AtomicReference<IOException> refuse = new java.util.concurrent.atomic.AtomicReference<>();
+		this.server.setTrasher(file -> {
+			if (refuse.get() != null) throw refuse.get();
+			trashed.add(file.getFileName().toString());
+			Files.delete(file);
+		});
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater((url, file) -> {
+			release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+			return new BookUpdater.Result(true, false, "ok");
+		});
+		assertEquals("GET では消さない", 405, get(base() + "api/book/" + ids[1] + "/trash").statusCode());
+		assertEquals(404, post(base() + "api/book/nosuchbook/trash").statusCode());
+
+		//続きを取っている最中の本は消さない
+		String running = post(base() + "api/book/" + ids[0] + "/update").body();
+		HttpResponse<String> busy = post(base() + "api/book/" + ids[0] + "/trash");
+		assertEquals(busy.body(), 409, busy.statusCode());
+		assertTrue(Files.isRegularFile(shelf.resolve("web.epub")));
+		release.countDown();
+		waitForJob(running);
+
+		//ゴミ箱へ移せない環境では、消さずにそう言う
+		refuse.set(new IOException("この環境ではゴミ箱へ移せないので、消しませんでした"));
+		HttpResponse<String> refused = post(base() + "api/book/" + ids[1] + "/trash");
+		assertEquals(500, refused.statusCode());
+		assertTrue(refused.body(), refused.body().contains("ゴミ箱へ移せない"));
+		assertTrue(get(base() + "api/library").body().contains("local.epub"));
+		refuse.set(null);
+
+		//Web から取っていない本も消せる。本棚からも外れる
+		assertEquals(200, post(base() + "api/book/" + ids[1] + "/trash").statusCode());
+		assertEquals(List.of("local.epub"), trashed);
+		assertFalse(Files.exists(shelf.resolve("local.epub")));
+		String library = get(base() + "api/library").body();
+		assertFalse(library, library.contains("local.epub"));
+		assertTrue(library, library.contains("web.epub"));
+
+		//もう無い本は、ゴミ箱へは移さず本棚から外すだけ
+		Files.delete(shelf.resolve("web.epub"));
+		assertEquals(200, post(base() + "api/book/" + ids[0] + "/trash").statusCode());
+		assertEquals(List.of("local.epub"), trashed);
+		assertFalse(get(base() + "api/library").body().contains("web.epub"));
+	}
+
+	/** Windows では、ゴミ箱に入らずに消える場所（ネットワーク・取り外せるドライブ・長いパス）の本は消さない */
+	@Test
+	public void windowsTrashOnlyOnShortPathsOfFixedDrives()
+	{
+		java.util.function.Function<Character, String> drives = c -> switch (c) {
+			case 'C' -> "Fixed";
+			case 'E' -> "Removable";
+			case 'Z' -> "Network";
+			default -> null;
+		};
+		assertEquals(null, PreviewServer.windowsTrashRefusal("C:\\books\\a.epub", "C:\\books\\a.epub", drives));
+		assertEquals("小文字のドライブ文字", null, PreviewServer.windowsTrashRefusal("c:\\books\\a.epub", "c:\\books\\a.epub", drives));
+		assertTrue(PreviewServer.windowsTrashRefusal("E:\\a.epub", "E:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue(PreviewServer.windowsTrashRefusal("Z:\\a.epub", "Z:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		assertTrue("種類が分からないドライブも消さない", PreviewServer.windowsTrashRefusal("Q:\\a.epub", "Q:\\a.epub", drives).contains("ゴミ箱に入らずに"));
+		//UNC はドライブの種類を訊かずに断る
+		assertTrue(PreviewServer.windowsTrashRefusal("\\\\server\\share\\a.epub", "\\\\server\\share\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		//実体が別のドライブ（SUBST・リンク）・ドライブ文字の無い場所（フォルダに付けたドライブ）なら断る
+		assertTrue(PreviewServer.windowsTrashRefusal("X:\\a.epub", "C:\\tmp\\a.epub", c -> "Fixed").contains("別のドライブ"));
+		assertTrue(PreviewServer.windowsTrashRefusal("C:\\mnt\\usb\\a.epub", "\\\\?\\Volume{1234}\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		assertEquals("同じドライブの中のリンクは移す", null, PreviewServer.windowsTrashRefusal("C:\\shelf\\a.epub", "c:\\real\\a.epub", drives));
+		//A〜Z のドライブ文字だけ
+		assertTrue(PreviewServer.windowsTrashRefusal("é:\\a.epub", "é:\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		assertTrue(PreviewServer.windowsTrashRefusal("ａ:\\a.epub", "ａ:\\a.epub", c -> "Fixed").contains("ネットワーク上の本"));
+		String longPath = "C:\\" + "あ".repeat(251) + ".epub";
+		assertTrue(PreviewServer.windowsTrashRefusal(longPath, longPath, drives).contains("長すぎる"));
+		assertEquals("257 文字までは移す", null, PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(254), "C:\\" + "a".repeat(254), drives));
+		//258 文字は JDK が移せないことが多い（win の確認）
+		assertTrue(PreviewServer.windowsTrashRefusal("C:\\" + "a".repeat(255), "C:\\" + "a".repeat(255), drives).contains("長すぎる"));
+		//SUBST のドライブは、DriveType が Fixed でも、見えているパスと実体のパスが同じでも断る
+		assertTrue(PreviewServer.windowsTrashRefusal("X:\\a.epub", "X:\\a.epub", c -> c == 'X' ? "Subst" : "Fixed").contains("SUBST"));
+	}
+
+	/** ゴミ箱へ移している間も、ほかの本の仕事は待たせない。その本の仕事は断る */
+	@Test
+	public void trashingDoesNotHoldUpOtherBooks() throws Exception
+	{
+		//Web から取った本を 2 冊にする（1 冊を消している間に、もう 1 冊の続きを取る）
+		Path shelf = temp.getRoot().toPath().resolve("upd");
+		EpubFixture.withSource("https://ncode.syosetu.com/n9999zz/").writeTo(shelf.resolve("web2.epub"));
+		String[] ids = shelfForUpdate();
+		java.util.regex.Matcher web2 = java.util.regex.Pattern.compile("\"id\":\"([^\"]+)\"[^}]*\"fileName\":\"web2.epub\"")
+			.matcher(get(base() + "api/library").body());
+		assertTrue(web2.find());
+		String other = web2.group(1);
+		java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setTrasher(file -> {
+			entered.countDown();
+			try {
+				release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			}
+			Files.delete(file);
+		});
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		java.util.concurrent.CompletableFuture<HttpResponse<String>> trashing =
+			java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+				try {
+					return post(base() + "api/book/" + ids[0] + "/trash");
+				} catch (Exception e) {
+					throw new IllegalStateException(e);
+				}
+			});
+		assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+		long start = System.nanoTime();
+		HttpResponse<String> otherUpdate = post(base() + "api/book/" + other + "/update");
+		assertEquals(otherUpdate.body(), 202, otherUpdate.statusCode());
+		assertTrue("ほかの本の仕事を待たせない", System.nanoTime() - start < 2_000_000_000L);
+		assertEquals("消している本は続きを取らない", 409, post(base() + "api/book/" + ids[0] + "/update").statusCode());
+		assertEquals("消している本は確かめない", 409, post(base() + "api/book/" + ids[0] + "/check").statusCode());
+		HttpResponse<String> again = post(base() + "api/book/" + ids[0] + "/trash");
+		assertEquals(409, again.statusCode());
+		assertTrue("更新しているとは言わない: " + again.body(), again.body().contains("本棚から消しています"));
+		release.countDown();
+		HttpResponse<String> trashed = trashing.get(10, java.util.concurrent.TimeUnit.SECONDS);
+		assertEquals(200, trashed.statusCode());
+		waitForJob(otherUpdate.body());
+		//消している印は終わっている（残ると、終わっていない仕事として列の上限を食い続ける）
+		assertTrue(trashed.body(), trashed.body().contains("\"state\":\"done\""));
+		java.util.regex.Matcher job = java.util.regex.Pattern.compile("\"job\":\"([0-9a-f]+)\"").matcher(trashed.body());
+		assertTrue(trashed.body(), job.find());
+		assertTrue(get(base() + "api/jobs/" + job.group(1)).body().contains("\"state\":\"done\""));
 	}
 
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */

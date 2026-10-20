@@ -84,6 +84,102 @@ public class PreviewServer implements AutoCloseable
 		void reveal(Path file) throws IOException;
 	}
 
+	/** 本をゴミ箱へ移す処理。テストが実際にゴミ箱へ移さないよう差し替えられるようにする */
+	interface Trasher
+	{
+		void moveToTrash(Path file) throws IOException;
+	}
+
+	/**
+	 * OS のゴミ箱へ移す（internal #54）。完全には消さない（ゴミ箱から戻せる）。ゴミ箱が使えない環境（画面の無い環境など）では
+	 * 消さずに投げる
+	 */
+	static void moveToTrash(Path file) throws IOException
+	{
+		if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
+			//見えているパスと、実体のパス（SUBST のドライブ・リンク・フォルダに付けたドライブの先）の両方で確かめる
+			String refusal = windowsTrashRefusal(file.toAbsolutePath().toString(), file.toRealPath().toString(), PreviewServer::windowsDriveType);
+			if (refusal != null) throw new IOException(refusal);
+		}
+		java.awt.Desktop desktop;
+		try {
+			desktop = java.awt.Desktop.isDesktopSupported() ? java.awt.Desktop.getDesktop() : null;
+		} catch (RuntimeException e) {
+			desktop = null;
+		}
+		if (desktop == null || !desktop.isSupported(java.awt.Desktop.Action.MOVE_TO_TRASH)) {
+			throw new IOException("この環境ではゴミ箱へ移せないので、消しませんでした");
+		}
+		if (!desktop.moveToTrash(file.toFile())) throw new IOException("ゴミ箱へ移せませんでした");
+	}
+
+	/**
+	 * Windows でゴミ箱へ移さない本の理由。移せないときは null。JDK の moveToTrash は SHFileOperation を
+	 * FOF_ALLOWUNDO・FOF_NOCONFIRMATION で呼ぶので、ゴミ箱の無い場所（ネットワーク・USB などの取り外せるドライブ）では
+	 * <b>確かめずに完全に消し</b>、それでも成功を返す。260 文字以上のパスは JDK が黙って切り詰めるので、別の物を消しうる。
+	 * ローカルの固定ドライブ（DriveType が Fixed）の、短いパスだけを移す。
+	 * SUBST のドライブは DriveType が Fixed で、toRealPath も実体をたどらない（X:\ のまま）。ゴミ箱が無く完全に消えるので、
+	 * 種類を "Subst" として受け取って断る（win の確認、2026-10-20）
+	 * @param driveType ドライブ文字（大文字）から .NET の DriveType の名前（Fixed・Network・Removable…）か "Subst"。分からなければ null
+	 */
+	static String windowsTrashRefusal(String path, String realPath, java.util.function.Function<Character, String> driveType)
+	{
+		//258 文字は、JDK の moveToTrash が false を返すことが多い（win で 14 回中 4 回だけ移せた。257 文字は 8/8）
+		if (path.length() >= 258 || realPath.length() >= 258) return "パスが長すぎるので、消しませんでした（ゴミ箱へ正しく移せません）";
+		if (!onDriveLetter(path) || !onDriveLetter(realPath)) {
+			return "ネットワーク上の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
+		}
+		//SUBST のドライブ・別のドライブへのリンクは、実体のドライブにゴミ箱があるとは限らない（SUBST にはゴミ箱が無い）
+		if (Character.toUpperCase(path.charAt(0)) != Character.toUpperCase(realPath.charAt(0))) {
+			return "別のドライブにつながった場所の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
+		}
+		String type = driveType.apply(Character.toUpperCase(path.charAt(0)));
+		if ("Subst".equals(type)) {
+			return "SUBST で作ったドライブの本は、ゴミ箱に入らずに消えるので、消しませんでした";
+		}
+		if (!"Fixed".equals(type)) {
+			return "このドライブ（ネットワーク・USB など）の本は、ゴミ箱に入らずに消えることがあるので、消しませんでした";
+		}
+		return null;
+	}
+
+	/** A:〜Z: で始まるパスか（UNC・\\?\Volume{…} などは違う） */
+	private static boolean onDriveLetter(String path)
+	{
+		if (path.length() < 3 || path.charAt(1) != ':' || (path.charAt(2) != '\\' && path.charAt(2) != '/')) return false;
+		char c = Character.toUpperCase(path.charAt(0));
+		return c >= 'A' && c <= 'Z';
+	}
+
+	/** その本を消している最中なら、断る文を言い換える（「更新しています」と言わない） */
+	private String busyMessage(String bookId, String whileUpdating)
+	{
+		boolean trashing = this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active() && JOB_TRASH.equals(j.kind));
+		return trashing ? "この本はいま本棚から消しています" : whileUpdating;
+	}
+
+	/** ドライブの種類（.NET の DriveType の名前。訳されない）。SUBST のドライブなら "Subst"（subst の一覧の「X:\: =>」）。分からなければ null */
+	private static String windowsDriveType(char letter)
+	{
+		try {
+			Process p = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+				"if (@(subst) -match '^" + letter + ":\\\\: =>') { 'Subst' } else { [System.IO.DriveInfo]::new('" + letter + "').DriveType }")
+				.redirectErrorStream(true).start();
+			p.getOutputStream().close();
+			if (!p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
+				p.destroyForcibly();
+				return null;
+			}
+			String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.US_ASCII).trim();
+			return p.exitValue() == 0 ? out : null;
+		} catch (IOException e) {
+			return null;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return null;
+		}
+	}
+
 	private final PreviewSession session;
 	private final HttpServer server;
 	private final ExecutorService executor;
@@ -93,6 +189,7 @@ public class PreviewServer implements AutoCloseable
 	private final LibraryCovers covers = new LibraryCovers();
 	/** テストスレッドが書き HTTP スレッドが読むので volatile */
 	private volatile Revealer revealer = FileRevealer::reveal;
+	private volatile Trasher trasher = PreviewServer::moveToTrash;
 	/** URL に載せるホスト表記。IPv6 なら角括弧付き */
 	private final String host;
 	/**
@@ -173,6 +270,8 @@ public class PreviewServer implements AutoCloseable
 	static final String JOB_UPDATE = "update";
 	static final String JOB_REGENERATE = "regenerate";
 	static final String JOB_REFETCH = "refetch";
+	/** 本棚から消している印（列には積まない。消している間、その本の仕事を断るため） */
+	static final String JOB_TRASH = "trash";
 
 	/** 更新の仕事 1 つ。state は queued・running・done・noUpdate・failed、守りで止めたら gone・shrunk */
 	static final class UpdateJob
@@ -574,6 +673,12 @@ public class PreviewServer implements AutoCloseable
 					rest.substring("api/book/".length(), rest.length() - "/reveal".length()));
 				return;
 			}
+			if (rest.startsWith("api/book/") && rest.endsWith("/trash")
+				&& rest.length() > "api/book/".length() + "/trash".length()) {
+				serveTrash(exchange, method,
+					rest.substring("api/book/".length(), rest.length() - "/trash".length()));
+				return;
+			}
 			if (rest.equals("api/webshelf")) {
 				serveWebShelf(exchange, method);
 				return;
@@ -694,6 +799,65 @@ public class PreviewServer implements AutoCloseable
 		this.revealer = revealer;
 	}
 
+	/** テスト用。実際にゴミ箱へ移さず呼び出しだけ記録できるようにする */
+	void setTrasher(Trasher trasher)
+	{
+		this.trasher = trasher;
+	}
+
+	/**
+	 * /api/book/{bookId}/trash — 本棚の本を OS のゴミ箱へ移し、本棚から外す (POST。internal #54)。
+	 * 消す対象はリクエストから受け取らず、本棚に載っている本の記録から引く。キャッシュと台帳は残す
+	 * （同じ作品を ＋ で落とし直せる）。その本の仕事（更新・名前を変える・確かめる）がまだなら断る
+	 */
+	private void serveTrash(HttpExchange exchange, String method, String bookId) throws IOException
+	{
+		if (!"POST".equals(method)) {
+			respond(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		LibraryEntry entry = this.session.getLibraryEntry(bookId);
+		if (entry == null) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Unknown book".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		//確かめてから移すまでの間に、その本の仕事が積まれないよう、消している印の仕事を列に置く。
+		//移す間は列を握らない（macOS の JDK はゴミ箱へ移すのをアプリの主スレッドで待つ。ほかの本の仕事まで止めない）
+		UpdateJob marker;
+		synchronized (this.jobs) {
+			if (this.jobs.values().stream().anyMatch(j -> (j.bookId.equals(bookId) || j.bookId.equals("check:" + bookId)) && j.active())) {
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから消してください")));
+				return;
+			}
+			if (!Files.isRegularFile(entry.file())) {
+				//もう無い本は、本棚から外すだけ
+				this.session.removeLibraryEntry(bookId);
+				respondJsonStatus(exchange, 200, "{\"ok\":true}");
+				return;
+			}
+			forgetOldJobs();
+			marker = new UpdateJob(newJobId(), bookId, false, JOB_TRASH);
+			marker.state = "running";
+			this.jobs.put(marker.id, marker);
+		}
+		try {
+			this.trasher.moveToTrash(entry.file());
+		} catch (IOException | RuntimeException e) {
+			logger.warn("本をゴミ箱へ移せませんでした: {}", entry.file(), e);
+			marker.message = String.valueOf(e.getMessage());
+			marker.state = "failed";
+			respondJsonStatus(exchange, 500, errorJson(e.getMessage() == null ? "ゴミ箱へ移せませんでした" : e.getMessage()));
+			return;
+		} catch (Error e) {
+			marker.state = "failed";
+			throw e;
+		}
+		this.session.removeLibraryEntry(bookId);
+		//印を終わらせる（残ると、まだ終わっていない仕事として数え続け、列の上限を食う）
+		marker.state = "done";
+		respondJsonStatus(exchange, 200, jobJson(marker));
+	}
+
 	/**
 	 * /api/book/{bookId}/reveal — EPUB のあるフォルダを OS のファイラで開く (POST)。
 	 *
@@ -735,7 +899,7 @@ public class PreviewServer implements AutoCloseable
 			//「減ったまま更新」を、ふつうの更新の仕事に黙ってまとめない（その仕事はまた減ったところで止まる。PR のゲート2）
 			//種類の違う仕事（続きを取る・作り直す・全話を取り直す）も、互いにまとめない（頼んだのと違う仕事の結果を返さない）
 			if (job != null && (job.allowFewer != allowFewer || !job.kind.equals(kind))) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから選び直してください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから選び直してください")));
 				return;
 			}
 			if (job == null) {
@@ -1064,7 +1228,7 @@ public class PreviewServer implements AutoCloseable
 		synchronized (this.jobs) {
 			//更新・名前を変える・新着を確かめる仕事のどれかがまだなら断る（PR のゲート2）
 			if (this.jobs.values().stream().anyMatch(j -> (j.bookId.equals(bookId) || j.bookId.equals("check:" + bookId)) && j.active())) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから変えてください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから変えてください")));
 				return;
 			}
 			forgetOldJobs();
@@ -1137,7 +1301,7 @@ public class PreviewServer implements AutoCloseable
 		synchronized (this.jobs) {
 			//更新・名前を変えている最中の本は確かめない（名前が変わると、積んだ確かめる仕事が古い名前を見る。PR の codex）
 			if (this.jobs.values().stream().anyMatch(j -> j.bookId.equals(bookId) && j.active())) {
-				respondJsonStatus(exchange, 409, errorJson("この本はいま更新しています。終わってから確かめてください"));
+				respondJsonStatus(exchange, 409, errorJson(busyMessage(bookId, "この本はいま更新しています。終わってから確かめてください")));
 				return;
 			}
 			job = this.jobs.values().stream().filter(j -> j.bookId.equals(key) && j.active()).findFirst().orElse(null);
