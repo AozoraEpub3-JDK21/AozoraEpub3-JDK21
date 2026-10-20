@@ -223,12 +223,31 @@ public class WebAozoraConverter
 		if (!page.isFile() || !this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) return false;
 		try {
 			Document cached = Jsoup.parse(page, null, url);
+			//変換も、話の一覧のセレクタに当たる要素が 1 つも無いときだけ 1 ページの作品として本文を読む。同じ条件で見分ける
 			Elements hrefs = getExtractElements(cached, this.queryMap.get(ExtractId.HREF));
 			Elements article = getExtractElements(cached, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
 			return (hrefs == null || hrefs.isEmpty()) && article != null && !article.isEmpty();
 		} catch (IOException e) {
 			return false;
 		}
+	}
+
+	/**
+	 * 目次のページから話として使うリンクの数。話の一覧を組み立てるときと同じく、空の href と、HREF のパターンに合わない
+	 * リンクは数えない（当たった要素をそのまま数えると、本文の無いページを「話の一覧がある」と受け入れてしまう。PR #182 の codex）
+	 */
+	private int usableEpisodeLinks(Document page)
+	{
+		Elements hrefs = getExtractElements(page, this.queryMap.get(ExtractId.HREF));
+		if (hrefs == null) return 0;
+		ExtractInfo extractInfo = this.queryMap.get(ExtractId.HREF)[0];
+		int n = 0;
+		for (Element href : hrefs) {
+			String hrefString = href.attr("href");
+			if (hrefString == null || hrefString.length() == 0) continue;
+			if (!extractInfo.hasPattern() || extractInfo.matches(hrefString)) n++;
+		}
+		return n;
 	}
 
 	/**
@@ -252,9 +271,8 @@ public class WebAozoraConverter
 			if (this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) {
 				Document page = Jsoup.parse(fresh, null, href);
 				Elements article = getExtractElements(page, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
-				Elements episodes = listPage ? getExtractElements(page, this.queryMap.get(ExtractId.HREF)) : null;
 				boolean hasArticle = article != null && article.size() > 0;
-				boolean hasEpisodes = episodes != null && episodes.size() > 0;
+				boolean hasEpisodes = listPage && usableEpisodeLinks(page) > 0;
 				if (!hasArticle && !hasEpisodes) throw new IOException("本文の無いページが返りました: " + href);
 			}
 			Files.move(fresh.toPath(), cache.toPath(), StandardCopyOption.REPLACE_EXISTING);

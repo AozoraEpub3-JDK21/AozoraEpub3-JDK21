@@ -495,7 +495,8 @@ public class HeadlessBookUpdaterTest {
 			String path = exchange.getRequestURI().getPath();
 			hits.merge(path, 1, Integer::sum);
 			if (maintenance.contains(path)) {
-				respond(exchange, "<html><body><h2>メンテナンス中</h2><p>ただいまメンテナンス中です</p></body></html>");
+				//話の一覧のセレクタに当たるが href の無いリンク（話としては使えない）。これを話の一覧と見て受け入れない（PR #182 の codex）
+				respond(exchange, "<html><body><h2>メンテナンス中</h2><p>ただいまメンテナンス中です</p><ul class=\"list\"><li><a>トップへ</a></li></ul></body></html>");
 			} else if (path.equals("/single/") && serialised.get()) {
 				respond(exchange, "<html><body><h1>短編</h1><p class=\"author\">著者</p><ul class=\"list\">"
 					+ "<li><a href=\"/sep/1/\">第1話</a><span class=\"up\">2026/03/01</span></li>"
