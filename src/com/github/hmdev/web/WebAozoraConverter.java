@@ -215,17 +215,65 @@ public class WebAozoraConverter
 	}
 
 	/**
+	 * 1 ページの作品（話の一覧が無く、目次のページに本文がある）のキャッシュか。話の一覧を HTML の外から読むサイトもあるので、
+	 * 「話のリンクが無いページ」を一律に壊れたページとは見なさない。前のキャッシュがこの形だったときだけ、取り直しを確かめる
+	 */
+	private boolean isSinglePageCache(File page, String url)
+	{
+		if (!page.isFile() || !this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) return false;
+		try {
+			Document cached = Jsoup.parse(page, null, url);
+			//変換も、話の一覧のセレクタに当たる要素が 1 つも無いときだけ 1 ページの作品として本文を読む。同じ条件で見分ける
+			Elements hrefs = getExtractElements(cached, this.queryMap.get(ExtractId.HREF));
+			Elements article = getExtractElements(cached, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+			return (hrefs == null || hrefs.isEmpty()) && article != null && !article.isEmpty();
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
+	/**
+	 * 目次のページから話として使うリンクの数。話の一覧を組み立てるときと同じく、空の href と、HREF のパターンに合わない
+	 * リンクは数えない（当たった要素をそのまま数えると、本文の無いページを「話の一覧がある」と受け入れてしまう。PR #182 の codex）
+	 */
+	private int usableEpisodeLinks(Document page)
+	{
+		Elements hrefs = getExtractElements(page, this.queryMap.get(ExtractId.HREF));
+		if (hrefs == null) return 0;
+		ExtractInfo extractInfo = this.queryMap.get(ExtractId.HREF)[0];
+		int n = 0;
+		for (Element href : hrefs) {
+			String hrefString = href.attr("href");
+			if (hrefString == null || hrefString.length() == 0) continue;
+			if (!extractInfo.hasPattern() || extractInfo.matches(hrefString)) n++;
+		}
+		return n;
+	}
+
+	/**
 	 * 全話を取り直すとき、キャッシュにある話を上書きする取り方。本文の無いページ（メンテナンス・年齢確認・削除の知らせなどが
 	 * 200 で返る）で、よいキャッシュを消さない。本文が無ければキャッシュはそのまま、取れなかったとして投げる
 	 */
 	private void refetchOver(String href, File cache, String referer) throws IOException
 	{
+		refetchOver(href, cache, referer, false);
+	}
+
+	/**
+	 * @param listPage 目次のページ（1 ページの作品の本文のキャッシュ）。本文が無くても、話の一覧があれば受け入れる
+	 *                 （1 ページの作品が連載になったとき、新しい目次を拒み続けない。internal #56 の Opus のレビュー）
+	 */
+	private void refetchOver(String href, File cache, String referer, boolean listPage) throws IOException
+	{
 		File fresh = new File(cache.getPath() + ".refetch");
 		try {
 			cacheFile(href, fresh, referer);
 			if (this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) {
-				Elements article = getExtractElements(Jsoup.parse(fresh, null, href), this.queryMap.get(ExtractId.CONTENT_ARTICLE));
-				if (article == null || article.size() == 0) throw new IOException("本文の無いページが返りました: " + href);
+				Document page = Jsoup.parse(fresh, null, href);
+				Elements article = getExtractElements(page, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+				boolean hasArticle = article != null && article.size() > 0;
+				boolean hasEpisodes = listPage && usableEpisodeLinks(page) > 0;
+				if (!hasArticle && !hasEpisodes) throw new IOException("本文の無いページが返りました: " + href);
 			}
 			Files.move(fresh.toPath(), cache.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		} finally {
@@ -808,7 +856,11 @@ public class WebAozoraConverter
 			LogAppender.println("キャッシュの目次から作り直します : " + urlString);
 		} else try {
 			LogAppender.append(urlString);
-			cacheFile(urlString, cacheFile, null);
+			//1 ページの作品は、目次のページが本文のただ 1 つのキャッシュ。200 で返る本文の無いページ（メンテナンス・年齢確認など）で
+			//上書きしない。本文が無ければ前のキャッシュのまま、取れなかったとして下へ（internal #56）
+			File cachedPage = cacheFile.isDirectory() ? new File(cacheFile, "index.html") : cacheFile;
+			if (isSinglePageCache(cachedPage, urlString)) refetchOver(urlString, cachedPage, null, true);
+			else cacheFile(urlString, cacheFile, null);
 			LogAppender.println(" : List Loaded.");
 		} catch (Exception e) {
 			logger.warn("一覧ページの取得に失敗、キャッシュ利用を試みる: {}", urlString, e);
@@ -1412,9 +1464,9 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								//全話を取り直すときは、キャッシュに無い話も本文を確かめてから置く（本文の無いページを取れたと数えない）
-								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
-								else cacheFile(chapterHref, chapterCacheFile, urlString);
+								//話は本文を確かめてから置く（internal #56）。⟳ で改稿された話を取り直すとき、よいキャッシュを本文の無いページ
+								//（メンテナンス・年齢確認などが 200 で返る）で上書きしない。新しい話も、本文の無いページを取れたと数えない
+								refetchOver(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り
 								this.updated = true;
@@ -1557,9 +1609,8 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								//全話を取り直すときは、ここでも本文の無いページを置かない（下の本文の確かめは取り直しでは取り直さない）
-								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
-								else cacheFile(chapterHref, chapterCacheFile, urlString);
+								//ここでも本文の無いページを置かない（取れなければ、この話を飛ばして記録に残す）
+								refetchOver(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 								//再試行で取れた話は、更新情報に新しい日付を書いてよい
 								this.confirmedHrefs.add(chapterHref);
@@ -1731,6 +1782,10 @@ public class WebAozoraConverter
 				if (guardBackup != null) Files.move(guardBackup.toPath(), txtFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 				else Files.deleteIfExists(txtFile.toPath());
 			} else if (!this.offline) {
+				//本棚の更新で txt を最後まで書けなかった（更新なし・取り損ね・中止・例外で途中で返った）ら、txt は前に戻す。
+				//見出しだけの txt を残すと、キャッシュの txt から作り直したときに中身の無い本になる（internal #56）。
+				//txt はいつもキャッシュの話から作り直すので、戻しても取れた話は失わない
+				if (!textWritten && guardBackup != null) Files.move(guardBackup.toPath(), txtFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 				//更新情報は変換の終わりに書く。途中で止まった（キャンセル・例外）ときも、取れた話までは記録に残す。
 				//作り直すときは書かない（何も取っていないので、記録は前のままが正しい）
 				writePendingUpdateInfo();
