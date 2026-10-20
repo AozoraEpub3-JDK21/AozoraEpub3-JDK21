@@ -194,6 +194,44 @@ public class WebAozoraConverter
 	public boolean offline = false;
 	/** 結果: offline のとき、キャッシュに無くて取りに行かなかった目次・話の数 */
 	public int offlineMisses = 0;
+	/**
+	 * 全話を取り直す（internal #54）。キャッシュにある話も、改稿の印が無くても、目次の話をすべて取り直す
+	 * （キャッシュが壊れた・サイトが改稿の日付を変えずに直した、など）。取れなかった話は前のキャッシュで本を作る（refetchFailures）。
+	 * 挿絵は取り直さない。守り（updateGuard）と一緒に立てる（話数が減っていたら止める）
+	 */
+	public boolean refetchAll = false;
+	/** refetchAll のとき、目次を読んだ周で取り直せなかった話 */
+	private final HashSet<String> refetchFailedHrefs = new HashSet<>();
+
+	/** 結果: refetchAll のとき、取り直せず、本文のあるキャッシュも無かった話の数。1 話でもあれば本は書かずに止める */
+	public int refetchUnusable = 0;
+
+	/** 結果: refetchAll のとき、取り直せなかった話の数（前のキャッシュがあれば、それで作った）。書き出しの周で取れた話は数えない */
+	public int refetchFailures()
+	{
+		int n = 0;
+		for (String href : this.refetchFailedHrefs) if (!this.confirmedHrefs.contains(href)) n++;
+		return n;
+	}
+
+	/**
+	 * 全話を取り直すとき、キャッシュにある話を上書きする取り方。本文の無いページ（メンテナンス・年齢確認・削除の知らせなどが
+	 * 200 で返る）で、よいキャッシュを消さない。本文が無ければキャッシュはそのまま、取れなかったとして投げる
+	 */
+	private void refetchOver(String href, File cache, String referer) throws IOException
+	{
+		File fresh = new File(cache.getPath() + ".refetch");
+		try {
+			cacheFile(href, fresh, referer);
+			if (this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)) {
+				Elements article = getExtractElements(Jsoup.parse(fresh, null, href), this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+				if (article == null || article.size() == 0) throw new IOException("本文の無いページが返りました: " + href);
+			}
+			Files.move(fresh.toPath(), cache.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		} finally {
+			Files.deleteIfExists(fresh.toPath());
+		}
+	}
 	/** 結果: 確かめたときの、目次の話数・新しい話・改稿された話。確かめていなければ -1 */
 	public int checkedEpisodes = -1;
 	public int checkedNew = -1;
@@ -644,6 +682,8 @@ public class WebAozoraConverter
 		this.pendingLastEpisodes = -1;
 		this.guardStopped = false;
 		this.offlineMisses = 0;
+		this.refetchUnusable = 0;
+		this.refetchFailedHrefs.clear();
 		// 前の作品の状態をリセット（変換器は変換ごとに新しいので、もとから空。同じ変換器で 2 回呼ぶ呼び手のために残す）
 		this.nextDataEpisodeChapterMap = null;
 		this.nextDataEpisodeDateMap = null;
@@ -1312,6 +1352,8 @@ public class WebAozoraConverter
 			List<String> failedHrefs = new ArrayList<>();
 			//取り直すはずだった（更新情報で更新ありと判定された）のに取れなかった話
 			HashSet<String> failedReloads = new HashSet<>();
+			//取れた話の数（全話を取り直して 1 話も取れなかったかを見る）
+			int loadedChapters = 0;
 			//止められたときに「対象の話を 1 つも書けなかったか」を見るための数（最新 N 話などで対象は目次の一部）
 			int selectedChapters = 0;
 			int writtenChapters = 0;
@@ -1357,6 +1399,8 @@ public class WebAozoraConverter
 						//nullでなく更新無しに含まれなければ再読込
 						//作り直すときは、改稿された話も取り直さない（キャッシュにある話で作る）
 						if (noUpdateUrls != null && !noUpdateUrls.contains(chapterHref) && !this.offline) reload = true;
+						//全話を取り直すときは、キャッシュにある話も取り直す
+						if (this.refetchAll && !this.offline) reload = true;
 						
 						if ((reload || !chapterCacheFile.exists()) && !this.blockedByChallenge) {
 							LogAppender.append("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] "+chapterHref);
@@ -1368,11 +1412,14 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								cacheFile(chapterHref, chapterCacheFile, urlString);
+								//全話を取り直すときは、キャッシュに無い話も本文を確かめてから置く（本文の無いページを取れたと数えない）
+								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
+								else cacheFile(chapterHref, chapterCacheFile, urlString);
 								LogAppender.println(" : Loaded.");
 								//ファイルがロードされたら更新有り
 								this.updated = true;
 								loaded = true;
+								loadedChapters++;
 							} catch (CloudflareChallengeException e) {
 								//理由は cacheFile が出した。以降の話は取りに行かない（キャッシュにある話で本を作る）
 							} catch (Exception e) {
@@ -1408,7 +1455,18 @@ public class WebAozoraConverter
 					}
 					chapterIdx++;
 				}
-				if (!failedReloads.isEmpty()) {
+				//取り直せなかった話（あとの書き出しで取り直せた話は、そこで数から外す）
+				if (this.refetchAll) this.refetchFailedHrefs.addAll(failedReloads);
+				//全話を取り直して 1 話も取れなかった（掲載元が落ちている・止められた）。前と同じキャッシュで本を書き直して
+				//「取り直しました」とは言わない。本も txt も前のまま（守りで止めたのと同じく txt を戻す）、取り直せなかったと返す
+				if (this.refetchAll && loadedChapters == 0 && !failedReloads.isEmpty()) {
+					LogAppender.println("掲載元から 1 話も取り直せなかったので、本は前のままにします");
+					this.guardStopped = true;
+					return blockedUpdateCheck(true);
+				}
+				if (!failedReloads.isEmpty() && this.refetchAll) {
+					LogAppender.println(failedReloads.size() + " 話を取り直せませんでした（前のキャッシュで本を作ります）: " + String.join(" ", failedReloads));
+				} else if (!failedReloads.isEmpty()) {
 					//改稿・追加された話を取り損ねた。前のキャッシュがあればそれで本を作る。次の変換でもう一度取りに行く
 					LogAppender.println("改稿・追加された " + failedReloads.size() + " 話を取得できませんでした（次の変換でもう一度取りに行きます）: " + String.join(" ", failedReloads));
 				}
@@ -1482,6 +1540,8 @@ public class WebAozoraConverter
 						//止められた後はキャッシュの無い話を取りに行かない（取れなかった話として記録する）
 						if (!chapterCacheFile.exists() && this.blockedByChallenge) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュなし、取得できないためスキップします: "+chapterHref);
+							//全話を取り直すときは、話の抜けた本で上書きしない（下で止める）。扱えないパスの話はどの変換でも本に入らないので数えない
+							if (this.refetchAll) this.refetchUnusable++;
 							failedHrefs.add(chapterHref);
 							chapterIdx++;
 							continue;
@@ -1497,13 +1557,17 @@ public class WebAozoraConverter
 									Thread.currentThread().interrupt();
 									return null;
 								}
-								cacheFile(chapterHref, chapterCacheFile, urlString);
+								//全話を取り直すときは、ここでも本文の無いページを置かない（下の本文の確かめは取り直しでは取り直さない）
+								if (this.refetchAll) refetchOver(chapterHref, chapterCacheFile, urlString);
+								else cacheFile(chapterHref, chapterCacheFile, urlString);
 								this.updated = true;
 								//再試行で取れた話は、更新情報に新しい日付を書いてよい
 								this.confirmedHrefs.add(chapterHref);
 							} catch (Exception e) {
 								logger.warn("章の再ダウンロードに失敗、スキップ: {}", chapterHref, e);
 								LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 再ダウンロード失敗、スキップします: "+chapterHref);
+								//全話を取り直すときは、話の抜けた本で上書きしない（下で止める）
+								if (this.refetchAll) this.refetchUnusable++;
 								failedHrefs.add(chapterHref);
 								chapterIdx++;
 								continue;
@@ -1514,8 +1578,10 @@ public class WebAozoraConverter
 						// キャッシュファイルに本文が無い場合（ダウンロード失敗・エラーページ等）は再ダウンロード
 						{
 							Elements contentCheck = getExtractElements(chapterDoc, this.queryMap.get(ExtractId.CONTENT_ARTICLE));
+							//全話を取り直すときは、目次の周で本文を確かめて取り直した（本文の無いページは取らなかった）ので、ここでは取り直さない。
+							//取り直すと本文の無いページで上書きし、取れたと数えてしまう
 							if ((contentCheck == null || contentCheck.size() == 0) && this.queryMap.containsKey(ExtractId.CONTENT_ARTICLE)
-								&& !this.blockedByChallenge && !this.offline) {
+								&& !this.blockedByChallenge && !this.offline && !this.refetchAll) {
 								LogAppender.println("本文が取得できないためキャッシュを削除して再ダウンロードします: " + chapterHref);
 								chapterCacheFile.delete();
 								try {
@@ -1536,6 +1602,14 @@ public class WebAozoraConverter
 						if (!hasArticle && this.offline) {
 							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] キャッシュに本文が無いため、作り直しをやめます: "+chapterHref);
 							this.offlineMisses++;
+							failedHrefs.add(chapterHref);
+							chapterIdx++;
+							continue;
+						}
+						//全話を取り直すときも、取り直せず、キャッシュにも本文が無い話があれば、話の抜けた本で上書きしない（下で止める）
+						if (!hasArticle && this.refetchAll) {
+							LogAppender.println("["+(chapterIdx+1)+"/"+chapterHrefs.size()+"] 取り直せず、キャッシュにも本文が無いため、本は前のままにします: "+chapterHref);
+							this.refetchUnusable++;
 							failedHrefs.add(chapterHref);
 							chapterIdx++;
 							continue;
@@ -1607,6 +1681,14 @@ public class WebAozoraConverter
 				this.pendingLastEpisodes = -1;
 				this.guardStopped = true;
 				return null;
+			}
+			//全話を取り直して、本文のある版がどこにも無い話が残ったら、txt を前に戻して止める（話の欠けた本で上書きしない）
+			if (this.refetchAll && this.refetchUnusable > 0) {
+				LogAppender.println("取り直せず、キャッシュにも本文の無い話が " + this.refetchUnusable + " 話あるので、本は前のままにします");
+				this.pendingEpisodes = -1;
+				this.pendingLastEpisodes = -1;
+				this.guardStopped = true;
+				return blockedUpdateCheck(true);
 			}
 			//止められて 1 話も取れなかったら、本文の無い本を作らずに失敗にする
 			if (this.blockedByChallenge && selectedChapters > 0 && writtenChapters == 0) {

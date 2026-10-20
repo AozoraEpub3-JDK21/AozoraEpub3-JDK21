@@ -282,6 +282,202 @@ public class HeadlessBookUpdaterTest {
 		assertFalse("別の作業フォルダを作らない: " + novelConverted, novelConverted.exists());
 	}
 
+	/**
+	 * 全話を取り直す（internal #54）: 目次に改稿の印が無くても、キャッシュにある話もすべて取り直す。
+	 * 取れなかった話は前のキャッシュで本を作り、その数を知らせる。話数が減っていたら更新と同じく止める
+	 */
+	@Test
+	public void refetchingFetchesEveryEpisodeAgain() throws Exception {
+		java.util.Map<String, Integer> hits = new java.util.concurrent.ConcurrentHashMap<>();
+		java.util.concurrent.atomic.AtomicReference<String> body = new java.util.concurrent.atomic.AtomicReference<>("はじめの本文");
+		java.util.Set<String> broken = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//200 で本文の無いページ（メンテナンス・年齢確認など）を返す話
+		java.util.Set<String> maintenance = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//次の 1 回だけ取れない話
+		java.util.Set<String> failOnce = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		//Cloudflare の確認画面（403 + cf-mitigated: challenge）を返す話
+		java.util.Set<String> challenged = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+		server.createContext("/", exchange -> {
+			String path = exchange.getRequestURI().getPath();
+			hits.merge(path, 1, Integer::sum);
+			if (challenged.contains(path)) {
+				exchange.getResponseHeaders().add("cf-mitigated", "challenge");
+				byte[] page = "<html><title>Just a moment...</title></html>".getBytes(StandardCharsets.UTF_8);
+				exchange.sendResponseHeaders(403, page.length);
+				exchange.getResponseBody().write(page);
+				exchange.close();
+			} else if (broken.contains(path) || failOnce.remove(path)) {
+				exchange.sendResponseHeaders(500, -1);
+				exchange.close();
+			} else if (maintenance.contains(path)) {
+				respond(exchange, "<html><body><h2>メンテナンス中</h2><p>ただいまメンテナンス中です</p></body></html>");
+			} else if (path.equals("/novel/")) {
+				respond(exchange, "<html><body><h1>題</h1><p class=\"author\">著者</p><ul class=\"list\">" + episodes + "</ul></body></html>");
+			} else if (path.equals("/single/")) {
+				//話の一覧の無い 1 ページの作品
+				respond(exchange, "<html><body><h1>短編</h1><p class=\"author\">著者</p><div class=\"body\"><p>丙" + body.get() + "</p></div></body></html>");
+			} else {
+				respond(exchange, "<html><body><h2>" + path + "</h2><div class=\"body\"><p>" + (path.contains("/1/") ? "甲" : "乙") + body.get() + "</p></div></body></html>");
+			}
+		});
+		server.start();
+		String base = "http://127.0.0.1:" + server.getAddress().getPort();
+		fqdn = base.substring(base.indexOf("//") + 2);
+		File root = tempFolder.newFolder("base");
+		File siteDir = new File(root, "web/" + fqdn.substring(0, fqdn.lastIndexOf(':')));
+		Assume.assumeTrue("サイト定義のフォルダ（" + fqdn + "）を作れない環境のためスキップ", siteDir.mkdirs());
+		Files.write(new File(siteDir, "extract.txt").toPath(), String.join("\n",
+			"TITLE\th1:0", "AUTHOR\t.author:0", "HREF\t.list a", "SUB_UPDATE\t.list .up", "CONTENT_SUBTITLE\th2:0", "CONTENT_ARTICLE\t.body:0", "")
+			.getBytes(StandardCharsets.UTF_8));
+		File repo = VelocityTestUtils.templateDir().getParent().toFile();
+		for (File f : repo.listFiles((d, n) -> n.startsWith("chuki_") && n.endsWith(".txt"))) {
+			Files.copy(f.toPath(), new File(root, f.getName()).toPath());
+		}
+		String basePath = root.getAbsolutePath() + File.separator;
+		Properties props = new Properties();
+		props.load(Files.newInputStream(new File(repo, "test_data/gui_default_settings.ini").toPath()));
+		props.setProperty("CachePath", new File(root, "cache").getAbsolutePath());
+		System.setProperty(HeadlessBookUpdater.ALLOW_LOCAL_PROPERTY, "true");
+		HeadlessBookUpdater updater = new HeadlessBookUpdater(() -> props, basePath);
+		updater.conversions = (p, cache) -> conversion(p, basePath, cache);
+
+		//本文の印（甲・乙）は話ごと。パスは本の中で全角・漢数字に変わるので印にしない
+		//目次の更新日は変わらない（改稿の印が無い）
+		episodes = "<li><a href=\"/ep/1/\">第1話</a><span class=\"up\">2026/01/01</span></li>"
+			+ "<li><a href=\"/ep/2/\">第2話</a><span class=\"up\">2026/01/01</span></li>";
+		File shelf = tempFolder.newFolder("shelf");
+		HeadlessWebConversion.Result first = conversion(props, basePath, new File(root, "cache"))
+			.convert(base + "/novel/", shelf, null, true);
+		assertTrue(first.message(), first.ok());
+
+		//掲載元が日付を変えずに本文を直した。「更新分のみ」の設定で続きを取っても、取り直さない（対照）
+		body.set("直した本文");
+		props.setProperty("WebConvertUpdated", "1");
+		//取ったばかりのキャッシュを「更新分」と見なさない（既定の 24 時間だと、さっき取った話が更新扱いになる）
+		props.setProperty("WebModifiedExpire", "0");
+		BookUpdater.Result plain = updater.update(base + "/novel/", first.epub().toPath());
+		assertTrue(plain.message(), plain.noUpdate());
+		org.junit.Assert.assertEquals("続きを取るは話を取り直さない", Integer.valueOf(1), hits.get("/ep/1/"));
+		String plainText = textOf(first.epub());
+		assertTrue(plainText, plainText.contains("甲はじめの本文"));
+
+		//全話を取り直すと、印が無くても両方の話を取り直す（「更新分のみ」の設定でも本を作る）
+		BookUpdater.Result r = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(r.message(), r.ok());
+		org.junit.Assert.assertEquals("すべて取れたら、カードに足す文は無い（「変換しました」を重ねない）", "", r.message());
+		org.junit.Assert.assertEquals(Integer.valueOf(2), hits.get("/ep/1/"));
+		org.junit.Assert.assertEquals(Integer.valueOf(2), hits.get("/ep/2/"));
+		String text = textOf(first.epub());
+		assertTrue(text, text.contains("甲直した本文") && text.contains("乙直した本文"));
+		assertFalse(text.contains("はじめの本文"));
+
+		//2 話目が取れない: 取れた話で本を作り、2 話目は前のキャッシュのまま。その数を知らせる
+		body.set("三度目の本文");
+		broken.add("/ep/2/");
+		BookUpdater.Result partial = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(partial.message(), partial.ok());
+		assertTrue(partial.message(), partial.message().contains("1 話は取り直せませんでした"));
+		text = textOf(first.epub());
+		assertTrue(text, text.contains("甲三度目の本文") && text.contains("乙直した本文"));
+
+		//2 話目が 200 で本文の無いページを返す: よいキャッシュを上書きせず、取り直せなかった話に数える
+		broken.clear();
+		maintenance.add("/ep/2/");
+		File ep2 = new File(root, "cache/" + fqdn.replace(':', '_') + "/ep/2/index.html");
+		byte[] ep2Before = Files.readAllBytes(ep2.toPath());
+		BookUpdater.Result gate = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(gate.message(), gate.ok());
+		assertTrue(gate.message(), gate.message().contains("1 話は取り直せませんでした"));
+		assertArrayEquals("キャッシュは前のまま", ep2Before, Files.readAllBytes(ep2.toPath()));
+		text = textOf(first.epub());
+		assertTrue(text, text.contains("乙直した本文"));
+		assertFalse(text.contains("メンテナンス"));
+		//キャッシュがもう壊れていて（本文の無いページ）、掲載元もまだ本文の無いページを返す: 取れたと数えず、
+		//その話の抜けた本で上書きしない。本も txt も前のまま（codex P1）
+		Files.write(ep2.toPath(), "<html><body><h2>メンテナンス中</h2></body></html>".getBytes(StandardCharsets.UTF_8));
+		File workDir = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel");
+		java.io.FileFilter bookTxt = f -> f.getName().endsWith(".txt") && !f.getName().equals("update.txt") && !f.getName().equals("failed_downloads.txt");
+		byte[] bookBeforeBroken = Files.readAllBytes(first.epub().toPath());
+		byte[] txtBeforeBroken = Files.readAllBytes(workDir.listFiles(bookTxt)[0].toPath());
+		BookUpdater.Result stillBroken = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(stillBroken.message(), stillBroken.ok());
+		assertTrue(stillBroken.message(), stillBroken.message().contains("1 話は取り直せず、本文のあるキャッシュも無い"));
+		assertArrayEquals("本は前のまま", bookBeforeBroken, Files.readAllBytes(first.epub().toPath()));
+		assertArrayEquals("txt も前のまま", txtBeforeBroken, Files.readAllBytes(workDir.listFiles(bookTxt)[0].toPath()));
+		Files.write(ep2.toPath(), ep2Before);
+		maintenance.clear();
+
+		//目次の周で取れなかった話も、書き出しの周の取り直しで取れたら、取り直せなかったとは言わない
+		assertTrue(ep2.delete());
+		failOnce.add("/ep/2/");
+		BookUpdater.Result retried = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(retried.message(), retried.ok());
+		org.junit.Assert.assertEquals("", retried.message());
+		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
+
+		//キャッシュに無い話を、掲載元が 200 で本文の無いページで返す: 置かず、取れたと数えない（書き出しの周の取り直しでも）（codex P1）
+		assertTrue(ep2.delete());
+		maintenance.add("/ep/2/");
+		byte[] bookBeforeGate = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result uncachedGate = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(uncachedGate.message(), uncachedGate.ok());
+		assertTrue(uncachedGate.message(), uncachedGate.message().contains("1 話は取り直せず、本文のあるキャッシュも無い"));
+		assertFalse("本文の無いページをキャッシュに置かない", ep2.exists());
+		assertArrayEquals("話の抜けた本で上書きしない", bookBeforeGate, Files.readAllBytes(first.epub().toPath()));
+		maintenance.clear();
+		BookUpdater.Result refilled = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(refilled.message(), refilled.ok());
+		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
+
+		//1 話目を取り直したあと、キャッシュに無い 2 話目でサイトに止められた: 話の抜けた本で上書きしない（codex P1）
+		assertTrue(ep2.delete());
+		challenged.add("/ep/2/");
+		byte[] bookBeforeChallenge = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result challengedRun = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(challengedRun.message(), challengedRun.ok());
+		assertArrayEquals("話の抜けた本で上書きしない", bookBeforeChallenge, Files.readAllBytes(first.epub().toPath()));
+		challenged.clear();
+		BookUpdater.Result afterChallenge = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertTrue(afterChallenge.message(), afterChallenge.ok());
+		assertTrue(textOf(first.epub()).contains("乙三度目の本文"));
+
+		//掲載元が落ちていて 1 話も取れない: 「取り直しました」と言わず、本も txt も書き換えない
+		body.set("四度目の本文");
+		broken.add("/ep/1/");
+		broken.add("/ep/2/");
+		File work = new File(root, "cache/" + fqdn.replace(':', '_') + "/novel");
+		//failed_downloads.txt は、上で飛ばした話の記録（本の txt ではない）
+		File[] txts = work.listFiles((d, n) -> n.endsWith(".txt") && !n.equals("update.txt") && !n.equals("failed_downloads.txt"));
+		org.junit.Assert.assertEquals(java.util.Arrays.toString(work.list()), 1, txts.length);
+		byte[] txtBeforeDown = Files.readAllBytes(txts[0].toPath());
+		byte[] beforeDown = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result down = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(down.message(), down.ok());
+		assertTrue(down.message(), down.message().contains("1 話も取り直せませんでした"));
+		assertArrayEquals("本は前のまま", beforeDown, Files.readAllBytes(first.epub().toPath()));
+		assertArrayEquals("txt も前のまま", txtBeforeDown, Files.readAllBytes(txts[0].toPath()));
+
+		//話の一覧の無い 1 ページの作品も、「更新分のみ」の設定のまま取り直して本を作る（更新なしで止めない）
+		HeadlessWebConversion.Result single = conversion(props, basePath, new File(root, "cache"))
+			.convert(base + "/single/", tempFolder.newFolder("shelf2"), null, true);
+		assertTrue(single.message(), single.ok());
+		BookUpdater.Result singleRefetch = updater.refetch(base + "/single/", single.epub().toPath(), false);
+		assertTrue(singleRefetch.message(), singleRefetch.ok());
+
+		//掲載元で 2 話目が消えた: 書かずに止める。「減ったまま」を選べば取り直す
+		broken.clear();
+		episodes = "<li><a href=\"/ep/1/\">第1話</a><span class=\"up\">2026/01/01</span></li>";
+		byte[] bookBefore = Files.readAllBytes(first.epub().toPath());
+		BookUpdater.Result shrunk = updater.refetch(base + "/novel/", first.epub().toPath(), false);
+		assertFalse(shrunk.ok());
+		org.junit.Assert.assertEquals("shrunk", shrunk.stop());
+		assertArrayEquals(bookBefore, Files.readAllBytes(first.epub().toPath()));
+		BookUpdater.Result accepted = updater.refetch(base + "/novel/", first.epub().toPath(), true);
+		assertTrue(accepted.message(), accepted.ok());
+		assertFalse(textOf(first.epub()).contains("乙"));
+	}
+
 	private static String opfOf(File epub) throws IOException {
 		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(epub)) {
 			java.util.zip.ZipEntry e = zip.stream().filter(z -> z.getName().endsWith(".opf")).findFirst().orElseThrow();
@@ -461,6 +657,7 @@ public class HeadlessBookUpdaterTest {
 				() -> updater.download(url, shelf),
 				() -> updater.check(url, book),
 				() -> updater.regenerate(url, book),
+				() -> updater.refetch(url, book, false),
 				() -> updater.rename(url, book, "新しい名前"))) {
 			try { call.call(); } catch (Exception e) { /* 意図的: 投げても鍵を外すかだけを見る */ }
 			assertFalse("鍵を外し忘れた", com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.isLocked());

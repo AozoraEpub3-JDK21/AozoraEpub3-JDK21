@@ -1372,6 +1372,62 @@ public class PreviewServerTest
 		assertTrue(failed, failed.contains("作り直せません"));
 	}
 
+	/** 全話を取り直す（internal #54）は更新器の refetch を呼ぶ。「減ったまま」も渡し、作り直す・続きを取る仕事とはまとめない */
+	@Test
+	public void refetchingCallsTheUpdaterSRefetch() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override
+			public Result update(String sourceUrl, java.nio.file.Path epubFile) throws Exception
+			{
+				calls.add("update " + epubFile.getFileName());
+				return new Result(true, false, "取りました");
+			}
+
+			@Override
+			public Result regenerate(String sourceUrl, java.nio.file.Path epubFile) throws Exception
+			{
+				release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+				calls.add("regenerate " + epubFile.getFileName());
+				return new Result(true, false, "作り直しました");
+			}
+
+			@Override
+			public Result refetch(String sourceUrl, java.nio.file.Path epubFile, boolean allowFewerEpisodes)
+			{
+				calls.add("refetch " + sourceUrl + " " + epubFile.getFileName() + " " + allowFewerEpisodes);
+				return new Result(true, false, "1 話は取り直せませんでした");
+			}
+		});
+		assertEquals("Web から取っていない本は取り直さない", 400, post(base() + "api/book/" + ids[1] + "/refetch").statusCode());
+		assertEquals("GET では取り直さない", 405, get(base() + "api/book/" + ids[0] + "/refetch").statusCode());
+		//作り直している最中の本には、全話を取り直すをまとめずに断る
+		String running = post(base() + "api/book/" + ids[0] + "/regenerate").body();
+		assertEquals(409, post(base() + "api/book/" + ids[0] + "/refetch").statusCode());
+		release.countDown();
+		waitForJob(running);
+		String done = waitForJob(post(base() + "api/book/" + ids[0] + "/refetch").body());
+		assertTrue(done, done.contains("\"state\":\"done\""));
+		assertTrue(done, done.contains("\"message\":\"1 話は取り直せませんでした\""));
+		waitForJob(post(base() + "api/book/" + ids[0] + "/refetch?allowFewer=1").body());
+		assertEquals(List.of("regenerate web.epub", "refetch https://ncode.syosetu.com/n1234ab/ web.epub false",
+			"refetch https://ncode.syosetu.com/n1234ab/ web.epub true"), calls);
+	}
+
+	/** 取り直せない更新器（古い実装）は、そう言う */
+	@Test
+	public void anUpdaterThatCannotRefetchSaysSo() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		String failed = waitForJob(post(base() + "api/book/" + ids[0] + "/refetch").body());
+		assertTrue(failed, failed.contains("\"state\":\"failed\""));
+		assertTrue(failed, failed.contains("取り直せません"));
+	}
+
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */
 	@Test
 	public void theSameBookIsNotQueuedTwice() throws Exception
