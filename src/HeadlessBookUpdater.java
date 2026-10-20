@@ -71,6 +71,26 @@ public class HeadlessBookUpdater implements BookUpdater
 		}
 	}
 
+	/** 作り直す（internal #54）。サイトへは取りに行かないが、宛先は更新と同じく確かめる（取りに行く道が紛れ込んだときの守り） */
+	@Override
+	public Result regenerate(String sourceUrl, Path epubFile) throws Exception
+	{
+		if (isLocalOrPrivate(sourceUrl) && !Boolean.getBoolean(ALLOW_LOCAL_PROPERTY)) {
+			return new Result(false, false, "手元・内部の宛先の本は作り直しません: " + sourceUrl);
+		}
+		//設定は鍵を取ってから写す（update と同じ。GUI は Web 変換の間、画面の部品を一時的に書き換えている）
+		com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.lock();
+		try {
+			if (!java.nio.file.Files.isRegularFile(epubFile)) return new Result(false, false, "本棚の本が見つかりません（名前を変えたか、消しました）");
+			Properties props = this.settings.get();
+			HeadlessWebConversion.Result r = this.conversions.apply(props, cacheFor(props, epubFile, sourceUrl))
+				.regenerate(sourceUrl, epubFile.toFile());
+			return new Result(r.ok(), r.noUpdate(), r.message(), r.stop());
+		} finally {
+			com.github.hmdev.web.WebAozoraConverter.WEB_LOCK.unlock();
+		}
+	}
+
 	/**
 	 * Web 本棚に新しく落とす。キャッシュは Web 本棚の .aozora（本と記録を一緒に写せる。設定のキャッシュの場所に依らない）
 	 */

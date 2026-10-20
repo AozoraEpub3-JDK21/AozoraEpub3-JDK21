@@ -1325,6 +1325,53 @@ public class PreviewServerTest
 		waitForJob(first);
 	}
 
+	/** 作り直す（internal #54）は、続きを取るとは別の呼び方で更新器に頼む。同じ本の続きを取る仕事にはまとめない */
+	@Test
+	public void regeneratingCallsTheUpdaterSRegenerate() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		this.server.setBookUpdater(new BookUpdater() {
+			@Override
+			public Result update(String sourceUrl, java.nio.file.Path epubFile) throws Exception
+			{
+				release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+				calls.add("update " + epubFile.getFileName());
+				return new Result(true, false, "取りました");
+			}
+
+			@Override
+			public Result regenerate(String sourceUrl, java.nio.file.Path epubFile)
+			{
+				calls.add("regenerate " + sourceUrl + " " + epubFile.getFileName());
+				return new Result(true, false, "作り直しました");
+			}
+		});
+		assertEquals("Web から取っていない本は作り直さない", 400, post(base() + "api/book/" + ids[1] + "/regenerate").statusCode());
+		assertEquals("GET では作り直さない", 405, get(base() + "api/book/" + ids[0] + "/regenerate").statusCode());
+		//続きを取っている最中の本には、作り直すをまとめずに断る
+		String running = post(base() + "api/book/" + ids[0] + "/update").body();
+		assertEquals(409, post(base() + "api/book/" + ids[0] + "/regenerate").statusCode());
+		release.countDown();
+		waitForJob(running);
+		String done = waitForJob(post(base() + "api/book/" + ids[0] + "/regenerate").body());
+		assertTrue(done, done.contains("\"state\":\"done\""));
+		assertTrue(done, done.contains("\"message\":\"作り直しました\""));
+		assertEquals(List.of("update web.epub", "regenerate https://ncode.syosetu.com/n1234ab/ web.epub"), calls);
+	}
+
+	/** 作り直せない更新器（古い実装）は、例外の名前でなく、そう言う */
+	@Test
+	public void anUpdaterThatCannotRegenerateSaysSo() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		this.server.setBookUpdater((url, file) -> new BookUpdater.Result(true, false, "ok"));
+		String failed = waitForJob(post(base() + "api/book/" + ids[0] + "/regenerate").body());
+		assertTrue(failed, failed.contains("\"state\":\"failed\""));
+		assertTrue(failed, failed.contains("作り直せません"));
+	}
+
 	/** 同じ本の仕事が終わっていなければ、新しく積まずに同じ仕事を返す（連打で同じ作品を何度も取りに行かない） */
 	@Test
 	public void theSameBookIsNotQueuedTwice() throws Exception

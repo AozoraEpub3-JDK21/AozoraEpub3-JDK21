@@ -70,6 +70,13 @@ const LIBRARY_UPDATE_LABELS = {
 	checkFailed: '確かめられませんでした',
 };
 
+/** 作り直す仕事 (internal #54) で、文を変える状態 */
+const LIBRARY_REGENERATE_LABELS = {
+	running: '作り直しています…',
+	done: '作り直しました',
+	failed: '作り直せませんでした',
+};
+
 function bindLibraryEvents()
 {
 	el.libraryToggle.addEventListener('click', () => toggleLibrary());
@@ -566,20 +573,22 @@ function libraryBookButton(book)
 /**
  * 「続きを取る」を頼み、終わるまで状態を問い合わせる
  * @param {boolean} [allowFewer] 話数が減っていても取り直す (利用者が「減ったまま更新」を押した)
+ * @param {boolean} [regenerate] 取りに行かず、キャッシュから今の設定で作り直す (internal #54)
  */
-async function startLibraryUpdate(book, allowFewer)
+async function startLibraryUpdate(book, allowFewer, regenerate)
 {
 	const current = libraryUpdates.get(book.id);
 	if (current && (current.state === 'queued' || current.state === 'running')) return;
-	setLibraryUpdate(book.id, {state: 'queued', message: ''});
-	const response = await fetch('api/book/' + encodeURIComponent(book.id) + '/update' + (allowFewer ? '?allowFewer=1' : ''),
-		{method: 'POST', cache: 'no-store'});
+	const kind = regenerate ? {regenerate: true} : {};
+	setLibraryUpdate(book.id, {state: 'queued', message: '', ...kind});
+	const path = regenerate ? '/regenerate' : '/update' + (allowFewer ? '?allowFewer=1' : '');
+	const response = await fetch('api/book/' + encodeURIComponent(book.id) + path, {method: 'POST', cache: 'no-store'});
 	let body = null;
 	try { body = await response.json(); } catch (e) { /* 本文の無い応答 */ }
 	if (!response.ok || !body || !body.job) {
 		throw new Error((body && body.error) ? body.error : 'HTTP ' + response.status);
 	}
-	setLibraryUpdate(book.id, {state: body.state, message: body.message || ''});
+	setLibraryUpdate(book.id, {state: body.state, message: body.message || '', ...kind});
 	let misses = 0;
 	for (;;) {
 		await new Promise(resolve => setTimeout(resolve, LIBRARY_UPDATE_POLL));
@@ -590,7 +599,7 @@ async function startLibraryUpdate(book, allowFewer)
 		} catch (e) {
 			// 一時的な失敗で「失敗」にしない。サーバでは更新が続いている
 			if (++misses < LIBRARY_UPDATE_MISSES) continue;
-			setLibraryUpdate(book.id, {state: 'failed',
+			setLibraryUpdate(book.id, {state: 'failed', ...kind,
 				message: '進み具合を確かめられません (更新は続いているかもしれません。⟳ 一覧を更新で確かめてください): ' + e.message});
 			return;
 		}
@@ -598,7 +607,7 @@ async function startLibraryUpdate(book, allowFewer)
 			// 開いている本は、サーバが次の読み込みで新しい版を展開する。目次を古いままにしない
 			job.reloaded = await reloadOpenBook(book.id);
 		}
-		setLibraryUpdate(book.id, {state: job.state, message: job.message || '', reloaded: job.reloaded});
+		setLibraryUpdate(book.id, {state: job.state, message: job.message || '', reloaded: job.reloaded, ...kind});
 		if (job.state !== 'queued' && job.state !== 'running') {
 			//上書きした本の題・表紙を出し直す
 			if (job.state === 'done') await loadLibrary(true);
@@ -660,8 +669,9 @@ function paintLibraryUpdate(slot, update)
 		return;
 	}
 	const fewer = slot.querySelector('.book-update-anyway');
-	if (fewer) fewer.hidden = update.state !== 'shrunk';
-	let text = LIBRARY_UPDATE_LABELS[update.state] || update.state;
+	// 作り直しで止めたときは出さない (押すと掲載元から取り直す。作り直しは取りに行かない操作)
+	if (fewer) fewer.hidden = update.state !== 'shrunk' || !!update.regenerate;
+	let text = (update.regenerate && LIBRARY_REGENERATE_LABELS[update.state]) || LIBRARY_UPDATE_LABELS[update.state] || update.state;
 	//守りで止めたとき・新着を確かめたときは、サーバの文 (N → M 話・HTTP の状態・n 話新着) をそのまま出す
 	if ((update.state === 'gone' || update.state === 'shrunk' || update.state === 'checked') && update.message) text = update.message;
 	else if ((update.state === 'failed' || update.state === 'checkFailed') && update.message) text += ': ' + update.message;
@@ -1363,6 +1373,13 @@ function bookMenuItems(book)
 		items.push({label: '続きを取る', disabled: () => libraryBookBusy(book.id), run: current => {
 			startLibraryUpdate(current).catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message}));
 		}});
+		// 掲載元へは取りに行かず、キャッシュから今の設定で作り直す (設定を変えたあとに)。アプリから開いた本棚だけ
+		if (libraryCanCheck) {
+			items.push({label: '作り直す (今の設定で)', disabled: () => libraryBookBusy(book.id), run: current => {
+				startLibraryUpdate(current, false, true)
+					.catch(err => setLibraryUpdate(current.id, {state: 'failed', message: err.message, regenerate: true}));
+			}});
+		}
 		if (libraryCanCheck) {
 			// 結果の文 (n 話新着・新着なし) はサーバが作り、カードの下に出る
 			items.push({label: 'この本の新着を確かめる', disabled: () => libraryBookBusy(book.id) || libraryChecking,
