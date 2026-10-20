@@ -11,6 +11,7 @@ import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -111,6 +112,8 @@ public class PreviewSession implements AutoCloseable
 	 * 登録できるため、名前で引くと取り違える。</p>
 	 */
 	private final Map<String, Integer> libraryShelfIndex = new HashMap<>();
+	/** 本棚から消した（ゴミ箱へ移した）本のファイル。古い走査の結果で戻さない（internal #57） */
+	private final Set<Path> removedLibraryFiles = new HashSet<>();
 	private final FontCatalog fontCatalog;
 	private final FileChannel lockChannel;
 	private final FileLock lock;
@@ -238,6 +241,13 @@ public class PreviewSession implements AutoCloseable
 			int index = this.libraryFolders.size();
 			this.libraryFolders.add(shelf.folder().toAbsolutePath().normalize());
 			for (LibraryEntry entry : shelf.entries()) {
+				// 本棚から消した本は、ファイルがまた現れるまで載せない。消している間に別の本のダウンロード・改名が本棚を読み直すと、
+				// 移す前に撮った走査の結果が、ゴミ箱へ移した本を本棚へ戻してしまう（internal #57）。確かめるのは消した本だけ
+				//（全冊を確かめると、ネットワークの棚で錠を握ったまま待たせる）
+				if (this.removedLibraryFiles.contains(entry.file())) {
+					if (!Files.isRegularFile(entry.file())) continue;
+					this.removedLibraryFiles.remove(entry.file());
+				}
 				// 既定の本は変えない。棚の 1 冊目が既定になると、
 				// 変換した本を開いたつもりが別の本になる
 				String id = addBook(entry.file(), false);
@@ -277,7 +287,9 @@ public class PreviewSession implements AutoCloseable
 	 */
 	public synchronized void removeLibraryEntry(String bookId)
 	{
-		if (this.library.remove(bookId) == null) return;
+		LibraryEntry removed = this.library.remove(bookId);
+		if (removed == null) return;
+		this.removedLibraryFiles.add(removed.file());
 		this.libraryShelfIndex.remove(bookId);
 		forgetUnusedLibraryBooks(Set.of(bookId));
 	}

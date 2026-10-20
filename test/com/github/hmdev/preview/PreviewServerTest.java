@@ -1517,6 +1517,33 @@ public class PreviewServerTest
 		assertTrue(PreviewServer.windowsTrashRefusal("X:\\a.epub", "X:\\a.epub", c -> c == 'X' ? "Subst" : "Fixed").contains("SUBST"));
 	}
 
+	/**
+	 * 消している間に、別の本のダウンロード・改名が本棚を読み直し、移す前に撮った走査の結果をあとから当てても、
+	 * ゴミ箱へ移した本は本棚に戻らない（internal #57）
+	 */
+	@Test
+	public void aStaleScanDoesNotBringBackATrashedBook() throws Exception
+	{
+		String[] ids = shelfForUpdate();
+		Path shelf = temp.getRoot().toPath().resolve("upd");
+		//移す前に撮った走査の結果（読み直しの途中）
+		List<LibraryEntry> stale = LibraryScanner.scan(shelf, 3, null);
+		assertEquals(2, stale.size());
+		this.server.setTrasher(Files::delete);
+		HttpResponse<String> trashed = post(base() + "api/book/" + ids[1] + "/trash");
+		assertEquals(trashed.body(), 200, trashed.statusCode());
+		assertFalse(get(base() + "api/library").body().contains("local.epub"));
+		//読み直しが終わり、古い結果を当てる
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, stale)));
+		String json = get(base() + "api/library").body();
+		assertFalse("消した本が戻らない: " + json, json.contains("local.epub"));
+		assertTrue("ほかの本はそのまま", json.contains("web.epub"));
+		//ゴミ箱から戻した（ファイルがまた在る）なら、次の読み直しで本棚に戻る
+		EpubFixture.standard().writeTo(shelf.resolve("local.epub"));
+		this.session.setLibrary(List.of(new LibraryShelf(shelf, LibraryScanner.scan(shelf, 3, null))));
+		assertTrue("戻した本は載る", get(base() + "api/library").body().contains("local.epub"));
+	}
+
 	/** ゴミ箱へ移している間も、ほかの本の仕事は待たせない。その本の仕事は断る */
 	@Test
 	public void trashingDoesNotHoldUpOtherBooks() throws Exception
