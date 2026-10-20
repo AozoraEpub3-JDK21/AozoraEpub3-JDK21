@@ -17,8 +17,8 @@ COOKIE	over18=yes
 SERIES	.p-novel__series-link:0,.series a:0
 ## タイトル (新クラス: p-novel__title)
 TITLE	.p-novel__title:0,.novel_title:0,.novel_subtitle:0	(^.*</div>)
-## 著者 (新クラス: p-novel__author)
-AUTHOR	.p-novel__author a:0,.p-infotop-data__value a:0,.novel_writername a:0,.novel_writername:0	作者：
+## 著者 (新クラス: p-novel__author)。マイページの無い著者はリンクが無く「作者：名前」だけなので、a の次に要素ごと読んで「作者：」を外す（internal #61）
+AUTHOR	.p-novel__author a:0,.p-novel__author:0,.p-infotop-data__value a:0,.novel_writername a:0,.novel_writername:0	^\s*作者：\s*(.*)$	$1
 ## 説明
 DESCRIPTION	.p-novel__summary:0,#novel_ex:0,.p-infotop-data__value:0
 ##表紙画像
