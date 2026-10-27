@@ -2154,6 +2154,16 @@ public class PreviewServerTest
 		assertTrue(ok.headers().firstValue("Content-Type").orElse(""), ok.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
 		assertEquals(1, asked.size());
 		assertTrue(asked.get(0).toString(), asked.get(0).toString().contains("order=weeklypoint"));
+		//ビューアーがなろうに付ける絞り込み (internal #62) の形のまま
+		assertEquals(200, get(base() + "api/ranking?site=narou&period=fav&genre=b2&type=er&length=-30000"
+			+ "&word=%E5%A4%A9%E6%89%8D&stop=1&notr15=0&nottensei=1&nottenni=0").statusCode());
+		String filtered = asked.get(1).toString();
+		for (String part : new String[]{ "&order=favnovelcnt&", "&biggenre=2", "&type=er", "&length=-30000", "&stop=1",
+				"&nottensei=1", "&word=%E5%A4%A9%E6%89%8D" }) {
+			assertTrue(part + " in " + filtered, filtered.contains(part));
+		}
+		assertEquals(400, get(base() + "api/ranking?site=narou&type=x").statusCode());
+		assertEquals(2, asked.size());
 		assertEquals(405, postText(base() + "api/ranking", "").statusCode());
 
 		this.server.setNarouRanking(new NarouRanking(uri -> { throw new IOException("つながりません"); }));

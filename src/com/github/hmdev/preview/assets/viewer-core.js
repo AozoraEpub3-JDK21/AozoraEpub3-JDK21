@@ -210,6 +210,8 @@ function cacheElements()
 		'libraryCheckAll',
 		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled',
 		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
+		'rankingSerialBox', 'rankingNarouFilters', 'rankingWord', 'rankingType', 'rankingLength', 'rankingStop',
+		'rankingNotR15', 'rankingNotTensei', 'rankingNotTenni',
 		'rankingStatus', 'rankingList'];
 	for (const id of ids) el[id] = document.getElementById(id);
 }

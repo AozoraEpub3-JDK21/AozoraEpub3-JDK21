@@ -143,11 +143,35 @@
 				<option value="kakuyomu">カクヨム</option>
 			</select>
 			<!-- 期間とジャンルの選択肢は、サイトに合わせて viewer-ranking.js が作る -->
-			<select id="rankingPeriod" title="期間"></select>
+			<select id="rankingPeriod" title="並び"></select>
 			<select id="rankingGenre" title="ジャンル">
 				<option value="0">総合</option>
 			</select>
-			<label><input id="rankingSerial" type="checkbox" checked> <span id="rankingSerialLabel">連載だけ (短編を外す)</span></label>
+			<label id="rankingSerialBox"><input id="rankingSerial" type="checkbox" checked> <span id="rankingSerialLabel">連載だけ (短編を外す)</span></label>
+		</div>
+		<!-- なろうだけの絞り込み (internal #62)。カクヨムのときは隠す。API の値は viewer-ranking.js が付ける -->
+		<div id="rankingNarouFilters" class="row">
+			<input id="rankingWord" type="search" placeholder="単語 (題・あらすじ・キーワード・作者名)" title="空白で区切ると、全部を含む作品 (Enter で探す)" autocomplete="off" maxlength="100">
+			<select id="rankingType" title="作品の種類">
+				<option value="">短編も連載も</option>
+				<option value="re" selected>連載 (完結済みと連載中)</option>
+				<option value="er">完結済みの連載</option>
+				<option value="r">連載中</option>
+				<option value="t">短編</option>
+				<option value="ter">完結済みの連載と短編</option>
+			</select>
+			<select id="rankingLength" title="文字数">
+				<option value="">文字数: 指定なし</option>
+				<option value="-30000">〜3 万字</option>
+				<option value="30000-100000">3〜10 万字</option>
+				<option value="100000-300000">10〜30 万字</option>
+				<option value="300000-1000000">30〜100 万字</option>
+				<option value="1000000-">100 万字〜</option>
+			</select>
+			<label><input id="rankingStop" type="checkbox"> 長期連載停止中を除く</label>
+			<label><input id="rankingNotR15" type="checkbox"> R15 を除く</label>
+			<label><input id="rankingNotTensei" type="checkbox"> 異世界転生を除く</label>
+			<label><input id="rankingNotTenni" type="checkbox"> 異世界転移を除く</label>
 		</div>
 		<div id="rankingStatus" class="note" aria-live="polite"></div>
 		<ol id="rankingList" class="ranking-list"></ol>

@@ -10,13 +10,17 @@
  */
 'use strict';
 
-/** なろうのジャンル (API の genre)。0 は総合 */
+/**
+ * なろうのジャンル (API の genre)。0 は総合。大ジャンル (API の biggenre) は b＋番号で頼む (internal #62)。
+ * ノンジャンル (9801) は大ジャンル 98 で、その他 (99) には入らないので、群を分ける
+ */
 const RANKING_GENRES = [
-	['恋愛', [[101, '異世界'], [102, '現実世界']]],
-	['ファンタジー', [[201, 'ハイファンタジー'], [202, 'ローファンタジー']]],
-	['文芸', [[301, '純文学'], [302, 'ヒューマンドラマ'], [303, '歴史'], [304, '推理'], [305, 'ホラー'], [306, 'アクション'], [307, 'コメディー']]],
-	['SF', [[401, 'VRゲーム'], [402, '宇宙'], [403, '空想科学'], [404, 'パニック']]],
-	['その他', [[9901, '童話'], [9902, '詩'], [9903, 'エッセイ'], [9904, 'リプレイ'], [9999, 'その他'], [9801, 'ノンジャンル']]],
+	['恋愛', 'b1', [[101, '異世界'], [102, '現実世界']]],
+	['ファンタジー', 'b2', [[201, 'ハイファンタジー'], [202, 'ローファンタジー']]],
+	['文芸', 'b3', [[301, '純文学'], [302, 'ヒューマンドラマ'], [303, '歴史'], [304, '推理'], [305, 'ホラー'], [306, 'アクション'], [307, 'コメディー']]],
+	['SF', 'b4', [[401, 'VRゲーム'], [402, '宇宙'], [403, '空想科学'], [404, 'パニック']]],
+	['その他', 'b99', [[9901, '童話'], [9902, '詩'], [9903, 'エッセイ'], [9904, 'リプレイ'], [9999, 'その他']]],
+	['ノンジャンル', 'b98', [[9801, 'ノンジャンル']]],
 ];
 
 /** カクヨムのジャンル (ランキングのページの URL の名前)。0 は総合 */
@@ -27,12 +31,17 @@ const KAKUYOMU_GENRES = [
 	['others', '詩・童話・その他'],
 ];
 
-const RANKING_PERIOD_NAMES = {d: '日間', w: '週間', m: '月間', q: '四半期', y: '年間', all: '累計'};
+const RANKING_PERIOD_NAMES = {
+	d: '日間', w: '週間', m: '月間', q: '四半期', y: '年間', all: '累計',
+	// なろうだけ (internal #62)。ポイントの順ではない
+	fav: 'ブックマーク数', new: '新着更新', len: '文字数が多い',
+};
 
 /** サイトごとの選べるもの */
 const RANKING_SITES = {
 	narou: {
-		periods: ['d', 'w', 'm', 'q', 'y', 'all'],
+		periods: ['d', 'w', 'm', 'q', 'y', 'all', 'fav', 'new', 'len'],
+		// なろうは連載だけかを rankingType で選ぶ (この印は出さない)
 		serial: '連載だけ (短編を外す)',
 		note: 'なろうの今のポイントで並べています (サイトのランキングのページと順番が少し違うことがあります)',
 	},
@@ -44,11 +53,18 @@ const RANKING_SITES = {
 	},
 };
 
-/** 期間 → なろうの点数の項目 (サーバが of に入れる名前) */
+/** 並び → なろうの、並びの理由になる項目 (サーバが of に入れる名前) と、その出し方 */
 const RANKING_POINTS = {
 	d: 'daily_point', w: 'weekly_point', m: 'monthly_point',
 	q: 'quarter_point', y: 'yearly_point', all: 'global_point',
+	fav: 'fav_novel_cnt', new: 'general_lastup', len: 'length',
 };
+
+/** ポイントの順の並び (サイトのランキングのページと順番が少し違う、と断る並び) */
+const RANKING_POINT_PERIODS = ['d', 'w', 'm', 'q', 'y', 'all'];
+
+/** ポイントでない並びを、断り書きの文に入れる言い方 */
+const RANKING_ORDER_PHRASES = {fav: 'ブックマーク数の多い順', new: '更新の新しい順', len: '文字数の多い順'};
 
 /** ランキングの読み込みの通し番号。遅れて返った古い一覧で新しい一覧を上書きしない */
 let rankingLoadSeq = 0;
@@ -77,9 +93,17 @@ function bindRankingEvents()
 		loadRanking();
 	});
 	el.libraryRankingToggle.addEventListener('click', () => toggleRanking());
-	for (const control of [el.rankingPeriod, el.rankingGenre, el.rankingSerial]) {
+	for (const control of [el.rankingPeriod, el.rankingGenre, el.rankingSerial, el.rankingType, el.rankingLength,
+		el.rankingStop, el.rankingNotR15, el.rankingNotTensei, el.rankingNotTenni]) {
 		control.addEventListener('change', () => loadRanking());
 	}
+	// 単語は打つたびには頼まない。Enter で頼む (変換を確定する Enter は除く)。× で消したとき (search) も。
+	// 欄を離れただけでは頼まない (本棚に戻る・落とすを押したときに、見ない一覧を頼む。PR #188 のゲート2)。
+	// ほかの選択を変えたときは、そのときの欄の単語で頼む (loadRanking)
+	el.rankingWord.addEventListener('keydown', event => {
+		if (event.key === 'Enter' && !isImeKey(event)) loadRanking();
+	});
+	el.rankingWord.addEventListener('search', () => loadRanking());
 	// 本棚の見出しの操作は本の一覧に効く。ランキングを出したままだと結果が見えないので、しまう
 	el.libraryFilter.addEventListener('input', () => toggleRanking(false));
 	for (const control of [el.librarySort, el.libraryShelfSelect]) {
@@ -93,6 +117,22 @@ function bindRankingEvents()
 		if (!button) return;
 		downloadFromRanking(button);
 	});
+}
+
+/**
+ * 頼んだときの単語。問い合わせはこれを送る。頼んだ時点 (loadRanking) の欄の値で、送る時点の値ではない:
+ * 送るのは待ち (RANKING_DELAY) と走っている問い合わせの後なので、その間に打ちかけた単語で絞らない。
+ * 頼むたびに欄から取り直すので、欄を空にしてからほかの選択を変えれば、単語の絞り込みも外れる (PR #188 のゲート2)
+ */
+let rankingWordSent = '';
+
+/** Esc で単語の欄を空にする。空にしたら true (ランキングはしまわない)。変換中かは呼ぶ側が見る */
+function clearRankingWordIfAny(event)
+{
+	if (event.target !== el.rankingWord || el.rankingWord.value === '') return false;
+	el.rankingWord.value = '';
+	loadRanking();
+	return true;
 }
 
 /** サイトに合わせて期間とジャンルの選択肢を作り直す。期間はそのサイトにあれば残す (四半期はカクヨムでは月間に) */
@@ -109,15 +149,20 @@ function fillRankingChoices()
 	if (site === 'kakuyomu') {
 		for (const [code, name] of KAKUYOMU_GENRES) genre.appendChild(rankingOption(code, name));
 	} else {
-		for (const [group, items] of RANKING_GENRES) {
+		for (const [group, big, items] of RANKING_GENRES) {
 			const optgroup = document.createElement('optgroup');
 			optgroup.label = group;
+			// 1 つしかない群 (ノンジャンル) は「すべて」を足さない (同じものが 2 つ並ぶ)
+			if (items.length > 1) optgroup.appendChild(rankingOption(big, group + 'のすべて'));
 			for (const [code, name] of items) optgroup.appendChild(rankingOption(String(code), name));
 			genre.appendChild(optgroup);
 		}
 	}
 	genre.value = '0';
 	el.rankingSerialLabel.textContent = config.serial;
+	// 連載だけかは、なろうでは作品の種類で選ぶ。絞り込みの行はなろうだけ
+	el.rankingSerialBox.hidden = (site === 'narou');
+	el.rankingNarouFilters.hidden = (site !== 'narou');
 }
 
 function rankingOption(value, label)
@@ -173,6 +218,7 @@ function closeRankingIfOpen()
 /** ランキングを頼む (少し待ち、1 本ずつ) */
 function loadRanking()
 {
+	rankingWordSent = el.rankingWord.value.trim();
 	el.rankingStatus.textContent = '読み込み中…';
 	el.rankingStatus.dataset.state = '';
 	// 走っている問い合わせの返りは、もう今の選択の答えではない。捨てさせる (PR #127 の codex)
@@ -204,10 +250,21 @@ async function fetchRanking()
 	const period = el.rankingPeriod.value;
 	const genre = el.rankingGenre.value;
 	const serial = el.rankingSerial.checked;
-	const query = 'site=' + encodeURIComponent(site)
+	let query = 'site=' + encodeURIComponent(site)
 		+ '&period=' + encodeURIComponent(period)
-		+ '&genre=' + encodeURIComponent(genre)
-		+ '&serial=' + (serial ? '1' : '0');
+		+ '&genre=' + encodeURIComponent(genre);
+	if (site === 'narou') {
+		// 空白は全角もサーバがそろえる (同じ単語を 1 つの問い合わせに数える)
+		query += '&type=' + encodeURIComponent(el.rankingType.value)
+			+ '&length=' + encodeURIComponent(el.rankingLength.value)
+			+ '&word=' + encodeURIComponent(rankingWordSent)
+			+ '&stop=' + (el.rankingStop.checked ? '1' : '0')
+			+ '&notr15=' + (el.rankingNotR15.checked ? '1' : '0')
+			+ '&nottensei=' + (el.rankingNotTensei.checked ? '1' : '0')
+			+ '&nottenni=' + (el.rankingNotTenni.checked ? '1' : '0');
+	} else {
+		query += '&serial=' + (serial ? '1' : '0');
+	}
 	let works;
 	try {
 		const response = await fetch('api/ranking?' + query, {cache: 'no-store'});
@@ -229,19 +286,37 @@ async function fetchRanking()
 	}
 	if (seq !== rankingLoadSeq) return;
 	rankingWorks = works;
-	el.rankingStatus.textContent = rankingWorks.length ? RANKING_SITES[site].note : '作品がありません';
+	el.rankingStatus.textContent = works.length ? rankingNote(site, period, works.length, works.allcount) : '作品がありません';
 	renderRanking();
 }
 
 /**
+ * 一覧の上の断り書き。なろうは、絞り込んで当たった数が出した数より多いときに、その数も出す。
+ * ポイントの順でない並び (ブックマーク数など) は、サイトのランキングと比べる断りが要らない
+ */
+function rankingNote(site, period, shown, allcount)
+{
+	if (site !== 'narou') return RANKING_SITES[site].note;
+	const note = RANKING_POINT_PERIODS.includes(period)
+		? RANKING_SITES.narou.note
+		: 'なろうの API で、' + RANKING_ORDER_PHRASES[period] + 'に並べています';
+	if (typeof allcount === 'number' && allcount > shown) {
+		return '当てはまる ' + allcount.toLocaleString('ja-JP') + ' 作のうち、先頭の ' + shown + ' 作です。' + note;
+	}
+	return note;
+}
+
+/**
  * なろうの API の行をそろえる。先頭は {"allcount": n}。作品の行は ncode を持つ。
- * period は頼んだときの期間 (点数の項目を選ぶ。今の選択で読むと、別の期間の答えで点数が消える)
+ * period は頼んだときの並び (点数の項目を選ぶ。今の選択で読むと、別の並びの答えで点数が消える)。
+ * 返す配列の allcount に、絞り込みに当てはまった作品の数を持たせる (数で返ったときだけ)
  */
 function narouWorks(rows, period)
 {
 	if (!Array.isArray(rows)) throw new Error('なろうの API が一覧を返しませんでした');
 	const point = RANKING_POINTS[period];
-	return rows.filter(row => row && typeof row.ncode === 'string').map(row => {
+	const head = rows.find(row => row && typeof row.allcount === 'number');
+	const works = rows.filter(row => row && typeof row.ncode === 'string').map(row => {
 		// 題・作者・あらすじは文字列にそろえる (数字だけだと数で返ることがある。split で落ちる)
 		const story = rankingText(row.story);
 		const ncode = row.ncode.toLowerCase();
@@ -252,11 +327,26 @@ function narouWorks(rows, period)
 			writer: rankingText(row.writer),
 			genre: rankingGenreName(row.genre),
 			kind: rankingKind(row),
-			points: rankingPoints(row[point], ' pt'),
+			points: narouReason(period, row[point]),
 			summary: firstLine(story),
 			story,
 		};
 	});
+	if (head) works.allcount = head.allcount;
+	return works;
+}
+
+/** 並びの理由の値。ポイント (… pt)・ブックマーク数・文字数・最終掲載日 */
+function narouReason(period, value)
+{
+	if (period === 'fav') return rankingPoints(value, '', 'ブックマーク ');
+	if (period === 'len') return rankingPoints(value, ' 字');
+	if (period === 'new') {
+		// 「2026-10-27 07:00:00」。分まで出す
+		const text = rankingText(value);
+		return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text) ? '更新 ' + text.slice(0, 16) : '';
+	}
+	return rankingPoints(value, ' pt');
 }
 
 /**
@@ -454,7 +544,7 @@ function downloadFromRanking(button)
 
 function rankingGenreName(code)
 {
-	for (const [, items] of RANKING_GENRES) {
+	for (const [, , items] of RANKING_GENRES) {
 		for (const [value, name] of items) if (value === code) return name;
 	}
 	return '';
