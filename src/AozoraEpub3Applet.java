@@ -4256,9 +4256,7 @@ public class AozoraEpub3Applet extends JPanel
 					//	bookInfo.coverImage = imageInfoReader.getImage(0);
 					//}
 					//画像数をプログレスバーに設定 xhtml出力で+1 画像出力で+10
-					this.jProgressBar.setMaximum(imageInfoReader.countImageFileInfos()*11);
-					jProgressBar.setValue(0);
-					jProgressBar.setStringPainted(true);
+					startProgress(this.jProgressBar, imageInfoReader.countImageFileInfos()*11);
 				} else {
 					//画像がなければプレビュー表示しないようにindexを-1に
 					if (imageInfoReader.countImageFileNames() == 0) coverImageIndex = -1;
@@ -4279,10 +4277,8 @@ public class AozoraEpub3Applet extends JPanel
 		
 		//テキストなら行数/100と画像数をプログレスバーに設定
 		if (bookInfo.totalLineNum > 0) {
-			if (isFile) this.jProgressBar.setMaximum(bookInfo.totalLineNum/10 + imageInfoReader.countImageFileNames()*10);
-			else this.jProgressBar.setMaximum(bookInfo.totalLineNum/10 + imageInfoReader.countImageFileInfos()*10);
-			jProgressBar.setValue(0);
-			jProgressBar.setStringPainted(true);
+			if (isFile) startProgress(this.jProgressBar, bookInfo.totalLineNum/10 + imageInfoReader.countImageFileNames()*10);
+			else startProgress(this.jProgressBar, bookInfo.totalLineNum/10 + imageInfoReader.countImageFileInfos()*10);
 		}
 		
 		//表紙目次ページ出力設定
@@ -4704,6 +4700,14 @@ public class AozoraEpub3Applet extends JPanel
 		return outFileOrg;
 	}
 	
+	/** 進み具合のバーを 0 から始める。短い本では units が 0 になり、割合が 0÷0 の NaN と出るので、最大値は 1 以上にする（internal #63） */
+	static void startProgress(JProgressBar bar, int units)
+	{
+		bar.setMaximum(Math.max(1, units));
+		bar.setValue(0);
+		bar.setStringPainted(true);
+	}
+
 	/** kindlegen の後、一時ファイルの EPUB を本当の名前で残すか。
 	 * 中止した回は残さない（前の本を置き換えない）。EPUB も出す設定なら残す。mobi だけの設定でも、mobi ができなかったら残す（変換した物を失わない）
 	 * @param epubOutput 出力の形式が EPUB も出す（.mobi+.epub） */
