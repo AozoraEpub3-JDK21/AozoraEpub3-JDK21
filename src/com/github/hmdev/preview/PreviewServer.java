@@ -1568,7 +1568,8 @@ public class PreviewServer implements AutoCloseable
 	}
 
 	/**
-	 * ランキング（GET api/ranking?site=narou&period=d&genre=0&serial=1）。
+	 * ランキング（GET api/ranking?site=narou&period=d&genre=0&serial=1）。なろうは type・length・stop・word・
+	 * notr15・nottensei・nottenni でも絞れる（internal #62、{@link NarouRanking.Query#parse}）。
 	 * なろうは API の応答の JSON を、カクヨム（site=kakuyomu）はページの __NEXT_DATA__ の JSON をそのまま返す。
 	 * 落とせる本棚（アプリから開いた本棚）だけ。札から落とせないランキングは出さない
 	 */
@@ -1585,7 +1586,7 @@ public class PreviewServer implements AutoCloseable
 			if (site == null || site.equals("narou")) {
 				NarouRanking.Query query = NarouRanking.Query.parse(rawQuery);
 				if (query == null) {
-					respondJsonStatus(exchange, 400, errorJson("ランキングの期間かジャンルの指定が読めません"));
+					respondJsonStatus(exchange, 400, errorJson("ランキングの並び・ジャンル・絞り込みの指定が読めません"));
 					return;
 				}
 				body = this.narouRanking.fetch(query);

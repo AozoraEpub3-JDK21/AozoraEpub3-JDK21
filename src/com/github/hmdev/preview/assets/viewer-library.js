@@ -164,6 +164,13 @@ function onLibraryKeyDown(event)
 			event.preventDefault();
 			return;
 		}
+		// ランキングの単語の欄も同じ。消して探し直し、ランキングはしまわない (internal #62)
+		if (event.target === el.rankingWord && el.rankingWord.value !== '') {
+			el.rankingWord.value = '';
+			el.rankingWord.dispatchEvent(new Event('change'));
+			event.preventDefault();
+			return;
+		}
 		// 手前に出しているランキングを先にしまう
 		if (closeRankingIfOpen()) {
 			event.preventDefault();

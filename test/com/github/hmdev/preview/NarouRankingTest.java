@@ -68,6 +68,79 @@ public class NarouRankingTest
 	}
 
 	@Test
+	public void theFiltersOfInternal62ReachTheApi()
+	{
+		//完結済みの連載だけ・10〜30 万字・長期連載停止中を除く・ファンタジー全体・転生を除く
+		String url = NarouRanking.Query.parse(
+			"period=all&genre=b2&type=er&length=100000-300000&stop=1&nottensei=1").uri().toString();
+		assertTrue(url, url.contains("&biggenre=2"));
+		assertFalse("大ジャンルは genre に入れない: " + url, url.contains("&genre="));
+		assertTrue(url, url.endsWith("&type=er"));
+		assertTrue(url, url.contains("&length=100000-300000"));
+		assertTrue(url, url.contains("&stop=1"));
+		assertTrue(url, url.contains("&nottensei=1"));
+		assertFalse(url, url.contains("&notr15="));
+		assertFalse(url, url.contains("&nottenni="));
+		assertFalse(url, url.contains("&word="));
+
+		//type は serial より強い（serial=1 のままでも完結済み＋短編）
+		assertTrue(NarouRanking.Query.parse("serial=1&type=ter").uri().toString().endsWith("&type=ter"));
+		//type= は短編も連載も
+		assertFalse(NarouRanking.Query.parse("type=").uri().toString().contains("&type="));
+		for (String type : new String[]{ "re", "er", "r", "t", "ter" }) {
+			assertTrue(type, NarouRanking.Query.parse("type=" + type).uri().toString().endsWith("&type=" + type));
+		}
+		for (String length : new String[]{ "-30000", "1000000-" }) {
+			assertTrue(length, NarouRanking.Query.parse("length=" + length).uri().toString().contains("&length=" + length + "&"));
+		}
+		String r15 = NarouRanking.Query.parse("notr15=1&nottenni=1").uri().toString();
+		assertTrue(r15, r15.contains("&notr15=1") && r15.contains("&nottenni=1"));
+	}
+
+	@Test
+	public void theOrdersBesidesPointsAskForTheirOwnField()
+	{
+		for (String[] p : new String[][]{ {"fav", "favnovelcnt", "f"}, {"new", "new", "gl"}, {"len", "lengthdesc", "l"} }) {
+			String url = NarouRanking.Query.parse("period=" + p[0]).uri().toString();
+			assertTrue(url, url.contains("&order=" + p[1] + "&"));
+			assertTrue(url, url.contains("&of=t-n-w-s-g-nt-e-ga-" + p[2] + "&"));
+		}
+	}
+
+	@Test
+	public void theWordIsDecodedTidiedAndEncodedAgain()
+	{
+		//ビューアーは encodeURIComponent で送る（空白は %20、全角の空白は %E3%80%80）
+		NarouRanking.Query query = NarouRanking.Query.parse("word=%E5%A4%A9%E6%89%8D%E3%80%80%20%E5%BD%B9%E7%AB%8B%E3%81%9F%E3%81%9A%20");
+		assertEquals("天才 役立たず", query.word());
+		String url = query.uri().toString();
+		assertTrue(url, url.contains("&word=" + java.net.URLEncoder.encode("天才 役立たず", StandardCharsets.UTF_8) + "&"));
+		//同じ単語は同じ問い合わせ（キャッシュが効く）
+		assertEquals(query, NarouRanking.Query.parse("word=%E5%A4%A9%E6%89%8D+%E5%BD%B9%E7%AB%8B%E3%81%9F%E3%81%9A"));
+		//& や = を含む単語も、ほかの引数に化けない
+		String amp = NarouRanking.Query.parse("word=a%26type%3Dt").uri().toString();
+		assertTrue(amp, amp.contains("&word=a%26type%3Dt&"));
+		assertTrue(amp, amp.endsWith("&type=re"));
+		//空白だけは指定なし
+		assertFalse(NarouRanking.Query.parse("word=%20%E3%80%80").uri().toString().contains("&word="));
+		//上限ちょうどは通る（コードポイントで数える。第 2 面の漢字も 1 字）
+		assertEquals(NarouRanking.WORD_MAX, NarouRanking.Query.parse("word=" + "%F0%A0%80%8B".repeat(NarouRanking.WORD_MAX))
+			.word().codePointCount(0, NarouRanking.WORD_MAX * 2));
+	}
+
+	@Test
+	public void unreadableFiltersAreRefused()
+	{
+		for (String bad : new String[]{ "type=x", "type=R", "length=abc", "length=-", "length=1-2-3", "length=+1-2",
+				"stop=2", "notr15=", "nottensei=yes", "genre=b5", "genre=b", "genre=b01", "genre=0201", "genre=+201",
+				"word=%ZZ", "word=" + "a".repeat(NarouRanking.WORD_MAX + 1), "word=a%00b", "period=FAV" }) {
+			assertNull(bad, NarouRanking.Query.parse(bad));
+		}
+		//上限より長い単語も、空白をそろえてから数える
+		assertEquals("a b", NarouRanking.Query.parse("word=a" + "%20".repeat(NarouRanking.WORD_MAX + 5) + "b").word());
+	}
+
+	@Test
 	public void theSameQueryIsNotFetchedAgainUntilTheCacheExpires() throws Exception
 	{
 		List<URI> asked = new CopyOnWriteArrayList<>();

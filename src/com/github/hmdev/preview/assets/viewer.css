@@ -588,6 +588,20 @@ details.css-file > summary { cursor: pointer; font-size: 12px; padding: 4px 0; }
 	font: inherit;
 }
 .library-ranking label { display: flex; gap: 4px; align-items: center; font-size: 13px; }
+.library-ranking label[hidden], .library-ranking .row[hidden] { display: none; }
+.library-ranking input[type="search"] {
+	height: 28px;
+	box-sizing: border-box;
+	flex: 1 1 16em;
+	min-width: 10em;
+	max-width: 28em;
+	padding: 0 8px;
+	background: var(--surface-2);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font: inherit;
+}
 .library-ranking .note { font-size: 12px; color: var(--text-sub); min-height: 1em; }
 .library-ranking .note[data-state="failed"] { color: var(--danger); }
 .ranking-list {
