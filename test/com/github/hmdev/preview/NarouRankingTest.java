@@ -137,7 +137,11 @@ public class NarouRankingTest
 				//壊れた UTF-8（途中で切れた 3 バイト・単独の FF）
 				"word=%E5%A4", "word=%FF",
 				//先頭の 0・最小が最大より大きい
-				"length=0030000-", "length=-030000", "length=300000-100000" }) {
+				"length=0030000-", "length=-030000", "length=300000-100000",
+				//指定なしと同じ・何にも当たらない
+				"length=0-", "length=-0", "length=0-0",
+				//% の後が切れている・生の非 ASCII
+				"word=%E5%A4%A", "word=%", "word=天才" }) {
 			assertNull(bad, NarouRanking.Query.parse(bad));
 		}
 		//上限より長い単語も、空白をそろえてから数える
@@ -146,6 +150,10 @@ public class NarouRankingTest
 		assertEquals("天才 役立たず 三語目 四語目 五語目", NarouRanking.Query.parse(
 			"word=%E5%A4%A9%E6%89%8D%C2%A0%E5%BD%B9%E7%AB%8B%E3%81%9F%E3%81%9A%E2%80%82%E4%B8%89%E8%AA%9E%E7%9B%AE%09"
 			+ "%E5%9B%9B%E8%AA%9E%E7%9B%AE%0A%E4%BA%94%E8%AA%9E%E7%9B%AE").word());
+		//U+FFFD そのものは正しい UTF-8 なので通す（文字化けした題を貼っても探せる）
+		assertEquals("a\uFFFDb", NarouRanking.Query.parse("word=a%EF%BF%BDb").word());
+		//幅の無い空白・ソフトハイフンは消す（語が割れない）
+		assertEquals("天才 役立たず", NarouRanking.Query.parse("word=%E5%A4%A9%E2%80%8B%E6%89%8D%C2%AD%20%E5%BD%B9%E7%AB%8B%E3%81%9F%E3%81%9A%EF%BB%BF").word());
 		//0 と、最小と最大が同じ字数は通る
 		assertTrue(NarouRanking.Query.parse("length=0-30000").uri().toString().contains("&length=0-30000&"));
 		assertTrue(NarouRanking.Query.parse("length=50000-50000").uri().toString().contains("&length=50000-50000&"));

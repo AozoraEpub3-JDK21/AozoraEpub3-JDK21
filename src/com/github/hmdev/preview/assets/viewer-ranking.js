@@ -98,11 +98,12 @@ function bindRankingEvents()
 		control.addEventListener('change', () => loadRanking());
 	}
 	// 単語は打つたびには頼まない。Enter で頼む (変換を確定する Enter は除く)。× で消したとき (search) も。
-	// 欄を離れただけでは頼まない (本棚に戻る・落とすを押したときに、見ない一覧を頼む。PR #188 のゲート2)
+	// 欄を離れただけでは頼まない (本棚に戻る・落とすを押したときに、見ない一覧を頼む。PR #188 のゲート2)。
+	// ほかの選択を変えたときは、そのときの欄の単語で頼む (loadRanking)
 	el.rankingWord.addEventListener('keydown', event => {
-		if (event.key === 'Enter' && !event.isComposing) sendRankingWord(el.rankingWord.value);
+		if (event.key === 'Enter' && !isImeKey(event)) loadRanking();
 	});
-	el.rankingWord.addEventListener('search', () => sendRankingWord(el.rankingWord.value));
+	el.rankingWord.addEventListener('search', () => loadRanking());
 	// 本棚の見出しの操作は本の一覧に効く。ランキングを出したままだと結果が見えないので、しまう
 	el.libraryFilter.addEventListener('input', () => toggleRanking(false));
 	for (const control of [el.librarySort, el.libraryShelfSelect]) {
@@ -119,26 +120,18 @@ function bindRankingEvents()
 }
 
 /**
- * 頼んだ単語。問い合わせはこれを送る (欄の今の値ではない)。欄の値で送ると、ほかの選択で頼み直したときに
- * Enter を押していない打ちかけの単語で絞り、そのあと欄を空にしても絞ったままになる (PR #188 のゲート2)
+ * 頼んだときの単語。問い合わせはこれを送る。頼んだ時点 (loadRanking) の欄の値で、送る時点の値ではない:
+ * 送るのは待ち (RANKING_DELAY) と走っている問い合わせの後なので、その間に打ちかけた単語で絞らない。
+ * 頼むたびに欄から取り直すので、欄を空にしてからほかの選択を変えれば、単語の絞り込みも外れる (PR #188 のゲート2)
  */
 let rankingWordSent = '';
 
-/** 単語を頼む。同じ単語なら頼み直さない */
-function sendRankingWord(value)
-{
-	const word = value.trim();
-	if (word === rankingWordSent) return;
-	rankingWordSent = word;
-	loadRanking();
-}
-
-/** Esc で単語の欄を空にする。空にしたら true (ランキングはしまわない)。変換中の Esc は変換の取り消しなので見ない */
+/** Esc で単語の欄を空にする。空にしたら true (ランキングはしまわない)。変換中かは呼ぶ側が見る */
 function clearRankingWordIfAny(event)
 {
-	if (event.target !== el.rankingWord || event.isComposing || el.rankingWord.value === '') return false;
+	if (event.target !== el.rankingWord || el.rankingWord.value === '') return false;
 	el.rankingWord.value = '';
-	sendRankingWord('');
+	loadRanking();
 	return true;
 }
 
@@ -225,6 +218,7 @@ function closeRankingIfOpen()
 /** ランキングを頼む (少し待ち、1 本ずつ) */
 function loadRanking()
 {
+	rankingWordSent = el.rankingWord.value.trim();
 	el.rankingStatus.textContent = '読み込み中…';
 	el.rankingStatus.dataset.state = '';
 	// 走っている問い合わせの返りは、もう今の選択の答えではない。捨てさせる (PR #127 の codex)

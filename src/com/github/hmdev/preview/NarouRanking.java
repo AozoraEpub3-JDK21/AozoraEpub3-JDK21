@@ -2,8 +2,9 @@ package com.github.hmdev.preview;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
@@ -117,11 +118,8 @@ final class NarouRanking
 						case "type" -> type = value;
 						case "length" -> length = value;
 						case "word" -> {
-							try {
-								word = URLDecoder.decode(value, StandardCharsets.UTF_8);
-							} catch (IllegalArgumentException e) {
-								return null;
-							}
+							word = decodeStrictly(value);
+							if (word == null) return null;
 						}
 						case "stop", "notr15", "nottensei", "nottenni" -> {
 							if (!value.equals("0") && !value.equals("1")) return null;
@@ -143,8 +141,8 @@ final class NarouRanking
 			if (type == null) type = serialType;
 			if (!TYPES.contains(type)) return null;
 			if (!length.isEmpty() && !knownLength(length)) return null;
-			//壊れた UTF-8 は URLDecoder が U+FFFD に置き換えて通すので、ここで断る
-			if (word.indexOf('\uFFFD') >= 0) return null;
+			//幅の無い空白・ソフトハイフン（Web から貼ると混ざる。語の中に入ると、その語が当たらない）は消す
+			word = word.replaceAll("[\\u200B\\u2060\\uFEFF\\u00AD]", "");
 			//空白（全角・ノーブレークスペースなどの Unicode の空白、タブ・改行も）を 1 つにそろえる。
 			//同じ単語の問い合わせを 1 つに数え（取り直さない）、API の「空白で区切ると全部を含む」に乗せる
 			word = word.replaceAll("[\\p{Z}\\s]+", " ").strip();
@@ -161,7 +159,44 @@ final class NarouRanking
 			int dash = length.indexOf('-');
 			String min = length.substring(0, dash), max = length.substring(dash + 1);
 			if (min.isEmpty() && max.isEmpty()) return false;
-			return min.isEmpty() || max.isEmpty() || Long.parseLong(min) <= Long.parseLong(max);
+			//0- は指定なしと同じ（同じ絞り込みを別の問い合わせに数える）、-0 は何にも当たらない
+			if (max.isEmpty()) return !min.equals("0");
+			if (Long.parseLong(max) == 0) return false;
+			return min.isEmpty() || Long.parseLong(min) <= Long.parseLong(max);
+		}
+
+		/**
+		 * %XX と + を UTF-8 として読む。壊れた UTF-8・壊れた %XX は null（URLDecoder は壊れたバイトを U+FFFD に
+		 * 置き換えて通す。U+FFFD そのもの（%EF%BF%BD）は正しい UTF-8 なので通す）
+		 */
+		static String decodeStrictly(String value)
+		{
+			java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+			for (int i = 0; i < value.length(); i++) {
+				char c = value.charAt(i);
+				if (c == '%') {
+					if (i + 2 >= value.length()) return null;
+					int hi = Character.digit(value.charAt(i + 1), 16), lo = Character.digit(value.charAt(i + 2), 16);
+					if (hi < 0 || lo < 0) return null;
+					bytes.write(hi * 16 + lo);
+					i += 2;
+				} else if (c == '+') {
+					bytes.write(' ');
+				} else if (c < 0x80) {
+					bytes.write(c);
+				} else {
+					//生の非 ASCII は来ない（ブラウザは %XX にする）
+					return null;
+				}
+			}
+			try {
+				return StandardCharsets.UTF_8.newDecoder()
+					.onMalformedInput(CodingErrorAction.REPORT)
+					.onUnmappableCharacter(CodingErrorAction.REPORT)
+					.decode(java.nio.ByteBuffer.wrap(bytes.toByteArray())).toString();
+			} catch (CharacterCodingException e) {
+				return null;
+			}
 		}
 
 		private static boolean knownGenre(String genre)
