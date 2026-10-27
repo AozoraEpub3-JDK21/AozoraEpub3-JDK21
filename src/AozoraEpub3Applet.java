@@ -4277,8 +4277,8 @@ public class AozoraEpub3Applet extends JPanel
 		
 		//テキストなら行数/100と画像数をプログレスバーに設定
 		if (bookInfo.totalLineNum > 0) {
-			if (isFile) startProgress(this.jProgressBar, bookInfo.totalLineNum/10 + imageInfoReader.countImageFileNames()*10);
-			else startProgress(this.jProgressBar, bookInfo.totalLineNum/10 + imageInfoReader.countImageFileInfos()*10);
+			int imageCount = isFile ? imageInfoReader.countImageFileNames() : imageInfoReader.countImageFileInfos();
+			startProgress(this.jProgressBar, bookInfo.totalLineNum/10 + imageCount*10);
 		}
 		
 		//表紙目次ページ出力設定
