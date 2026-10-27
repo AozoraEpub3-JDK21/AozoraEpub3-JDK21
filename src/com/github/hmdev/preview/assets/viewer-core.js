@@ -27,7 +27,9 @@ const DEFAULT_SETTINGS = {
 	marginBlock: 1.5,
 	/** 本文の左右余白 (em) */
 	marginInline: 1.5,
-	tocOpen: true
+	tocOpen: true,
+	/** 本の右クリックに「Kindle に送る」を出すか (internal #55)。Kindle を使わない人には要らないので既定は出さない */
+	sendToKindle: false
 };
 
 /**
@@ -208,7 +210,7 @@ function cacheElements()
 		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
 		'libraryQueueList', 'libraryQueueNote', 'libraryQueueRefusal',
 		'libraryCheckAll',
-		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled',
+		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled', 'sendToKindleField', 'sendToKindleEnabled',
 		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
 		'rankingSerialBox', 'rankingNarouFilters', 'rankingWord', 'rankingType', 'rankingLength', 'rankingStop',
 		'rankingNotR15', 'rankingNotTensei', 'rankingNotTenni',
@@ -302,11 +304,16 @@ const REVEAL_TITLE = 'EPUB のあるフォルダを開く';
  * <p>ブラウザからファイラは開けないのでサーバに依頼する。
  * 開く対象はサーバが bookId から解決するため、パスは送らない。</p>
  */
-async function revealBook(bookId = state.bookId)
+async function revealBook(bookId = state.bookId, requireBook = false)
 {
 	if (!bookId) return;
-	const response = await fetch('api/book/' + encodeURIComponent(bookId) + '/reveal',
+	// requireBook: フォルダだけでなく本のファイルも在るときだけ開く (「Kindle に送る」)
+	const response = await fetch('api/book/' + encodeURIComponent(bookId) + '/reveal' + (requireBook ? '?book' : ''),
 		{method: 'POST', cache: 'no-store'});
-	if (!response.ok) throw new Error('HTTP ' + response.status);
+	if (!response.ok) {
+		const error = new Error('HTTP ' + response.status);
+		error.status = response.status;
+		throw error;
+	}
 }
 

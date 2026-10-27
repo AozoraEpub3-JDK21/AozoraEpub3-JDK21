@@ -44,6 +44,11 @@ function bindEvents()
 		saveSettings();
 	});
 
+	el.sendToKindleEnabled.addEventListener('change', () => {
+		state.settings.sendToKindle = el.sendToKindleEnabled.checked;
+		saveSettings();
+	});
+
 	el.fontSelect.addEventListener('change', () => {
 		state.settings.fontFamily = el.fontSelect.value;
 		reapplyStyle();
@@ -79,8 +84,9 @@ function bindEvents()
 	});
 
 	el.settingsReset.addEventListener('click', () => {
-		const tocOpen = state.settings.tocOpen;
-		state.settings = Object.assign({}, DEFAULT_SETTINGS, {tocOpen: tocOpen});
+		// 目次の開閉と「Kindle に送る」は見た目の設定ではないので、既定に戻さない
+		const keep = {tocOpen: state.settings.tocOpen, sendToKindle: state.settings.sendToKindle};
+		state.settings = Object.assign({}, DEFAULT_SETTINGS, keep);
 		applyDefaultFontIfUnset();
 		el.fontSelect.value = state.settings.fontFamily;
 		el.gothicSelect.value = '';

@@ -385,6 +385,35 @@ public class PreviewServerTest
 		assertTrue(json, json.contains("\"hasCover\":false"));
 	}
 
+	/** 本の右クリックの「Kindle に送る」で開くページを、本の一覧と一緒に渡す (internal #55) */
+	@Test
+	public void theLibraryNamesTheSendToKindlePage() throws Exception
+	{
+		shelfWith("plain-b");
+		java.util.Locale before = com.github.hmdev.util.I18n.getLocale();
+		try {
+			com.github.hmdev.util.I18n.init(java.util.Locale.JAPANESE, null);
+			String json = get(base() + "api/library").body();
+			assertTrue(json, json.contains("\"sendToKindleUrl\":\"https://www.amazon.co.jp/sendtokindle\""));
+			com.github.hmdev.util.I18n.init(java.util.Locale.ENGLISH, null);
+			json = get(base() + "api/library").body();
+			assertTrue(json, json.contains("\"sendToKindleUrl\":\"https://www.amazon.com/sendtokindle\""));
+		} finally {
+			com.github.hmdev.util.I18n.init(before, null);
+		}
+	}
+
+	/** 表示言語が日本語なら amazon.co.jp、ほかは amazon.com (internal #55) */
+	@Test
+	public void theSendToKindlePageFollowsTheAppLanguage()
+	{
+		assertEquals("https://www.amazon.co.jp/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.JAPANESE));
+		assertEquals("https://www.amazon.co.jp/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.JAPAN));
+		assertEquals("https://www.amazon.com/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.ENGLISH));
+		assertEquals("https://www.amazon.com/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.FRANCE));
+		assertEquals("https://www.amazon.com/sendtokindle", PreviewSession.sendToKindleUrl(null));
+	}
+
 	@Test
 	public void theLibraryListsTheSourceOfBooksFromTheWeb() throws Exception
 	{
@@ -822,6 +851,24 @@ public class PreviewServerTest
 		// スラッシュ入りの bookId も引けないだけ
 		assertEquals(404, post(base() + "api/book/a/b/reveal").statusCode());
 		assertTrue("拒否したのにファイラを起動している", opened.isEmpty());
+	}
+
+	/** 「Kindle に送る」(?book) は、フォルダが在っても本のファイルが無ければ開かない (internal #55) */
+	@Test
+	public void revealForKindleNeedsTheBookItself() throws Exception
+	{
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		Path folder = temp.newFolder("moved").toPath();
+		String movedId = this.session.addBook(folder.resolve("book.epub"));
+		assertEquals(404, post(base() + "api/book/" + movedId + "/reveal?book").statusCode());
+		assertTrue("本が無いのにファイラを起動している", opened.isEmpty());
+		// ?book の無い「保存フォルダを開く」は、今までどおりフォルダがあれば開く
+		assertEquals(204, post(base() + "api/book/" + movedId + "/reveal").statusCode());
+		// 本が在れば ?book でも開く
+		assertEquals(204, post(base() + "api/book/" + this.bookId + "/reveal?book").statusCode());
+		assertEquals(2, opened.size());
 	}
 
 	@Test

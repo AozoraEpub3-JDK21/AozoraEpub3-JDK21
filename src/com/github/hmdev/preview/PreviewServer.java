@@ -1693,6 +1693,11 @@ public class PreviewServer implements AutoCloseable
 			respond(exchange, 404, "text/plain; charset=utf-8", "Folder not found".getBytes(StandardCharsets.UTF_8));
 			return;
 		}
+		// 「Kindle に送る」(?book) は本そのものを Amazon へ渡してもらうので、本が無ければ開かない (internal #55)
+		if ("book".equals(exchange.getRequestURI().getRawQuery()) && !Files.isRegularFile(book.getEpubFile())) {
+			respond(exchange, 404, "text/plain; charset=utf-8", "Book not found".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
 		try {
 			this.revealer.reveal(book.getEpubFile());
 		} catch (IOException e) {

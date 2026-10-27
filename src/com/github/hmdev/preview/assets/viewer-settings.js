@@ -86,6 +86,7 @@ function syncSettingsInputs()
 	el.marginBlock.value = state.settings.marginBlock;
 	el.marginInline.value = state.settings.marginInline;
 	el.themeSelect.value = state.settings.theme;
+	el.sendToKindleEnabled.checked = !!state.settings.sendToKindle;
 	updateSettingsOutputs();
 }
 
