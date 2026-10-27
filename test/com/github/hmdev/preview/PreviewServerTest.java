@@ -853,6 +853,24 @@ public class PreviewServerTest
 		assertTrue("拒否したのにファイラを起動している", opened.isEmpty());
 	}
 
+	/** 「Kindle に送る」(?book) は、フォルダが在っても本のファイルが無ければ開かない (internal #55) */
+	@Test
+	public void revealForKindleNeedsTheBookItself() throws Exception
+	{
+		java.util.List<Path> opened = new java.util.ArrayList<>();
+		this.server.setRevealer(opened::add);
+
+		Path folder = temp.newFolder("moved").toPath();
+		String movedId = this.session.addBook(folder.resolve("book.epub"));
+		assertEquals(404, post(base() + "api/book/" + movedId + "/reveal?book").statusCode());
+		assertTrue("本が無いのにファイラを起動している", opened.isEmpty());
+		// ?book の無い「保存フォルダを開く」は、今までどおりフォルダがあれば開く
+		assertEquals(204, post(base() + "api/book/" + movedId + "/reveal").statusCode());
+		// 本が在れば ?book でも開く
+		assertEquals(204, post(base() + "api/book/" + this.bookId + "/reveal?book").statusCode());
+		assertEquals(2, opened.size());
+	}
+
 	@Test
 	public void revealIsRejectedWhenTheFolderIsGone() throws Exception
 	{

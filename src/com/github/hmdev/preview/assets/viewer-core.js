@@ -304,11 +304,16 @@ const REVEAL_TITLE = 'EPUB のあるフォルダを開く';
  * <p>ブラウザからファイラは開けないのでサーバに依頼する。
  * 開く対象はサーバが bookId から解決するため、パスは送らない。</p>
  */
-async function revealBook(bookId = state.bookId)
+async function revealBook(bookId = state.bookId, requireBook = false)
 {
 	if (!bookId) return;
-	const response = await fetch('api/book/' + encodeURIComponent(bookId) + '/reveal',
+	// requireBook: フォルダだけでなく本のファイルも在るときだけ開く (「Kindle に送る」)
+	const response = await fetch('api/book/' + encodeURIComponent(bookId) + '/reveal' + (requireBook ? '?book' : ''),
 		{method: 'POST', cache: 'no-store'});
-	if (!response.ok) throw new Error('HTTP ' + response.status);
+	if (!response.ok) {
+		const error = new Error('HTTP ' + response.status);
+		error.status = response.status;
+		throw error;
+	}
 }
 

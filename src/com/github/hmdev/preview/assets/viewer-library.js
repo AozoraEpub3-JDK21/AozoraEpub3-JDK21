@@ -1438,12 +1438,24 @@ function bookMenuItems(book)
 	items.push({label: '保存フォルダを開く', run: current => {
 		revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
 	}});
-	// Send to Kindle のページはファイルを受け取れないので、本を選んだフォルダも開き、そこから落としてもらう (internal #55)
+	// Send to Kindle のページへは本棚から本を渡せないので、本のフォルダも開き、そこから落としてもらう (internal #55)。
+	// macOS は本を選んだ状態で開く。Windows はフォルダを開くだけ (FileRevealer)
 	const sendToKindleUrl = state.library && state.library.sendToKindleUrl;
 	if (state.settings.sendToKindle && sendToKindleUrl) {
 		items.push({label: 'Kindle に送る', run: current => {
-			window.open(sendToKindleUrl, '_blank', 'noopener');
-			revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
+			// タブは押した操作の中でしか開けないので先に空で開き、本が在ると分かってから Amazon へ進める
+			// (本が棚から消えていたら、送る物の無いページへ連れて行かない。win2 の確認)
+			const tab = window.open('about:blank', '_blank');
+			revealBook(current.id, true).then(() => {
+				if (!tab) return;
+				tab.opener = null;
+				tab.location.href = sendToKindleUrl;
+			}).catch(err => {
+				if (tab) tab.close();
+				showLibraryStatus(err.status === 404
+					? 'この本のファイルが見つかりません (一覧を更新してください)'
+					: 'Kindle に送れませんでした: ' + err.message);
+			});
 		}});
 	}
 	if (book.source && isWebSource(book.source)) {
