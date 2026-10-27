@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +24,8 @@ import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.github.hmdev.util.I18n;
 
 /**
  * 1 回のプレビューの寿命を束ねる。
@@ -498,6 +501,13 @@ public class PreviewSession implements AutoCloseable
 		return renderLibraryJson();
 	}
 
+	/** Amazon の Send to Kindle のページ。アプリの表示言語が日本語なら amazon.co.jp、ほかは amazon.com (internal #55) */
+	static String sendToKindleUrl(Locale locale)
+	{
+		return (locale != null && "ja".equals(locale.getLanguage()))
+			? "https://www.amazon.co.jp/sendtokindle" : "https://www.amazon.com/sendtokindle";
+	}
+
 	private synchronized String renderLibraryJson()
 	{
 		StringBuilder buf = new StringBuilder(this.library.size() * 128 + 256);
@@ -506,6 +516,8 @@ public class PreviewSession implements AutoCloseable
 		Json.prop(buf, "folderName",
 			(this.libraryFolders.size() == 1) ? folderDisplayName(this.libraryFolders.get(0)) : null);
 		Json.prop(buf, "count", this.library.size());
+		// 本の右クリックの「Kindle に送る」で開くページ (internal #55)
+		Json.prop(buf, "sendToKindle", sendToKindleUrl(I18n.getLocale()));
 		// 棚ごとの名前と冊数。本は shelf に添字を持つので、名前が重なっても取り違えない
 		Json.key(buf, "shelves");
 		buf.append('[');

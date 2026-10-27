@@ -44,6 +44,11 @@ function bindEvents()
 		saveSettings();
 	});
 
+	el.sendToKindleEnabled.addEventListener('change', () => {
+		state.settings.sendToKindle = el.sendToKindleEnabled.checked;
+		saveSettings();
+	});
+
 	el.fontSelect.addEventListener('change', () => {
 		state.settings.fontFamily = el.fontSelect.value;
 		reapplyStyle();

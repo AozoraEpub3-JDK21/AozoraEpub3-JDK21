@@ -27,7 +27,9 @@ const DEFAULT_SETTINGS = {
 	marginBlock: 1.5,
 	/** 本文の左右余白 (em) */
 	marginInline: 1.5,
-	tocOpen: true
+	tocOpen: true,
+	/** 本の右クリックに「Kindle に送る」を出すか (internal #55)。Kindle を使わない人には要らないので既定は出さない */
+	sendToKindle: false
 };
 
 /**
@@ -208,7 +210,7 @@ function cacheElements()
 		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
 		'libraryQueueList', 'libraryQueueNote', 'libraryQueueRefusal',
 		'libraryCheckAll',
-		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled',
+		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled', 'sendToKindleEnabled',
 		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
 		'rankingSerialBox', 'rankingNarouFilters', 'rankingWord', 'rankingType', 'rankingLength', 'rankingStop',
 		'rankingNotR15', 'rankingNotTensei', 'rankingNotTenni',

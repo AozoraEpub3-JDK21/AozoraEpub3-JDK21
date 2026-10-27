@@ -385,6 +385,27 @@ public class PreviewServerTest
 		assertTrue(json, json.contains("\"hasCover\":false"));
 	}
 
+	/** 本の右クリックの「Kindle に送る」で開くページを、本の一覧と一緒に渡す (internal #55) */
+	@Test
+	public void theLibraryNamesTheSendToKindlePage() throws Exception
+	{
+		shelfWith("plain-b");
+		String json = get(base() + "api/library").body();
+		assertTrue(json, json.contains("\"sendToKindle\":\""
+			+ PreviewSession.sendToKindleUrl(com.github.hmdev.util.I18n.getLocale()) + "\""));
+	}
+
+	/** 表示言語が日本語なら amazon.co.jp、ほかは amazon.com (internal #55) */
+	@Test
+	public void theSendToKindlePageFollowsTheAppLanguage()
+	{
+		assertEquals("https://www.amazon.co.jp/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.JAPANESE));
+		assertEquals("https://www.amazon.co.jp/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.JAPAN));
+		assertEquals("https://www.amazon.com/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.ENGLISH));
+		assertEquals("https://www.amazon.com/sendtokindle", PreviewSession.sendToKindleUrl(java.util.Locale.FRANCE));
+		assertEquals("https://www.amazon.com/sendtokindle", PreviewSession.sendToKindleUrl(null));
+	}
+
 	@Test
 	public void theLibraryListsTheSourceOfBooksFromTheWeb() throws Exception
 	{

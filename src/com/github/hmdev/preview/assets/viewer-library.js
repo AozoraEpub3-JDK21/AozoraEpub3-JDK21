@@ -1436,6 +1436,14 @@ function bookMenuItems(book)
 	items.push({label: '保存フォルダを開く', run: current => {
 		revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
 	}});
+	// Send to Kindle のページはファイルを受け取れないので、本を選んだフォルダも開き、そこから落としてもらう (internal #55)
+	const sendToKindle = state.library && state.library.sendToKindle;
+	if (state.settings.sendToKindle && sendToKindle) {
+		items.push({label: 'Kindle に送る', run: current => {
+			window.open(sendToKindle, '_blank', 'noopener');
+			revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
+		}});
+	}
 	if (book.source && isWebSource(book.source)) {
 		items.push({label: '作品ページを開く', run: current => {
 			window.open(current.source, '_blank', 'noopener');
