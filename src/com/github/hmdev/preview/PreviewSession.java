@@ -517,7 +517,7 @@ public class PreviewSession implements AutoCloseable
 			(this.libraryFolders.size() == 1) ? folderDisplayName(this.libraryFolders.get(0)) : null);
 		Json.prop(buf, "count", this.library.size());
 		// 本の右クリックの「Kindle に送る」で開くページ (internal #55)
-		Json.prop(buf, "sendToKindle", sendToKindleUrl(I18n.getLocale()));
+		Json.prop(buf, "sendToKindleUrl", sendToKindleUrl(I18n.getLocale()));
 		// 棚ごとの名前と冊数。本は shelf に添字を持つので、名前が重なっても取り違えない
 		Json.key(buf, "shelves");
 		buf.append('[');

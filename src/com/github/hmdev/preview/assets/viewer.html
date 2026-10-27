@@ -222,8 +222,8 @@
 		<span>本棚を開いたときに新しい版を確かめる（1 日 1 回）</span>
 	</label>
 
-	<!-- 本の右クリックに「Kindle に送る」を出すか (internal #55) -->
-	<label class="field check">
+	<!-- 本の右クリックに「Kindle に送る」を出すか (internal #55)。本棚を読んだら viewer-library.js が hidden を外す -->
+	<label id="sendToKindleField" class="field check" hidden>
 		<input id="sendToKindleEnabled" type="checkbox">
 		<span>本の右クリックに「Kindle に送る」を出す</span>
 	</label>

@@ -301,6 +301,8 @@ async function loadLibrary(keepView)
 	}
 	if (seq !== libraryLoadSeq) return;
 	state.library = library;
+	// 「Kindle に送る」の設定は本の右クリックにしか効かないので、本棚があるときだけ出す
+	el.sendToKindleField.hidden = !library.sendToKindleUrl;
 	checkDownloadAvailable();
 	checkUpdateNotice();
 	updateCheckAllButton();
@@ -1437,10 +1439,10 @@ function bookMenuItems(book)
 		revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
 	}});
 	// Send to Kindle のページはファイルを受け取れないので、本を選んだフォルダも開き、そこから落としてもらう (internal #55)
-	const sendToKindle = state.library && state.library.sendToKindle;
-	if (state.settings.sendToKindle && sendToKindle) {
+	const sendToKindleUrl = state.library && state.library.sendToKindleUrl;
+	if (state.settings.sendToKindle && sendToKindleUrl) {
 		items.push({label: 'Kindle に送る', run: current => {
-			window.open(sendToKindle, '_blank', 'noopener');
+			window.open(sendToKindleUrl, '_blank', 'noopener');
 			revealBook(current.id).catch(err => showLibraryStatus('フォルダを開けませんでした: ' + err.message));
 		}});
 	}

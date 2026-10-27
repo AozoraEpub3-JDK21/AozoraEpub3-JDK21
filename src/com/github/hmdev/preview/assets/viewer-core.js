@@ -210,7 +210,7 @@ function cacheElements()
 		'libraryShelfAsk', 'libraryShelfPath', 'libraryShelfUse', 'libraryShelfPick', 'libraryShelfNote', 'libraryDownloadStatus',
 		'libraryQueueList', 'libraryQueueNote', 'libraryQueueRefusal',
 		'libraryCheckAll',
-		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled', 'sendToKindleEnabled',
+		'libraryUpdateBand', 'libraryUpdateText', 'libraryUpdateLink', 'libraryUpdateClose', 'updateCheckField', 'updateCheckEnabled', 'sendToKindleField', 'sendToKindleEnabled',
 		'libraryRankingToggle', 'libraryRanking', 'rankingSite', 'rankingPeriod', 'rankingGenre', 'rankingSerial', 'rankingSerialLabel',
 		'rankingSerialBox', 'rankingNarouFilters', 'rankingWord', 'rankingType', 'rankingLength', 'rankingStop',
 		'rankingNotR15', 'rankingNotTensei', 'rankingNotTenni',

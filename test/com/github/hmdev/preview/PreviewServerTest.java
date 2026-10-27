@@ -390,9 +390,17 @@ public class PreviewServerTest
 	public void theLibraryNamesTheSendToKindlePage() throws Exception
 	{
 		shelfWith("plain-b");
-		String json = get(base() + "api/library").body();
-		assertTrue(json, json.contains("\"sendToKindle\":\""
-			+ PreviewSession.sendToKindleUrl(com.github.hmdev.util.I18n.getLocale()) + "\""));
+		java.util.Locale before = com.github.hmdev.util.I18n.getLocale();
+		try {
+			com.github.hmdev.util.I18n.init(java.util.Locale.JAPANESE, null);
+			String json = get(base() + "api/library").body();
+			assertTrue(json, json.contains("\"sendToKindleUrl\":\"https://www.amazon.co.jp/sendtokindle\""));
+			com.github.hmdev.util.I18n.init(java.util.Locale.ENGLISH, null);
+			json = get(base() + "api/library").body();
+			assertTrue(json, json.contains("\"sendToKindleUrl\":\"https://www.amazon.com/sendtokindle\""));
+		} finally {
+			com.github.hmdev.util.I18n.init(before, null);
+		}
 	}
 
 	/** 表示言語が日本語なら amazon.co.jp、ほかは amazon.com (internal #55) */
