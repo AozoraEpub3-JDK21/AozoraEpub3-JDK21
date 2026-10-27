@@ -63,7 +63,7 @@ final class NarouRanking
 	static final Set<String> TYPES = Set.of("", "re", "er", "r", "t", "ter");
 
 	/** 文字数（API の length。最小-最大、どちらかは省ける） */
-	private static final Pattern LENGTH = Pattern.compile("[0-9]{1,9}-[0-9]{0,9}|-[0-9]{1,9}");
+	private static final Pattern LENGTH = Pattern.compile("(0|[1-9][0-9]{0,8})?-(0|[1-9][0-9]{0,8})?");
 
 	/** 単語の長さの上限（コードポイント）。API に上限の定めは無いが、URL を長くしすぎない */
 	static final int WORD_MAX = 100;
@@ -142,12 +142,26 @@ final class NarouRanking
 			if (!genre.equals("0") && !knownGenre(genre)) return null;
 			if (type == null) type = serialType;
 			if (!TYPES.contains(type)) return null;
-			if (!length.isEmpty() && !LENGTH.matcher(length).matches()) return null;
-			//空白（全角も）を 1 つにそろえる。同じ単語の問い合わせを 1 つに数える（取り直さない）
-			word = word.replaceAll("[\\s\u3000]+", " ").strip();
+			if (!length.isEmpty() && !knownLength(length)) return null;
+			//壊れた UTF-8 は URLDecoder が U+FFFD に置き換えて通すので、ここで断る
+			if (word.indexOf('\uFFFD') >= 0) return null;
+			//空白（全角・ノーブレークスペースなどの Unicode の空白、タブ・改行も）を 1 つにそろえる。
+			//同じ単語の問い合わせを 1 つに数え（取り直さない）、API の「空白で区切ると全部を含む」に乗せる
+			word = word.replaceAll("[\\p{Z}\\s]+", " ").strip();
 			if (word.codePointCount(0, word.length()) > WORD_MAX) return null;
+			//空白に寄せたあとに残る制御文字は断る
 			if (word.chars().anyMatch(Character::isISOControl)) return null;
 			return new Query(period, genre, type, length, stop, word, notR15, notTensei, notTenni);
+		}
+
+		/** 最小-最大（どちらかは省ける・両方は省けない）。先頭の 0 は通さない（同じ絞り込みを別の問い合わせに数える） */
+		private static boolean knownLength(String length)
+		{
+			if (!LENGTH.matcher(length).matches()) return false;
+			int dash = length.indexOf('-');
+			String min = length.substring(0, dash), max = length.substring(dash + 1);
+			if (min.isEmpty() && max.isEmpty()) return false;
+			return min.isEmpty() || max.isEmpty() || Long.parseLong(min) <= Long.parseLong(max);
 		}
 
 		private static boolean knownGenre(String genre)

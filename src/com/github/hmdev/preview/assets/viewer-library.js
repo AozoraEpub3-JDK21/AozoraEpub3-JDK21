@@ -155,6 +155,8 @@ function onLibraryKeyDown(event)
 {
 	if (event.ctrlKey || event.altKey || event.metaKey) return;
 	if (event.key === 'Escape' && state.libraryOpen) {
+		// 変換中の Esc は変換の取り消し。欄を消したり、ランキングや本棚を閉じたりしない (PR #188 のゲート2)
+		if (event.isComposing) return;
 		// 検索欄に文字が残っているうちは、まず絞り込みを解く (type="search" の作法)。
 		// ブラウザ任せにすると入力欄だけ空になって一覧が戻らない実装があるので自分で消す
 		if (event.target === el.libraryFilter && el.libraryFilter.value !== '') {
@@ -165,9 +167,7 @@ function onLibraryKeyDown(event)
 			return;
 		}
 		// ランキングの単語の欄も同じ。消して探し直し、ランキングはしまわない (internal #62)
-		if (event.target === el.rankingWord && el.rankingWord.value !== '') {
-			el.rankingWord.value = '';
-			el.rankingWord.dispatchEvent(new Event('change'));
+		if (clearRankingWordIfAny(event)) {
 			event.preventDefault();
 			return;
 		}
