@@ -89,6 +89,8 @@ The preview shows *Night on the Galactic Railroad* by Kenji Miyazawa from Aozora
 
 This software is a derivative of **AozoraEpub3** by hmdev, updated for Java 21–26 compatibility and support for modern operating systems.
 
+Maintained by [AozoraEpub3-JDK21](https://github.com/AozoraEpub3-JDK21) / Contributor: [Harusame64](https://harusame64.github.io/)
+
 It aims to comply with EPUB 3.3 and the [Japanese Book Publishing Association (電書協) EPUB 3 Production Guide](https://www.ebpaj.jp/counsel/guide), validated with epubcheck 5.x.
 
 ---

@@ -92,6 +92,8 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 
 本ソフトウェアは hmdev 氏の **AozoraEpub3** をベースに、narou.rb との互換性の維持、Java 21〜26 への対応、最新 OS 向けの調整を行った派生版です。
 
+保守: [AozoraEpub3-JDK21](https://github.com/AozoraEpub3-JDK21) ／ コントリビューター: [Harusame64](https://harusame64.github.io/)
+
 EPUB 3.3 および 電書協／電書連 EPUB 3 制作ガイドへの準拠を目指し、epubcheck 5.x で検証しています。
 
 ---
