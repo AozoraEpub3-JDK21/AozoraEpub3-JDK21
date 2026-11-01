@@ -152,6 +152,7 @@ public class NestedNavTest {
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
 			bookInfo = converter.getBookInfo(txt.toFile(), src, imageInfoReader, titleType, false);
 		}
+		bookInfo.insertTitleToc = true; //GUI と CLI の既定
 		File epub = tempFolder.newFile();
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
 			writer.write(converter, src, txt.toFile(), "txt", epub, bookInfo, imageInfoReader);
