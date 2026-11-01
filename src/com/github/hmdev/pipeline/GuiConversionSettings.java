@@ -145,6 +145,9 @@ public final class GuiConversionSettings
 		}
 		//目次階層化設定
 		writer.setTocParam(on(p, "NavNest"), on(p, "NcxNest"));
+		//EPUB 2 向けの要素。画像の本の writer にも届ける
+		writer.setLegacyOutput(on(p, "LegacyOutput"));
+		imageWriter.setLegacyOutput(on(p, "LegacyOutput"));
 
 		//スタイル設定。GUI は単位の 1 つ目（0）だけを em、それ以外を % にしている。値は部品の文字のまま（trim しない）
 		writer.setStyles(margins(p, "PageMargin", "PageMarginUnit", "0.5"), margins(p, "BodyMargin", "BodyMarginUnit", "0"),

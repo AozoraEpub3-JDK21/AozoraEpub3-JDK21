@@ -34,6 +34,8 @@ public final class SettingDefaults
 		//目次階層化
 		map.put("NavNest", true); //EPUB 3 リーダーが読む目次は NAV だけなので、階層はここに出す
 		map.put("NcxNest", false);
+		//EPUB 2 向けの要素（meta name="cover" と toc.ncx）。Kobo 向けと .mobi では設定によらず入れる
+		map.put("LegacyOutput", true);
 		//見出しの拾い方
 		map.put("ChapterUseNextLine", false);
 		map.put("ChapterExclude", true);

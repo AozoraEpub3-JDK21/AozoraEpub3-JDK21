@@ -216,6 +216,8 @@ public class Epub3Writer
 	
 	/** nav.xhtml階層化 */
 	boolean navNest = false;
+	/** EPUB 2 向けの要素（meta name="cover" と toc.ncx）を出力する */
+	boolean legacyOutput = true;
 	/** toc.ncx階層化 */
 	boolean ncxNest = false;
 	
@@ -527,6 +529,21 @@ public class Epub3Writer
 		return levels;
 	}
 
+	/** EPUB 2 向けの要素（meta name="cover" と toc.ncx）を出力するか */
+	public void setLegacyOutput(boolean legacyOutput)
+	{
+		this.legacyOutput = legacyOutput;
+	}
+	
+	/**
+	 * 今回の出力に EPUB 2 向けの要素を入れるか。
+	 * Kobo 向け（.kepub.epub）は端末が無く測れていないので、.mobi は目次が NCX 頼りなので、設定によらず入れる。
+	 */
+	static boolean usesLegacyOutput(boolean legacyOutput, boolean kindle, String fileName)
+	{
+		return legacyOutput || kindle || fileName.toLowerCase(Locale.ROOT).endsWith(".kepub.epub");
+	}
+	
 	public void setTocParam(boolean navNest, boolean ncxNest)
 	{
 		this.navNest = navNest;
@@ -672,6 +689,7 @@ public class Epub3Writer
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
+		velocityContext.put("legacyOutput", usesLegacyOutput(this.legacyOutput, this.isKindle, epubFile.getName()));
 		
 		//SVG画像出力
 		if (this.isSvgImage) velocityContext.put("svgImage", true);
@@ -1054,11 +1072,13 @@ public class Epub3Writer
 		
 		//tocファイル
 		velocityContext.put("chapters", chapterInfos);
-		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+TOC_FILE));
-		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		mergeTemplate(templatePath+OPS_PATH+TOC_VM, bw);
-		bw.flush();
-		zos.closeArchiveEntry();
+		if (usesLegacyOutput(this.legacyOutput, this.isKindle, epubFile.getName())) {
+			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+TOC_FILE));
+			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
+			mergeTemplate(templatePath+OPS_PATH+TOC_VM, bw);
+			bw.flush();
+			zos.closeArchiveEntry();
+		}
 		
 		//入力ロックを早期解放する（後段のフォント・画像出力を待たない）。
 		//クローズ失敗は出力の成否と無関係なので警告に留める（finally 側と同じ方針）
