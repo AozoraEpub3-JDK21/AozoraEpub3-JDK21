@@ -118,17 +118,23 @@ public class ImageOnlyFixedLayoutTest {
 
 	/** 手元の zip から画像だけの本を作る。cover を指定すると表紙ページも入れる */
 	private File writeBook(File zip, Epub3ImageWriter writer, boolean coverPage, boolean tocPage, String name) throws Exception {
+		return writeBook(zip, writer, bookInfo -> {
+			bookInfo.insertTocPage = tocPage;
+			if (coverPage) {
+				bookInfo.insertCoverPage = true;
+				bookInfo.coverImageIndex = 0;
+			}
+		}, name);
+	}
+
+	private File writeBook(File zip, Epub3ImageWriter writer, java.util.function.Consumer<BookInfo> setup, String name) throws Exception {
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, projectRoot.toString()+"/");
 		ImageInfoReader imageInfoReader = new ImageInfoReader(false, zip);
 		imageInfoReader.loadZipImageInfos(zip, true);
 		imageInfoReader.sortImageFileNames();
 		BookInfo bookInfo = new BookInfo(zip);
 		bookInfo.imageOnly = true;
-		bookInfo.insertTocPage = tocPage;
-		if (coverPage) {
-			bookInfo.insertCoverPage = true;
-			bookInfo.coverImageIndex = 0;
-		}
+		setup.accept(bookInfo);
 		File epub = tempFolder.newFile(name + ".epub");
 		writer.write(converter, null, zip, "zip", epub, bookInfo, imageInfoReader);
 		return epub;
@@ -246,6 +252,14 @@ public class ImageOnlyFixedLayoutTest {
 			File epub = writeBook(imageZip(), writer, true, false, "rotated" + svg);
 			assertEveryPageHasViewportOfItsImage(epub);
 			if (svg) assertSvgSizesMatchViewport(epub);
+			//回転が止まっても viewport と画像は一致するので、回転したことを別に見る
+			try (ZipFile zf = new ZipFile(epub)) {
+				boolean rotated = false;
+				for (String page : spinePages(zf)) {
+					rotated |= read(zf, page).contains("width=1000, height=1600");
+				}
+				assertTrue("1600x1000 の画像が回転していない", rotated);
+			}
 		}
 	}
 
@@ -255,18 +269,10 @@ public class ImageOnlyFixedLayoutTest {
 		ImageIO.write(new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB), "png", cover);
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, svg, 0, 0, 0, sizeType);
-		File zip = imageZip();
-		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, projectRoot.toString()+"/");
-		ImageInfoReader imageInfoReader = new ImageInfoReader(false, zip);
-		imageInfoReader.loadZipImageInfos(zip, true);
-		imageInfoReader.sortImageFileNames();
-		BookInfo bookInfo = new BookInfo(zip);
-		bookInfo.imageOnly = true;
-		bookInfo.insertCoverPage = true;
-		bookInfo.coverFileName = cover.getPath();
-		File epub = tempFolder.newFile(name + ".epub");
-		writer.write(converter, null, zip, "zip", epub, bookInfo, imageInfoReader);
-		return epub;
+		return writeBook(imageZip(), writer, bookInfo -> {
+			bookInfo.insertCoverPage = true;
+			bookInfo.coverFileName = cover.getPath();
+		}, name);
 	}
 
 	/** 別ファイルの表紙は縮小して入る。ページの大きさは縮小した後の画像に合わせる */
@@ -328,6 +334,19 @@ public class ImageOnlyFixedLayoutTest {
 				assertFalse(page + " に割合の高さがある: " + read(zf, page), read(zf, page).contains("min-height:"));
 			}
 		}
+	}
+
+	/** Kindle 用の CSS は大きさを決めないので、横長のページの大きさは割合のまま決める */
+	@Test
+	public void kindleImagePagesKeepPercentHeight() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_HEIGHT);
+		writer.setIsKindle(true);
+		File epub = writeBook(imageZip(), writer, false, false, "kindleheight");
+		try (ZipFile zf = new ZipFile(epub)) {
+			assertTrue(read(zf, "OPS/xhtml/0001.xhtml"), read(zf, "OPS/xhtml/0001.xhtml").contains("min-height:"));
+		}
+		assertEveryPageHasViewportOfItsImage(epub);
 	}
 
 	/** 目次ページは GUI で入る。文字のページなのでリフローにする（viewport が要らない） */

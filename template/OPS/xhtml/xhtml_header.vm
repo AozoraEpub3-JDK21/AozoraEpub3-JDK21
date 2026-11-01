@@ -38,7 +38,8 @@
 	<title>${title}</title>
 
 ## 画像だけの本はページが画像と同じ大きさなので、画面の高さに対する割合を当てない
-#if (${sectionInfo.ImageHeight} > 0 && !${bookInfo.ImageOnly})
+## Kindle 用の CSS には幅や高さに合わせる指定が無く、大きさを決めるのはこの割合だけなので残す
+#if (${sectionInfo.ImageHeight} > 0 && (!${bookInfo.ImageOnly} || ${kindle}))
 <style type="text/css">
 body .img img {
 height: ${sectionInfo.ImageHeightPercent}%;

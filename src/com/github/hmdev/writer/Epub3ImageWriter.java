@@ -145,7 +145,8 @@ public class Epub3ImageWriter extends Epub3Writer
 		
 		//画像xhtmlを出力
 		zos.setLevel(9);
-		//OPF の original-resolution は、ページになる先頭の画像の大きさにする（先頭へ移した表紙も含む。BMP などは飛ばす）
+		//OPF の original-resolution は、本の中でページにできる先頭の画像の大きさにする（BMP などは飛ばす）
+		//別ファイルの表紙は本の基準にしない。この値は本全体で 1 つなので、表紙ページの大きさとは違うことがある
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
 			ImageInfo firstPage = this.imageInfoReader.getImageInfo(srcFilePath);
 			if (firstPage != null && isPageFormat(firstPage)) {
