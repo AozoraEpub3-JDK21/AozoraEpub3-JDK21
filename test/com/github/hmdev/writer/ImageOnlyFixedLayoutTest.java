@@ -44,7 +44,7 @@ public class ImageOnlyFixedLayoutTest {
 
 	private static final Pattern VIEWPORT = Pattern.compile("<meta name=\"viewport\" content=\"width=(\\d+), height=(\\d+)\"/>");
 	private static final Pattern IMAGE = Pattern.compile("(?:src|xlink:href)=\"\\.\\./images/([^\"]+)\"");
-	private static final Pattern PLACED_IMG = Pattern.compile("img\\{position:absolute;left:(\\d+)px;top:(\\d+)px;width:(\\d+)px;height:(\\d+)px;");
+	private static final Pattern PLACED_IMG = Pattern.compile("img\\{position:absolute;left:([\\d.]+)%;top:([\\d.]+)%;width:([\\d.]+)%;height:([\\d.]+)%;");
 	private static final Pattern PLACED_SVG = Pattern.compile("<image x=\"(\\d+)\" y=\"(\\d+)\" width=\"(\\d+)\" height=\"(\\d+)\"");
 
 	@Rule
@@ -156,6 +156,11 @@ public class ImageOnlyFixedLayoutTest {
 		return ImageIO.read(new ByteArrayInputStream(zf.getInputStream(zf.getEntry("OPS/images/" + img.group(1))).readAllBytes()));
 	}
 
+	/** 画素の値か（whole が 0）、whole に対する割合の値を画素にする */
+	private static int pixels(String value, int whole) {
+		return whole == 0 ? Integer.parseInt(value) : (int)Math.round(Double.parseDouble(value)*whole/100);
+	}
+
 	/** 全ページが同じ大きさで、実際の画像が縦横比を保ってページの中央いっぱいに置かれていること */
 	private void assertEveryPageIs(File epub, int width, int height) throws Exception {
 		try (ZipFile zf = new ZipFile(epub)) {
@@ -175,15 +180,16 @@ public class ImageOnlyFixedLayoutTest {
 				if (svg) assertTrue(page + " の viewBox: " + xhtml, xhtml.contains("viewBox=\"0 0 " + width + " " + height + "\""));
 				Matcher placed = (svg ? PLACED_SVG : PLACED_IMG).matcher(xhtml);
 				assertTrue(page + " に画像の位置が無い: " + xhtml, placed.find());
-				int x = Integer.parseInt(placed.group(1)), y = Integer.parseInt(placed.group(2));
-				int w = Integer.parseInt(placed.group(3)), h = Integer.parseInt(placed.group(4));
-				assertTrue(page + " がページからはみ出す: " + xhtml, x + w <= width && y + h <= height);
+				//SVG は画素、それ以外はページに対する割合
+				int x = pixels(placed.group(1), svg ? 0 : width), y = pixels(placed.group(2), svg ? 0 : height);
+				int w = pixels(placed.group(3), svg ? 0 : width), h = pixels(placed.group(4), svg ? 0 : height);
+				assertTrue(page + " がページからはみ出す: " + xhtml, x + w <= width + 1 && y + h <= height + 1);
 				assertTrue(page + " が左右の中央に無い: " + xhtml, Math.abs(2*x + w - width) <= 1);
 				assertTrue(page + " が上下の中央に無い: " + xhtml, Math.abs(2*y + h - height) <= 1);
-				assertTrue(page + " がページいっぱいでない: " + xhtml, w == width || h == height);
+				assertTrue(page + " がページいっぱいでない: " + xhtml, Math.abs(w - width) <= 1 || Math.abs(h - height) <= 1);
 				BufferedImage image = imageOf(zf, xhtml);
 				assertTrue(page + " の縦横比が " + image.getWidth() + "x" + image.getHeight() + " と違う: " + xhtml,
-					Math.abs((long)w*image.getHeight() - (long)h*image.getWidth()) <= Math.max(image.getWidth(), image.getHeight()));
+					Math.abs((long)w*image.getHeight() - (long)h*image.getWidth()) <= 2L*Math.max(image.getWidth(), image.getHeight()));
 			}
 		}
 	}
@@ -226,23 +232,32 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** いちばん多い大きさがページの大きさになる。先頭が横長でも本全体の基準にしない */
+	/** 縦横比が真ん中の画像がページの大きさになる。先頭が横長でも本全体の基準にしない */
 	@Test
-	public void pageSizeIsTheMostCommonImage() throws Exception {
+	public void pageSizeIsTheMedianAspect() throws Exception {
 		for (boolean svg : new boolean[]{false, true}) {
 			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 			setParams(writer, svg, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
 			File zip = imageZip(new int[][]{{1200, 800}, {800, 1200}, {800, 1200}, {3000, 500}});
-			assertEveryPageIs(writeBook(zip, writer, false, false, "common" + svg), 800, 1200);
+			assertEveryPageIs(writeBook(zip, writer, false, false, "median" + svg), 800, 1200);
 		}
 	}
 
-	/** 同数なら先に出てきた大きさ */
+	/** スキャンした本は寸法が少しずつ違う。先頭が見開きでも、ページは縦長になる */
 	@Test
-	public void pageSizeTieGoesToTheFirstImage() throws Exception {
+	public void scanWithUnevenSizesGetsAPortraitPage() throws Exception {
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
-		assertEveryPageIs(writeBook(imageZip(), writer, false, false, "tie"), 2000, 1000);
+		File zip = imageZip(new int[][]{{2400, 1700}, {1190, 1700}, {1205, 1698}, {1198, 1702}, {1210, 1700}});
+		assertEveryPageIs(writeBook(zip, writer, false, false, "scan"), 1205, 1698);
+	}
+
+	/** 偶数枚なら縦長の側。縦長のページの中なら横長の絵も収まる */
+	@Test
+	public void pageSizeOfEvenCountTakesTheTallerSide() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+		assertEveryPageIs(writeBook(imageZip(new int[][]{{2000, 1000}, {800, 1200}}), writer, false, false, "even"), 800, 1200);
 	}
 
 	/** 縮小すると出力した画像の大きさが元と変わる。ページは出力した大きさに合わせる */
@@ -250,7 +265,7 @@ public class ImageOnlyFixedLayoutTest {
 	public void pageSizeFollowsResizedImage() throws Exception {
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false, 500, 500, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
-		assertEveryPageIs(writeBook(imageZip(), writer, false, false, "resized"), 500, 250);
+		assertEveryPageIs(writeBook(imageZip(), writer, false, false, "resized"), 500, 313);
 	}
 
 	/** 回転すると縦と横が入れ替わる */
@@ -260,7 +275,7 @@ public class ImageOnlyFixedLayoutTest {
 			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 			setParams(writer, svg, 0, 0, 90, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
 			File epub = writeBook(imageZip(), writer, true, false, "rotated" + svg);
-			assertEveryPageIs(epub, 1000, 2000);
+			assertEveryPageIs(epub, 1000, 1600);
 			//回転が止まってもページと画像は一致するので、回転したことを別に見る
 			try (ZipFile zf = new ZipFile(epub)) {
 				boolean rotated = false;
@@ -290,7 +305,7 @@ public class ImageOnlyFixedLayoutTest {
 	public void externalCoverFitsInsideThePageOfTheBody() throws Exception {
 		for (boolean svg : new boolean[]{false, true}) {
 			File epub = writeBookWithExternalCover(3000, 4000, svg, SectionInfo.IMAGE_SIZE_TYPE_ASPECT, "extcover" + svg);
-			assertEveryPageIs(epub, 2000, 1000);
+			assertEveryPageIs(epub, 1600, 1000);
 			try (ZipFile zf = new ZipFile(epub)) {
 				String cover = read(zf, "OPS/xhtml/cover.xhtml");
 				assertEquals(600, imageOf(zf, cover).getWidth());
@@ -334,6 +349,7 @@ public class ImageOnlyFixedLayoutTest {
 		try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "bmponly"))) {
 			String cover = read(zf, "OPS/xhtml/cover.xhtml");
 			assertTrue(cover, cover.contains("width=800, height=1100"));
+			assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("<meta name=\"original-resolution\" content=\"800x1100\"/>"));
 			assertFalse(cover, cover.contains("${"));
 		}
 	}
@@ -360,7 +376,7 @@ public class ImageOnlyFixedLayoutTest {
 		try (ZipFile zf = new ZipFile(epub)) {
 			assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("<itemref idref=\"nav\" linear=\"yes\" properties=\"rendition:layout-reflowable\"/>"));
 		}
-		assertEveryPageIs(epub, 2000, 1000);
+		assertEveryPageIs(epub, 1600, 1000);
 	}
 
 	/** リフローの本（表紙ページつき）に viewport を入れない。リフローには意味が無く、epubcheck が指摘する */

@@ -853,6 +853,10 @@ public class Epub3Writer
 					sectionInfo.setImageFitH(false);
 				}
 				this.velocityContext.put("coverImage", insertCoverInfo);
+				//本文にページが無い画像の本は、表紙の大きさをページの大きさにする
+				if (bookInfo.imageOnly && !this.velocityContext.containsKey("pageSize")) {
+					this.velocityContext.put("pageSize", new FixedPageSize(insertCoverInfo.getPageWidth(), insertCoverInfo.getPageHeight()));
+				}
 				//ページは、別ファイルの表紙を出力してから書く（viewport に出力した画像の大きさを使うため）
 				coverSectionInfo = sectionInfo;
 			} else {
@@ -1095,11 +1099,6 @@ public class Epub3Writer
 		//表紙ページ出力
 		if (coverSectionInfo != null) {
 			this.velocityContext.put("sectionInfo", coverSectionInfo);
-			//本文にページが無い画像の本は、表紙の大きさをページの大きさにする
-			if (bookInfo.imageOnly && !this.velocityContext.containsKey("pageSize")) {
-				ImageInfo pageCover = (ImageInfo)this.velocityContext.get("coverImage");
-				this.velocityContext.put("pageSize", new FixedPageSize(pageCover.getPageWidth(), pageCover.getPageHeight()));
-			}
 			zos.setLevel(9); //ここからの画像は無圧縮だが、ページは圧縮する
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+COVER_FILE));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));

@@ -37,12 +37,12 @@
 #end
 	<title>${title}</title>
 
-## 画像だけの本は、本全体で同じ大きさのページの中に画素で画像を置く（割合や class に頼るとリーダーごとに結果が変わる）
-#if (${bookInfo.ImageOnly} && ${pageSize} && ${imageInfo})
+## 画像だけの本は、本全体で同じ大きさのページの中に、ページに対する割合で画像を置く
+#if (${bookInfo.ImageOnly} && ${pageSize})
 #set ($place = $pageSize.place($imageInfo))
 <style type="text/css">
-html,body{margin:0;padding:0;width:${pageSize.Width}px;height:${pageSize.Height}px;overflow:hidden}
-img{position:absolute;left:${place.X}px;top:${place.Y}px;width:${place.Width}px;height:${place.Height}px;max-width:none;max-height:none;min-height:0;margin:0}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
+img{position:absolute;left:${place.LeftPercent}%;top:${place.TopPercent}%;width:${place.WidthPercent}%;height:${place.HeightPercent}%;max-width:none;max-height:none;min-width:0;min-height:0;margin:0}
 </style>
 #elseif (${sectionInfo.ImageHeight} > 0 && !${bookInfo.ImageOnly})
 <style type="text/css">
