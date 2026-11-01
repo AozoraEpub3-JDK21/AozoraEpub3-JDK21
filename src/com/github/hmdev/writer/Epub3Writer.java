@@ -669,7 +669,6 @@ public class Epub3Writer
 		//更新日時
 		velocityContext.put("modified", MODIFIED_FORMATTER.format(bookInfo.modified.toInstant()));
 		
-		//目次階層化
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
@@ -939,9 +938,11 @@ public class Epub3Writer
 			if (chapterInfos.get(i).getChapterName() == null) chapterInfos.remove(i);
 		}
 		
-		//表題のレベルを2つめと同じにする（先頭が表題でない本は、本物の見出しなので変えない）
+		//表題のレベルを次の見出しと同じにする（先頭が表題でない本は、本物の見出しなので変えない）
 		if (bookInfo.insertTitleToc && chapterInfos.size() >= 2 && chapterInfos.get(0).chapterLevel == ChapterLineInfo.LEVEL_TITLE) {
-			chapterInfos.get(0).chapterLevel = chapterInfos.get(1).chapterLevel;
+			int next = 1;
+			while (next < chapterInfos.size()-1 && chapterInfos.get(next).pageBreakLine) next++;
+			chapterInfos.get(0).chapterLevel = chapterInfos.get(next).chapterLevel;
 		}
 		
 		//目次の階層情報を設定
@@ -959,13 +960,12 @@ public class Epub3Writer
 			chapterInfo.chapterLevel = newLevel[chapterInfo.chapterLevel];
 		}
 		
-		ChapterInfo preChapterInfo;
 		int ncxDepth = 1;
 		if (this.ncxNest) {
+			ChapterInfo preChapterInfo = null;
 			int minLevel = 99; int maxLevel = 0;
-			//navPointを閉じる回数をlevelEndに設定
+			//navPointを閉じる回数を設定
 			int[] navPointLevel = new int[10]; //navPointを開始したレベルidxに1を設定
-			preChapterInfo = null;
 			for (ChapterInfo chapterInfo : chapterInfos) {
 				if (preChapterInfo != null) {
 					int preLevel = preChapterInfo.chapterLevel;

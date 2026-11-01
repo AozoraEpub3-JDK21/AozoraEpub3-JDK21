@@ -192,6 +192,15 @@ public class NestedNavTest {
 		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>第一章</a>.*"));
 	}
 
+	/** 表題は改ページの行のレベルに揃えず、次の見出しに揃える。全部が親にならない */
+	@Test
+	public void titleIsNotTheParentWhenABodyLineFollows() throws Exception {
+		String text = "表題\n著者\n\n［＃改ページ］\n前書きの行。\n［＃中見出し］第一章［＃中見出し終わり］\n本文。\n［＃中見出し］第二章［＃中見出し終わり］\n本文。\n";
+		String nav = nav(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text));
+		assertEquals(nav, 1, count(nav, "<ol>"));
+		assertTrue(nav, nav.contains("前書きの行。</a></li>"));
+	}
+
 	/** 章の間の改ページの後の本文の行が、次の章を子に取らない */
 	@Test
 	public void bodyLineAfterPageBreakDoesNotTakeChapters() throws Exception {

@@ -17,9 +17,9 @@ import org.slf4j.LoggerFactory;
 /**
  * 展開済み EPUB から階層目次を構築する。
  *
- * <p>解決順は <b>toc.ncx → nav.xhtml → spine</b> で、nav.xhtml の階層のほうが深ければ nav.xhtml を使う。
- * 2026-11 より前に作った本は階層が toc.ncx にしか無く、今の設定（NavNest オン、NcxNest オフ）で作った本は
- * nav.xhtml にしか無い。</p>
+ * <p>解決順は <b>toc.ncx → nav.xhtml → spine</b>。ただし nav.xhtml が入れ子で、toc.ncx より浅くなく、
+ * 項目も減らないなら nav.xhtml を使う（EPUB 3 リーダーが読むのは nav.xhtml）。
+ * 2026-11 より前に作った本は階層が toc.ncx にしか無く、NcxNest オフの本は nav.xhtml にしか無い。</p>
  */
 public class TocParser
 {
@@ -53,11 +53,19 @@ public class TocParser
 				logger.warn("nav.xhtml の解析に失敗しました: {}", navPath, e);
 			}
 		}
-		if (!ncx.isEmpty() && depth(ncx) >= depth(nav)) return ncx;
-		if (!nav.isEmpty()) return nav;
-		return fromSpine(opf);
+		if (ncx.isEmpty()) return nav.isEmpty() ? fromSpine(opf) : nav;
+		boolean navNested = depth(nav) > 1 && depth(nav) >= depth(ncx) && count(nav) >= count(ncx);
+		return navNested ? nav : ncx;
 	}
 
+	/** 目次の項目数 */
+	private static int count(List<TocEntry> entries)
+	{
+		int count = entries.size();
+		for (TocEntry entry : entries) count += count(entry.children());
+		return count;
+	}
+	
 	/** 目次の階層の深さ */
 	private static int depth(List<TocEntry> entries)
 	{
@@ -145,7 +153,10 @@ public class TocParser
 		for (Element li : list.children()) {
 			if (!"li".equalsIgnoreCase(li.tagName())) continue;
 			Elements anchors = li.select("> a");
-			String label = anchors.isEmpty() ? li.ownText().trim() : anchors.first().text().trim();
+			//リンクの無い見出しは span（EPUB の nav の定義）
+			Elements spans = li.select("> span");
+			String label = !anchors.isEmpty() ? anchors.first().text().trim()
+				: !spans.isEmpty() ? spans.first().text().trim() : li.ownText().trim();
 			String href = anchors.isEmpty() ? null : anchors.first().attr("href");
 
 			List<TocEntry> children = new ArrayList<>();

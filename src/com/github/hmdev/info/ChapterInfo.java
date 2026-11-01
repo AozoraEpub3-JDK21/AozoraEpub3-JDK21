@@ -76,7 +76,6 @@ public class ChapterInfo
 	}
 	
 	/** Velocityでループするために配列を返す */
-	/** Velocityでループするために配列を返す */
 	public int[] getNavClose()
 	{
 		if (this.navClose <= 0) return null;
