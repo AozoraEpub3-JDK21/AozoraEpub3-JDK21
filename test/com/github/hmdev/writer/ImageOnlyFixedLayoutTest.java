@@ -63,8 +63,12 @@ public class ImageOnlyFixedLayoutTest {
 	}
 
 	private static void setParams(Epub3Writer writer, boolean svg) {
-		writer.setImageParam(600, 800, 600, 800, 0, 0, 480, 640, 600,
-			SectionInfo.IMAGE_SIZE_TYPE_HEIGHT, true, svg, 0,
+		setParams(writer, svg, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_HEIGHT);
+	}
+
+	private static void setParams(Epub3Writer writer, boolean svg, int resizeW, int resizeH, int rotate, int sizeType) {
+		writer.setImageParam(600, 800, 600, 800, resizeW, resizeH, 480, 640, 600,
+			sizeType, true, svg, rotate,
 			1.0f, 0, 0, 0, 0.8f, 1.0f, 0, 0, 100, 0f, 0, 0.03f);
 		writer.setTocParam(false, false);
 		writer.setStyles(new String[]{"0","0","0","0"}, new String[]{"0","0","0","0"}, 1.6f, 100, true, true);
@@ -96,10 +100,46 @@ public class ImageOnlyFixedLayoutTest {
 		return new String(zf.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8);
 	}
 
+	/** 横長と縦長の画像を入れた zip を作る */
+	private File imageZip() throws Exception {
+		File zip = File.createTempFile("wide", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			int[][] sizes = {{2000, 1000}, {800, 1200}, {1600, 1000}};
+			for (int i = 0; i < sizes.length; i++) {
+				zos.putNextEntry(new ZipEntry("p" + i + ".png"));
+				java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+				ImageIO.write(new BufferedImage(sizes[i][0], sizes[i][1], BufferedImage.TYPE_INT_RGB), "png", png);
+				zos.write(png.toByteArray());
+				zos.closeEntry();
+			}
+		}
+		return zip;
+	}
+
+	/** 手元の zip から画像だけの本を作る。cover を指定すると表紙ページも入れる */
+	private File writeBook(File zip, Epub3ImageWriter writer, boolean coverPage, boolean tocPage, String name) throws Exception {
+		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, projectRoot.toString()+"/");
+		ImageInfoReader imageInfoReader = new ImageInfoReader(false, zip);
+		imageInfoReader.loadZipImageInfos(zip, true);
+		imageInfoReader.sortImageFileNames();
+		BookInfo bookInfo = new BookInfo(zip);
+		bookInfo.imageOnly = true;
+		bookInfo.insertTocPage = tocPage;
+		if (coverPage) {
+			bookInfo.insertCoverPage = true;
+			bookInfo.coverImageIndex = 0;
+		}
+		File epub = tempFolder.newFile(name + ".epub");
+		writer.write(converter, null, zip, "zip", epub, bookInfo, imageInfoReader);
+		return epub;
+	}
+
 	/** spine に載っている XHTML を順に返す */
 	private static List<String> spinePages(ZipFile zf) throws Exception {
 		String opf = read(zf, "OPS/package.opf");
 		List<String> pages = new ArrayList<>();
+		//目次はリフローのページなので除く
+		opf = opf.replaceAll("<itemref idref=\"nav\"[^>]*/>", "");
 		Matcher ref = Pattern.compile("<itemref idref=\"([^\"]+)\"").matcher(opf);
 		while (ref.find()) {
 			Matcher item = Pattern.compile("<item id=\"" + Pattern.quote(ref.group(1)) + "\" href=\"([^\"]+)\"").matcher(opf);
@@ -165,6 +205,77 @@ public class ImageOnlyFixedLayoutTest {
 				assertTrue("svg=" + svg + " で rendition:layout が無い", m.find());
 				assertEquals("pre-paginated", m.group(1));
 				assertFalse("svg=" + svg + " で rendition:layout が重複している", m.find());
+			}
+		}
+	}
+
+	/** 縮小すると出力した画像の大きさが元と変わる。viewport は出力した大きさに合わせる */
+	@Test
+	public void viewportFollowsResizedImage() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 500, 500, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+		File epub = writeBook(imageZip(), writer, false, false, "resized");
+		assertEveryPageHasViewportOfItsImage(epub);
+		try (ZipFile zf = new ZipFile(epub)) {
+			assertTrue("縮小されていない: " + read(zf, "OPS/xhtml/0001.xhtml"), read(zf, "OPS/xhtml/0001.xhtml").contains("width=500"));
+		}
+	}
+
+	/** 回転すると縦と横が入れ替わる */
+	@Test
+	public void viewportFollowsRotatedImage() throws Exception {
+		for (boolean svg : new boolean[]{false, true}) {
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, svg, 0, 0, 90, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+			File epub = writeBook(imageZip(), writer, true, false, "rotated" + svg);
+			assertEveryPageHasViewportOfItsImage(epub);
+			if (svg) {
+				try (ZipFile zf = new ZipFile(epub)) {
+					Matcher vp = VIEWPORT.matcher(read(zf, "OPS/xhtml/cover.xhtml"));
+					assertTrue(vp.find());
+					assertTrue("viewBox が viewport と違う: " + read(zf, "OPS/xhtml/cover.xhtml"),
+						read(zf, "OPS/xhtml/cover.xhtml").contains("viewBox=\"0 0 " + vp.group(1) + " " + vp.group(2) + "\""));
+				}
+			}
+		}
+	}
+
+	/** 高さの割合は画面に対する値なので、ページが画像の大きさの本では画像が小さくなる */
+	@Test
+	public void imagePagesHaveNoPercentHeight() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_HEIGHT);
+		File epub = writeBook(imageZip(), writer, false, false, "height");
+		try (ZipFile zf = new ZipFile(epub)) {
+			for (String page : spinePages(zf)) {
+				assertFalse(page + " に割合の高さがある: " + read(zf, page), read(zf, page).contains("min-height:"));
+			}
+		}
+	}
+
+	/** 目次ページは GUI で入る。文字のページなのでリフローにする（viewport が要らない） */
+	@Test
+	public void tocPageInSpineIsReflowable() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false);
+		File epub = writeBook(imageZip(), writer, false, true, "toc");
+		try (ZipFile zf = new ZipFile(epub)) {
+			assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("<itemref idref=\"nav\" linear=\"yes\" properties=\"rendition:layout-reflowable\"/>"));
+		}
+		assertEveryPageHasViewportOfItsImage(epub);
+	}
+
+	/** original-resolution は表紙の有無に関わらず、出力した先頭のページの大きさ */
+	@Test
+	public void originalResolutionIsTheFirstPage() throws Exception {
+		for (boolean cover : new boolean[]{false, true}) {
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, false, 500, 500, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+			File epub = writeBook(imageZip(), writer, cover, false, "res" + cover);
+			try (ZipFile zf = new ZipFile(epub)) {
+				String opf = read(zf, "OPS/package.opf");
+				assertFalse("変数のまま出ている: " + opf, opf.contains("${"));
+				assertTrue(opf, opf.contains("<meta name=\"original-resolution\" content=\"500x250\"/>"));
 			}
 		}
 	}

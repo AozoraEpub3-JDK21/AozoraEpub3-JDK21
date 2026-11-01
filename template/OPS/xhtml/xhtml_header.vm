@@ -37,7 +37,8 @@
 #end
 	<title>${title}</title>
 
-#if (${sectionInfo.ImageHeight} > 0)
+## 画像だけの本はページが画像と同じ大きさなので、画面の高さに対する割合を当てない
+#if (${sectionInfo.ImageHeight} > 0 && !${bookInfo.ImageOnly})
 <style type="text/css">
 body .img img {
 height: ${sectionInfo.ImageHeightPercent}%;

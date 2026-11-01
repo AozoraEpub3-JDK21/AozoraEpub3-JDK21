@@ -145,6 +145,11 @@ public class Epub3ImageWriter extends Epub3Writer
 		
 		//画像xhtmlを出力
 		zos.setLevel(9);
+		//OPF の original-resolution は、出力した先頭の画像の大きさにする
+		if (!this.imageInfoReader.getImageFileNames().isEmpty()) {
+			ImageInfo firstPage = this.imageInfoReader.getImageInfo(this.imageInfoReader.getImageFileNames().get(0));
+			if (firstPage != null) this.velocityContext.put("firstPageImage", firstPage);
+		}
 		pageNum = 0;
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
 			if (this.canceled) return;
