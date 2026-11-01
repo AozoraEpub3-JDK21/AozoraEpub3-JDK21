@@ -180,6 +180,8 @@ public class ImageOnlyFixedLayoutTest {
 				if (svg) assertTrue(page + " の viewBox: " + xhtml, xhtml.contains("viewBox=\"0 0 " + width + " " + height + "\""));
 				Matcher placed = (svg ? PLACED_SVG : PLACED_IMG).matcher(xhtml);
 				assertTrue(page + " に画像の位置が無い: " + xhtml, placed.find());
+				//固定レイアウトを解さないリーダーで画面の形が違っても歪ませない
+				if (!svg) assertTrue(page + " に object-fit が無い: " + xhtml, xhtml.contains("object-fit:contain"));
 				//SVG は画素、それ以外はページに対する割合
 				int x = pixels(placed.group(1), svg ? 0 : width), y = pixels(placed.group(2), svg ? 0 : height);
 				int w = pixels(placed.group(3), svg ? 0 : width), h = pixels(placed.group(4), svg ? 0 : height);
