@@ -27,6 +27,41 @@
 	<dc:source>${source}</dc:source>
 #end
 	<meta property="dcterms:modified">${modified}</meta>
+## アクセシビリティ（確かめられることだけを書く。規格への適合 dcterms:conformsTo は確かめていないので書かない）
+## .mobi の出力は変えない
+#if (!${kindle})
+#if (${bookInfo.ImageOnly})
+	<meta property="schema:accessMode">visual</meta>
+	<meta property="schema:accessModeSufficient">visual</meta>
+#elseif (${hasContentImage})
+	<meta property="schema:accessMode">textual</meta>
+	<meta property="schema:accessMode">visual</meta>
+	<meta property="schema:accessModeSufficient">textual,visual</meta>
+#else
+	<meta property="schema:accessMode">textual</meta>
+	<meta property="schema:accessModeSufficient">textual</meta>
+#end
+	<meta property="schema:accessibilityFeature">tableOfContents</meta>
+#if (!${bookInfo.ImageOnly})
+#if (${bookInfo.Vertical})
+	<meta property="schema:accessibilityFeature">verticalWriting</meta>
+#else
+	<meta property="schema:accessibilityFeature">horizontalWriting</meta>
+#end
+#end
+#if (${stillImagesOnly})
+	<meta property="schema:accessibilityHazard">none</meta>
+#else
+	<meta property="schema:accessibilityHazard">unknown</meta>
+#end
+#if (${bookInfo.ImageOnly})
+	<meta property="schema:accessibilitySummary">画像だけの本を機械的に変換したものです。絵に代替テキストはなく、読むには視覚が必要です。アクセシビリティ規格への適合は確かめていません。</meta>
+#elseif (${hasContentImage})
+	<meta property="schema:accessibilitySummary">テキストを機械的に変換したものです。本文の画像に代替テキストはありません。アクセシビリティ規格への適合は確かめていません。</meta>
+#else
+	<meta property="schema:accessibilitySummary">テキストを機械的に変換したものです。アクセシビリティ規格への適合は確かめていません。</meta>
+#end
+#end
 #if (${bookInfo.InsertCoverPage})
 	<meta name="cover" content="img${coverImage.Id}"/>
 #end

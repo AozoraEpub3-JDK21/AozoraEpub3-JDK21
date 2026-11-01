@@ -926,6 +926,15 @@ public class Epub3Writer
 		//package.opf 出力
 		velocityContext.put("sections", sectionInfos);
 		velocityContext.put("images", imageInfos);
+		//アクセシビリティ情報の材料。表紙は読むのに要らない。JPEG は動かないので光の点滅の心配が無い
+		boolean hasContentImage = false;
+		boolean stillImagesOnly = true;
+		for (ImageInfo imageInfo : imageInfos) {
+			if (!imageInfo.getIsCover()) hasContentImage = true;
+			if (!imageInfo.getExt().matches("^(jpeg|jpg)$")) stillImagesOnly = false;
+		}
+		velocityContext.put("hasContentImage", hasContentImage);
+		velocityContext.put("stillImagesOnly", stillImagesOnly);
 		velocityContext.put("vecGaijiInfo", this.vecGaijiInfo);
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+PACKAGE_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
