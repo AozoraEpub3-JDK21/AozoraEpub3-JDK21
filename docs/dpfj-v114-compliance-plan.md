@@ -46,8 +46,8 @@
 | 6 | OPF | `package.vm:3` prefix に `ebpaj:` / `dpfj:` 未宣言 | A | 電書連自己宣言不可 |
 | 7 | OPF | `ebpaj:guide-version` / `dpfj:guide-version` meta 未出力 | A | 同上 |
 | 8 | OPF | `package.vm:9, 15` で v1.1.4 廃止の `file-as` を出力 | C | 読み上げソフトに影響可 |
-| 9 | OPF | `template/OPS/toc.ncx.vm` 出力 + `package.vm:127, 131-133` で NCX 参照 | C | 旧 RS で目次喪失 |
-| 10 | OPF | `package.vm:158-173` の `<guide>` 要素 (EPUB 3 で deprecated) | C | 旧 RS で表紙/目次ショートカット喪失 |
+| 9 | OPF | `template/OPS/toc.ncx.vm` 出力 + `package.vm:130, 134-136` で NCX 参照 | C | 旧 RS で目次喪失 |
+| 10 | OPF | `package.vm:161-177` の `<guide>` 要素 (EPUB 3.3 で legacy) | C | 旧 RS で表紙/目次ショートカット喪失 |
 | 11 | OPF | `package.vm:12-16` で `dc:creator` に `role` meta なし | A | 推奨レベル |
 
 ### 2.3 epubcheck 影響
@@ -164,7 +164,9 @@
 
 #### 3.3.1 設計方針
 
-破壊的変更を**設定スイッチでオプトイン化**する。デフォルトは現行挙動を維持し、`v1.4.0` 等のメジャーバージョンでデフォルト切替を**別途検討**。
+破壊的変更を**設定スイッチでオプトイン化**する。NCX・`<guide>` の既定の扱いは [モダン化計画 ステージ S](modernization-plan.md)（2026-11-01）に従う。`file-as` は EPUB 3.4 草案でも定義されているので、このモードでだけ外す。
+
+> **訂正（2026-11-01）**: 見出しとブランチ名の「deprecated」は誤りである。NCX・`<guide>` は EPUB 3.3 では legacy であり、含めても仕様に反しない。このステージは仕様違反の解消ではなく、電書連サンプルに揃えたい人のための選択肢である。互換設定（ステージ S の S-7）とは別の設定とする。
 
 #### 3.3.2 フラグの流通経路（実装必須）
 
@@ -249,7 +251,7 @@ OPF の `<item href="toc.ncx">` 抑止 (`package.vm` 側、§3.3.3-2) と**セ�
    #end
    ```
 
-3. **`package.vm:158-173` の `<guide>` 要素全体をフラグで抑止**
+3. **`package.vm:161-177` の `<guide>` 要素全体をフラグで抑止**
    ```velocity
    #if (!${dpfjCompliantMode} && (${bookInfo.InsertCoverPage} || ${bookInfo.InsertTocPage}))
      <guide>
@@ -418,3 +420,4 @@ OPF の `<item href="toc.ncx">` 抑止 (`package.vm` 側、§3.3.3-2) と**セ�
 | 2026-05-27 | 初版作成（ディープリサーチ結果反映） | Claude (Opus 4.7) |
 | 2026-05-27 | レビュー指摘 4 件反映: ①§2.4 WebP / XHTML 構造をスコープ外として明示 ②§2.2 #4 と §3.2.1 で `vertical_image.css:64` 誤参照を `vertical.css:64` に訂正 ③§3.3.2 でフラグの CLI/GUI/Velocity 流通経路と `AozoraEpub3.ini`（`.template` なし、`1`/空文字慣習）を具体化 ④§6.3.1 / §6.3.2 で ZIP entry と OPF manifest/spine/guide/file-as の不在検証を完了条件に追加 | Claude (Opus 4.7) |
 | 2026-05-27 | レビュー指摘 2 件追加反映: ⑤`AozoraEpub3Applet.java` のパスを `src/com/github/hmdev/AozoraEpub3Applet.java` → `src/AozoraEpub3Applet.java`（default package、唯一の例外的配置）に訂正（§3.3.2 (c)、§3.3.3） ⑥生成 OPF のファイル名を `standard.opf` → `OPS/package.opf` に訂正（`Epub3Writer.java:119` `PACKAGE_FILE` 定数、`META-INF/container.xml` の rootfile path に基づく）。電書連サンプルの `item/standard.opf` との命名差異を §6.1 / §6.3.2 に注記 | Claude (Opus 4.7) |
+| 2026-11-01 | NCX・`<guide>` の扱いを deprecated から legacy に訂正。既定の扱いをモダン化計画 ステージ S に委ねた | Claude (Opus 5.5) |
