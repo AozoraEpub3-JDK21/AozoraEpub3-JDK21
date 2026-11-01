@@ -104,6 +104,8 @@ Kindle / Kobo / Apple Books の実機既定フォントとは**一致しない**
 
 ### F2. 目次の階層情報は toc.ncx にしかない
 
+（2026-11-01 追記: 計画時点の話。今は nav.xhtml も入れ子にできる。解決の順は `TocParser` のコメントを見る）
+
 - `template/OPS/toc.ncx.vm` は `navPoint` を `chapter.NavClose` で閉じる構造を持ち、
   **入れ子 (階層) の目次を出力できる**。
 - `template/OPS/xhtml/xhtml_nav.vm` の toc nav は `<ol>` 直下に `li.chapter` を
