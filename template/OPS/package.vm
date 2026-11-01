@@ -28,17 +28,18 @@
 #end
 	<meta property="dcterms:modified">${modified}</meta>
 ## アクセシビリティ（確かめられることだけを書く。規格への適合 dcterms:conformsTo は確かめていないので書かない）
+## .mobi の出力は変えない
+#if (!${kindle})
 #if (${bookInfo.ImageOnly})
 	<meta property="schema:accessMode">visual</meta>
 	<meta property="schema:accessModeSufficient">visual</meta>
-#else
+#elseif (${hasContentImage})
 	<meta property="schema:accessMode">textual</meta>
-#if (${images.size()} > 0 || ${vecGaijiInfo.size()} > 0)
 	<meta property="schema:accessMode">visual</meta>
 	<meta property="schema:accessModeSufficient">textual,visual</meta>
 #else
+	<meta property="schema:accessMode">textual</meta>
 	<meta property="schema:accessModeSufficient">textual</meta>
-#end
 #end
 	<meta property="schema:accessibilityFeature">tableOfContents</meta>
 #if (!${bookInfo.ImageOnly})
@@ -48,12 +49,15 @@
 	<meta property="schema:accessibilityFeature">horizontalWriting</meta>
 #end
 #end
+#if (${stillImagesOnly})
+	<meta property="schema:accessibilityHazard">none</meta>
+#else
 	<meta property="schema:accessibilityHazard">unknown</meta>
+#end
 #if (${bookInfo.ImageOnly})
 	<meta property="schema:accessibilitySummary">画像だけの本を機械的に変換したものです。絵に代替テキストはなく、読むには視覚が必要です。アクセシビリティ規格への適合は確かめていません。</meta>
-#else
-#if (${images.size()} > 0 || ${vecGaijiInfo.size()} > 0)
-	<meta property="schema:accessibilitySummary">テキストを機械的に変換したものです。画像に代替テキストはありません。アクセシビリティ規格への適合は確かめていません。</meta>
+#elseif (${hasContentImage})
+	<meta property="schema:accessibilitySummary">テキストを機械的に変換したものです。本文の画像に代替テキストはありません。アクセシビリティ規格への適合は確かめていません。</meta>
 #else
 	<meta property="schema:accessibilitySummary">テキストを機械的に変換したものです。アクセシビリティ規格への適合は確かめていません。</meta>
 #end

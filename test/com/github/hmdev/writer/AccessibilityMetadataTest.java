@@ -49,10 +49,17 @@ public class AccessibilityMetadataTest {
 	}
 
 	private String textBook(boolean vertical, boolean cover) throws Exception {
-		Path txt = tempFolder.newFile().toPath();
-		Files.write(txt, "表題\n著者\n\n本文です。\n".getBytes(StandardCharsets.UTF_8));
+		return textBook(vertical, cover ? "png" : null, false, "本文です。\n");
+	}
+
+	/** @param coverFormat 別ファイルの表紙の形式。null なら表紙なし */
+	private String textBook(boolean vertical, String coverFormat, boolean kindle, String body) throws Exception {
+		Path txt = tempFolder.newFile("book.txt").toPath();
+		Files.write(txt, ("表題\n著者\n\n" + body).getBytes(StandardCharsets.UTF_8));
+		ImageIO.write(new BufferedImage(40, 40, BufferedImage.TYPE_INT_RGB), "png", tempFolder.newFile("fig.png"));
 		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
 		setParams(writer);
+		writer.setIsKindle(kindle);
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
 		converter.setChapterLevel(64, false, false, true, true, true, true, true, false, false, false, false, false, false, null);
 		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt.toFile());
@@ -61,9 +68,9 @@ public class AccessibilityMetadataTest {
 			bookInfo = converter.getBookInfo(txt.toFile(), src, imageInfoReader, BookInfo.TitleType.TITLE_AUTHOR, false);
 		}
 		bookInfo.vertical = vertical;
-		if (cover) {
-			File image = tempFolder.newFile("cover.png");
-			ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "png", image);
+		if (coverFormat != null) {
+			File image = tempFolder.newFile("cover." + coverFormat);
+			ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), coverFormat, image);
 			bookInfo.insertCoverPage = true;
 			bookInfo.coverFileName = image.getPath();
 		}
@@ -113,7 +120,7 @@ public class AccessibilityMetadataTest {
 	private static void assertMakesNoUnverifiedClaim(String opf) {
 		assertFalse(opf, opf.contains("dcterms:conformsTo"));
 		assertFalse(opf, opf.contains("alternativeText"));
-		assertEquals(List.of("unknown"), values(opf, "accessibilityHazard"));
+		assertEquals(opf, 1, values(opf, "accessibilityHazard").size());
 		assertEquals(opf, 1, values(opf, "accessibilitySummary").size());
 		assertFalse(opf, opf.contains("${"));
 	}
@@ -124,6 +131,7 @@ public class AccessibilityMetadataTest {
 		assertEquals(List.of("textual"), values(opf, "accessMode"));
 		assertEquals(List.of("textual"), values(opf, "accessModeSufficient"));
 		assertEquals(List.of("tableOfContents", "verticalWriting"), values(opf, "accessibilityFeature"));
+		assertEquals(List.of("none"), values(opf, "accessibilityHazard"));
 		assertFalse("画像の無い本で代替テキストの話をしない", values(opf, "accessibilitySummary").get(0).contains("代替テキスト"));
 		assertMakesNoUnverifiedClaim(opf);
 	}
@@ -133,14 +141,38 @@ public class AccessibilityMetadataTest {
 		assertEquals(List.of("tableOfContents", "horizontalWriting"), values(textBook(false, false), "accessibilityFeature"));
 	}
 
-	/** 画像に代替テキストが無いので、文字だけで足りるとは言えない */
+	/** 本文の画像に代替テキストが無いので、文字だけで足りるとは言えない */
 	@Test
-	public void textBookWithImageAlsoNeedsSight() throws Exception {
-		String opf = textBook(true, true);
+	public void bodyImageAlsoNeedsSight() throws Exception {
+		String opf = textBook(true, null, false, "本文です。\n［＃挿絵（fig.png）入る］\n");
 		assertEquals(List.of("textual", "visual"), values(opf, "accessMode"));
 		assertEquals(List.of("textual,visual"), values(opf, "accessModeSufficient"));
 		assertTrue(opf, values(opf, "accessibilitySummary").get(0).contains("代替テキストはありません"));
+		//PNG は動くかもしれない
+		assertEquals(List.of("unknown"), values(opf, "accessibilityHazard"));
 		assertMakesNoUnverifiedClaim(opf);
+	}
+
+	/** 表紙は読むのに要らない（EPUB Accessibility Techniques 1.1 §3.1） */
+	@Test
+	public void coverAloneDoesNotNeedSight() throws Exception {
+		String opf = textBook(true, "png", false, "本文です。\n");
+		assertEquals(List.of("textual"), values(opf, "accessMode"));
+		assertEquals(List.of("textual"), values(opf, "accessModeSufficient"));
+		assertFalse(opf, values(opf, "accessibilitySummary").get(0).contains("代替テキスト"));
+		assertEquals(List.of("unknown"), values(opf, "accessibilityHazard"));
+		assertMakesNoUnverifiedClaim(opf);
+	}
+
+	@Test
+	public void jpegCoverHasNoHazard() throws Exception {
+		assertEquals(List.of("none"), values(textBook(true, "jpg", false, "本文です。\n"), "accessibilityHazard"));
+	}
+
+	/** .mobi の出力は変えない */
+	@Test
+	public void kindleOutputHasNoMetadata() throws Exception {
+		assertFalse(textBook(true, null, true, "本文です。\n").contains("schema:access"));
 	}
 
 	@Test
@@ -149,6 +181,7 @@ public class AccessibilityMetadataTest {
 		assertEquals(List.of("visual"), values(opf, "accessMode"));
 		assertEquals(List.of("visual"), values(opf, "accessModeSufficient"));
 		assertEquals(List.of("tableOfContents"), values(opf, "accessibilityFeature"));
+		assertEquals(List.of("unknown"), values(opf, "accessibilityHazard"));
 		assertMakesNoUnverifiedClaim(opf);
 	}
 }
