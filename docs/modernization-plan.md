@@ -62,7 +62,7 @@
 
 ## 2. 設計原則
 
-1. **互換性最優先**: 出力 EPUB は byte-identical を維持する。`.NET` ポート比較テストが PASS し続けることを各段階のゲートにする。
+1. **互換性最優先**: 出力 EPUB は byte-identical を維持する。`.NET` ポート比較テストが PASS し続けることを各段階のゲートにする。**ステージ S だけは例外**で、既定の出力を変え、`.NET` ポートとの一致も求めない（2026-11-01）。
 2. **段階的にコミット**: 1 PR を小さく保つ。リネーム/フォーマット/ロジック変更を混ぜない。
 3. **重量フレームワーク不採用**: Spring / Quarkus 等は導入しない。手動 DI で十分な規模。
 4. **GUI は維持**: Swing を活かす。JavaFX 全面書き直しは ROI が低い。
@@ -280,14 +280,14 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 
 | 順 | # | 項目 | 影響範囲 | 検証方法 |
 |---|---|------|---------|--------|
-| 1 | S-8 | 画像のみの本（固定レイアウト）のページの大きさを本全体で 1 つにして、全ページに同じ `viewport` を入れる。大きさは縦横比が真ん中の画像に合わせ、画像はページに対する割合で中央に置く（SVG は画素）。ページごとの `viewport` では Apple Books が先頭と違う形のページを切り、Kindle Previewer は `original-resolution` が本文の横長だと縦長の表紙を切った。`SvgImage` のときの `rendition:layout` の重複と `<title>` の欠けも直す。既存の `meta` は残す（`original-resolution` などを外すと `viewport` なしでは Kindle Previewer で右端が切れた）。現行の出力は epubcheck で HTM-046 のエラーになり、Apple Books と Thorium では上下が切れ、Google Play ブックスでは絵が出ない | `template/OPS/xhtml/`、`template/OPS/package.vm`、`Epub3ImageWriter`、CI | epubcheck（CI に画像のみの本を足す）、リーダーでの表示比較 |
-| 2 | S-5 | 縦中横に `text-combine-upright` を足す。現在は `text-combine`・`-webkit-text-combine`・`-epub-text-combine` だけで、`-epub-text-combine` は EPUB 3.3 から deprecated である。古い指定は残す（Google Play ブックスは `-epub-text-combine` がないと組まない。下記の実測） | `template/OPS/css/vertical.css`、`template/OPS/xhtml/xhtml_nav.vm` | 下記の 4 リーダーでの表示比較（epubcheck では検出できない。上記 6 本は 0 warnings だった） |
-| 3 | S-6 | NAV doc の目次を階層化する。現在は階層が `toc.ncx` にしか無く（`navNest` はテンプレートに渡されるが使われていない）、仕様上 EPUB 3 リーダーは NCX を使わない | `template/OPS/xhtml/xhtml_nav.vm`、`Epub3Writer` | epubcheck、リーダーの目次表示 |
+| 1 | S-8 | 画像のみの本（固定レイアウト）のページの大きさを本全体で 1 つにして、全ページに同じ `viewport` を入れる。大きさは縦横比が真ん中の画像に合わせ、画像はページに対する割合で中央に置く（SVG は画素）。ページごとの `viewport` では Apple Books が先頭と違う形のページを切り、Kindle Previewer は `original-resolution` が本文の横長だと縦長の表紙を切った。`SvgImage` のときの `rendition:layout` の重複と `<title>` の欠けも直す。既存の `meta` は残す（OPF 2 の `meta` を外すと `viewport` なしでは Kindle Previewer で右端が切れた。どの `meta` が原因かは切り分けていない）。現行の出力は epubcheck で HTM-046 のエラーになり、Apple Books と Thorium では上下が切れ、Google Play ブックスでは絵が出ない | `template/OPS/xhtml/`、`template/OPS/package.vm`、`Epub3ImageWriter`、CI | epubcheck（CI に画像のみの本を足す）、リーダーでの表示比較 |
+| 2 | S-5 | 縦中横に `text-combine-upright` を足す。現在は `text-combine`・`-webkit-text-combine`・`-epub-text-combine` だけで、`-epub-text-combine` は EPUB 3.0.1 から deprecated で、3.3 でも同じである。古い指定は残す（Google Play ブックスは `-epub-text-combine` がないと組まない。下記の実測） | `template/OPS/css/vertical.css`、`template/OPS/xhtml/xhtml_nav.vm` | 下記の 4 リーダーでの表示比較（epubcheck では検出できない。上記 6 本は 0 warnings だった） |
+| 3 | S-6 | NAV doc の目次を階層化する。現在は階層が `toc.ncx` にしか無く（`navNest` はテンプレートに渡されるが使われていない）、仕様上 EPUB 3 リーダーは NCX を使わない。`NavNest` の既定値は `SettingDefaults` が false、同梱の ini が 1 で違うので、ここでそろえる。NCX を外した後の GUI の「目次(ncx)階層化」もここで扱う | `template/OPS/xhtml/xhtml_nav.vm`、`Epub3Writer` | epubcheck、リーダーの目次表示 |
 | 4 | S-4 | アクセシビリティメタデータの追加（`schema:accessMode`、`accessibilityFeature`、`accessibilityHazard`、`accessibilitySummary`）。`dcterms:conformsTo` は適合を確かめられた場合だけ書く | `template/OPS/package.vm`、`Epub3Writer` の context 投入 | epubcheck PASS、Ace by DAISY などで accessibility report |
 | 5 | S-7 | `<meta name="cover">` と NCX を出力する互換設定を足す（INI・GUI）。Kobo のプリセット（`presets/kobo_*.ini`）と、出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub` のときは自動で有効にする。この時点では既定を変えない | `template/OPS/package.vm`、`Epub3Writer`、設定、`presets/` | 設定の有無とプリセットごとに OPF を比較 |
-| 6 | S-1〜S-2 | `<meta name="cover">`、`toc` 属性と NCX を既定の出力から外す（互換設定と Kobo 向けの出力では残す）。`<guide>`（S-3）は下記の実測により既定に残す | `template/OPS/package.vm`、`toc.ncx.vm` | epubcheck、下記の確認 |
+| 6 | S-1〜S-2 | `<meta name="cover">`、`toc` 属性と NCX を既定の出力から外す（互換設定と Kobo 向けの出力では残す）。`<guide>`（S-3）は下記の実測により既定に残す。`.mobi`（Kindle モード）の出力は変えない（nav に `epub:type` が付かないので、NCX を外すと機械可読の目次が無くなる）。画像のみの本で `<meta name="cover">` を外した測定はまだ無いので、切り替える前にリーダーで確かめる | `template/OPS/package.vm`、`toc.ncx.vm` | epubcheck、下記の確認 |
 
-**実測（2026-11-01、試作の EPUB を同じ本文で比較）**:
+**実測（2026-11-01、試作の EPUB で比較。Thorium と Kindle Previewer の EPUB は Windows で同じ変換から作ったもので、mac の EPUB とは本文の一部が違う）**:
 
 | 確認項目 | Apple Books（macOS） | Thorium 3.5.1 | Kindle Previewer 4.0.3.0（Tablet・Phone・E-reader） | Google Play ブックス 2026.10.2.1（Android） |
 |---|---|---|---|---|
@@ -298,16 +298,16 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 | 接頭辞を外した縦中横 | 組まれる | 組まれる | 組まれる | **崩れる（`-epub-text-combine` だけで組まれる）** |
 | 接頭辞を外した傍点・正立・ルビ | 変わらない | 変わらない | 変わらない | 変わらない |
 
-epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で、試作の 9 本すべて 0 fatal / 0 errors / 0 warnings だった。legacy の要素や接頭辞付き CSS は `-u` の利用法情報に出るだけである。
+epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で、試作の 9 本すべて 0 fatal / 0 errors / 0 warnings だった。legacy の要素や接頭辞付き CSS は、5.4.0 の `-u` の利用法情報に出るだけである（5.3.0 には出ない）。
 
 **既定を切り替える前に確かめること**（S-1〜S-2 のゲート）:
 - [x] Kindle は Kindle Previewer で確認する（Send to Kindle の代わり、2026-11-01 決定）。Tablet・Phone・E-reader とも問題なし。実機での表紙の認識は確かめていない
 - [x] 本プロジェクトのプレビューで目次の階層が保たれること（NCX が無ければ NAV を読み、試作で同じ階層になった。表紙は `cover-image` を先に見る）
-- [x] 画像のみの本の `rendition:spread` と OPF 2 の `meta` は残す。`viewport` と画像の配置を足す（S-8）
+- [x] 画像のみの本の `rendition:spread` と OPF 2 の `meta`（`<meta name="cover">` は S-1 で扱う）は残す。`viewport` と画像の配置を足す（S-8）
 
 **ゲート条件**:
 - [ ] `gradlew test` PASS
-- [ ] サンプル EPUB（n9623lp / aozora_1567_14913 等）が epubcheck で 0 errors / 0 warnings のまま
+- [ ] CI の EPUB 6 本が epubcheck で 0 errors / 0 warnings のまま
 - [ ] 互換設定を有効にした出力に S-1〜S-2 の要素が従来どおり入ること（`<meta name="cover">` は表紙ページを入れたとき）
 - [ ] 既定の出力に `<guide>` と `-epub-text-combine` が残ること（`<guide>` は表紙ページか目次ページを入れたとき）
 
@@ -323,8 +323,9 @@ epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で�
 > 2026-10-28 時点で [EPUB 3.4](https://www.w3.org/TR/epub-34/) は W3C Candidate Recommendation Draft。Recommendation 化されるまで本ステージは着手しない。
 >
 > **3.4 草案の扱い（2026-11-01 に確認。変わる可能性がある）**:
-> - `<meta name="cover">`・`<guide>`・NCX は **outdated** の中の「Legacy features」という区分に入り、引き続き含めてよい。EPUB 3 リーダーは無視しなければならない（MUST be ignored）。ただし「EPUB 2 のみのリーダーは今や稀で、含める価値は限られる」と明記されている
-> - 本プロジェクトが使う `-epub-writing-mode` などの接頭辞付き CSS も outdated で、次のメジャーバージョンでは保守されない見込みとされている。現行テンプレートは大半を接頭辞なしと併記している
+> - `<meta name="cover">`・`<guide>`・NCX は **outdated** の中の「Legacy features」という区分に入り、引き続き含めてよい。EPUB 3 リーダーは無視しなければならない（EPUB Reading Systems 3.4 の MUST be ignored。3.3 にも同じ趣旨の規定がある）。ただし「EPUB 2 のみのリーダーは今や稀で、含める価値は限られる」と明記されている
+> - 本プロジェクトが使う `-epub-writing-mode` などの接頭辞付き CSS も outdated で、次のメジャーバージョンでは保守されない見込みとされている。現行テンプレートは接頭辞なしと併記している
+> - `-epub-text-combine` だけは Deprecated の区分で、使うべきでなく（SHOULD NOT）、検証器が警告することが推奨されている。それでも S-5 で残すのは、Google Play ブックスがこれなしでは縦中横を組まないからで、「現行の仕様で推奨される形」の例外である。epubcheck が警告を出すようになったら、0 warnings のゲートと両立しないので、その時に Play ブックスを測り直して決める
 > - `rendition:spread`（画像のみの本で出力）も outdated である
 > - 3.4 の確認には epubcheck 5.4.0 以降を使う（CI は 5.2.0、`build.gradle` は 5.3.0）
 
@@ -369,7 +370,7 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
                ├─ 1-C 静的状態解消
                └─ 1-B 巨大クラス分割
 並行:       ステージ 2（言語機能、§2.1 の互換性監査を先に完了させる）
-独立:       ステージ S（将来も残せる EPUB へ、ステージ 0C 完了後にいつでも）
+独立:       ステージ S（将来も残せる EPUB へ、ステージ 0C の完了を待たずに進める）
                 ├─ S-8 画像のみの本の `viewport`
                 ├─ S-5 縦中横の `text-combine-upright`
                 ├─ S-6 NAV doc の目次の階層化
@@ -387,14 +388,14 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
 
 | リスク | 影響 | 緩和策 |
 |------|------|------|
-| 出力 EPUB の byte 差分発生 | narou.rb 連携・既存ユーザー破壊 | 各 PR で `.NET` ポート `JavaComparisonTests` 5/5 確認をゲート化 |
+| 出力 EPUB の byte 差分発生 | narou.rb 連携・既存ユーザー破壊 | ステージ S を除く各 PR で `.NET` ポート `JavaComparisonTests` 5/5 確認をゲート化 |
 | 0C-2（Maven 配置）の git diff 肥大化 | レビュー困難 | 単独 PR、ロジック変更を一切混ぜない、`git mv` でリネーム追跡 |
 | `JApplet` 撤去で Web 起動を期待するユーザー | 影響想定: ほぼゼロ（既に GUI は JFrame で動作） | リリースノートに明記 |
 | record 化で Velocity テンプレート呼び出し失敗 | 出力崩壊 | §2.1 の方針に従い、**テンプレート参照クラスは Bean 互換維持**（record 化対象外）。record 化前に `template/` 配下の `$obj.Property` 参照を**全件監査**し、参照ありクラスを除外。PR 単位で全テンプレートのレンダリングテストを必須ゲート化 |
 | narou.rb の `java -cp` 直接呼びがメインクラス移動で壊れる | 連携破壊 | 旧クラス名でラッパー（数行）を最低 1 マイナーバージョン残す。`AozoraEpub3` クラスは現状でも CLI エントリだが、移動時に旧 FQCN を残置 |
 | 並行作業で衝突 | マージコスト | ステージ単位で feature ブランチを切る、ステージ 0A を最初に完了させる |
-| ステージ S で `<package version="...">` を `"3.3"` 等に変更してしまう | epubcheck reject（OPF-073）／ EPUB 仕様違反 | **`version` 属性は "3.0" 固定**。S では版数を触らない。INI 上書き機構の追加もしない（誤った値を書き出す経路を作らない） |
-| legacy の要素を削除して旧リーダ互換が崩れる | `<guide>` や NCX を頼る EPUB 2 リーダーで表紙・目次の案内が失われる | 先に互換設定を作り、リーダーでの確認（§3 ステージ S）が済むまで既定を変えない。切り替え後も互換設定で従来の形を出力できる |
+| ステージ S で `<package version="...">` を `"3.3"` 等に変更してしまう | epubcheck reject ／ EPUB 仕様違反 | **`version` 属性は "3.0" 固定**。S では版数を触らない。INI 上書き機構の追加もしない（誤った値を書き出す経路を作らない） |
+| legacy の要素を削除して旧リーダ互換が崩れる | NCX を頼る EPUB 2 リーダーで目次の案内が失われる（`<guide>` は既定に残す） | 先に互換設定を作り、リーダーでの確認（§3 ステージ S）が済むまで既定を変えない。切り替え後も互換設定で従来の形を出力できる |
 
 ---
 
@@ -402,7 +403,7 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
 
 - Kotlin / Scala / Groovy への移行
 - Spring / Quarkus / Micronaut 等の DI コンテナ導入
-- 出力 EPUB 仕様の変更（EPUB 3.3 から動かさない。3.4 への移行はステージ S+ で別途検討）
+- 出力 EPUB が従う仕様の版の変更（`version` は 3.0 固定、規則は EPUB 3.3 のまま。3.4 への移行はステージ S+ で別途検討）。既定の出力を変えるのはステージ S だけ
 - `<package version="...">` 属性の値変更（仕様上 "3.0" 固定）。INI 上書き機構の追加もしない
 - 青空文庫テキスト形式の入力仕様変更
 - データベース導入（現状は INI / プロパティで十分）
