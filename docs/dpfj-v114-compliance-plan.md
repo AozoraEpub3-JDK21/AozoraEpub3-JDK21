@@ -38,7 +38,7 @@
 
 | # | カテゴリ | 該当箇所 | ステージ | 影響 |
 |---|---|---|---|---|
-| 1 | CSS | `template/OPS/css/vertical.css:253` `text-combine: horizontal` のみで `text-combine-upright: all` 欠落 | B | 現代 RS で縦中横が崩れる |
+| 1 | CSS | `template/OPS/css/vertical.css:253` `text-combine: horizontal` のみで `text-combine-upright: all` 欠落（モダン化計画 S-5 で追加済み） | B | 現代 RS で縦中横が崩れる |
 | 2 | CSS | `template/OPS/css/vertical.css:252` セレクタ `.tcy span` が 2 階層 span 前提 | B | 電書連 CSS との相互非互換 |
 | 3 | CSS | `template/OPS/css/vertical.css:297` `text-orientation: sideways-right` が deprecated | B | Chromium で無視 |
 | 4 | CSS | `template/OPS/css/vertical.css:64` の `vertical-align: center` が無効値（`vertical_image.css` には該当指定なし、レビュー指摘で訂正） | B | 現在は無視されている、修正で挙動変化の可能性 |
@@ -120,7 +120,7 @@
 
 #### 3.2.1 対象変更
 
-1. `template/OPS/css/vertical.css:252-256` を以下に修正:
+1. （モダン化計画 S-5 に置き換え。`.tcy span` に `text-combine-upright: all` を足し、古い指定は Play ブックスのために残した。セレクタは広げず、`-webkit-text-combine-upright` も足していない）当初の案は `template/OPS/css/vertical.css:252-256` を以下に修正:
    ```css
    .tcy, .tcy span {
        -webkit-text-combine: horizontal;
