@@ -72,6 +72,11 @@ public final class WriterConfigurator {
 		// toc nesting (キー不在時の値は GUI と共有する SettingDefaults に置く)
 		epub3Writer.setTocParam(SettingDefaults.getBoolean(props, "NavNest"), SettingDefaults.getBoolean(props, "NcxNest"));
 
+		// EPUB 2 向けの要素
+		boolean legacyOutput = SettingDefaults.getBoolean(props, "LegacyOutput");
+		epub3Writer.setLegacyOutput(legacyOutput);
+		epub3ImageWriter.setLegacyOutput(legacyOutput);
+
 		// style settings
 		String[] pageMargin = {};
 		try { pageMargin = props.getProperty("PageMargin").split(","); } catch (Exception e) { /* 意図的: パース失敗時は既定値を維持 */ }

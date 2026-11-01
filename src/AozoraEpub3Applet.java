@@ -374,6 +374,7 @@ public class AozoraEpub3Applet extends JPanel
 	
 	JCheckBox jCheckNavNest;
 	JCheckBox jCheckNcxNest;
+	JCheckBox jCheckLegacyOutput;
 	
 	JCheckBox jCheckTitleToc;
 	JCheckBox jCheckChapterSection;
@@ -2065,6 +2066,13 @@ public class AozoraEpub3Applet extends JPanel
 		jCheckNcxNest.setFocusPainted(false);
 		jCheckNcxNest.setBorder(padding2);
 		panel.add(jCheckNcxNest);
+		
+		//EPUB 2 向けの要素
+		jCheckLegacyOutput = new JCheckBox(I18n.t("ui.chk.legacyOutput")+" ", SettingDefaults.isSelected("LegacyOutput"));
+		jCheckLegacyOutput.setToolTipText(I18n.t("ui.tooltip.legacyOutput"));
+		jCheckLegacyOutput.setFocusPainted(false);
+		jCheckLegacyOutput.setBorder(padding2);
+		panel.add(jCheckLegacyOutput);
 		
 		panelV.add(panel);
 		
@@ -3960,6 +3968,9 @@ public class AozoraEpub3Applet extends JPanel
 				imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQualty, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, autoMarginNombreSize);
 		//目次階層化設定
 		this.epub3Writer.setTocParam(jCheckNavNest.isSelected(), jCheckNcxNest.isSelected());
+		for (Epub3Writer w : new Epub3Writer[]{ this.epub3Writer, this.epub3ImageWriter }) {
+			w.setLegacyOutput(jCheckLegacyOutput.isSelected());
+		}
 		
 		//スタイル設定
 		String[] pageMargin = new String[4];
@@ -4381,6 +4392,7 @@ public class AozoraEpub3Applet extends JPanel
 		//Kindleチェック
 		File kindlegen = null;
 		writer.setIsKindle(false);
+		writer.setOutputExt(outExt);
 		if (outExt.startsWith(".mobi")) {
 			kindlegen = new File(this.jarPath+"kindlegen.exe");
 			if (!kindlegen.isFile()) {
@@ -5874,6 +5886,7 @@ public class AozoraEpub3Applet extends JPanel
 		//目次階層化
 		setPropsSelected(jCheckNavNest, props, "NavNest");
 		setPropsSelected(jCheckNcxNest, props, "NcxNest");
+		setPropsSelected(jCheckLegacyOutput, props, "LegacyOutput", SettingDefaults.isSelected("LegacyOutput"));
 		//改ページ後を目次に追加
 		setPropsSelected(jCheckChapterSection, props, "ChapterSection");
 		//見出し注記
@@ -6112,6 +6125,7 @@ public class AozoraEpub3Applet extends JPanel
 		props.setProperty("ChapterExclude", this.jCheckChapterExclude.isSelected()?"1":"");
 		props.setProperty("NavNest", this.jCheckNavNest.isSelected()?"1":"");
 		props.setProperty("NcxNest", this.jCheckNcxNest.isSelected()?"1":"");
+		props.setProperty("LegacyOutput", this.jCheckLegacyOutput.isSelected()?"1":"");
 		props.setProperty("ChapterSection", this.jCheckChapterSection.isSelected()?"1":"");
 		props.setProperty("ChapterH", this.jCheckChapterH.isSelected()?"1":"");
 		props.setProperty("ChapterH1", this.jCheckChapterH1.isSelected()?"1":"");

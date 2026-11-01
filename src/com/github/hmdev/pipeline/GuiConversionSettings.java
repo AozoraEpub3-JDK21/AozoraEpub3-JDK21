@@ -49,6 +49,13 @@ public final class GuiConversionSettings
 		java.util.Map.entry("LineHeight", "1.8"), java.util.Map.entry("FontSize", "100"),
 		java.util.Map.entry("WebInterval", "0.5"), java.util.Map.entry("WebModifiedExpire", "24"), java.util.Map.entry("WebBeforeChapterCount", "1"));
 
+	/** ini の出力の拡張子。空なら .epub */
+	public static String outExt(Properties p)
+	{
+		String ext = p.getProperty("Ext", ".epub").trim();
+		return ext.isEmpty() ? ".epub" : ext;
+	}
+
 	private static boolean on(Properties p, String key)
 	{
 		return flag(p, key);
@@ -145,6 +152,11 @@ public final class GuiConversionSettings
 		}
 		//目次階層化設定
 		writer.setTocParam(on(p, "NavNest"), on(p, "NcxNest"));
+		//EPUB 2 向けの要素。出力の拡張子で変わるので、拡張子も両方の writer に届ける
+		for (Epub3Writer w : new Epub3Writer[]{ writer, imageWriter }) {
+			w.setLegacyOutput(on(p, "LegacyOutput"));
+			w.setOutputExt(outExt(p));
+		}
 
 		//スタイル設定。GUI は単位の 1 つ目（0）だけを em、それ以外を % にしている。値は部品の文字のまま（trim しない）
 		writer.setStyles(margins(p, "PageMargin", "PageMarginUnit", "0.5"), margins(p, "BodyMargin", "BodyMarginUnit", "0"),

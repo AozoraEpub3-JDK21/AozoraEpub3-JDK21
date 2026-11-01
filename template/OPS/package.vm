@@ -62,7 +62,7 @@
 	<meta property="schema:accessibilitySummary">テキストを機械的に変換したものです。アクセシビリティ規格への適合は確かめていません。</meta>
 #end
 #end
-#if (${bookInfo.InsertCoverPage})
+#if (${bookInfo.InsertCoverPage} && ${legacyOutput})
 	<meta name="cover" content="img${coverImage.Id}"/>
 #end
 #if (${bookInfo.ImageOnly})
@@ -161,13 +161,15 @@
 #foreach($gaijiInfo in ${vecGaijiInfo})
     <item id="font_${gaijiInfo.ClassName}" href="gaiji/${gaijiInfo.File.Name}" media-type="font/ttf"/>
 #end
+#if (${legacyOutput})
     <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
+#end
   </manifest>
 
 #if (${bookInfo.Vertical})
-  <spine page-progression-direction="rtl" toc="ncx">
+  <spine page-progression-direction="rtl"#if (${legacyOutput}) toc="ncx"#end>
 #else
-  <spine page-progression-direction="ltr" toc="ncx">
+  <spine page-progression-direction="ltr"#if (${legacyOutput}) toc="ncx"#end>
 #end
 #if (${bookInfo.InsertCoverPage})
 	<itemref idref="cover-page" linear="yes"/>

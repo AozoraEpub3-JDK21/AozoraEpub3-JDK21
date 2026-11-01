@@ -98,7 +98,7 @@ public class SettingDefaultsTest {
 	public void tableKeysAreStable() {
 		String[] expectedBooleans = {
 			"CoverPageToc", "TitleToc",
-			"NavNest", "NcxNest",
+			"NavNest", "NcxNest", "LegacyOutput",
 			"ChapterUseNextLine", "ChapterExclude", "ChapterSection",
 			"ChapterH", "ChapterH1", "ChapterH2", "ChapterH3", "SameLineChapter",
 			"ChapterName", "ChapterNumOnly", "ChapterNumTitle",
