@@ -46,8 +46,8 @@
 | 6 | OPF | `package.vm:3` prefix に `ebpaj:` / `dpfj:` 未宣言 | A | 電書連自己宣言不可 |
 | 7 | OPF | `ebpaj:guide-version` / `dpfj:guide-version` meta 未出力 | A | 同上 |
 | 8 | OPF | `package.vm:9, 15` で v1.1.4 廃止の `file-as` を出力 | C | 読み上げソフトに影響可 |
-| 9 | OPF | `template/OPS/toc.ncx.vm` 出力 + `package.vm:127, 131-133` で NCX 参照 | C | 旧 RS で目次喪失 |
-| 10 | OPF | `package.vm:158-173` の `<guide>` 要素 (EPUB 3.3 で legacy) | C | 旧 RS で表紙/目次ショートカット喪失 |
+| 9 | OPF | `template/OPS/toc.ncx.vm` 出力 + `package.vm:130, 134-136` で NCX 参照 | C | 旧 RS で目次喪失 |
+| 10 | OPF | `package.vm:161-177` の `<guide>` 要素 (EPUB 3.3 で legacy) | C | 旧 RS で表紙/目次ショートカット喪失 |
 | 11 | OPF | `package.vm:12-16` で `dc:creator` に `role` meta なし | A | 推奨レベル |
 
 ### 2.3 epubcheck 影響
@@ -251,7 +251,7 @@ OPF の `<item href="toc.ncx">` 抑止 (`package.vm` 側、§3.3.3-2) と**セ�
    #end
    ```
 
-3. **`package.vm:158-173` の `<guide>` 要素全体をフラグで抑止**
+3. **`package.vm:161-177` の `<guide>` 要素全体をフラグで抑止**
    ```velocity
    #if (!${dpfjCompliantMode} && (${bookInfo.InsertCoverPage} || ${bookInfo.InsertTocPage}))
      <guide>
