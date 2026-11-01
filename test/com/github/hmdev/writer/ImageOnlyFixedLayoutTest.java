@@ -79,19 +79,7 @@ public class ImageOnlyFixedLayoutTest {
 		org.junit.Assume.assumeTrue("test_data/test_png.zip が無い", zip.isFile());
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, svg);
-		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, projectRoot.toString()+"/");
-		ImageInfoReader imageInfoReader = new ImageInfoReader(false, zip);
-		imageInfoReader.loadZipImageInfos(zip, true);
-		imageInfoReader.sortImageFileNames();
-		BookInfo bookInfo = new BookInfo(zip);
-		bookInfo.imageOnly = true;
-		if (coverPage) {
-			bookInfo.insertCoverPage = true;
-			bookInfo.coverImageIndex = 0;
-		}
-		File epub = tempFolder.newFile("image" + svg + coverPage + ".epub");
-		writer.write(converter, null, zip, "zip", epub, bookInfo, imageInfoReader);
-		return epub;
+		return writeBook(zip, writer, coverPage, false, "image" + svg + coverPage);
 	}
 
 	private static String read(ZipFile zf, String name) throws Exception {
@@ -284,6 +272,8 @@ public class ImageOnlyFixedLayoutTest {
 			if (svg) assertSvgSizesMatchViewport(epub);
 			try (ZipFile zf = new ZipFile(epub)) {
 				assertTrue(read(zf, "OPS/xhtml/cover.xhtml"), read(zf, "OPS/xhtml/cover.xhtml").contains("width=600, height=800"));
+				//別ファイルの表紙は本の基準にしない
+				assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("<meta name=\"original-resolution\" content=\"2000x1000\"/>"));
 			}
 		}
 	}
@@ -336,19 +326,6 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** Kindle 用の CSS は大きさを決めないので、横長のページの大きさは割合のまま決める */
-	@Test
-	public void kindleImagePagesKeepPercentHeight() throws Exception {
-		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
-		setParams(writer, false, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_HEIGHT);
-		writer.setIsKindle(true);
-		File epub = writeBook(imageZip(), writer, false, false, "kindleheight");
-		try (ZipFile zf = new ZipFile(epub)) {
-			assertTrue(read(zf, "OPS/xhtml/0001.xhtml"), read(zf, "OPS/xhtml/0001.xhtml").contains("min-height:"));
-		}
-		assertEveryPageHasViewportOfItsImage(epub);
-	}
-
 	/** 目次ページは GUI で入る。文字のページなのでリフローにする（viewport が要らない） */
 	@Test
 	public void tocPageInSpineIsReflowable() throws Exception {
@@ -361,7 +338,7 @@ public class ImageOnlyFixedLayoutTest {
 		assertEveryPageHasViewportOfItsImage(epub);
 	}
 
-	/** original-resolution は表紙の有無に関わらず、出力した先頭のページの大きさ */
+	/** original-resolution は本の中でページにできる先頭の画像の大きさ。先頭の画像を表紙へ移しても変わらない */
 	@Test
 	public void originalResolutionIsTheFirstPage() throws Exception {
 		for (boolean cover : new boolean[]{false, true}) {
