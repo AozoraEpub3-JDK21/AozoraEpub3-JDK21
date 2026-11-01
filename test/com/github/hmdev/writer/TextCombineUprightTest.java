@@ -6,14 +6,10 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
-import org.apache.velocity.app.VelocityEngine;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -22,6 +18,7 @@ import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
 import com.github.hmdev.info.SectionInfo;
+import com.github.hmdev.util.VelocityTestUtils;
 
 /**
  * 縦中横は標準の text-combine-upright を出す。古い指定は残す。
@@ -34,20 +31,15 @@ public class TextCombineUprightTest {
 	@Rule
 	public TemporaryFolder tempFolder = new TemporaryFolder();
 
-	private File writeBook(Path root) throws Exception {
-		String templatePath = root.resolve("template") + "/";
-		Path txt = tempFolder.newFile("book.txt").toPath();
-		Files.write(txt, "表題\n著者\n\n［＃中見出し］一［＃中見出し終わり］\n本文［＃縦中横］12［＃縦中横終わり］です。\n".getBytes(StandardCharsets.UTF_8));
-		Properties vp = new Properties();
-		vp.setProperty("resource.loaders", "file");
-		vp.setProperty("resource.loader.file.class", "org.apache.velocity.runtime.resource.loader.FileResourceLoader");
-		vp.setProperty("resource.loader.file.path", root.resolve("template").toString());
-		Epub3Writer writer = new Epub3Writer(templatePath, new VelocityEngine(vp));
+	private File writeBook() throws Exception {
+		java.nio.file.Path txt = tempFolder.newFile("book.txt").toPath();
+		Files.write(txt, "表題\n著者\n\n［＃中見出し］第12話［＃中見出し終わり］\n本文［＃縦中横］12［＃縦中横終わり］です。\n".getBytes(StandardCharsets.UTF_8));
+		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
 		writer.setImageParam(600, 800, 600, 800, 0, 0, 480, 640, 600, SectionInfo.IMAGE_SIZE_TYPE_ASPECT, true, false, 0,
 			1.0f, 0, 0, 0, 0.8f, 1.0f, 0, 0, 100, 0f, 0, 0.03f);
 		writer.setTocParam(false, false);
 		writer.setStyles(new String[]{"0","0","0","0"}, new String[]{"0","0","0","0"}, 1.6f, 100, true, true);
-		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, root + "/");
+		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
 		converter.setChapterLevel(64, false, false, true, true, true, true, true, false, false, false, false, false, false, null);
 		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt.toFile());
 		BookInfo bookInfo;
@@ -81,15 +73,11 @@ public class TextCombineUprightTest {
 
 	@Test
 	public void standardAndOldPropertiesAreBothWritten() throws Exception {
-		Path root = Paths.get(".").toAbsolutePath().normalize();
-		if (!Files.exists(root.resolve("template"))) {
-			root = Paths.get(TextCombineUprightTest.class.getProtectionDomain().getCodeSource().getLocation().toURI())
-				.getParent().getParent().getParent();
-		}
-		try (ZipFile zf = new ZipFile(writeBook(root))) {
+		try (ZipFile zf = new ZipFile(writeBook())) {
 			assertAllProperties("vertical.css", read(zf, "OPS/css/vertical.css"));
 			assertAllProperties("nav.xhtml", read(zf, "OPS/xhtml/nav.xhtml"));
 			assertTrue("本文に縦中横が無い", read(zf, "OPS/xhtml/0001.xhtml").contains("<span class=\"tcy\"><span>12</span></span>"));
+			assertTrue("目次に縦中横が無い: " + read(zf, "OPS/xhtml/nav.xhtml"), read(zf, "OPS/xhtml/nav.xhtml").contains("<span class=\"tcy\"><span>12</span></span>"));
 		}
 	}
 }
