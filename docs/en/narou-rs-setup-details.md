@@ -133,7 +133,7 @@ The differences seen in this setup:
 | Page | Built-in engine | AozoraEpub3-JDK21 |
 |---|---|---|
 | Title page | Title in a serif (Mincho) font, left-aligned, author below a rule | Title and author in a sans-serif (Gothic) font, centered |
-| Table of contents | Episodes indented under chapters | Chapters and episodes as one flat bulleted list |
+| Table of contents | Episodes indented under chapters | One flat bulleted list when captured. After v1.7.6, episodes are indented under chapters when the nested contents page setting is on |
 | Chapter title page | Running head and chapter title near the top center of the page | Running head and chapter title at the top-right edge (chapter title about the same size). From v1.7.0, the running head (work title) is a small vertical line beside the chapter title, and the page is centered when the work title is short |
 | Episode text | Bold heading | Regular-weight heading. Body typesetting and ruby are the same |
 
