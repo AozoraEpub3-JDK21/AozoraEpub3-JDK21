@@ -240,6 +240,32 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
+	/** 別ファイルの表紙は縮小して入る。ページの大きさは縮小した後の画像に合わせる */
+	@Test
+	public void externalCoverPageHasViewportOfTheStoredImage() throws Exception {
+		File cover = File.createTempFile("cover", ".png", tempFolder.getRoot());
+		ImageIO.write(new BufferedImage(3000, 4000, BufferedImage.TYPE_INT_RGB), "png", cover);
+		for (boolean svg : new boolean[]{false, true}) {
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, svg, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+			File zip = imageZip();
+			AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, projectRoot.toString()+"/");
+			ImageInfoReader imageInfoReader = new ImageInfoReader(false, zip);
+			imageInfoReader.loadZipImageInfos(zip, true);
+			imageInfoReader.sortImageFileNames();
+			BookInfo bookInfo = new BookInfo(zip);
+			bookInfo.imageOnly = true;
+			bookInfo.insertCoverPage = true;
+			bookInfo.coverFileName = cover.getPath();
+			File epub = tempFolder.newFile("extcover" + svg + ".epub");
+			writer.write(converter, null, zip, "zip", epub, bookInfo, imageInfoReader);
+			assertEveryPageHasViewportOfItsImage(epub);
+			try (ZipFile zf = new ZipFile(epub)) {
+				assertTrue(read(zf, "OPS/xhtml/cover.xhtml"), read(zf, "OPS/xhtml/cover.xhtml").contains("width=600, height=800"));
+			}
+		}
+	}
+
 	/** 高さの割合は画面に対する値なので、ページが画像の大きさの本では画像が小さくなる */
 	@Test
 	public void imagePagesHaveNoPercentHeight() throws Exception {
@@ -298,6 +324,10 @@ public class ImageOnlyFixedLayoutTest {
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
 			bookInfo = converter.getBookInfo(txt.toFile(), src, imageInfoReader, BookInfo.TitleType.TITLE_AUTHOR, false);
 		}
+		File cover = File.createTempFile("cover", ".png", tempFolder.getRoot());
+		ImageIO.write(new BufferedImage(1000, 1400, BufferedImage.TYPE_INT_RGB), "png", cover);
+		bookInfo.insertCoverPage = true;
+		bookInfo.coverFileName = cover.getPath();
 		File epub = tempFolder.newFile("text.epub");
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
 			writer.write(converter, src, txt.toFile(), "txt", epub, bookInfo, imageInfoReader);
@@ -308,6 +338,7 @@ public class ImageOnlyFixedLayoutTest {
 			for (String page : pages) {
 				assertFalse(page + " に viewport がある", read(zf, page).contains("name=\"viewport\""));
 			}
+			assertTrue("表紙のページが無い", pages.contains("OPS/xhtml/cover.xhtml"));
 			assertTrue(read(zf, "OPS/package.opf").contains("<meta property=\"rendition:layout\">reflowable</meta>"));
 		}
 	}
