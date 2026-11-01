@@ -318,6 +318,26 @@ public class ImageOnlyFixedLayoutTest {
 		assertEveryPageIs(writeBook(zip, writer, false, false, "bmpfirst"), 810, 1110);
 	}
 
+	/** 本文にページが無い本（BMP 1 枚を表紙にした本）は、表紙の大きさをページの大きさにする */
+	@Test
+	public void bookWithOnlyACoverPageUsesTheCoverSize() throws Exception {
+		File zip = File.createTempFile("bmponly", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			zos.putNextEntry(new ZipEntry("p0.bmp"));
+			java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+			ImageIO.write(new BufferedImage(800, 1100, BufferedImage.TYPE_INT_RGB), "bmp", out);
+			zos.write(out.toByteArray());
+			zos.closeEntry();
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "bmponly"))) {
+			String cover = read(zf, "OPS/xhtml/cover.xhtml");
+			assertTrue(cover, cover.contains("width=800, height=1100"));
+			assertFalse(cover, cover.contains("${"));
+		}
+	}
+
 	/** 高さの割合は画面に対する値なので、ページが画像の大きさの本では画像が小さくなる */
 	@Test
 	public void imagePagesHaveNoPercentHeight() throws Exception {
@@ -378,6 +398,8 @@ public class ImageOnlyFixedLayoutTest {
 				assertFalse(page + " に画素の配置がある", read(zf, page).contains("position:absolute"));
 			}
 			assertTrue("表紙のページが無い", pages.contains("OPS/xhtml/cover.xhtml"));
+			//文字の本の表紙は今までどおり class で合わせる（画素の配置は画像だけの本に限る）
+			assertTrue(read(zf, "OPS/xhtml/cover.xhtml"), read(zf, "OPS/xhtml/cover.xhtml").contains("<body class=\"fit_h\">"));
 			assertTrue(read(zf, "OPS/package.opf").contains("<meta property=\"rendition:layout\">reflowable</meta>"));
 			//本全体がリフローなので、目次に properties を付けない
 			assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("<itemref idref=\"nav\" linear=\"yes\"/>"));
