@@ -32,6 +32,8 @@ import org.junit.rules.TemporaryFolder;
 import com.github.hmdev.converter.AozoraEpub3Converter;
 import com.github.hmdev.image.ImageInfoReader;
 import com.github.hmdev.info.BookInfo;
+import com.github.hmdev.info.FixedPageSize;
+import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.info.SectionInfo;
 
 /**
@@ -334,6 +336,22 @@ public class ImageOnlyFixedLayoutTest {
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false);
 		assertEveryPageIs(writeBook(zip, writer, false, false, "bmpfirst"), 810, 1110);
+	}
+
+	/** 丸めても絵は消えず、ページからはみ出さない */
+	@Test
+	public void placementRoundsInsideThePage() {
+		FixedPageSize page = new FixedPageSize(800, 1200);
+		FixedPageSize.Placement thin = page.place(new ImageInfo("png", 1, 5000, 0));
+		assertEquals("細い画像が消える", 1, thin.getWidth());
+		assertEquals(1200, thin.getHeight());
+		FixedPageSize.Placement wide = page.place(new ImageInfo("png", 5000, 1, 0));
+		assertEquals(800, wide.getWidth());
+		assertEquals("低い画像が消える", 1, wide.getHeight());
+		//699.4 は切り上げない
+		FixedPageSize.Placement rounded = page.place(new ImageInfo("png", 700, 1201, 0));
+		assertEquals(699, rounded.getWidth());
+		assertEquals(1200, rounded.getHeight());
 	}
 
 	/** 本文にページが無い本（BMP 1 枚を表紙にした本）は、表紙の大きさをページの大きさにする */
