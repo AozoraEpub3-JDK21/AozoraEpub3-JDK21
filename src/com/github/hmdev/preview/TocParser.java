@@ -17,10 +17,9 @@ import org.slf4j.LoggerFactory;
 /**
  * 展開済み EPUB から階層目次を構築する。
  *
- * <p>解決順は <b>toc.ncx → nav.xhtml → spine</b>。
- * 本プロジェクトの {@code template/OPS/toc.ncx.vm} は navPoint を入れ子にできる一方、
- * {@code template/OPS/xhtml/xhtml_nav.vm} の toc は {@code <ol>} 直下に
- * {@code li.chapter} が並ぶフラット構造のため、階層情報は toc.ncx にしか無い。</p>
+ * <p>解決順は <b>toc.ncx → nav.xhtml → spine</b> で、nav.xhtml の階層のほうが深ければ nav.xhtml を使う。
+ * 2026-11 より前に作った本は階層が toc.ncx にしか無く、今の設定（NavNest オン、NcxNest オフ）で作った本は
+ * nav.xhtml にしか無い。</p>
  */
 public class TocParser
 {
@@ -36,25 +35,37 @@ public class TocParser
 	 */
 	public static List<TocEntry> parse(Path epubRoot, OpfPackage opf)
 	{
+		List<TocEntry> ncx = List.of();
 		String ncxPath = opf.getNcxPath();
 		if (ncxPath != null) {
 			try {
-				List<TocEntry> entries = parseNcx(epubRoot, opf, ncxPath);
-				if (!entries.isEmpty()) return entries;
+				ncx = parseNcx(epubRoot, opf, ncxPath);
 			} catch (IOException e) {
 				logger.warn("toc.ncx の解析に失敗しました: {}", ncxPath, e);
 			}
 		}
+		List<TocEntry> nav = List.of();
 		String navPath = opf.getNavPath();
 		if (navPath != null) {
 			try {
-				List<TocEntry> entries = parseNav(epubRoot, opf, navPath);
-				if (!entries.isEmpty()) return entries;
+				nav = parseNav(epubRoot, opf, navPath);
 			} catch (IOException e) {
 				logger.warn("nav.xhtml の解析に失敗しました: {}", navPath, e);
 			}
 		}
+		if (!ncx.isEmpty() && depth(ncx) >= depth(nav)) return ncx;
+		if (!nav.isEmpty()) return nav;
 		return fromSpine(opf);
+	}
+
+	/** 目次の階層の深さ */
+	private static int depth(List<TocEntry> entries)
+	{
+		int depth = 0;
+		for (TocEntry entry : entries) {
+			depth = Math.max(depth, 1 + depth(entry.children()));
+		}
+		return depth;
 	}
 
 	// ------------------------------------------------------------------

@@ -15,14 +15,12 @@ public class ChapterInfo
 	/** 目次階層レベル */
 	public int chapterLevel;
 	
-	/** 出力前に階層化開始タグを入れる回数 通常は1回 */
-	public int levelStart = 0;
-	/** 出力後に階層化終了タグを入れる回数 */
-	public int levelEnd = 0;
 	/** navPointを閉じる回数 */
 	public int navClose = 1;
 	/** NAV の目次で、項目の a の後ろに続けて出す文字列（階層化しないときは li を閉じるだけ） */
 	String navAfter = "</li>";
+	/** 見出しではなく、改ページの後の本文の行から作った項目なら true（目次の親にしない） */
+	public boolean pageBreakLine = false;
 	
 	public ChapterInfo(String sectionId, String chapterId, String chapterName, int chapterLevel)
 	{
@@ -68,19 +66,6 @@ public class ChapterInfo
 		return chapterLevel;
 	}
 	
-	/** Velocityでループするために配列を返す */
-	public int[] getLevelStart()
-	{
-		if (this.levelStart == 0) return null;
-		return new int[this.levelStart];
-	}
-	/** Velocityでループするために配列を返す */
-	public int[] getLevelEnd()
-	{
-		if (this.levelEnd == 0) return null;
-		return new int[this.levelEnd];
-	}
-	/** Velocityでループするために配列を返す */
 	public String getNavAfter()
 	{
 		return navAfter;
@@ -90,6 +75,8 @@ public class ChapterInfo
 		this.navAfter = navAfter;
 	}
 	
+	/** Velocityでループするために配列を返す */
+	/** Velocityでループするために配列を返す */
 	public int[] getNavClose()
 	{
 		if (this.navClose <= 0) return null;

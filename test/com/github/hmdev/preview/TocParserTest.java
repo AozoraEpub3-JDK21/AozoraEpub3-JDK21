@@ -4,7 +4,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +17,7 @@ import org.junit.rules.TemporaryFolder;
 
 /**
  * 目次の解決。
- * 本プロジェクトでは階層情報が toc.ncx にしか無く、nav.xhtml はフラットなので、
- * toc.ncx → nav.xhtml → spine の順で解決する必要がある。
+ * toc.ncx → nav.xhtml → spine の順で解決し、nav.xhtml の階層のほうが深ければ nav.xhtml を使う。
  */
 public class TocParserTest
 {
@@ -145,5 +146,24 @@ public class TocParserTest
 			out.add(entry.label());
 			collectLabels(entry.children(), out);
 		}
+	}
+
+	/** nav.xhtml の階層のほうが深ければ、平らな toc.ncx より優先する */
+	@Test
+	public void deeperNavWinsOverFlatNcx() throws IOException
+	{
+		Path root = EpubFixture.standard().explodeTo(temp.getRoot().toPath());
+		Path ncx = root.resolve("OPS/toc.ncx");
+		String flat = Files.readString(ncx, StandardCharsets.UTF_8)
+			.replaceAll("(?s)<navMap>.*</navMap>", "<navMap><navPoint id=\"a\" playOrder=\"1\"><navLabel><text>平らな目次</text></navLabel><content src=\"xhtml/text00001.xhtml\"/></navPoint></navMap>");
+		Files.writeString(ncx, flat, StandardCharsets.UTF_8);
+		Path nav = root.resolve("OPS/xhtml/nav.xhtml");
+		String nested = Files.readString(nav, StandardCharsets.UTF_8)
+			.replaceAll("(?s)(<nav[^>]*epub:type=\"toc\"[^>]*>.*?)<ol>.*?</ol>(\\s*</nav>)",
+				"$1<ol><li><a href=\"text00001.xhtml\">親</a><ol><li><a href=\"text00002.xhtml\">子</a></li></ol></li></ol>$2");
+		Files.writeString(nav, nested, StandardCharsets.UTF_8);
+		List<TocEntry> toc = TocParser.parse(root, OpfParser.parse(root));
+		assertEquals("親", toc.get(0).label());
+		assertEquals("子", toc.get(0).children().get(0).label());
 	}
 }

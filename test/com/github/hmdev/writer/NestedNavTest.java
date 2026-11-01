@@ -74,6 +74,42 @@ public class NestedNavTest {
 		assertEquals("c0</li> c1</li>", nest(2, 1));
 	}
 
+	private static String nestWithPageBreakLines(int[] levels, boolean[] lines) {
+		List<ChapterInfo> chapters = new ArrayList<>();
+		for (int i = 0; i < levels.length; i++) {
+			ChapterInfo chapter = new ChapterInfo("s", null, "c" + i, levels[i]);
+			chapter.pageBreakLine = lines[i];
+			chapters.add(chapter);
+		}
+		Epub3Writer.nestNavChapters(chapters);
+		StringBuilder out = new StringBuilder();
+		for (ChapterInfo chapter : chapters) {
+			out.append(chapter.getChapterName()).append(chapter.getNavAfter().replaceAll("\\s", "")).append(' ');
+		}
+		return out.toString().trim();
+	}
+
+	/** 改ページの後の本文の行は、後ろの章の親にならない。第一部 > 第一章・本文の行・第二章・第三章 */
+	@Test
+	public void pageBreakLineIsNotAParent() {
+		assertEquals("c0<ol> c1</li> c2</li> c3</li> c4</li></ol></li>",
+			nestWithPageBreakLines(new int[]{0, 1, 0, 1, 1}, new boolean[]{false, false, true, false, false}));
+	}
+
+	/** 大見出しの直後の本文の行は、次の章と同じ深さに並ぶ */
+	@Test
+	public void pageBreakLineTakesTheDepthOfTheNextHeading() {
+		assertEquals("c0<ol> c1</li> c2</li></ol></li>",
+			nestWithPageBreakLines(new int[]{0, 0, 1}, new boolean[]{false, true, false}));
+	}
+
+	/** 見出しの無い本は、本文の行だけが平らに並ぶ */
+	@Test
+	public void onlyPageBreakLinesStayFlat() {
+		assertEquals("c0</li> c1</li> c2</li>",
+			nestWithPageBreakLines(new int[]{0, 0, 0}, new boolean[]{true, true, true}));
+	}
+
 	/** 画像だけの本は全部レベル 0 */
 	@Test
 	public void allLevelZeroStaysFlat() {
@@ -86,13 +122,22 @@ public class NestedNavTest {
 	}
 
 	private File writeBook(boolean navNest, boolean kindle) throws Exception {
-		java.nio.file.Path txt = tempFolder.newFile().toPath();
+		return writeBook(navNest, kindle, BookInfo.TitleType.TITLE_AUTHOR);
+	}
+
+	private File writeBook(boolean navNest, boolean kindle, BookInfo.TitleType titleType) throws Exception {
 		String text = "表題\n著者\n\n"
 			+ "［＃大見出し］第一部［＃大見出し終わり］\n"
 			+ "［＃中見出し］第一章［＃中見出し終わり］\n本文。\n"
 			+ "［＃小見出し］その一［＃小見出し終わり］\n本文。\n"
 			+ "［＃中見出し］第二章［＃中見出し終わり］\n本文。\n"
-			+ "［＃大見出し］第二部［＃大見出し終わり］\n本文。\n";
+			+ "［＃改ページ］\n［＃大見出し］第二部［＃大見出し終わり］\n本文。\n"
+			+ "［＃中見出し］第三章［＃中見出し終わり］\n本文。\n";
+		return writeBook(navNest, kindle, titleType, text);
+	}
+
+	private File writeBook(boolean navNest, boolean kindle, BookInfo.TitleType titleType, String text) throws Exception {
+		java.nio.file.Path txt = tempFolder.newFile().toPath();
 		Files.write(txt, text.getBytes(StandardCharsets.UTF_8));
 		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
 		writer.setImageParam(600, 800, 600, 800, 0, 0, 480, 640, 600, SectionInfo.IMAGE_SIZE_TYPE_ASPECT, true, false, 0,
@@ -105,9 +150,9 @@ public class NestedNavTest {
 		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt.toFile());
 		BookInfo bookInfo;
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
-			bookInfo = converter.getBookInfo(txt.toFile(), src, imageInfoReader, BookInfo.TitleType.TITLE_AUTHOR, false);
+			bookInfo = converter.getBookInfo(txt.toFile(), src, imageInfoReader, titleType, false);
 		}
-		File epub = tempFolder.newFile("book" + navNest + kindle + ".epub");
+		File epub = tempFolder.newFile();
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
 			writer.write(converter, src, txt.toFile(), "txt", epub, bookInfo, imageInfoReader);
 		}
@@ -128,11 +173,30 @@ public class NestedNavTest {
 	@Test
 	public void navIsNestedInTheBook() throws Exception {
 		String nav = nav(writeBook(true, false));
-		//表題と第一部は同じ深さ。第一部 > 第一章 > その一、第一部 > 第二章、第二部
+		//表題と第一部は同じ深さ。第一部 > 第一章 > その一、第一部 > 第二章、第二部 > 第三章
 		assertTrue(nav, nav.contains("表題</a></li>"));
-		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>第一章</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>その一</a></li></ol></li>\\s*<li[^>]*><a[^>]*>第二章</a></li></ol></li>\\s*<li[^>]*><a[^>]*>第二部</a></li>\\s*</ol>.*"));
+		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>第一章</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>その一</a></li></ol></li>\\s*<li[^>]*><a[^>]*>第二章</a></li></ol></li>\\s*<li[^>]*><a[^>]*>第二部</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>第三章</a></li></ol></li>\\s*</ol>.*"));
+		//改ページの直後の見出しは a に見出しの ID が付かない。この経路でも入れ子にする
+		assertTrue(nav, nav.matches("(?s).*href=\"[0-9]+\\.xhtml\">第二部</a>\\s*<ol>.*"));
 		assertEquals("ol と li が閉じていない: " + nav, count(nav, "<ol>"), count(nav, "</ol>"));
 		assertEquals("ol と li が閉じていない: " + nav, count(nav, "<li "), count(nav, "</li>"));
+	}
+
+	/** 表題の無い本の先頭は本物の見出しなので、次の見出しのレベルに揃えない */
+	@Test
+	public void firstHeadingKeepsItsChildrenWithoutATitle() throws Exception {
+		String nav = nav(writeBook(true, false, BookInfo.TitleType.NONE));
+		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>第一章</a>.*"));
+	}
+
+	/** 章の間の改ページの後の本文の行が、次の章を子に取らない */
+	@Test
+	public void bodyLineAfterPageBreakDoesNotTakeChapters() throws Exception {
+		String text = "表題\n著者\n\n［＃大見出し］第一部［＃大見出し終わり］\n［＃中見出し］第一章［＃中見出し終わり］\n本文。\n"
+			+ "［＃改ページ］\nその日の朝。\n［＃中見出し］第二章［＃中見出し終わり］\n本文。\n［＃中見出し］第三章［＃中見出し終わり］\n本文。\n";
+		String nav = nav(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text));
+		assertTrue(nav, nav.contains("その日の朝。</a></li>"));
+		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>.*第三章</a></li></ol></li>\\s*</ol>.*"));
 	}
 
 	@Test
