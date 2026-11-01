@@ -16,6 +16,7 @@ li {padding:0 .25em 0 0;}
 li a {text-decoration:none; border-right-width:1px; border-right-style:solid; padding-right: 1px;}
 .tcy span {
 	width: 1em;
+	text-combine-upright: all;
 	text-combine: horizontal;
 	-webkit-text-combine: horizontal;
 	-epub-text-combine: horizontal;
