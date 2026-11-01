@@ -136,6 +136,29 @@ public class HeadlessWebConversionTest {
 		return p;
 	}
 
+	/** 本棚の更新は一時ファイルへ書く。名前からは Kobo と分からなくても、Kobo 向けの要素を落とさない */
+	@Test
+	public void koboShelfBookKeepsLegacyElementsWhenTurnedOff() throws Exception {
+		String basePath = serveAndBase();
+		Properties props = guiDefaults();
+		props.setProperty("Ext", ".kepub.epub");
+		props.setProperty("LegacyOutput", "");
+		File dst = tempFolder.newFolder("kobo");
+		HeadlessWebConversion.Result r = conversion(props, basePath).convert("http://" + fqdn + "/novel/", dst, null, true);
+		assertTrue(r.message(), r.ok());
+		try (ZipFile zip = new ZipFile(r.epub())) {
+			assertNotNull("toc.ncx が無い", zip.getEntry("OPS/toc.ncx"));
+		}
+		//拡張子が .epub なら設定に従う
+		props.setProperty("Ext", ".epub");
+		dst = tempFolder.newFolder("plain");
+		r = conversion(props, basePath).convert("http://" + fqdn + "/novel/", dst, null, true);
+		assertTrue(r.message(), r.ok());
+		try (ZipFile zip = new ZipFile(r.epub())) {
+			assertTrue("toc.ncx がある", zip.getEntry("OPS/toc.ncx") == null);
+		}
+	}
+
 	@Test
 	public void aWebWorkBecomesAnEpubWithTheGuiSettings() throws Exception {
 		String basePath = serveAndBase();

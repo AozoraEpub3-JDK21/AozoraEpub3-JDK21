@@ -240,6 +240,14 @@ PageBreakChapterSize=200
 `PageBreakChapterSize` より小さい場合、内部でそれらの最大値まで引き上げられます
 （空行・章見出しでの改ページ機会を無条件分割が先取りしないようにするため）。
 
+古いリーダー向けの要素（表紙の `<meta>` と `toc.ncx`）を出すかどうか:
+
+```ini
+LegacyOutput=1
+```
+
+空にすると出しません（`NcxNest` も効かなくなります）。出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときは、この設定によらず出します。
+
 目次を入れ子にするかどうか:
 
 ```ini

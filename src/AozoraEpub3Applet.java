@@ -3968,8 +3968,9 @@ public class AozoraEpub3Applet extends JPanel
 				imageScale, imageFloatType, imageFloatW, imageFloatH, jpegQualty, gamma, autoMarginLimitH, autoMarginLimitV, autoMarginWhiteLevel, autoMarginPadding, autoMarginNombre, autoMarginNombreSize);
 		//目次階層化設定
 		this.epub3Writer.setTocParam(jCheckNavNest.isSelected(), jCheckNcxNest.isSelected());
-		this.epub3Writer.setLegacyOutput(jCheckLegacyOutput.isSelected());
-		this.epub3ImageWriter.setLegacyOutput(jCheckLegacyOutput.isSelected());
+		for (Epub3Writer w : new Epub3Writer[]{ this.epub3Writer, this.epub3ImageWriter }) {
+			w.setLegacyOutput(jCheckLegacyOutput.isSelected());
+		}
 		
 		//スタイル設定
 		String[] pageMargin = new String[4];
@@ -4391,6 +4392,7 @@ public class AozoraEpub3Applet extends JPanel
 		//Kindleチェック
 		File kindlegen = null;
 		writer.setIsKindle(false);
+		writer.setOutputExt(outExt);
 		if (outExt.startsWith(".mobi")) {
 			kindlegen = new File(this.jarPath+"kindlegen.exe");
 			if (!kindlegen.isFile()) {
@@ -5884,7 +5886,7 @@ public class AozoraEpub3Applet extends JPanel
 		//目次階層化
 		setPropsSelected(jCheckNavNest, props, "NavNest");
 		setPropsSelected(jCheckNcxNest, props, "NcxNest");
-		setPropsSelected(jCheckLegacyOutput, props, "LegacyOutput");
+		setPropsSelected(jCheckLegacyOutput, props, "LegacyOutput", SettingDefaults.isSelected("LegacyOutput"));
 		//改ページ後を目次に追加
 		setPropsSelected(jCheckChapterSection, props, "ChapterSection");
 		//見出し注記

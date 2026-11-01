@@ -650,6 +650,14 @@ java -jar AozoraEpub3.jar -i AozoraEpub3.ini -of -d ./output/ large_novel.txt
 
 Whether chapter headings nest under their parent chapter is also an ini setting:
 
+Whether to write the elements for older readers (the cover `<meta>` and `toc.ncx`):
+
+```ini
+LegacyOutput=1
+```
+
+Leave it empty to omit them (`NcxNest` then has no effect). Output with the extension `.kepub.epub`, `.fxl.kepub.epub` or `.mobi` always has them.
+
 ```ini
 # nest entries in nav.xhtml
 NavNest=1

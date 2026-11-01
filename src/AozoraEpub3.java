@@ -248,6 +248,11 @@ public class AozoraEpub3
 				}
 			}
 
+			//EPUB 2 向けの要素は出力の形で決まる。-device kindle は .mobi と同じ扱い（画像の本の writer には isKindle が届かない）
+			String outputExt = "kindle".equalsIgnoreCase(targetDevice) ? ".mobi" : outExt;
+			epub3Writer.setOutputExt(outputExt);
+			epub3ImageWriter.setOutputExt(outputExt);
+
 			//変換クラス生成とパラメータ設定
 			AozoraEpub3Converter  aozoraConverter = new AozoraEpub3Converter(epub3Writer, jarPath);
 			//変換の設定（挿絵・栞・縦中横・文字出力・外字・禁則・コメント・空行・改ページ・目次）
