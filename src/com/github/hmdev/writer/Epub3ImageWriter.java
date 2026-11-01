@@ -208,6 +208,9 @@ public class Epub3ImageWriter extends Epub3Writer
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(super.zos, "UTF-8"));
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
+		//固定レイアウトのページの大きさ（viewport）に使う。前のページの値を残さない
+		if (imageInfo != null) this.velocityContext.put("imageInfo", imageInfo);
+		else this.velocityContext.remove("imageInfo");
 		//テキストの本と同じ mergeTemplate を通す。jar の中のテンプレートも探せ、改行も LF にそろう（監査項目 43・44）
 		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, bw);
 		bw.flush();

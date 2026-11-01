@@ -157,6 +157,16 @@ public class ImageInfo
 		this.height = height;
 	}
 	
+	/** 固定レイアウトのページの幅。出力した画像の幅で、出力前なら元の幅 */
+	public int getPageWidth()
+	{
+		return outWidth > 0 ? outWidth : width;
+	}
+	/** 固定レイアウトのページの高さ。出力した画像の高さで、出力前なら元の高さ */
+	public int getPageHeight()
+	{
+		return outHeight > 0 ? outHeight : height;
+	}
 	public int getOutWidth()
 	{
 		return outWidth;

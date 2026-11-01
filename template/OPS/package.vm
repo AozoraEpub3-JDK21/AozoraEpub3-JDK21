@@ -31,9 +31,6 @@
 	<meta name="cover" content="img${coverImage.Id}"/>
 #end
 #if (${bookInfo.ImageOnly})
-#if (${svgImage})
-	<meta property="rendition:layout">pre-paginated</meta>
-#end
 	<meta name="fixed-layout" content="true"/>
 	<meta name="book-type" content="comic"/>
 #if (${kindle})
