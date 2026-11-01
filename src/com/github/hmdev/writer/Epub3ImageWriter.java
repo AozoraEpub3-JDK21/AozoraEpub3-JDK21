@@ -145,10 +145,13 @@ public class Epub3ImageWriter extends Epub3Writer
 		
 		//画像xhtmlを出力
 		zos.setLevel(9);
-		//OPF の original-resolution は、出力した先頭の画像の大きさにする
-		if (!this.imageInfoReader.getImageFileNames().isEmpty()) {
-			ImageInfo firstPage = this.imageInfoReader.getImageInfo(this.imageInfoReader.getImageFileNames().get(0));
-			if (firstPage != null) this.velocityContext.put("firstPageImage", firstPage);
+		//OPF の original-resolution は、ページになる先頭の画像の大きさにする（先頭へ移した表紙も含む。BMP などは飛ばす）
+		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
+			ImageInfo firstPage = this.imageInfoReader.getImageInfo(srcFilePath);
+			if (firstPage != null && isPageFormat(firstPage)) {
+				this.velocityContext.put("firstPageImage", firstPage);
+				break;
+			}
 		}
 		pageNum = 0;
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
@@ -244,6 +247,12 @@ public class Epub3ImageWriter extends Epub3Writer
 		bw.flush();
 	}
 	
+	/** ページにできる画像形式か */
+	private static boolean isPageFormat(ImageInfo imageInfo)
+	{
+		return imageInfo.getExt().matches("^(png|jpeg|gif|jpg)$");
+	}
+
 	@Override
 	public String getImageFilePath(String srcImageFileName, int lineNum)
 	{
@@ -258,7 +267,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
 			imageInfo.setId(imageId);
 			imageInfo.setOutFileName(imageId+"."+ext);
-			if (!imageInfo.getExt().matches("^(png|jpeg|gif|jpg)$")) {
+			if (!isPageFormat(imageInfo)) {
 				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
 				return null;
 			}
