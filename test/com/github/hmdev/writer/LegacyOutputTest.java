@@ -217,6 +217,17 @@ public class LegacyOutputTest {
 		assertEquals(".kepub.epub", image.outputExt);
 	}
 
+	/** ini の拡張子の読み方。本棚のファイル名と writer の判定が同じ値を見る */
+	@Test
+	public void outExtIsReadOneWay() {
+		Properties props = new Properties();
+		assertEquals(".epub", GuiConversionSettings.outExt(props));
+		props.setProperty("Ext", "  ");
+		assertEquals(".epub", GuiConversionSettings.outExt(props));
+		props.setProperty("Ext", " .kepub.epub ");
+		assertEquals(".kepub.epub", GuiConversionSettings.outExt(props));
+	}
+
 	/** Kobo のプリセットの拡張子で効く（設定のキーは持たない。プリセットを切り替えて値が残らないように） */
 	@Test
 	public void koboPresetsUseKoboExtensions() throws Exception {
