@@ -1,6 +1,6 @@
 # AozoraEpub3 モダン化計画書
 
-最終更新: 2026-04-30
+最終更新: 2026-11-01
 対象バージョン: v1.3.5-jdk21
 対象ブランチ: `master`
 
@@ -266,33 +266,67 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 - mutation testing（PIT）— 中核ロジックに限定
 - カバレッジ計測（JaCoCo）— CI レポート
 
-### ステージ S — EPUB 3.3 準拠強化（推定 2〜3 週、低リスク、アーキテクチャ系ステージと独立）
+### ステージ S — 将来も残せる EPUB へ（互換は設定で保つ）
 
-> **目的**: 出力 EPUB を W3C EPUB 3.3 Recommendation により厳密に準拠させる。
+> **方針**: 優先順位は次のとおりとする。
+> 1. **今作る EPUB を、将来も安心して残せる形にする。** 既定の出力は現行の仕様で推奨される形に揃える
+> 2. **その上で、可能な限り過去との互換を保つ。** 古いリーダーや変換先が必要とする要素は、設定で従来どおり出力できるようにする
 >
-> **重要な前提**: `<package version="...">` 属性は **EPUB 3.0/3.1/3.2/3.3/3.4 すべてで `"3.0"` 固定**（W3C EPUB 3.3 §5.4 "The string '3.0' is the only allowed value."）。`version="3.3"` 等を書くと epubcheck が reject する（OPF-073 系）。したがって「3.3 準拠」は version 属性ではなく、**deprecated 要素整理 + アクセシビリティメタデータ追加 + 新メディアタイプ対応**で表現する。
+> **前提**: `<package version="...">` 属性は EPUB 3.3 でも `"3.0"` が正しい値である（W3C EPUB 3.3 "The attribute MUST have the value \"3.0\""）。版数は変更しない。
 
-| # | 項目 | 影響範囲 | 検証方法 |
-|---|------|---------|--------|
-| S-1 | `<meta name="cover">` の削除（3.0 で deprecated。`properties="cover-image"` のみで表現） | `template/OPS/package.vm` | epubcheck warning 削減 |
-| S-2 | `<spine toc="ncx">` の `toc` 属性削除（3.3 で deprecated、`<item properties="nav">` の NAV doc で表現） | `template/OPS/package.vm` | epubcheck warning 削減、NAV doc 動作確認 |
-| S-3 | `<guide>` 要素削除（3.3 で deprecated。NAV doc に統合） | `template/OPS/package.vm`、関連 `.vm` | epubcheck warning 削減、リーダ互換性手動確認 |
-| S-4 | アクセシビリティメタデータの最低限追加（`schema:accessMode`、`accessibilityFeature`、`accessibilityHazard`、`accessibilitySummary`、`dcterms:conformsTo`） | `template/OPS/package.vm`、`Epub3Writer` の context 投入 | epubcheck PASS、Ace by DAISY などで accessibility report |
+**訂正（2026-11-01）**: 本節の旧版は `<meta name="cover">`・`<spine toc="ncx">`・`<guide>` を「deprecated」としていた。これは誤りである。[EPUB 3.3 §5.9](https://www.w3.org/TR/epub-33/#sec-pkg-legacy) での扱いは **legacy** であり、含めても仕様に反しない。既定から外す理由は仕様違反の解消ではなく、上記の方針 1 である。
+
+旧版のゲート「epubcheck の warning が減ること」も成立しない。CI の epubcheck 5.2.0 は、`toc="ncx"` を常に出力する現行テンプレートの EPUB 6 本すべてで 0 errors / 0 warnings である（2026-10-27、`ee46be13`）。
+
+| 順 | # | 項目 | 影響範囲 | 検証方法 |
+|---|---|------|---------|--------|
+| 1 | S-8 | 画像のみの本（固定レイアウト）の全ページに `viewport` を足す。`SvgImage` のときの `rendition:layout` の重複と `<title>` の欠けも直す。既存の `meta` は残す（`original-resolution` などを外すと `viewport` なしでは Kindle Previewer で右端が切れた）。現行の出力は epubcheck で HTM-046 のエラーになり、Apple Books と Thorium では上下が切れ、Google Play ブックスでは絵が出ない | `template/OPS/xhtml/`、`template/OPS/package.vm`、`Epub3ImageWriter`、CI | epubcheck（CI に画像のみの本を足す）、リーダーでの表示比較 |
+| 2 | S-5 | 縦中横に `text-combine-upright` を足す。現在は `text-combine`・`-webkit-text-combine`・`-epub-text-combine` だけで、`-epub-text-combine` は EPUB 3.3 から deprecated である。古い指定は残す（Google Play ブックスは `-epub-text-combine` がないと組まない。下記の実測） | `template/OPS/css/vertical.css`、`template/OPS/xhtml/xhtml_nav.vm` | 下記の 4 リーダーでの表示比較（epubcheck では検出できない。上記 6 本は 0 warnings だった） |
+| 3 | S-6 | NAV doc の目次を階層化する。現在は階層が `toc.ncx` にしか無く（`navNest` はテンプレートに渡されるが使われていない）、仕様上 EPUB 3 リーダーは NCX を使わない | `template/OPS/xhtml/xhtml_nav.vm`、`Epub3Writer` | epubcheck、リーダーの目次表示 |
+| 4 | S-4 | アクセシビリティメタデータの追加（`schema:accessMode`、`accessibilityFeature`、`accessibilityHazard`、`accessibilitySummary`）。`dcterms:conformsTo` は適合を確かめられた場合だけ書く | `template/OPS/package.vm`、`Epub3Writer` の context 投入 | epubcheck PASS、Ace by DAISY などで accessibility report |
+| 5 | S-7 | `<meta name="cover">` と NCX を出力する互換設定を足す（INI・GUI）。Kobo のプリセット（`presets/kobo_*.ini`）と、出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub` のときは自動で有効にする。この時点では既定を変えない | `template/OPS/package.vm`、`Epub3Writer`、設定、`presets/` | 設定の有無とプリセットごとに OPF を比較 |
+| 6 | S-1〜S-2 | `<meta name="cover">`、`toc` 属性と NCX を既定の出力から外す（互換設定と Kobo 向けの出力では残す）。`<guide>`（S-3）は下記の実測により既定に残す | `template/OPS/package.vm`、`toc.ncx.vm` | epubcheck、下記の確認 |
+
+**実測（2026-11-01、試作の EPUB を同じ本文で比較）**:
+
+| 確認項目 | Apple Books（macOS） | Thorium 3.5.1 | Kindle Previewer 4.0.3.0（Tablet・Phone・E-reader） | Google Play ブックス 2026.10.2.1（Android） |
+|---|---|---|---|---|
+| 現行の出力の目次 | 平ら（NCX の階層は使われない） | 平ら | 平ら | 平ら |
+| NAV を階層化した目次 | 階層つき | 3 段 | 3 段 | 階層つき |
+| `<meta name="cover">` なしのサムネイル | 出る | 出る | Book Information の Cover は Specified（サムネイルは確認できない） | 出る |
+| `<guide>` の有無による開始位置 | 未確認 | 変わらない（どちらも表紙） | 変わらない（Book Information の Start Reading は Specified） | **変わる（ありは本文、なしは表紙）** |
+| 接頭辞を外した縦中横 | 組まれる | 組まれる | 組まれる | **崩れる（`-epub-text-combine` だけで組まれる）** |
+| 接頭辞を外した傍点・正立・ルビ | 変わらない | 変わらない | 変わらない | 変わらない |
+
+epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で、試作の 9 本すべて 0 fatal / 0 errors / 0 warnings だった。legacy の要素や接頭辞付き CSS は `-u` の利用法情報に出るだけである。
+
+**既定を切り替える前に確かめること**（S-1〜S-2 のゲート）:
+- [x] Kindle は Kindle Previewer で確認する（Send to Kindle の代わり、2026-11-01 決定）。Tablet・Phone・E-reader とも問題なし。実機での表紙の認識は確かめていない
+- [x] 本プロジェクトのプレビューで目次の階層が保たれること（NCX が無ければ NAV を読み、試作で同じ階層になった。表紙は `cover-image` を先に見る）
+- [x] 画像のみの本の `rendition:spread` と OPF 2 の `meta` は残す。`viewport` だけを足す（S-8）
 
 **ゲート条件**:
 - [ ] `gradlew test` PASS
-- [ ] サンプル EPUB（n9623lp / aozora_1567_14913 等）が epubcheck PASS（warning が S 着手前より減ること）
-- [ ] `.NET` ポート `JavaComparisonTests` ベースライン更新（出力 byte 列が変わるため、リファレンス EPUB を再生成して 5/5 PASS を再確認）
+- [ ] サンプル EPUB（n9623lp / aozora_1567_14913 等）が epubcheck で 0 errors / 0 warnings のまま
+- [ ] 互換設定を有効にした出力に S-1〜S-2 の要素が従来どおり入ること（`<meta name="cover">` は表紙ページを入れたとき）
+- [ ] 既定の出力に `<guide>` と `-epub-text-combine` が残ること（`<guide>` は表紙ページか目次ページを入れたとき）
 
 **注意点**:
-- S-1〜S-3 は出力 EPUB の byte-identical を崩す。`.NET` ポートのリファレンス EPUB を**再生成**してからゲートを通すこと
-- narou.rb 連携は出力 EPUB の構造に直接依存しないため影響軽微（ただし旧リーダで `<guide>` を見ているケースがゼロでないため、サンプル端末での読み出し確認を推奨）
-- 各サブステージ（S-1 / S-2 / S-3 / S-4）は**個別 PR**にし、**各 PR が自分の差分に対応する `.NET` ポートのリファレンス EPUB 再生成＋ベースライン更新を同梱する**（差分追跡と独立 revert を両立。S 全体を 1 PR にまとめない）
 - `<package version="...">` の値は触らない。INI で上書き可能化する案はステージ S/S+ 全体で**採用しない**
+- 各項目は個別 PR にする
+- Kobo は実機で確かめていない（手元に端末がない）ので、Kobo 向けの出力は従来の要素を残す
+- 既定の切り替えは出力が変わるので、リリースノートに互換設定とあわせて書く。テンプレートを差し替えている利用者の出力は変わらない
+- `file-as` は legacy ではなく EPUB 3.4 草案でも定義されているので、本ステージでは外さない
 
 ### ステージ S+ — EPUB 3.4 移行（**保留**、3.4 が W3C Recommendation 化されたら開始）
 
-> 2026-04-30 時点で EPUB 3.4 は W3C Working Draft。Recommendation 化されるまで本ステージは着手しない。
+> 2026-10-28 時点で [EPUB 3.4](https://www.w3.org/TR/epub-34/) は W3C Candidate Recommendation Draft。Recommendation 化されるまで本ステージは着手しない。
+>
+> **3.4 草案の扱い（2026-11-01 に確認。変わる可能性がある）**:
+> - `<meta name="cover">`・`<guide>`・NCX は **outdated** の中の「Legacy features」という区分に入り、引き続き含めてよい。EPUB 3 リーダーは無視しなければならない（MUST be ignored）。ただし「EPUB 2 のみのリーダーは今や稀で、含める価値は限られる」と明記されている
+> - 本プロジェクトが使う `-epub-writing-mode` などの接頭辞付き CSS も outdated で、次のメジャーバージョンでは保守されない見込みとされている。現行テンプレートは大半を接頭辞なしと併記している
+> - `rendition:spread`（画像のみの本で出力）も outdated である
+> - 3.4 の確認には epubcheck 5.4.0 以降を使う（CI は 5.2.0、`build.gradle` は 5.3.0）
 
 | # | 項目 | 影響範囲 | 検証方法 |
 |---|------|---------|--------|
@@ -335,11 +369,13 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
                ├─ 1-C 静的状態解消
                └─ 1-B 巨大クラス分割
 並行:       ステージ 2（言語機能、§2.1 の互換性監査を先に完了させる）
-独立:       ステージ S（EPUB 3.3 準拠強化、ステージ 0C 完了後にいつでも）
-                ├─ S-1 `<meta name="cover">` 削除
-                ├─ S-2 `<spine toc>` 属性削除
-                ├─ S-3 `<guide>` 削除
-                └─ S-4 アクセシビリティメタデータ追加
+独立:       ステージ S（将来も残せる EPUB へ、ステージ 0C 完了後にいつでも）
+                ├─ S-8 画像のみの本の `viewport`
+                ├─ S-5 縦中横の `text-combine-upright`
+                ├─ S-6 NAV doc の目次の階層化
+                ├─ S-4 アクセシビリティメタデータ追加
+                ├─ S-7 互換設定（Kobo 向けの出力では自動で有効）
+                └─ S-1〜S-2 `<meta name="cover">` と NCX を既定から外す（`<guide>` は残す）
 独立:       ステージ 4（配布、随時）
 保留:       ステージ S+（EPUB 3.4 移行、Recommendation 化待ち）
 未定:       ステージ 3 GUI（要方針合意）
@@ -357,8 +393,8 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
 | record 化で Velocity テンプレート呼び出し失敗 | 出力崩壊 | §2.1 の方針に従い、**テンプレート参照クラスは Bean 互換維持**（record 化対象外）。record 化前に `template/` 配下の `$obj.Property` 参照を**全件監査**し、参照ありクラスを除外。PR 単位で全テンプレートのレンダリングテストを必須ゲート化 |
 | narou.rb の `java -cp` 直接呼びがメインクラス移動で壊れる | 連携破壊 | 旧クラス名でラッパー（数行）を最低 1 マイナーバージョン残す。`AozoraEpub3` クラスは現状でも CLI エントリだが、移動時に旧 FQCN を残置 |
 | 並行作業で衝突 | マージコスト | ステージ単位で feature ブランチを切る、ステージ 0A を最初に完了させる |
-| ステージ S で `<package version="...">` を `"3.3"` 等に変更してしまう | epubcheck reject（OPF-073）／ EPUB 仕様違反 | **`version` 属性は "3.0" 固定**。S では版数を触らず、deprecated 要素整理＋アクセシビリティメタデータで 3.3 準拠を表現する。INI 上書き機構の追加もしない（誤った値を書き出す経路を作らない） |
-| ステージ S の deprecated 要素削除で旧リーダ互換が崩れる | `<guide>` を頼る古い ADE 等で目次が出ない | NAV doc が機能していれば実害なし。代表的な旧リーダで読み出し確認した上で、リリースノートに「旧 ADE で目次が出ない場合は最新版へ」と明記 |
+| ステージ S で `<package version="...">` を `"3.3"` 等に変更してしまう | epubcheck reject（OPF-073）／ EPUB 仕様違反 | **`version` 属性は "3.0" 固定**。S では版数を触らない。INI 上書き機構の追加もしない（誤った値を書き出す経路を作らない） |
+| legacy の要素を削除して旧リーダ互換が崩れる | `<guide>` や NCX を頼る EPUB 2 リーダーで表紙・目次の案内が失われる | 先に互換設定を作り、リーダーでの確認（§3 ステージ S）が済むまで既定を変えない。切り替え後も互換設定で従来の形を出力できる |
 
 ---
 
@@ -390,7 +426,7 @@ Week 6-9:   ステージ 1（アーキテクチャ整理）
 3. ステージ 0C-2（Maven 配置）— `git mv` でリネーム追跡する方針で良いか
 4. ステージ 0C-3（メインクラス移動）— 旧 FQCN ラッパー残置期間（1 マイナー / 1 メジャー）
 5. ステージ 2 の record 化 — テンプレート参照の監査結果次第で対象を決める方針で良いか
-6. ステージ S — `version` 属性は触らず deprecated 要素整理＋アクセシビリティメタデータ追加で 3.3 準拠を表現する方針で良いか
-7. ~~ステージ S 着手時、`.NET` ポートのリファレンス EPUB 再生成＋ベースライン更新を含めて 1 回の PR にまとめる方針で良いか~~ → **Resolved**: §3 ステージ S 注意点に従い、各サブステージ個別 PR + 各 PR が自分のベースライン更新を同梱する方針
+6. ~~ステージ S — `version` 属性は触らず deprecated 要素整理＋アクセシビリティメタデータ追加で 3.3 準拠を表現する方針で良いか~~ → **Resolved**（2026-11-01）: 将来も残せる形を既定とし、互換は設定で保つ（§3 ステージ S）
+7. ~~ステージ S 着手時、`.NET` ポートのリファレンス EPUB 再生成＋ベースライン更新を含めて 1 回の PR にまとめる方針で良いか~~ → **不要**（2026-11-01）: `.NET` ポートとの一致を必須としないため
 
 承認が得られた項目から個別 PR 化していく。
