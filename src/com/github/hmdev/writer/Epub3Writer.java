@@ -844,7 +844,8 @@ public class Epub3Writer
 			}
 			if (insertCoverInfo != null) {
 				SectionInfo sectionInfo = new SectionInfo("cover-page");
-				if (this.imageSizeType != SectionInfo.IMAGE_SIZE_TYPE_AUTO) {
+				//画像だけの本はページの中に割合で置くので合わせない
+				if (this.imageSizeType != SectionInfo.IMAGE_SIZE_TYPE_AUTO && !bookInfo.imageOnly) {
 					//画像が横長なら幅100% それ以外は高さ100%
 					if ((double)insertCoverInfo.getWidth()/insertCoverInfo.getHeight() >= (double)this.coverW/this.coverH) sectionInfo.setImageFitW(true);
 					else sectionInfo.setImageFitH(true);

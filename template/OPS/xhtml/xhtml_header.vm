@@ -44,13 +44,6 @@
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
 img{position:absolute;left:${place.LeftPercent}%;top:${place.TopPercent}%;width:${place.WidthPercent}%;height:${place.HeightPercent}%;max-width:none;max-height:none;min-width:0;min-height:0;margin:0;object-fit:contain}
 </style>
-#elseif (${sectionInfo.ImageHeight} > 0 && !${bookInfo.ImageOnly})
-<style type="text/css">
-body .img img {
-height: ${sectionInfo.ImageHeightPercent}%;
-min-height: ${sectionInfo.ImageHeightPercent}%;
-}
-</style>
 #end
 </head>
 

@@ -186,13 +186,13 @@ public class ImageOnlyFixedLayoutTest {
 				//SVG は画素、それ以外はページに対する割合
 				int x = pixels(placed.group(1), svg ? 0 : width), y = pixels(placed.group(2), svg ? 0 : height);
 				int w = pixels(placed.group(3), svg ? 0 : width), h = pixels(placed.group(4), svg ? 0 : height);
-				assertTrue(page + " がページからはみ出す: " + xhtml, x + w <= width + 1 && y + h <= height + 1);
+				assertTrue(page + " がページからはみ出す: " + xhtml, x + w <= width && y + h <= height);
 				assertTrue(page + " が左右の中央に無い: " + xhtml, Math.abs(2*x + w - width) <= 1);
 				assertTrue(page + " が上下の中央に無い: " + xhtml, Math.abs(2*y + h - height) <= 1);
-				assertTrue(page + " がページいっぱいでない: " + xhtml, Math.abs(w - width) <= 1 || Math.abs(h - height) <= 1);
+				assertTrue(page + " がページいっぱいでない: " + xhtml, w == width || h == height);
 				BufferedImage image = imageOf(zf, xhtml);
 				assertTrue(page + " の縦横比が " + image.getWidth() + "x" + image.getHeight() + " と違う: " + xhtml,
-					Math.abs((long)w*image.getHeight() - (long)h*image.getWidth()) <= 2L*Math.max(image.getWidth(), image.getHeight()));
+					Math.abs((long)w*image.getHeight() - (long)h*image.getWidth()) <= Math.max(image.getWidth(), image.getHeight()));
 			}
 		}
 	}
@@ -357,16 +357,13 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** 高さの割合は画面に対する値なので、ページが画像の大きさの本では画像が小さくなる */
+	/** 画像の表示サイズの設定は、画像だけの本の配置を変えない */
 	@Test
-	public void imagePagesHaveNoPercentHeight() throws Exception {
-		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
-		setParams(writer, false, 0, 0, 0, SectionInfo.IMAGE_SIZE_TYPE_HEIGHT);
-		File epub = writeBook(imageZip(), writer, false, false, "height");
-		try (ZipFile zf = new ZipFile(epub)) {
-			for (String page : spinePages(zf)) {
-				assertFalse(page + " に割合の高さがある: " + read(zf, page), Pattern.compile("min-height: *[1-9]").matcher(read(zf, page)).find());
-			}
+	public void imageSizeSettingDoesNotChangeThePlacement() throws Exception {
+		for (int sizeType : new int[]{SectionInfo.IMAGE_SIZE_TYPE_AUTO, SectionInfo.IMAGE_SIZE_TYPE_HEIGHT, SectionInfo.IMAGE_SIZE_TYPE_ASPECT}) {
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, false, 0, 0, 0, sizeType);
+			assertEveryPageIs(writeBook(imageZip(), writer, true, false, "size" + sizeType), 1600, 1000);
 		}
 	}
 
