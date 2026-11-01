@@ -2,12 +2,15 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
 <head>
+#set ($place = $pageSize.place($imageInfo))
+	<meta name="viewport" content="width=${pageSize.Width}, height=${pageSize.Height}"/>
 	<link rel="stylesheet" type="text/css" href="../css/svg_image.css"/>
+	<title>${title}</title>
 </head>
 <body>
 <div>
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 ${imageInfo.OutWidth} ${imageInfo.OutHeight}">
-<image width="${imageInfo.OutWidth}" height="${imageInfo.OutHeight}" xlink:href="../images/${imageInfo.OutFileName}"/>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 ${pageSize.Width} ${pageSize.Height}">
+<image x="${place.X}" y="${place.Y}" width="${place.Width}" height="${place.Height}" xlink:href="../images/${imageInfo.OutFileName}"/>
 </svg>
 </div>
 </body>

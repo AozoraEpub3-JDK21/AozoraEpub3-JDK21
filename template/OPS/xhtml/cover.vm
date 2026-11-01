@@ -3,6 +3,10 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
 
 <head>
+#if (${bookInfo.ImageOnly} && ${pageSize} && ${coverImage})
+#set ($place = $pageSize.place($coverImage))
+	<meta name="viewport" content="width=${pageSize.Width}, height=${pageSize.Height}"/>
+#end
 #if (${svgImage} && ${bookInfo.ImageOnly})
 	<link rel="stylesheet" type="text/css" href="../css/svg_image.css"/>
 #elseif (${kindle} && ${bookInfo.ImageOnly})
@@ -13,12 +17,10 @@
 	<link rel="stylesheet" type="text/css" href="../css/horizontal_image.css"/>
 #end
 	<title>${title}</title>
-#if (${sectionInfo.ImageHeight} > 0)
+#if (!${svgImage} && ${bookInfo.ImageOnly} && ${pageSize} && ${coverImage})
 <style type="text/css">
-body .img img {
-height: ${sectionInfo.ImageHeightPercent}%;
-min-height: ${sectionInfo.ImageHeightPercent}%;
-}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
+img{position:absolute;left:${place.LeftPercent}%;top:${place.TopPercent}%;width:${place.WidthPercent}%;height:${place.HeightPercent}%;max-width:none;max-height:none;min-width:0;min-height:0;margin:0;object-fit:contain}
 </style>
 #end
 </head>
@@ -26,8 +28,8 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 #if (${svgImage} && ${bookInfo.ImageOnly})
 <body>
 <div>
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 ${coverImage.Width} ${coverImage.Height}">
-<image width="${coverImage.Width}" height="${coverImage.Height}" xlink:href="../images/${coverImage.OutFileName}"/>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 ${pageSize.Width} ${pageSize.Height}">
+<image x="${place.X}" y="${place.Y}" width="${place.Width}" height="${place.Height}" xlink:href="../images/${coverImage.OutFileName}"/>
 </svg>
 </div>
 </body>

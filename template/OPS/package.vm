@@ -31,9 +31,6 @@
 	<meta name="cover" content="img${coverImage.Id}"/>
 #end
 #if (${bookInfo.ImageOnly})
-#if (${svgImage})
-	<meta property="rendition:layout">pre-paginated</meta>
-#end
 	<meta name="fixed-layout" content="true"/>
 	<meta name="book-type" content="comic"/>
 #if (${kindle})
@@ -48,7 +45,9 @@
 #if (${bookInfo.ImageOnly})
 	<meta property="rendition:layout">pre-paginated</meta>
 	<meta property="rendition:spread">landscape</meta>
-	<meta name="original-resolution" content="${coverImage.Width}x${coverImage.Height}"/>
+#if (${pageSize})
+	<meta name="original-resolution" content="${pageSize.Width}x${pageSize.Height}"/>
+#end
 
 	#if (${bookInfo.Vertical})
 		<meta name="primary-writing-mode" content="horizontal-rl"/>
@@ -142,7 +141,12 @@
 	<itemref idref="title-page" linear="yes"/>
 #end
 #if (${bookInfo.InsertTocPage})
+## 目次は文字のページなので、画像だけの本（固定レイアウト）でもリフローにする
+#if (${bookInfo.ImageOnly})
+	<itemref idref="nav" linear="yes" properties="rendition:layout-reflowable"/>
+#else
 	<itemref idref="nav" linear="yes"/>
+#end
 #end
 
 #foreach(${sectionInfo} in ${sections})

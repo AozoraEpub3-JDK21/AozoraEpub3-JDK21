@@ -48,6 +48,7 @@ import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.info.ChapterInfo;
 import com.github.hmdev.info.ChapterLineInfo;
 import com.github.hmdev.info.GaijiInfo;
+import com.github.hmdev.info.FixedPageSize;
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.util.CharUtils;
@@ -821,6 +822,7 @@ public class Epub3Writer
 		}
 		
 		//表紙ページ出力 先頭画像表示時は画像出力時にカバー指定するので出力しない
+		SectionInfo coverSectionInfo = null;
 		if (bookInfo.insertCoverPage) {
 			//追加用の情報取得にのみ使う
 			ImageInfo insertCoverInfo = coverImageInfo;
@@ -842,7 +844,8 @@ public class Epub3Writer
 			}
 			if (insertCoverInfo != null) {
 				SectionInfo sectionInfo = new SectionInfo("cover-page");
-				if (this.imageSizeType != SectionInfo.IMAGE_SIZE_TYPE_AUTO) {
+				//画像だけの本はページの中に割合で置くので合わせない
+				if (this.imageSizeType != SectionInfo.IMAGE_SIZE_TYPE_AUTO && !bookInfo.imageOnly) {
 					//画像が横長なら幅100% それ以外は高さ100%
 					if ((double)insertCoverInfo.getWidth()/insertCoverInfo.getHeight() >= (double)this.coverW/this.coverH) sectionInfo.setImageFitW(true);
 					else sectionInfo.setImageFitH(true);
@@ -850,13 +853,13 @@ public class Epub3Writer
 					sectionInfo.setImageFitW(false);
 					sectionInfo.setImageFitH(false);
 				}
-				this.velocityContext.put("sectionInfo", sectionInfo);
 				this.velocityContext.put("coverImage", insertCoverInfo);
-				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+COVER_FILE));
-				bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-				mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+COVER_VM, bw);
-				bw.flush();
-				zos.closeArchiveEntry();
+				//本文にページが無い画像の本は、表紙の大きさをページの大きさにする
+				if (bookInfo.imageOnly && !this.velocityContext.containsKey("pageSize")) {
+					this.velocityContext.put("pageSize", new FixedPageSize(insertCoverInfo.getPageWidth(), insertCoverInfo.getPageHeight()));
+				}
+				//ページは、別ファイルの表紙を出力してから書く（viewport に出力した画像の大きさを使うため）
+				coverSectionInfo = sectionInfo;
 			} else {
 				//画像がなかったら表紙ページ無し
 				bookInfo.insertCoverPage = false;
@@ -1093,6 +1096,18 @@ public class Epub3Writer
 			}
 		}
 		if (this.canceled) return;
+		
+		//表紙ページ出力
+		if (coverSectionInfo != null) {
+			this.velocityContext.put("sectionInfo", coverSectionInfo);
+			zos.setLevel(9); //ここからの画像は無圧縮だが、ページは圧縮する
+			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+COVER_FILE));
+			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
+			mergeTemplate(templatePath+OPS_PATH+XHTML_PATH+COVER_VM, bw);
+			bw.flush();
+			zos.closeArchiveEntry();
+			zos.setLevel(0);
+		}
 		
 		//本文画像出力 (画像のみの場合は出力済)
 		if ("txt".equals(srcExt)) {

@@ -7,6 +7,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
 #end
 <head>
+#if (${bookInfo.ImageOnly} && ${pageSize})
+	<meta name="viewport" content="width=${pageSize.Width}, height=${pageSize.Height}"/>
+#end
 #if (${kindle} && ${bookInfo.ImageOnly})
 	<link rel="stylesheet" type="text/css" href="../css/kindle_image.css"/>
 #elseif (${bookInfo.Vertical})
@@ -34,12 +37,12 @@
 #end
 	<title>${title}</title>
 
-#if (${sectionInfo.ImageHeight} > 0)
+## 画像だけの本は、本全体で同じ大きさのページの中に、ページに対する割合で画像を置く
+#if (${bookInfo.ImageOnly} && ${pageSize})
+#set ($place = $pageSize.place($imageInfo))
 <style type="text/css">
-body .img img {
-height: ${sectionInfo.ImageHeightPercent}%;
-min-height: ${sectionInfo.ImageHeightPercent}%;
-}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
+img{position:absolute;left:${place.LeftPercent}%;top:${place.TopPercent}%;width:${place.WidthPercent}%;height:${place.HeightPercent}%;max-width:none;max-height:none;min-width:0;min-height:0;margin:0;object-fit:contain}
 </style>
 #end
 </head>

@@ -166,6 +166,13 @@ jobs:
           java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_ruby.txt 2>&1 || echo "Warning: test_ruby.txt conversion failed"
           echo "Generating EPUB from test_data/test_yoko.txt..."
           java -jar "$JAR_FILE" -of -ext .epub -d build/epub_out test_data/test_yoko.txt 2>&1 || echo "Warning: test_yoko.txt conversion failed"
+          # Image-only books are fixed layout, which has its own epubcheck rules (viewport)
+          echo "Generating image-only EPUBs from test_data/test_png.zip..."
+          java -jar "$JAR_FILE" -c 0 -of -ext .epub -d build/epub_out test_data/test_png.zip 2>&1
+          printf 'SvgImage=1\n' > build/epub_out/svg.ini
+          mkdir -p build/epub_out/svg
+          java -jar "$JAR_FILE" -i build/epub_out/svg.ini -c 0 -of -ext .epub -d build/epub_out/svg test_data/test_png.zip 2>&1
+          mv build/epub_out/svg/test_png.epub build/epub_out/test_png_svg.epub
 
           echo "Generated files:"
           ls -la build/epub_out || echo "build/epub_out is empty"

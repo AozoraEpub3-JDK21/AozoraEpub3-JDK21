@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
+import com.github.hmdev.info.FixedPageSize;
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.util.LogAppender;
@@ -145,6 +146,9 @@ public class Epub3ImageWriter extends Epub3Writer
 		
 		//画像xhtmlを出力
 		zos.setLevel(9);
+		//ページの大きさは本全体で 1 つ。imageInfos はページにできる画像（先頭へ移す表紙を含む）で、別ファイルの表紙はまだ入っていない
+		FixedPageSize pageSize = FixedPageSize.ofMedianAspect(this.imageInfos);
+		if (pageSize != null) this.velocityContext.put("pageSize", pageSize);
 		pageNum = 0;
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
 			if (this.canceled) return;
@@ -176,30 +180,7 @@ public class Epub3ImageWriter extends Epub3Writer
 		
 		//画像専用指定
 		sectionInfo.setImagePage(true);
-		//画像サイズが横長なら幅に合わせる
 		ImageInfo imageInfo = this.imageInfoReader.getImageInfo(srcImageFilePath);
-		if (imageInfo != null) {
-			if ((double)imageInfo.getWidth()/imageInfo.getHeight() >= (double)this.dispW/this.dispH) {
-				if (this.rotateAngle != 0 && this.dispW < this.dispH && (double)imageInfo.getHeight()/imageInfo.getWidth() < (double)this.dispW/this.dispH) { //縦長画面で横長
-					imageInfo.rotateAngle = this.rotateAngle;
-					if (this.imageSizeType != SectionInfo.IMAGE_SIZE_TYPE_AUTO) sectionInfo.setImageFitH(true);
-				} else {
-					//高さでサイズ調整する場合は高さの%指定
-					if (this.imageSizeType == SectionInfo.IMAGE_SIZE_TYPE_HEIGHT) sectionInfo.setImageHeight(((double)imageInfo.getHeight()/imageInfo.getWidth())*((double)this.dispW/this.dispH));
-					else if (this.imageSizeType == SectionInfo.IMAGE_SIZE_TYPE_ASPECT) sectionInfo.setImageFitW(true);
-				}
-			}
-			else {
-				if (this.rotateAngle != 0 && this.dispW > this.dispH && (double)imageInfo.getHeight()/imageInfo.getWidth() > (double)this.dispW/this.dispH) { //横長画面で縦長
-					imageInfo.rotateAngle = this.rotateAngle;
-					//高さでサイズ調整する場合は高さの%指定
-					if (this.imageSizeType == SectionInfo.IMAGE_SIZE_TYPE_HEIGHT) sectionInfo.setImageHeight(((double)imageInfo.getHeight()/imageInfo.getWidth())*((double)this.dispW/this.dispH));
-					else if (this.imageSizeType == SectionInfo.IMAGE_SIZE_TYPE_ASPECT) sectionInfo.setImageFitW(true);
-				} else {
-					if (this.imageSizeType != SectionInfo.IMAGE_SIZE_TYPE_AUTO) sectionInfo.setImageFitH(true);
-				}
-			}
-		}
 		
 		this.sectionInfos.add(sectionInfo);
 		if (this.sectionIndex ==1 || this.sectionIndex % 5 == 0) this.addChapter(null, ""+this.sectionIndex, 0); //目次追加
@@ -208,6 +189,8 @@ public class Epub3ImageWriter extends Epub3Writer
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(super.zos, "UTF-8"));
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
+		//固定レイアウトのページの中で画像を置く位置に使う
+		this.velocityContext.put("imageInfo", imageInfo);
 		//テキストの本と同じ mergeTemplate を通す。jar の中のテンプレートも探せ、改行も LF にそろう（監査項目 43・44）
 		mergeTemplate(this.templatePath+OPS_PATH+XHTML_PATH+XHTML_HEADER_VM, bw);
 		bw.flush();
