@@ -54,9 +54,7 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 #end
 </head>
 
-#if (${bookInfo.ImageOnly} && ${pageSize})
-<body>
-#elseif (${sectionInfo.ImageFitW})
+#if (${sectionInfo.ImageFitW})
 <body class="fit_w">
 #elseif (${sectionInfo.ImageFitH})
 <body class="fit_h">

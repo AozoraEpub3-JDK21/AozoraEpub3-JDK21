@@ -178,6 +178,7 @@ public class ImageOnlyFixedLayoutTest {
 				assertFalse(page + " の body に class がある: " + xhtml, xhtml.contains("<body class"));
 				boolean svg = xhtml.contains("<svg");
 				if (svg) assertTrue(page + " の viewBox: " + xhtml, xhtml.contains("viewBox=\"0 0 " + width + " " + height + "\""));
+				if (svg) assertFalse(page + " に img の style がある: " + xhtml, xhtml.contains("position:absolute"));
 				Matcher placed = (svg ? PLACED_SVG : PLACED_IMG).matcher(xhtml);
 				assertTrue(page + " に画像の位置が無い: " + xhtml, placed.find());
 				//固定レイアウトを解さないリーダーで画面の形が違っても歪ませない
