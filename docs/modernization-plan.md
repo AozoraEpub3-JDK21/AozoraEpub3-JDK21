@@ -280,7 +280,7 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 
 | 順 | # | 項目 | 影響範囲 | 検証方法 |
 |---|---|------|---------|--------|
-| 1 | S-8 | 画像のみの本（固定レイアウト）の全ページに `viewport` を足す。`SvgImage` のときの `rendition:layout` の重複と `<title>` の欠けも直す。既存の `meta` は残す（`original-resolution` などを外すと `viewport` なしでは Kindle Previewer で右端が切れた）。現行の出力は epubcheck で HTM-046 のエラーになり、Apple Books と Thorium では上下が切れ、Google Play ブックスでは絵が出ない | `template/OPS/xhtml/`、`template/OPS/package.vm`、`Epub3ImageWriter`、CI | epubcheck（CI に画像のみの本を足す）、リーダーでの表示比較 |
+| 1 | S-8 | 画像のみの本（固定レイアウト）のページの大きさを本全体で 1 つにして、全ページに同じ `viewport` を入れる。大きさは縦横比が真ん中の画像に合わせ、画像はページに対する割合で中央に置く（SVG は画素）。ページごとの `viewport` では Apple Books が先頭と違う形のページを切り、Kindle Previewer は `original-resolution` が本文の横長だと縦長の表紙を切った。`SvgImage` のときの `rendition:layout` の重複と `<title>` の欠けも直す。既存の `meta` は残す（`original-resolution` などを外すと `viewport` なしでは Kindle Previewer で右端が切れた）。現行の出力は epubcheck で HTM-046 のエラーになり、Apple Books と Thorium では上下が切れ、Google Play ブックスでは絵が出ない | `template/OPS/xhtml/`、`template/OPS/package.vm`、`Epub3ImageWriter`、CI | epubcheck（CI に画像のみの本を足す）、リーダーでの表示比較 |
 | 2 | S-5 | 縦中横に `text-combine-upright` を足す。現在は `text-combine`・`-webkit-text-combine`・`-epub-text-combine` だけで、`-epub-text-combine` は EPUB 3.3 から deprecated である。古い指定は残す（Google Play ブックスは `-epub-text-combine` がないと組まない。下記の実測） | `template/OPS/css/vertical.css`、`template/OPS/xhtml/xhtml_nav.vm` | 下記の 4 リーダーでの表示比較（epubcheck では検出できない。上記 6 本は 0 warnings だった） |
 | 3 | S-6 | NAV doc の目次を階層化する。現在は階層が `toc.ncx` にしか無く（`navNest` はテンプレートに渡されるが使われていない）、仕様上 EPUB 3 リーダーは NCX を使わない | `template/OPS/xhtml/xhtml_nav.vm`、`Epub3Writer` | epubcheck、リーダーの目次表示 |
 | 4 | S-4 | アクセシビリティメタデータの追加（`schema:accessMode`、`accessibilityFeature`、`accessibilityHazard`、`accessibilitySummary`）。`dcterms:conformsTo` は適合を確かめられた場合だけ書く | `template/OPS/package.vm`、`Epub3Writer` の context 投入 | epubcheck PASS、Ace by DAISY などで accessibility report |
@@ -303,7 +303,7 @@ epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で�
 **既定を切り替える前に確かめること**（S-1〜S-2 のゲート）:
 - [x] Kindle は Kindle Previewer で確認する（Send to Kindle の代わり、2026-11-01 決定）。Tablet・Phone・E-reader とも問題なし。実機での表紙の認識は確かめていない
 - [x] 本プロジェクトのプレビューで目次の階層が保たれること（NCX が無ければ NAV を読み、試作で同じ階層になった。表紙は `cover-image` を先に見る）
-- [x] 画像のみの本の `rendition:spread` と OPF 2 の `meta` は残す。`viewport` だけを足す（S-8）
+- [x] 画像のみの本の `rendition:spread` と OPF 2 の `meta` は残す。`viewport` と画像の配置を足す（S-8）
 
 **ゲート条件**:
 - [ ] `gradlew test` PASS
