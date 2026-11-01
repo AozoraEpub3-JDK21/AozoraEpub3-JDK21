@@ -39,7 +39,7 @@ public class SettingDefaultsTest {
 		assertFalse("ChapterNumParenTitle", SettingDefaults.getBoolean(empty, "ChapterNumParenTitle"));
 		assertFalse("ChapterPattern", SettingDefaults.getBoolean(empty, "ChapterPattern"));
 		assertFalse("CoverPageToc", SettingDefaults.getBoolean(empty, "CoverPageToc"));
-		assertFalse("NavNest", SettingDefaults.getBoolean(empty, "NavNest"));
+		assertTrue("NavNest", SettingDefaults.getBoolean(empty, "NavNest"));
 		assertFalse("NcxNest", SettingDefaults.getBoolean(empty, "NcxNest"));
 
 		assertEquals(64, SettingDefaults.getInt(empty, "MaxChapterNameLength"));

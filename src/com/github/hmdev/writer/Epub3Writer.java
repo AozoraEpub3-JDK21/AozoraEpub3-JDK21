@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -214,7 +215,7 @@ public class Epub3Writer
 	LookupOp gammaOp;
 	
 	/** nav.xhtml階層化 */
-	boolean navNest = false;
+	boolean navNest = true;
 	/** toc.ncx階層化 */
 	boolean ncxNest = false;
 	
@@ -466,6 +467,40 @@ public class Epub3Writer
 		this.autoMarginPadding = autoMarginPadding;
 		this.autoMarginNombre = autoMarginNombre;
 		this.autoMarginNombreSize = nombreSize;
+	}
+	
+	/**
+	 * NAV の目次を入れ子にする。項目ごとに、a の後ろへ続ける文字列を決める。
+	 * ol は深さが飛んでも 1 段ずつ開く（li の中に ol は 1 つで、a の次にしか置けない）。
+	 * 呼ぶ前に、名前の無い項目を除き、表題のレベルを次の見出しにそろえておく。
+	 */
+	static void nestNavChapters(List<ChapterInfo> chapterInfos)
+	{
+		//開いている ol ごとの、今の項目の深さ
+		ArrayDeque<Integer> open = new ArrayDeque<>();
+		for (int i = 0; i < chapterInfos.size(); i++) {
+			ChapterInfo chapterInfo = chapterInfos.get(i);
+			if (open.isEmpty()) open.push(chapterInfo.getChapterLevel());
+			if (i == chapterInfos.size()-1) {
+				chapterInfo.setNavAfter("</li>" + "</ol></li>".repeat(open.size()-1));
+				break;
+			}
+			int next = chapterInfos.get(i+1).getChapterLevel();
+			if (next > chapterInfo.getChapterLevel()) {
+				chapterInfo.setNavAfter("\n\t\t\t<ol>");
+				open.push(next);
+				continue;
+			}
+			StringBuilder after = new StringBuilder("</li>");
+			open.pop();
+			//親の深さが次の項目以上の間は ol を閉じる
+			while (!open.isEmpty() && open.peek() >= next) {
+				open.pop();
+				after.append("</ol></li>");
+			}
+			open.push(next);
+			chapterInfo.setNavAfter(after.toString());
+		}
 	}
 	
 	public void setTocParam(boolean navNest, boolean ncxNest)
@@ -970,6 +1005,9 @@ public class Epub3Writer
 		
 		//velocityに設定 1～
 		velocityContext.put("ncx_depth", ncxDepth);
+		
+		//NAV の目次の階層。.mobi は追わないので Kindle モードの出力は変えない
+		if (this.navNest && !this.isKindle) nestNavChapters(chapterInfos);
 		
 		//出力前に縦中横とエスケープ処理
 		if (!bookInfo.imageOnly) {

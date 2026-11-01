@@ -32,7 +32,7 @@ public final class SettingDefaults
 		map.put("CoverPageToc", false);
 		map.put("TitleToc", true);
 		//目次階層化
-		map.put("NavNest", false);
+		map.put("NavNest", true); //EPUB 3 リーダーが読む目次は NAV だけなので、階層はここに出す
 		map.put("NcxNest", false);
 		//見出しの拾い方
 		map.put("ChapterUseNextLine", false);

@@ -21,6 +21,8 @@ public class ChapterInfo
 	public int levelEnd = 0;
 	/** navPointを閉じる回数 */
 	public int navClose = 1;
+	/** NAV の目次で、項目の a の後ろに続けて出す文字列（階層化しないときは li を閉じるだけ） */
+	String navAfter = "</li>";
 	
 	public ChapterInfo(String sectionId, String chapterId, String chapterName, int chapterLevel)
 	{
@@ -79,6 +81,15 @@ public class ChapterInfo
 		return new int[this.levelEnd];
 	}
 	/** Velocityでループするために配列を返す */
+	public String getNavAfter()
+	{
+		return navAfter;
+	}
+	public void setNavAfter(String navAfter)
+	{
+		this.navAfter = navAfter;
+	}
+	
 	public int[] getNavClose()
 	{
 		if (this.navClose <= 0) return null;
