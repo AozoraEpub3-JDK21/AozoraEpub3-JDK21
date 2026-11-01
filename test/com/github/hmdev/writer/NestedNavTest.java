@@ -186,7 +186,9 @@ public class NestedNavTest {
 	/** 表題の無い本の先頭は本物の見出しなので、次の見出しのレベルに揃えない */
 	@Test
 	public void firstHeadingKeepsItsChildrenWithoutATitle() throws Exception {
-		String nav = nav(writeBook(true, false, BookInfo.TitleType.NONE));
+		String text = "［＃大見出し］第一部［＃大見出し終わり］\n［＃中見出し］第一章［＃中見出し終わり］\n本文。\n"
+			+ "［＃中見出し］第二章［＃中見出し終わり］\n本文。\n";
+		String nav = nav(writeBook(true, false, BookInfo.TitleType.NONE, text));
 		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>\\s*<li[^>]*><a[^>]*>第一章</a>.*"));
 	}
 
