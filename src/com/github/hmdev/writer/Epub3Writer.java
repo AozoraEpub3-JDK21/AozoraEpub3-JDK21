@@ -48,6 +48,7 @@ import com.github.hmdev.info.BookLedger;
 import com.github.hmdev.info.ChapterInfo;
 import com.github.hmdev.info.ChapterLineInfo;
 import com.github.hmdev.info.GaijiInfo;
+import com.github.hmdev.info.FixedPageSize;
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.util.CharUtils;
@@ -1094,6 +1095,11 @@ public class Epub3Writer
 		//表紙ページ出力
 		if (coverSectionInfo != null) {
 			this.velocityContext.put("sectionInfo", coverSectionInfo);
+			//本文にページが無い画像の本は、表紙の大きさをページの大きさにする
+			if (bookInfo.imageOnly && !this.velocityContext.containsKey("pageSize")) {
+				ImageInfo pageCover = (ImageInfo)this.velocityContext.get("coverImage");
+				this.velocityContext.put("pageSize", new FixedPageSize(pageCover.getPageWidth(), pageCover.getPageHeight()));
+			}
 			zos.setLevel(9); //ここからの画像は無圧縮だが、ページは圧縮する
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+XHTML_PATH+COVER_FILE));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));

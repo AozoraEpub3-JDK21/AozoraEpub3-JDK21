@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.hmdev.converter.AozoraEpub3Converter;
+import com.github.hmdev.info.FixedPageSize;
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.info.SectionInfo;
 import com.github.hmdev.util.LogAppender;
@@ -145,15 +146,14 @@ public class Epub3ImageWriter extends Epub3Writer
 		
 		//画像xhtmlを出力
 		zos.setLevel(9);
-		//OPF の original-resolution は、本の中でページにできる先頭の画像の大きさにする（BMP などは飛ばす）
-		//別ファイルの表紙は本の基準にしない。この値は本全体で 1 つなので、表紙ページの大きさとは違うことがある
+		//ページの大きさは本全体で 1 つ。本文でいちばん多い画像の大きさにする（BMP などページにならない画像は数えない）
+		ArrayList<ImageInfo> pageImages = new ArrayList<>();
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
-			ImageInfo firstPage = this.imageInfoReader.getImageInfo(srcFilePath);
-			if (firstPage != null && isPageFormat(firstPage)) {
-				this.velocityContext.put("firstPageImage", firstPage);
-				break;
-			}
+			ImageInfo pageImage = this.imageInfoReader.getImageInfo(srcFilePath);
+			if (pageImage != null && isPageFormat(pageImage)) pageImages.add(pageImage);
 		}
+		FixedPageSize pageSize = FixedPageSize.mostCommon(pageImages);
+		if (pageSize != null) this.velocityContext.put("pageSize", pageSize);
 		pageNum = 0;
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
 			if (this.canceled) return;
@@ -217,7 +217,7 @@ public class Epub3ImageWriter extends Epub3Writer
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(super.zos, "UTF-8"));
 		//出力開始するセクションに対応したSectionInfoを設定
 		this.velocityContext.put("sectionInfo", sectionInfo);
-		//固定レイアウトのページの大きさ（viewport）に使う。前のページの値を残さない
+		//固定レイアウトのページの中で画像を置く位置に使う。前のページの値を残さない
 		if (imageInfo != null) this.velocityContext.put("imageInfo", imageInfo);
 		else this.velocityContext.remove("imageInfo");
 		//テキストの本と同じ mergeTemplate を通す。jar の中のテンプレートも探せ、改行も LF にそろう（監査項目 43・44）

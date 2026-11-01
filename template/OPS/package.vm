@@ -45,8 +45,8 @@
 #if (${bookInfo.ImageOnly})
 	<meta property="rendition:layout">pre-paginated</meta>
 	<meta property="rendition:spread">landscape</meta>
-#if (${firstPageImage})
-	<meta name="original-resolution" content="${firstPageImage.PageWidth}x${firstPageImage.PageHeight}"/>
+#if (${pageSize})
+	<meta name="original-resolution" content="${pageSize.Width}x${pageSize.Height}"/>
 #end
 
 	#if (${bookInfo.Vertical})

@@ -7,8 +7,8 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="ja" lang="ja">
 #end
 <head>
-#if (${bookInfo.ImageOnly} && ${imageInfo})
-	<meta name="viewport" content="width=${imageInfo.PageWidth}, height=${imageInfo.PageHeight}"/>
+#if (${bookInfo.ImageOnly} && ${pageSize})
+	<meta name="viewport" content="width=${pageSize.Width}, height=${pageSize.Height}"/>
 #end
 #if (${kindle} && ${bookInfo.ImageOnly})
 	<link rel="stylesheet" type="text/css" href="../css/kindle_image.css"/>
@@ -37,8 +37,14 @@
 #end
 	<title>${title}</title>
 
-## 画像だけの本はページが画像と同じ大きさなので、画面の高さに対する割合を当てない
-#if (${sectionInfo.ImageHeight} > 0 && !${bookInfo.ImageOnly})
+## 画像だけの本は、本全体で同じ大きさのページの中に画素で画像を置く（割合や class に頼るとリーダーごとに結果が変わる）
+#if (${bookInfo.ImageOnly} && ${pageSize} && ${imageInfo})
+#set ($place = $pageSize.place($imageInfo))
+<style type="text/css">
+html,body{margin:0;padding:0;width:${pageSize.Width}px;height:${pageSize.Height}px;overflow:hidden}
+img{position:absolute;left:${place.X}px;top:${place.Y}px;width:${place.Width}px;height:${place.Height}px;max-width:none;max-height:none;min-height:0;margin:0}
+</style>
+#elseif (${sectionInfo.ImageHeight} > 0 && !${bookInfo.ImageOnly})
 <style type="text/css">
 body .img img {
 height: ${sectionInfo.ImageHeightPercent}%;
@@ -48,7 +54,9 @@ min-height: ${sectionInfo.ImageHeightPercent}%;
 #end
 </head>
 
-#if (${sectionInfo.ImageFitW})
+#if (${bookInfo.ImageOnly} && ${pageSize})
+<body>
+#elseif (${sectionInfo.ImageFitW})
 <body class="fit_w">
 #elseif (${sectionInfo.ImageFitH})
 <body class="fit_h">
