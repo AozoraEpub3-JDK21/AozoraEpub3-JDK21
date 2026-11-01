@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -468,6 +469,64 @@ public class Epub3Writer
 		this.autoMarginNombreSize = nombreSize;
 	}
 	
+	/**
+	 * NAV の目次を入れ子にする。項目ごとに、a の後ろへ続ける文字列を決める。
+	 * ol は深さが飛んでも 1 段ずつ開く（li の中に ol は 1 つで、a の次にしか置けない）。
+	 * 呼ぶ前に、名前の無い項目を除き、表題のレベルを次の見出しにそろえておく。
+	 */
+	static void nestNavChapters(List<ChapterInfo> chapterInfos)
+	{
+		int[] levels = navLevels(chapterInfos);
+		//開いている ol ごとの、今の項目の深さ
+		ArrayDeque<Integer> open = new ArrayDeque<>();
+		for (int i = 0; i < levels.length; i++) {
+			ChapterInfo chapterInfo = chapterInfos.get(i);
+			if (open.isEmpty()) open.push(levels[i]);
+			if (i == levels.length-1) {
+				chapterInfo.setNavAfter("</li>" + "</ol></li>".repeat(open.size()-1));
+				break;
+			}
+			int next = levels[i+1];
+			if (next > levels[i]) {
+				chapterInfo.setNavAfter("\n\t\t\t<ol>");
+				open.push(next);
+				continue;
+			}
+			StringBuilder after = new StringBuilder("</li>");
+			open.pop();
+			//親の深さが次の項目以上の間は ol を閉じる
+			while (!open.isEmpty() && open.peek() >= next) {
+				open.pop();
+				after.append("</ol></li>");
+			}
+			open.push(next);
+			chapterInfo.setNavAfter(after.toString());
+		}
+	}
+
+	/**
+	 * 目次での深さ。改ページの後の本文の行はレベルが大見出しと同じだが、本の構造ではないので親にしない。
+	 * 前の項目と次の見出しの深いほうに置く。
+	 */
+	private static int[] navLevels(List<ChapterInfo> chapterInfos)
+	{
+		int[] levels = new int[chapterInfos.size()];
+		for (int i = 0; i < levels.length; i++) {
+			ChapterInfo chapterInfo = chapterInfos.get(i);
+			levels[i] = chapterInfo.getChapterLevel();
+			if (!chapterInfo.pageBreakLine) continue;
+			int level = i > 0 ? levels[i-1] : levels[i];
+			for (int j = i+1; j < levels.length; j++) {
+				if (!chapterInfos.get(j).pageBreakLine) {
+					level = Math.max(level, chapterInfos.get(j).getChapterLevel());
+					break;
+				}
+			}
+			levels[i] = level;
+		}
+		return levels;
+	}
+
 	public void setTocParam(boolean navNest, boolean ncxNest)
 	{
 		this.navNest = navNest;
@@ -610,8 +669,6 @@ public class Epub3Writer
 		//更新日時
 		velocityContext.put("modified", MODIFIED_FORMATTER.format(bookInfo.modified.toInstant()));
 		
-		//目次階層化
-		velocityContext.put("navNest", this.navNest);
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
@@ -881,9 +938,11 @@ public class Epub3Writer
 			if (chapterInfos.get(i).getChapterName() == null) chapterInfos.remove(i);
 		}
 		
-		//表題のレベルを2つめと同じにする
-		if (bookInfo.insertTitleToc && chapterInfos.size() >= 2) {
-			chapterInfos.get(0).chapterLevel = chapterInfos.get(1).chapterLevel;
+		//表題のレベルを次の見出しと同じにする（先頭が表題でない本は、本物の見出しなので変えない）
+		if (bookInfo.insertTitleToc && chapterInfos.size() >= 2 && chapterInfos.get(0).chapterLevel == ChapterLineInfo.LEVEL_TITLE) {
+			int next = 1;
+			while (next < chapterInfos.size()-1 && chapterInfos.get(next).pageBreakLine) next++;
+			chapterInfos.get(0).chapterLevel = chapterInfos.get(next).chapterLevel;
 		}
 		
 		//目次の階層情報を設定
@@ -901,29 +960,12 @@ public class Epub3Writer
 			chapterInfo.chapterLevel = newLevel[chapterInfo.chapterLevel];
 		}
 		
-		//開始終了情報を追加 nav用
-		ChapterInfo preChapterInfo = new ChapterInfo(null, null, null, 0); //レベル0
-		for (ChapterInfo chapterInfo : chapterInfos) {
-			if (preChapterInfo != null) {
-				//開始
-				chapterInfo.levelStart = Math.max(0, chapterInfo.chapterLevel - preChapterInfo.chapterLevel);
-				//終了
-				preChapterInfo.levelEnd = Math.max(0, preChapterInfo.chapterLevel - chapterInfo.chapterLevel);
-			}
-			preChapterInfo = chapterInfo;
-		}
-		//一番最後は閉じる
-		if (chapterInfos.size() > 0) {
-			ChapterInfo chapterInfo = chapterInfos.get(chapterInfos.size() - 1);
-			if (chapterInfo != null) chapterInfo.levelEnd = chapterInfo.chapterLevel;
-		}
-		
 		int ncxDepth = 1;
 		if (this.ncxNest) {
+			ChapterInfo preChapterInfo = null;
 			int minLevel = 99; int maxLevel = 0;
-			//navPointを閉じる回数をlevelEndに設定
+			//navPointを閉じる回数を設定
 			int[] navPointLevel = new int[10]; //navPointを開始したレベルidxに1を設定
-			preChapterInfo = null;
 			for (ChapterInfo chapterInfo : chapterInfos) {
 				if (preChapterInfo != null) {
 					int preLevel = preChapterInfo.chapterLevel;
@@ -970,6 +1012,9 @@ public class Epub3Writer
 		
 		//velocityに設定 1～
 		velocityContext.put("ncx_depth", ncxDepth);
+		
+		//NAV の目次の階層。.mobi は追わないので Kindle モードの出力は変えない
+		if (this.navNest && !this.isKindle) nestNavChapters(chapterInfos);
 		
 		//出力前に縦中横とエスケープ処理
 		if (!bookInfo.imageOnly) {
@@ -1425,8 +1470,15 @@ public class Epub3Writer
 	/** 章を追加 */
 	public void addChapter(String chapterId, String name, int chapterLevel)
 	{
+		addChapter(chapterId, name, chapterLevel, false);
+	}
+	/** @param pageBreakLine 見出しではなく、改ページの後の本文の行から作った項目なら true */
+	public void addChapter(String chapterId, String name, int chapterLevel, boolean pageBreakLine)
+	{
 		SectionInfo sectionInfo = this.sectionInfos.get(this.sectionInfos.size() - 1);
-		this.chapterInfos.add(new ChapterInfo(sectionInfo.sectionId, chapterId, name, chapterLevel));
+		ChapterInfo chapterInfo = new ChapterInfo(sectionInfo.sectionId, chapterId, name, chapterLevel);
+		chapterInfo.pageBreakLine = pageBreakLine;
+		this.chapterInfos.add(chapterInfo);
 	}
 	/** 追加済の章の名称を変更 */
 	/*public void updateChapterName(String name)

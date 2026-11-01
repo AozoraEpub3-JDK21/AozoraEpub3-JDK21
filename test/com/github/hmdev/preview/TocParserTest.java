@@ -4,7 +4,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +17,7 @@ import org.junit.rules.TemporaryFolder;
 
 /**
  * 目次の解決。
- * 本プロジェクトでは階層情報が toc.ncx にしか無く、nav.xhtml はフラットなので、
- * toc.ncx → nav.xhtml → spine の順で解決する必要がある。
+ * toc.ncx → nav.xhtml → spine の順で解決し、nav.xhtml の階層のほうが深ければ nav.xhtml を使う。
  */
 public class TocParserTest
 {
@@ -145,5 +146,85 @@ public class TocParserTest
 			out.add(entry.label());
 			collectLabels(entry.children(), out);
 		}
+	}
+
+	/** nav.xhtml の階層のほうが深ければ、平らな toc.ncx より優先する */
+	@Test
+	public void deeperNavWinsOverFlatNcx() throws IOException
+	{
+		Path root = EpubFixture.standard().explodeTo(temp.getRoot().toPath());
+		Path ncx = root.resolve("OPS/toc.ncx");
+		String flat = Files.readString(ncx, StandardCharsets.UTF_8)
+			.replaceAll("(?s)<navMap>.*</navMap>", "<navMap><navPoint id=\"a\" playOrder=\"1\"><navLabel><text>平らな目次</text></navLabel><content src=\"xhtml/text00001.xhtml\"/></navPoint></navMap>");
+		Files.writeString(ncx, flat, StandardCharsets.UTF_8);
+		Path nav = root.resolve("OPS/xhtml/nav.xhtml");
+		String nested = Files.readString(nav, StandardCharsets.UTF_8)
+			.replaceAll("(?s)(<nav[^>]*epub:type=\"toc\"[^>]*>.*?)<ol>.*?</ol>(\\s*</nav>)",
+				"$1<ol><li><a href=\"text00001.xhtml\">親</a><ol><li><a href=\"text00002.xhtml\">子</a></li></ol></li></ol>$2");
+		Files.writeString(nav, nested, StandardCharsets.UTF_8);
+		List<TocEntry> toc = TocParser.parse(root, OpfParser.parse(root));
+		assertEquals("親", toc.get(0).label());
+		assertEquals("子", toc.get(0).children().get(0).label());
+	}
+
+	private Path bookWithTocs(String navPoints, String navList) throws IOException
+	{
+		Path root = EpubFixture.standard().explodeTo(temp.newFolder().toPath());
+		Path ncx = root.resolve("OPS/toc.ncx");
+		Files.writeString(ncx, Files.readString(ncx, StandardCharsets.UTF_8)
+			.replaceAll("(?s)<navMap>.*</navMap>", "<navMap>" + navPoints + "</navMap>"), StandardCharsets.UTF_8);
+		Path nav = root.resolve("OPS/xhtml/nav.xhtml");
+		Files.writeString(nav, Files.readString(nav, StandardCharsets.UTF_8)
+			.replaceAll("(?s)(<nav[^>]*epub:type=\"toc\"[^>]*>.*?)<ol>.*?</ol>(\\s*</nav>)", "$1" + navList + "$2"), StandardCharsets.UTF_8);
+		return root;
+	}
+
+	private static String navPoint(String id, String label, String inner)
+	{
+		return "<navPoint id=\"" + id + "\" playOrder=\"1\"><navLabel><text>" + label + "</text></navLabel><content src=\"xhtml/text00001.xhtml\"/>" + inner + "</navPoint>";
+	}
+
+	/** 階層が同じ深さなら、リーダーが読む nav.xhtml を使う */
+	@Test
+	public void navWinsATieWhenNested() throws IOException
+	{
+		Path root = bookWithTocs(navPoint("a", "NCXの親", navPoint("b", "NCXの子", "")),
+			"<ol><li><a href=\"text00001.xhtml\">NAVの親</a><ol><li><a href=\"text00002.xhtml\">NAVの子</a></li></ol></li></ol>");
+		assertEquals("NAVの親", TocParser.parse(root, OpfParser.parse(root)).get(0).label());
+	}
+
+	/** 平ら同士は今までどおり toc.ncx */
+	@Test
+	public void ncxWinsWhenBothAreFlat() throws IOException
+	{
+		Path root = bookWithTocs(navPoint("a", "NCXの項目", ""), "<ol><li><a href=\"text00001.xhtml\">NAVの項目</a></li></ol>");
+		assertEquals("NCXの項目", TocParser.parse(root, OpfParser.parse(root)).get(0).label());
+	}
+
+	/** 2026-11 より前の本。階層は toc.ncx にしか無い */
+	@Test
+	public void deeperNcxWinsOverFlatNav() throws IOException
+	{
+		Path root = bookWithTocs(navPoint("a", "NCXの親", navPoint("b", "NCXの子", "")),
+			"<ol><li><a href=\"text00001.xhtml\">NAVの項目</a></li><li><a href=\"text00002.xhtml\">NAVの項目2</a></li></ol>");
+		assertEquals("NCXの親", TocParser.parse(root, OpfParser.parse(root)).get(0).label());
+	}
+
+	/** 項目が減るなら、深くても nav.xhtml を使わない */
+	@Test
+	public void nestedNavWithFewerEntriesLoses() throws IOException
+	{
+		Path root = bookWithTocs(navPoint("a", "1", "") + navPoint("b", "2", "") + navPoint("c", "3", ""),
+			"<ol><li><a href=\"text00001.xhtml\">親</a><ol><li><a href=\"text00002.xhtml\">子</a></li></ol></li></ol>");
+		assertEquals("1", TocParser.parse(root, OpfParser.parse(root)).get(0).label());
+	}
+
+	/** リンクの無い見出しは span が名前になる */
+	@Test
+	public void spanHeadingKeepsItsLabel() throws IOException
+	{
+		Path root = bookWithTocs(navPoint("a", "NCX", ""),
+			"<ol><li><span>部の名前</span><ol><li><a href=\"text00001.xhtml\">子</a></li></ol></li></ol>");
+		assertEquals("部の名前", TocParser.parse(root, OpfParser.parse(root)).get(0).label());
 	}
 }
