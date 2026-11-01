@@ -595,7 +595,6 @@ public class HeadlessWebConversion
 
 	private String outExt()
 	{
-		String ext = this.props.getProperty("Ext", ".epub").trim();
-		return ext.isEmpty() ? ".epub" : ext;
+		return GuiConversionSettings.outExt(this.props);
 	}
 }

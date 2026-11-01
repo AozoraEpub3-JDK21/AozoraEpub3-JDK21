@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
@@ -19,10 +20,12 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import javax.imageio.ImageIO;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.w3c.dom.Element;
 
 import com.github.hmdev.config.SettingDefaults;
 import com.github.hmdev.converter.AozoraEpub3Converter;
@@ -109,7 +112,11 @@ public class LegacyOutputTest {
 		try (ZipFile zf = new ZipFile(epub)) {
 			String opf = new String(zf.getInputStream(zf.getEntry("OPS/package.opf")).readAllBytes(), StandardCharsets.UTF_8);
 			assertEquals(opf, expected, opf.contains("<meta name=\"cover\""));
-			assertEquals(opf, expected, opf.contains("toc=\"ncx\""));
+			//XML として読む（テンプレートの崩れで属性がくっついても、文字列の検索では分からない）
+			Element spine = (Element) DocumentBuilderFactory.newInstance().newDocumentBuilder()
+				.parse(new ByteArrayInputStream(opf.getBytes(StandardCharsets.UTF_8)))
+				.getElementsByTagName("spine").item(0);
+			assertEquals(opf, expected ? "ncx" : "", spine.getAttribute("toc"));
 			assertEquals(opf, expected, opf.contains("href=\"toc.ncx\""));
 			assertEquals("toc.ncx の有無", expected, zf.getEntry("OPS/toc.ncx") != null);
 			//外しても表紙の指定と目次は残る

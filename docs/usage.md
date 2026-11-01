@@ -246,7 +246,7 @@ PageBreakChapterSize=200
 LegacyOutput=1
 ```
 
-空にすると出しません（`NcxNest` も効かなくなります）。出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときは、この設定によらず出します。
+空にすると出しません（`NcxNest` も効かなくなるので、`NavNest` もオフだと階層がなくなります）。出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときと `-device kindle` のときは、この設定によらず出します。
 
 目次を入れ子にするかどうか:
 
