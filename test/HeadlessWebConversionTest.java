@@ -52,6 +52,8 @@ public class HeadlessWebConversionTest {
 	private final java.util.concurrent.atomic.AtomicInteger episodeRequests = new java.util.concurrent.atomic.AtomicInteger();
 	/** 0 話のとき、一覧のページに本文（告知）を置くか */
 	private volatile boolean noticeWhenEmpty = true;
+	/** 一覧の先頭に、この話へのリンクをもう 1 つ置く（0 なら置かない。1 はカクヨムの一覧の形） */
+	private volatile int repeatLink = 0;
 
 	@After
 	public void tearDown() {
@@ -88,6 +90,7 @@ public class HeadlessWebConversionTest {
 				int from = paged && secondPage ? 3 : 1;
 				int to = paged && !secondPage ? Math.min(2, episodes) : episodes;
 				StringBuilder list = new StringBuilder();
+				if (repeatLink > 0) list.append("<li><a href=\"/ep/" + repeatLink + "/\">読む</a><span class=\"up\">").append(upDate).append("</span></li>");
 				if (paged && !secondPage) list.append("<li><a class=\"pager\" href=\"/novel/?p=2\">最後</a></li>");
 				for (int i = from; i <= to; i++) {
 					list.append("<li><a href=\"/ep/").append(i).append("/\">第").append(i).append("話</a><span class=\"up\">").append(upDate).append("</span></li>");
@@ -393,6 +396,56 @@ public class HeadlessWebConversionTest {
 		episodes = 4;
 		shelfBook(basePath, tempFolder.newFolder("out2"));
 		assertEquals("増えたら書き直す", 4, ledgerOf().episodes);
+	}
+
+	/** 一覧に同じ話へのリンクが 2 つあっても、本に入るのは 1 回で、順番も変わらない */
+	@Test
+	public void aRepeatedLinkPutsTheEpisodeInTheBookOnce() throws Exception {
+		String basePath = serveAndBase();
+		repeatLink = 1;
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		String text = epubText(book);
+		String first = marker("1");
+		assertTrue("1 話目がある", text.contains(first));
+		assertEquals("1 回だけ", text.indexOf(first), text.lastIndexOf(first));
+		assertTrue("順番どおり", text.indexOf(first) < text.indexOf(marker("2")) && text.indexOf(marker("2")) < text.indexOf(marker("3")));
+		assertEquals("話を取るのも 1 回ずつ", 3, episodeRequests.get());
+	}
+
+	/** 目次の前に「最新話を読む」のリンクがあっても、最新話は目次の位置に入る */
+	@Test
+	public void aLinkToTheLatestEpisodeDoesNotMoveIt() throws Exception {
+		String basePath = serveAndBase();
+		repeatLink = 3;
+		episodes = 3;
+		String text = epubText(shelfBook(basePath, tempFolder.newFolder("out")));
+		assertTrue(text.contains(marker("1")) && text.contains(marker("3")));
+		assertEquals(text.indexOf(marker("3")), text.lastIndexOf(marker("3")));
+		assertTrue("順番どおり", text.indexOf(marker("1")) < text.indexOf(marker("2")) && text.indexOf(marker("2")) < text.indexOf(marker("3")));
+	}
+
+	/** 同じ話へのリンクも数えた台帳の本が、更新で「減った」に見えない。新しい話も数えられる */
+	@Test
+	public void aBookCountedWithTheRepeatedLinkStillUpdates() throws Exception {
+		String basePath = serveAndBase();
+		repeatLink = 1;
+		episodes = 3;
+		File book = shelfBook(basePath, tempFolder.newFolder("out"));
+		assertEquals("台帳はリンクの数のまま", 4, ledgerOf().episodesFor(book));
+		HeadlessWebConversion.Result same = guardedUpdate(basePath, book, false);
+		assertTrue(same.message(), same.ok());
+		episodes = 4;
+		HeadlessWebConversion checker = conversion(guiDefaults(), basePath);
+		checker.check("http://" + fqdn + "/novel/", book);
+		assertEquals("新しい話は 1 話", 1, checker.checkedNew);
+		HeadlessWebConversion.Result grown = guardedUpdate(basePath, book, false);
+		assertTrue(grown.message(), grown.ok());
+		String text = epubText(book);
+		assertTrue(text.contains(marker("4")));
+		assertTrue(text.contains(marker("1")));
+		assertEquals(text.indexOf(marker("1")), text.lastIndexOf(marker("1")));
+		assertEquals("確かめた話数は本当の話数", 4, checker.checkedEpisodes);
 	}
 
 	/** 話数が減ったら、本棚の本も台帳の話数も変えずに止める */
