@@ -89,28 +89,60 @@ public class TitlePageAutofitTemplateTest
 		assertEquals("font-size:1.1em;", titleBlockFontSize(renderHorizontal("タイトル", 121, null)));
 	}
 
-	//---------- title_horizontal.vm: 45文字以下は現行レイアウト維持 ----------
+	//---------- title_horizontal.vm: 45文字以下は余白の段を残す ----------
 
 	@Test
-	public void shortTitleKeepsLegacyLayout()
+	public void shortTitleKeepsSpacers()
 	{
 		String out = renderHorizontal("短いタイトル", 20, null);
-		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; min-height:50%; text-align:center; }"));
+		assertEquals("padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 		//SERIES/ORGTITLE/SUBTITLE/SUBORGTITLE なし → space 4個
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
 	}
 
-	/** 上下の段は高さを固定しない。固定すると、スマホで文字を大きくしたときに題名が段からあふれて、
-	 * 著者と重なる（Apple Books）か、著者だけ次のページへ送られる（Kindle）。internal #67 */
+	/** 段も外側の枠も高さを固定しない。固定すると、スマホで文字を大きくしたときに題名が段からあふれて、
+	 * 著者と重なる（Apple Books）か、著者だけ次のページへ送られる（Kindle）。著者の段は場所も取らない。internal #67 */
 	@Test
 	public void blocksGrowInsteadOfOverflowing()
 	{
-		for (int length : new int[]{10, 28, 45, 90}) {
-			String out = renderHorizontal("タイトル", length, null);
-			assertFalse(length + ": " + out, out.contains("; height:50%"));
-			assertFalse(length + ": " + out, out.contains("; height:25%"));
-			assertTrue(length + ": " + out, out.contains(".lower { padding:0 5%; min-height:25%; text-align:center; }"));
+		for (int length : new int[]{10, 28, 30, 31, 45}) {
+			for (String series : new String[]{null, "シリーズ名"}) {
+				String out = renderHorizontal("タイトル", length, series);
+				String label = length + "/" + series + ": " + out;
+				assertEquals(label, "padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
+				assertEquals(label, "padding:0 5%; text-align:center;", rule(out, ".lower"));
+				//外側の枠は高さを固定する（題名の段の min-height:50% の基準になる）
+				assertTrue(label, rule(out, ".outer").contains(" height:98.5%;"));
+				//固定の高さは html と body（ADE のための 98%）と外側の枠だけ
+				assertEquals(label, 3, out.split("(?<![\\w-])height\\s*:", -1).length - 1);
+			}
 		}
+	}
+
+	/** 副題や原題があるときも同じ形（題名の段がいちばん伸びる場合） */
+	@Test
+	public void subtitlesUseTheSameGrowingBlocks()
+	{
+		VelocityContext ctx = new VelocityContext();
+		ctx.put("title", "t");
+		ctx.put("TITLE", "タイトル");
+		ctx.put("TITLE_LENGTH", 28);
+		ctx.put("SUBTITLE", "副題");
+		ctx.put("ORGTITLE", "原題");
+		ctx.put("CREATOR", "テスト著者");
+		StringWriter sw = new StringWriter();
+		engine.getTemplate("title_horizontal.vm", "UTF-8").merge(ctx, sw);
+		String out = sw.toString();
+		assertEquals("padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
+		assertEquals("padding:0 5%; text-align:center;", rule(out, ".lower"));
+	}
+
+	/** CSS の規則の中身（空白をそろえる） */
+	private static String rule(String out, String selector)
+	{
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(selector) + "\\s*\\{([^}]*)\\}").matcher(out);
+		assertTrue(selector + " が無い: " + out, m.find());
+		return m.group(1).replaceAll("\\s+", " ").trim();
 	}
 
 	//---------- title_horizontal.vm: 46文字以上で構造調整 ----------
@@ -120,8 +152,7 @@ public class TitlePageAutofitTemplateTest
 	{
 		String out = renderHorizontal("長いタイトル", 90, null);
 		//min-height でタイトルが50%を超えた時だけ伸びる(著者名と重ならず、通常は下段位置を維持)
-		assertTrue(out.contains(".upper { padding:5% 5% 0 5%; min-height:50%; text-align:center; }"));
-		assertFalse(out.contains("; height:50%"));
+		assertEquals("padding:5% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 		assertEquals(0, countOf(out, "<div class=\"space\"></div>"));
 	}
 
@@ -157,7 +188,7 @@ public class TitlePageAutofitTemplateTest
 		engine.getTemplate("title_horizontal.vm", "UTF-8").merge(ctx, sw);
 		String out = sw.toString();
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
-		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; min-height:50%; text-align:center; }"));
+		assertEquals("padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 		assertEquals("font-size:2em;", titleBlockFontSize(out));
 	}
 

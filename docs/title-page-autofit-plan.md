@@ -73,7 +73,7 @@ static int displayTextLength(String html)
 | 81–120 | 1.25em | 3% |
 | ≥121 | 1.1em | 0%(安全網) |
 
-構造調整(**46 文字以上のときのみ**適用 — 45 以下は現行出力を byte 単位で維持):
+構造調整(**46 文字以上のときのみ**適用 — 45 以下は 1.4.0 当時は現行出力を byte 単位で維持。2026-11 に下記の高さの変更を全長へ広げた):
 
 - `.space` div を出力しない(縦領域の 20% を回収)
 - `.upper` の `height:50%` を `min-height:50%` に変更(タイトルが 50% を超えた時だけ
@@ -109,6 +109,11 @@ static int displayTextLength(String html)
 - `${title_border}`(Java から未設定の死に変数)の整理
 
 ## 互換性
+
+> **2026-11 の変更（internal #67）**: `.upper` の `height:50%` を全長で `min-height:50%` に、`.lower` の `height:25%` は外し、
+> `.outer` の `height:98.5%` は残した（`min-height` にすると親の高さが決まらず、`.upper` の `min-height:50%` が効かなくなった。Apple Books で確認）。固定の高さだと、スマホで文字を大きくしたときに題名が段からあふれ、
+> Apple Books では著者と重なり、Kindle Previewer の Phone では著者だけ次のページへ送られた（28 文字の題名で文字サイズ 6 から）。
+> 収まる間の見た目は変わらないが、**45 文字以下でも title.xhtml は 1.4.0 以前と byte 一致しなくなった**。下の記述はそれ以前の記録。
 
 - **表示文字数 45 以下のタイトルは出力 byte 不変**(directive 行は Velocity が改行ごと
   swallow するため、分岐追加でも出力に影響しない)。実測確認済み(2026-08-01):
