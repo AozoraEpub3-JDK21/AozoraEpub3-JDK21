@@ -43,7 +43,7 @@ Developer documentation for contributing to AozoraEpub3 or understanding its int
 ### Requirements
 
 - **Java**: JDK 25 LTS recommended (JDK 21 or later works for building and running)
-- **Gradle**: 9.6.1 (use the bundled Gradle Wrapper)
+- **Gradle**: 9.8.2 (use the bundled Gradle Wrapper)
 - **Git**: Version control
 - **IDE**: IntelliJ IDEA, Eclipse, VS Code, etc.
 

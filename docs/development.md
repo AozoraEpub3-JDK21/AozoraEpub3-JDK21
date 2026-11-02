@@ -43,7 +43,7 @@ AozoraEpub3の開発に参加する方、または内部実装を理解したい
 ### 必要な環境
 
 - **Java**: JDK 25 LTS 推奨（JDK 21 以上でビルド・実行可能）
-- **Gradle**: 9.6.1（同梱の Gradle Wrapper を使用してください）
+- **Gradle**: 9.8.2（同梱の Gradle Wrapper を使用してください）
 - **Git**: バージョン管理
 - **IDE**: IntelliJ IDEA, Eclipse, VS Code など
 
