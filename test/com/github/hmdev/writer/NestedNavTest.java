@@ -136,6 +136,10 @@ public class NestedNavTest {
 		return writeBook(navNest, kindle, titleType, text);
 	}
 
+	private boolean legacy = false;
+	private boolean tocVertical = false;
+	private String outputExt = ".epub";
+
 	private File writeBook(boolean navNest, boolean kindle, BookInfo.TitleType titleType, String text) throws Exception {
 		java.nio.file.Path txt = tempFolder.newFile().toPath();
 		Files.write(txt, text.getBytes(StandardCharsets.UTF_8));
@@ -143,6 +147,8 @@ public class NestedNavTest {
 		writer.setImageParam(600, 800, 600, 800, 0, 0, 480, 640, 600, SectionInfo.IMAGE_SIZE_TYPE_ASPECT, true, false, 0,
 			1.0f, 0, 0, 0, 0.8f, 1.0f, 0, 0, 100, 0f, 0, 0.03f);
 		writer.setTocParam(navNest, false);
+		writer.setLegacyOutput(legacy);
+		writer.setOutputExt(outputExt);
 		writer.setIsKindle(kindle);
 		writer.setStyles(new String[]{"0","0","0","0"}, new String[]{"0","0","0","0"}, 1.6f, 100, true, true);
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
@@ -153,6 +159,7 @@ public class NestedNavTest {
 			bookInfo = converter.getBookInfo(txt.toFile(), src, imageInfoReader, titleType, false);
 		}
 		bookInfo.insertTitleToc = true; //GUI と CLI の既定
+		bookInfo.tocVertical = tocVertical;
 		File epub = tempFolder.newFile();
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
 			writer.write(converter, src, txt.toFile(), "txt", epub, bookInfo, imageInfoReader);
@@ -211,13 +218,17 @@ public class NestedNavTest {
 		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>.*第三章</a></li></ol></li>\\s*</ol>.*"));
 	}
 
-	/** Apple Books の目次パネルが壊れるので、NAV の項目名の &amp; と &lt; だけ全角にする。本文と NCX と .mobi はそのまま */
+	/** Apple Books の目次パネルが壊れるので、NAV の項目名の &amp; と &lt; と ]]&gt; だけ全角にする。縦書きの目次（既定）でも */
 	@Test
 	public void ampersandAndLessThanAreFullWidthOnlyInNavLabels() throws Exception {
-		String text = "表題\n著者\n\n［＃中見出し］甲&乙<丙>丁［＃中見出し終わり］\n本文。\n［＃中見出し］次の章［＃中見出し終わり］\n本文。\n";
+		tocVertical = true;
+		legacy = true;
+		String text = "表題\n著者\n\n［＃中見出し］甲&乙<丙>丁]]>戊［＃中見出し終わり］\n本文。\n［＃中見出し］次の章［＃中見出し終わり］\n本文。\n";
 		try (ZipFile zf = new ZipFile(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text))) {
 			String nav = new String(zf.getInputStream(zf.getEntry("OPS/xhtml/nav.xhtml")).readAllBytes(), StandardCharsets.UTF_8);
-			assertTrue(nav, nav.contains(">甲＆乙＜丙&gt;丁</a>"));
+			assertTrue(nav, nav.contains(">甲＆乙＜丙&gt;丁]]＞戊</a>"));
+			String ncx = new String(zf.getInputStream(zf.getEntry("OPS/toc.ncx")).readAllBytes(), StandardCharsets.UTF_8);
+			assertTrue("NCX はそのまま:\n" + ncx, ncx.contains("甲&amp;乙&lt;丙&gt;丁]]&gt;戊"));
 			StringBuilder body = new StringBuilder();
 			for (java.util.zip.ZipEntry e : java.util.Collections.list(zf.entries())) {
 				if (e.getName().matches(".*/\\d+\\.xhtml")) body.append(new String(zf.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
@@ -230,6 +241,14 @@ public class NestedNavTest {
 	public void kindleKeepsAmpersandInItsContentsPage() throws Exception {
 		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
 		assertTrue(nav(writeBook(true, true, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲&amp;乙</a>"));
+	}
+
+	/** -device kindle を付けない .mobi の出力も変えない */
+	@Test
+	public void mobiExtensionKeepsAmpersandInItsContentsPage() throws Exception {
+		outputExt = ".mobi";
+		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
+		assertTrue(nav(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲&amp;乙</a>"));
 	}
 
 	@Test
