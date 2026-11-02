@@ -55,7 +55,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Ensure gradlew is executable
         run: chmod +x ./gradlew
@@ -65,7 +65,7 @@ jobs:
       # 残しつつ matrix 版を追加で install。multi-line java-version は最後の項目を JAVA_HOME に
       # するので、matrix 版を上、JDK 21 を下に書く。
       - name: Setup Java (toolchain ${{ matrix.java-version }} + launcher 21)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: |
@@ -74,7 +74,7 @@ jobs:
           check-latest: true
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Build & Test (all matrix JDK versions)
         run: |
@@ -411,7 +411,7 @@ jobs:
 
       - name: Upload EPUBs
         if: success() && matrix.java-version == '21'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: generated-epubs-jdk-${{ matrix.java-version }}
           path: build/epub_out/*.epub
@@ -460,7 +460,7 @@ jobs:
 
       - name: Publish test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-reports-jdk-${{ matrix.java-version }}
           path: |

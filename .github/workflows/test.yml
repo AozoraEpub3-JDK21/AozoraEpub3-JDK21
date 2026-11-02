@@ -34,13 +34,13 @@ jobs:
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Gradle の launcher JVM は JDK 21 で動かす（Gradle 9.6.1 で確かめた制約。9.8.2 では確かめていない）。
       # matrix 版を toolchain として使うため JDK 21 を launcher に残しつつ matrix 版を追加 install。
       # multi-line java-version は最後の項目を JAVA_HOME にするので 21 を最後に書く。
       - name: Set up JDK (toolchain ${{ matrix.java-version }} + launcher 21)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: |
             ${{ matrix.java-version }}
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-jdk-${{ matrix.java-version }}
           path: build/test-results/test/
