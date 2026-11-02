@@ -21,7 +21,7 @@
 | Java toolchain | 21（25 互換ターゲット） |
 | Gradle | 9.8.2 |
 | テストフレームワーク | JUnit 4.13.2 |
-| 主要依存 | Velocity 2.4.1 / JSoup 1.22.1 / Commons Compress 1.28 / Junrar 7.5.10 / Batik 1.19 / SLF4J 2.0.16 |
+| 主要依存 | Velocity 2.4.1 / JSoup 1.23.2 / Commons Compress 1.28 / Junrar 7.6.1 / Batik 1.20 / SLF4J 2.0.17 |
 
 ### 1.2 巨大クラス（責務集中の箇所）
 
