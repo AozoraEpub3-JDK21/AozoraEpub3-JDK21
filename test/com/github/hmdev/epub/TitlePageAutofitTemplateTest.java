@@ -1,7 +1,6 @@
 package com.github.hmdev.epub;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.StringWriter;
@@ -100,16 +99,16 @@ public class TitlePageAutofitTemplateTest
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
 	}
 
-	/** 段も外側の枠も高さを固定しない。固定すると、スマホで文字を大きくしたときに題名が段からあふれて、
+	/** 題名と著者の段は高さを固定しない（外側の枠は固定のまま。題名の段の min-height:50% の基準になる）。固定すると、スマホで文字を大きくしたときに題名が段からあふれて、
 	 * 著者と重なる（Apple Books）か、著者だけ次のページへ送られる（Kindle）。著者の段は場所も取らない。internal #67 */
 	@Test
 	public void blocksGrowInsteadOfOverflowing()
 	{
-		for (int length : new int[]{10, 28, 30, 31, 45}) {
+		for (int length : new int[]{10, 28, 30, 31, 45, 46, 90}) {
 			for (String series : new String[]{null, "シリーズ名"}) {
 				String out = renderHorizontal("タイトル", length, series);
 				String label = length + "/" + series + ": " + out;
-				assertEquals(label, "padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
+				assertEquals(label, "padding:" + (length > 45 ? "5%" : "10%") + " 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 				assertEquals(label, "padding:0 5%; text-align:center;", rule(out, ".lower"));
 				//外側の枠は高さを固定する（題名の段の min-height:50% の基準になる）
 				assertTrue(label, rule(out, ".outer").contains(" height:98.5%;"));
@@ -148,7 +147,7 @@ public class TitlePageAutofitTemplateTest
 	//---------- title_horizontal.vm: 46文字以上で構造調整 ----------
 
 	@Test
-	public void longTitleDropsSpacersAndFixedHeight()
+	public void longTitleDropsSpacers()
 	{
 		String out = renderHorizontal("長いタイトル", 90, null);
 		//min-height でタイトルが50%を超えた時だけ伸びる(著者名と重ならず、通常は下段位置を維持)
@@ -176,10 +175,10 @@ public class TitlePageAutofitTemplateTest
 		assertEquals("font-size:2em;", titleBlockFontSize(renderHorizontal(twentyChars, null, null)));
 	}
 
-	/** TITLEもTITLE_LENGTHも無い場合(タイトル無し変換)は旧レイアウトを維持する
+	/** TITLEもTITLE_LENGTHも無い場合(タイトル無し変換)は短い題名と同じ形になる
 	 * (フォールバックの #set が no-op になり null 比較で space が消えるバグの回帰テスト) */
 	@Test
-	public void noTitleKeepsLegacyLayout()
+	public void noTitleUsesTheShortTitleLayout()
 	{
 		VelocityContext ctx = new VelocityContext();
 		ctx.put("title", "t");

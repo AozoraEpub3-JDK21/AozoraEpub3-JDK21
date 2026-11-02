@@ -113,7 +113,8 @@ static int displayTextLength(String html)
 > **2026-11 の変更（internal #67）**: `.upper` の `height:50%` を全長で `min-height:50%` に、`.lower` の `height:25%` は外し、
 > `.outer` の `height:98.5%` は残した（`min-height` にすると親の高さが決まらず、`.upper` の `min-height:50%` が効かなくなった。Apple Books で確認）。固定の高さだと、スマホで文字を大きくしたときに題名が段からあふれ、
 > Apple Books では著者と重なり、Kindle Previewer の Phone では著者だけ次のページへ送られた（28 文字の題名で文字サイズ 6 から）。
-> 収まる間の見た目は変わらないが、**45 文字以下でも title.xhtml は 1.4.0 以前と byte 一致しなくなった**。下の記述はそれ以前の記録。
+> 収まる間の見た目は変わらないが、**45 文字以下でも title.xhtml は 1.4.0 以前と byte 一致しなくなった**。下の「構造調整」の箇条と「互換性」の記述はそれ以前（46 文字以上だけ min-height）の記録で、今は `.upper` の min-height と `.lower` の高さなしが全長に当たる。
+> 参照比較（`JavaAozoraVsReferenceTest` の `-DreferenceCompare=true`、.NET 版の `JavaComparisonTests`）の reference.epub は title.xhtml が変わるので作り直しが要る（.NET 版は 2026-10-08 の判断で合わせなくてよい）。
 
 - **表示文字数 45 以下のタイトルは出力 byte 不変**(directive 行は Velocity が改行ごと
   swallow するため、分岐追加でも出力に影響しない)。実測確認済み(2026-08-01):
