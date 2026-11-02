@@ -511,29 +511,66 @@ public class Epub3Writer
 	}
 
 	/**
+	 * 形から自動で拾った行は、注記の見出しより浅くなることがある。前書きの「第三部」や本文の「第三話」の下に後の話がみな入り、
+	 * Kindle Previewer では開くまで見えない（2026-11-02 に FC2 と Arcadia の実作品で確認）。本の構造でないと見てよい次の場合は、
+	 * 改ページの後の本文の行と同じ扱いにし、後ろの注記の見出しと同じ深さにする。
+	 * <ul>
+	 * <li>注記の見出しを直接の子に持つ行が 1 つ以下（部が 1 つでは階層にしても情報がない。本の残りが隠れるだけ）</li>
+	 * <li>その行より前に、親のいない注記の見出しがある（本文の途中で拾った行）</li>
+	 * </ul>
+	 * 「第一部」が 2 つ以上あって注記の話を従える本と、注記より深い自動の行（大見出しの下の「1」「2」）はそのまま。
+	 * 表題のレベルと NCX もこの結果を使うので、それらを決める前に呼ぶ。
+	 */
+	static void demoteStrayAutoLines(List<ChapterInfo> chapterInfos)
+	{
+		List<ChapterInfo> stray = new ArrayList<>();
+		List<Integer> headingLevels = new ArrayList<>();
+		int parents = 0;
+		ChapterInfo firstHeading = null;
+		boolean orphanBefore = false;
+		for (int i = 0; i < chapterInfos.size(); i++) {
+			ChapterInfo chapterInfo = chapterInfos.get(i);
+			if (chapterInfo.pageBreakLine) continue;
+			if (!chapterInfo.autoLine) {
+				if (firstHeading == null) firstHeading = chapterInfo;
+				continue;
+			}
+			ChapterInfo nextHeading = null;
+			boolean direct = true;
+			for (int j = i+1; j < chapterInfos.size() && nextHeading == null; j++) {
+				ChapterInfo next = chapterInfos.get(j);
+				if (next.pageBreakLine) continue;
+				if (next.autoLine) direct = false;
+				else nextHeading = next;
+			}
+			if (nextHeading == null || nextHeading.getChapterLevel() <= chapterInfo.getChapterLevel()) continue;
+			if (direct) parents++;
+			//最初の親の候補より前の見出しだけを見る（後ろの部の前には、前の部の見出しが当然ある）
+			if (stray.isEmpty() && firstHeading != null && firstHeading.getChapterLevel() > chapterInfo.getChapterLevel()) orphanBefore = true;
+			stray.add(chapterInfo);
+			headingLevels.add(nextHeading.getChapterLevel());
+		}
+		if (parents > 1 && !orphanBefore) return;
+		for (int i = 0; i < stray.size(); i++) {
+			stray.get(i).pageBreakLine = true;
+			stray.get(i).chapterLevel = headingLevels.get(i);
+		}
+	}
+
+	/**
 	 * 目次での深さ。改ページの後の本文の行はレベルが大見出しと同じだが、本の構造ではないので親にしない。
-	 * 形から自動で拾った行も、後ろに注記の見出しがある本では親にしない（前書きの「第三部」や本文の「第三話」の下に、後の話がみな入る）。
-	 * 注記の見出しが無い本では、自動で拾った行の階層が本の構造なので残す。
-	 * 親にしない行は、前の項目と次の見出しの深いほうに置く。
+	 * 前の項目と次の見出しの深いほうに置く。
 	 */
 	private static int[] navLevels(List<ChapterInfo> chapterInfos)
 	{
 		int[] levels = new int[chapterInfos.size()];
-		//後ろから見て、注記の見出しがこの先にあるか
-		boolean[] notParent = new boolean[levels.length];
-		boolean headingLater = false;
-		for (int i = levels.length-1; i >= 0; i--) {
-			ChapterInfo chapterInfo = chapterInfos.get(i);
-			notParent[i] = chapterInfo.pageBreakLine || (chapterInfo.autoLine && headingLater);
-			if (!chapterInfo.pageBreakLine && !chapterInfo.autoLine) headingLater = true;
-		}
 		for (int i = 0; i < levels.length; i++) {
 			ChapterInfo chapterInfo = chapterInfos.get(i);
 			levels[i] = chapterInfo.getChapterLevel();
-			if (!notParent[i]) continue;
+			if (!chapterInfo.pageBreakLine) continue;
 			int level = i > 0 ? levels[i-1] : levels[i];
 			for (int j = i+1; j < levels.length; j++) {
-				if (!notParent[j]) {
+				if (!chapterInfos.get(j).pageBreakLine) {
 					level = Math.max(level, chapterInfos.get(j).getChapterLevel());
 					break;
 				}
@@ -997,6 +1034,7 @@ public class Epub3Writer
 		for (int i=chapterInfos.size()-1; i>=0; i--) {
 			if (chapterInfos.get(i).getChapterName() == null) chapterInfos.remove(i);
 		}
+		demoteStrayAutoLines(chapterInfos);
 		
 		//表題のレベルを次の見出しと同じにする（先頭が表題でない本は、本物の見出しなので変えない）
 		if (bookInfo.insertTitleToc && chapterInfos.size() >= 2 && chapterInfos.get(0).chapterLevel == ChapterLineInfo.LEVEL_TITLE) {

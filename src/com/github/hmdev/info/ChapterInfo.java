@@ -21,7 +21,7 @@ public class ChapterInfo
 	String navAfter = "</li>";
 	/** 見出しではなく、改ページの後の本文の行から作った項目なら true（目次の親にしない） */
 	public boolean pageBreakLine = false;
-	/** 注記ではなく、章の名前や数字の形から自動で拾った項目なら true */
+	/** 注記ではなく、章の名前や数字の形から自動で拾った項目なら true（{@code Epub3Writer.demoteStrayAutoLines}） */
 	public boolean autoLine = false;
 	
 	public ChapterInfo(String sectionId, String chapterId, String chapterName, int chapterLevel)
