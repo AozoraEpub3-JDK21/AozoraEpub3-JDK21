@@ -2,7 +2,7 @@
 
 ## 未リリース
 
-- **配布物:** 同梱ライブラリの一覧（`THIRD-PARTY-NOTICES.txt`）に、jar に入っている間接依存のライブラリ（commons-codec・commons-io・commons-logging・xmlgraphics-commons・xml-apis など）を加えました。Apache License 2.0 のライブラリの NOTICE の内容と、xml-apis に含まれる W3C・SAX のライセンス文（`LICENSE/xml-apis/`・`LICENSE/xml-apis-ext/`）も同梱します。
+- **配布物:** 同梱ライブラリの一覧（`THIRD-PARTY-NOTICES.txt`）に、jar に入っている間接依存のライブラリ（commons-codec・commons-io・commons-logging・xmlgraphics-commons・xml-apis など）を加えました。Apache License 2.0 のライブラリの NOTICE の内容と、xml-apis に含まれる W3C・SAX のライセンス文（`LICENSE/xml-apis/`・`LICENSE/xml-apis-ext/`）も同梱します。Apache License 2.0 のライセンス文は全文の `LICENSE/apache-2.0.txt` にまとめ、本文のなかった `LICENSE/batik.txt`・`LICENSE/velocity.txt`・重複していた `LICENSE/commons.txt` は外しました。
 （次期バージョンの変更をここに追記する。リリース時は正式なバージョン節へ書き換えること。）
 
 ---

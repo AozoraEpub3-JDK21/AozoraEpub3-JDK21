@@ -23,7 +23,7 @@ distribution. AozoraEpub3.jar contains every library listed here.
    Copyright: The Apache Software Foundation
    License: Apache License 2.0
    URL: https://commons.apache.org/
-   License File: LICENSE/commons.txt
+   License File: LICENSE/apache-2.0.txt
 
 --------------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ distribution. AozoraEpub3.jar contains every library listed here.
    Copyright: 2000-2024 The Apache Software Foundation
    License: Apache License 2.0
    URL: https://velocity.apache.org/
-   License File: LICENSE/velocity.txt
+   License File: LICENSE/apache-2.0.txt
 
 --------------------------------------------------------------------------------
 
@@ -60,7 +60,7 @@ distribution. AozoraEpub3.jar contains every library listed here.
    Copyright: The Apache Software Foundation
    License: Apache License 2.0
    URL: https://xmlgraphics.apache.org/
-   License File: LICENSE/batik.txt
+   License File: LICENSE/apache-2.0.txt
 
 --------------------------------------------------------------------------------
 
@@ -71,7 +71,7 @@ distribution. AozoraEpub3.jar contains every library listed here.
    Copyright: 1999-2009 The Apache Software Foundation
    License: Apache License 2.0
    URL: https://xerces.apache.org/xml-commons/
-   License File: LICENSE/commons.txt
+   License File: LICENSE/apache-2.0.txt
 
    These libraries also contain the W3C DOM and SVG DOM interfaces (W3C
    Software License), the SAX interfaces (public domain) and the W3C SAC
@@ -213,6 +213,17 @@ The Apache Software Foundation (http://www.apache.org/).
 --------------------------------------------------------------------------------
 Apache XML Commons XML APIs
 Copyright 1999-2009 The Apache Software Foundation.
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+Portions of this software were originally based on the following:
+  - software copyright (c) 1999, IBM Corporation., http://www.ibm.com.
+  - software copyright (c) 1999, Sun Microsystems., http://www.sun.com.
+  - software copyright (c) 2000 World Wide Web Consortium, http://www.w3.org
+--------------------------------------------------------------------------------
+Apache XML Commons XML APIs
+Copyright 2006 The Apache Software Foundation.
 
 This product includes software developed at
 The Apache Software Foundation (http://www.apache.org/).

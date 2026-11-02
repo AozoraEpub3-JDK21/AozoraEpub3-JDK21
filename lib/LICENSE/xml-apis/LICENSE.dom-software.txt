@@ -2,8 +2,8 @@ xml-commons/java/external/LICENSE.dom-software.txt $Id: LICENSE.dom-software.txt
 
 This license came from: http://www.w3.org/TR/2004/REC-DOM-Level-3-Core-20040407/java-binding.zip (COPYRIGHT.html)
 
-W3C® SOFTWARE NOTICE AND LICENSE 
-Copyright © 2004 World Wide Web Consortium, (Massachusetts Institute of Technology,
+W3CÂ® SOFTWARE NOTICE AND LICENSE 
+Copyright Â© 2004 World Wide Web Consortium, (Massachusetts Institute of Technology,
 European Research Consortium for Informatics and Mathematics, Keio University).
 All Rights Reserved.
 

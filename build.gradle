@@ -181,29 +181,68 @@ jar {
     }
 }
 
-// THIRD-PARTY-NOTICES.txt must list exactly the libraries packed into the jar above,
-// and every licence file it names must exist under lib/ (shipped as LICENSE/).
+// THIRD-PARTY-NOTICES.txt must match the libraries packed into the jar above:
+// - its list names exactly the bundled modules and versions,
+// - every licence file it names exists under lib/ (shipped as LICENSE/),
+// - the NOTICE file of every bundled jar is reproduced in its second part
+//   (the fat jar keeps only one META-INF/NOTICE of each name).
 // v1.8.0 shipped without LICENSE/flatlaf.txt and with six stale versions in the list.
 tasks.register('checkThirdPartyNotices') {
     def notices = file('THIRD-PARTY-NOTICES.txt')
     def libDir = file('lib')
-    def bundled = configurations.runtimeClasspath.incoming.artifacts.resolvedArtifacts.map { arts ->
-        arts.collect { it.id.componentIdentifier }
-            .findAll { it instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier }
-            .collect { "${it.module} ${it.version}".toString() }
-            .toSet()
+    def resolved = configurations.runtimeClasspath.incoming.artifacts.resolvedArtifacts.map { arts ->
+        arts.collect { a ->
+            def id = a.id.componentIdentifier
+            id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier
+                ? [group: id.group, module: id.module, version: id.version, file: a.file]
+                : [group: null, module: id.displayName, version: null, file: a.file]
+        }
     }
-    inputs.file(notices)
-    inputs.dir(file('lib/LICENSE'))
-    inputs.property('bundled', bundled.map { it.toList().sort() })
     doLast {
+        def noticeHeader = 'NOTICE FILES OF THE APACHE LICENSE 2.0 COMPONENTS'
         def text = notices.getText('UTF-8').replace('\r', '')
-        def listed = (text =~ /(?m)^   - (\S+ \S+)$/).collect { it[1] }.toSet()
-        def licences = (text =~ /(?m)\b(LICENSE\/\S+)/).collect { it[1] }.toSet()
+        def split = text.indexOf(noticeHeader)
+        if (split < 0) throw new GradleException("THIRD-PARTY-NOTICES.txt has no '${noticeHeader}' part")
+        def listPart = text.substring(0, split)
+        def normalise = { String line -> line.trim().replaceAll(/\s+/, ' ') }
+        def noticeBody = { String t -> t.readLines().collect(normalise).findAll { it && !it.startsWith('==') }.join('\n') }
+        def noticePart = noticeBody(text.substring(split))
         def problems = []
-        (bundled.get() - listed).sort().each { problems << "bundled but not listed: ${it}" }
-        (listed - bundled.get()).sort().each { problems << "listed but not bundled: ${it}" }
-        licences.sort().each { if (!new File(libDir, it).isFile()) problems << "licence file missing: lib/${it}" }
+
+        def arts = resolved.get()
+        arts.findAll { !it.version }.each { problems << "not a module dependency, so it cannot be listed by name and version: ${it.module}" }
+        def modules = arts.findAll { it.version }
+        modules.groupBy { it.module }.each { name, same ->
+            def groups = same*.group.unique()
+            if (groups.size() > 1) problems << "one name in several groups, list them apart: ${name} (${groups.join(', ')})"
+        }
+
+        def bundled = modules.collect { "${it.module} ${it.version}".toString() }.toSet()
+        def listed = [] as Set
+        listPart.readLines().findAll { it ==~ /^\s*-\s.*/ }.each { line ->
+            def m = line =~ /^   - (\S+) (\S+)$/
+            if (m.matches()) listed << "${m[0][1]} ${m[0][2]}".toString()
+            else problems << "entry not in the form '   - name version': '${line}'"
+        }
+        (bundled - listed).sort().each { problems << "bundled but not listed: ${it}" }
+        (listed - bundled).sort().each { problems << "listed but not bundled: ${it}" }
+
+        (text =~ /LICENSE\/[\w.\/-]*\w/).collect { it }.toSet().sort().each {
+            if (!new File(libDir, it).isFile()) problems << "licence file missing: lib/${it}"
+        }
+
+        modules.findAll { it.file.name.endsWith('.jar') }.sort { it.module }.each { mod ->
+            new java.util.zip.ZipFile(mod.file).withCloseable { zip ->
+                zip.entries().findAll { !it.directory && it.name ==~ /(?i)(.*\/)?NOTICE(\.txt)?/ }.each { entry ->
+                    // the whole NOTICE, line by line in order, so a shared line elsewhere cannot stand in
+                    def body = noticeBody(zip.getInputStream(entry).getText('UTF-8'))
+                    if (body && !('\n' + noticePart + '\n').contains('\n' + body + '\n')) {
+                        problems << "NOTICE of ${mod.module} ${mod.version} not reproduced (${entry.name}): '${body.readLines()[0]}'"
+                    }
+                }
+            }
+        }
+
         if (problems) {
             throw new GradleException("THIRD-PARTY-NOTICES.txt is out of date:\n  " + problems.join('\n  '))
         }

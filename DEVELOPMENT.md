@@ -104,7 +104,7 @@ AozoraEpub3/
 - **Apache Batik 1.20**: 画像トランスコーディング（JAI代替）
 - **SLF4J 2.0.17**: ロギング
 
-依存を足したり版を上げたりしたら、`THIRD-PARTY-NOTICES.txt` の一覧（間接依存も含む）と、`lib/LICENSE/` のライセンス文を合わせてください。`gradlew check`（`build` も）が `checkThirdPartyNotices` で、jar に入るライブラリと一覧の食い違い、一覧が指すライセンス文の欠けを検出します。Apache License 2.0 のライブラリは、NOTICE ファイルの中身も一覧の後半に写してください（jar の中では同じ名前の NOTICE が 1 つしか残らないため）。
+依存を足したり版を上げたりしたら、`THIRD-PARTY-NOTICES.txt` の一覧（間接依存も含む）と、`lib/LICENSE/` のライセンス文を合わせてください。Apache License 2.0 のライブラリは、NOTICE ファイルの中身も一覧の後半に写してください（jar の中では同じ名前の NOTICE が 1 つしか残らないため）。`gradlew check`（`build` も）が `checkThirdPartyNotices` で、jar に入るライブラリと一覧の食い違い、一覧が指すライセンス文の欠け、各 jar の NOTICE が写されていないことを検出します。
 
 ### CI/CD
 - **GitHub Actions**: ビルド、テスト、EPUB生成・検証の自動化
