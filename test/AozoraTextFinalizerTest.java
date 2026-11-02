@@ -590,6 +590,34 @@ public class AozoraTextFinalizerTest {
 		assertFalse("表示テキスト側の URL に注記が入った: " + result, result.contains("［＃縦中横］"));
 	}
 
+	/** 本の最後の「底本：」の行は見出しにしない（見出しにすると、全部の Web 小説の目次に底本の項目が出ていた）。ほかの改ページ直後の行は今までどおり */
+	@Test
+	public void testSourceLineIsNotAHeading() throws Exception {
+		String url = "https://novel.fc2.com/novel.php?mode=tc&nid=1";
+		String input = "タイトル\n著者名\n\n本文です。\n［＃改ページ］\n次の話\n本文。\n［＃改ページ］\n"
+				+ "底本： <a href=\"" + url + "\">" + url + "</a>\n変換日時： 2026/11/02 00:00:00\n";
+		writeTestFile(input);
+		settings.setEnableEnchantMidashi(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+		assertTrue("ほかの行は見出しになる: " + result, result.contains("［＃中見出し］次の話［＃中見出し終わり］"));
+		assertTrue("底本の行はそのまま: " + result, result.contains("\n底本： <a href="));
+		assertFalse(result, result.contains("［＃中見出し］底本"));
+	}
+
+	/** 既定の自動字下げが付いても、底本の行は見出しにならない（変換器は行頭の空白を除いてから底本：を見る） */
+	@Test
+	public void testSourceLineIsNotAHeadingWithAutoIndent() throws Exception {
+		String url = "https://ncode.syosetu.com/n1/";
+		writeTestFile("タイトル\n著者名\n\n本文です。\n［＃改ページ］\n底本： <a href=\"" + url + "\">" + url + "</a>\n");
+		settings.setEnableEnchantMidashi(true);
+		settings.setEnableAutoIndent(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+		assertFalse(result, result.contains("［＃中見出し］"));
+		assertTrue(result, result.matches("(?s).*\\n[\\s　]*底本： <a href=.*"));
+	}
+
 	/**
 	 * 見出しでない通常行のタグ内も変換対象外であること。
 	 *
