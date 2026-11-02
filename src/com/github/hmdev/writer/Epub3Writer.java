@@ -603,6 +603,16 @@ public class Epub3Writer
 	}
 	
 	/** OPF の manifest が toc.ncx を載せているか（差し替えた package.vm でも実体とずれないように、これで決める） */
+	/**
+	 * NAV の目次の項目名。Apple Books は項目名の文字参照を戻したまま目次パネルの XHTML に入れるので、
+	 * &amp;・&lt;・]]&gt; があるとパネルに XML のエラーが出て、ページ番号も消える（2026-11-02 に実測。&gt; と引用符は出ない）。
+	 * それらを全角にする。本文と toc.ncx は変えない
+	 */
+	static String navLabel(String escapedName)
+	{
+		return escapedName.replace("]]&gt;", "]]＞").replace("&amp;", "＆").replace("&lt;", "＜");
+	}
+
 	static boolean opfListsNcx(String opf)
 	{
 		return OPF_NCX_ITEM.matcher(opf.replaceAll("(?s)<!--.*?-->", "")).find();
@@ -1120,6 +1130,8 @@ public class Epub3Writer
 			int spaceHyphenation = converter.getSpaceHyphenation();
 			converter.setSpaceHyphenation(0);
 			StringBuilder buf = new StringBuilder();
+			//.mobi の目次ページは変えない（Kindle の変換は Books の目次パネルと関係がない）
+			boolean keepNavLabels = this.isKindle || this.outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
 			for (ChapterInfo chapterInfo : chapterInfos) {
 				buf.setLength(0);
 				String converted = CharUtils.escapeHtml(chapterInfo.getChapterName());
@@ -1127,6 +1139,7 @@ public class Epub3Writer
 					converted = converter.convertTcyText(converted);
 				}
 				chapterInfo.setChapterName(converted);
+				if (!keepNavLabels) chapterInfo.setNavLabel(navLabel(converted));
 			}
 			//戻す
 			converter.vertical = bookInfo.vertical;

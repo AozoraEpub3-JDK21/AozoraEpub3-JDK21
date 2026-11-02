@@ -63,6 +63,19 @@ public class ChapterInfo
 		return CharUtils.removeTag(chapterName);
 	}
 	
+	/** NAV の目次に出す名前（{@code Epub3Writer.navLabel}）。決めていなければ章の名前 */
+	String navLabel = null;
+
+	public String getNavLabel()
+	{
+		return this.navLabel != null ? this.navLabel : this.chapterName;
+	}
+
+	public void setNavLabel(String navLabel)
+	{
+		this.navLabel = navLabel;
+	}
+
 	public int getChapterLevel()
 	{
 		return chapterLevel;
