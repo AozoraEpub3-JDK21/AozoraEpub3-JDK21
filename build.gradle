@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'application'
     // 依存関係の更新可否チェック用プラグイン
-    id 'com.github.ben-manes.versions' version '0.67.0'
+    id 'io.github.ben-manes.versions' version '0.67.0'
     // Windows .exe ランチャー生成（Smart App Control 対策）
     id 'edu.sc.seis.launch4j' version '4.0.0'
 }
