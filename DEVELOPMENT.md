@@ -98,10 +98,10 @@ AozoraEpub3/
 
 ### 主要ライブラリ（抜粋）
 - **Apache Velocity 2.4.1**: テンプレートエンジン（EPUB生成）
-- **JSoup 1.18.3**: HTML解析
-- **Apache Commons**: CLI 1.9.0, Collections 4.5.0-M2, Compress 1.27.1, Lang3 3.18.0
-- **Junrar 7.5.5**: RAR解凍
-- **Apache Batik 1.18**: 画像トランスコーディング（JAI代替）
+- **JSoup 1.23.2**: HTML解析
+- **Apache Commons**: CLI 1.11.0, Collections 4.6.0, Compress 1.28.0, Lang3 3.21.0
+- **Junrar 7.6.1**: RAR解凍
+- **Apache Batik 1.20**: 画像トランスコーディング（JAI代替）
 - **SLF4J 2.0.16**: ロギング
 
 ### CI/CD

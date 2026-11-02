@@ -66,7 +66,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 6. Junrar
-   - junrar 8.1.2
+   - junrar 7.6.1
    
    Copyright: Alexander Roshal (UnRAR)
    License: UnRAR Free License
