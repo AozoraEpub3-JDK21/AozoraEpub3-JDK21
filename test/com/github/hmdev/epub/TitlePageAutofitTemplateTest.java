@@ -1,7 +1,6 @@
 package com.github.hmdev.epub;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.StringWriter;
@@ -89,26 +88,70 @@ public class TitlePageAutofitTemplateTest
 		assertEquals("font-size:1.1em;", titleBlockFontSize(renderHorizontal("タイトル", 121, null)));
 	}
 
-	//---------- title_horizontal.vm: 45文字以下は現行レイアウト維持 ----------
+	//---------- title_horizontal.vm: 45文字以下は余白の段を残す ----------
 
 	@Test
-	public void shortTitleKeepsLegacyLayout()
+	public void shortTitleKeepsSpacers()
 	{
 		String out = renderHorizontal("短いタイトル", 20, null);
-		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; height:50%; text-align:center; }"));
+		assertEquals("padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 		//SERIES/ORGTITLE/SUBTITLE/SUBORGTITLE なし → space 4個
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
+	}
+
+	/** 題名と著者の段は高さを固定しない（外側の枠は固定のまま。題名の段の min-height:50% の基準になる）。固定すると、スマホで文字を大きくしたときに題名が段からあふれて、
+	 * 著者と重なる（Apple Books）か、著者だけ次のページへ送られる（Kindle）。著者の段は場所も取らない。internal #67 */
+	@Test
+	public void blocksGrowInsteadOfOverflowing()
+	{
+		for (int length : new int[]{10, 28, 30, 31, 45, 46, 90}) {
+			for (String series : new String[]{null, "シリーズ名"}) {
+				String out = renderHorizontal("タイトル", length, series);
+				String label = length + "/" + series + ": " + out;
+				assertEquals(label, "padding:" + (length > 45 ? "5%" : "10%") + " 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
+				assertEquals(label, "padding:0 5%; text-align:center;", rule(out, ".lower"));
+				//外側の枠は高さを固定する（題名の段の min-height:50% の基準になる）
+				assertTrue(label, rule(out, ".outer").contains(" height:98.5%;"));
+				//固定の高さは html と body（ADE のための 98%）と外側の枠だけ
+				assertEquals(label, 3, out.split("(?<![\\w-])height\\s*:", -1).length - 1);
+			}
+		}
+	}
+
+	/** 副題や原題があるときも同じ形（題名の段がいちばん伸びる場合） */
+	@Test
+	public void subtitlesUseTheSameGrowingBlocks()
+	{
+		VelocityContext ctx = new VelocityContext();
+		ctx.put("title", "t");
+		ctx.put("TITLE", "タイトル");
+		ctx.put("TITLE_LENGTH", 28);
+		ctx.put("SUBTITLE", "副題");
+		ctx.put("ORGTITLE", "原題");
+		ctx.put("CREATOR", "テスト著者");
+		StringWriter sw = new StringWriter();
+		engine.getTemplate("title_horizontal.vm", "UTF-8").merge(ctx, sw);
+		String out = sw.toString();
+		assertEquals("padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
+		assertEquals("padding:0 5%; text-align:center;", rule(out, ".lower"));
+	}
+
+	/** CSS の規則の中身（空白をそろえる） */
+	private static String rule(String out, String selector)
+	{
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(selector) + "\\s*\\{([^}]*)\\}").matcher(out);
+		assertTrue(selector + " が無い: " + out, m.find());
+		return m.group(1).replaceAll("\\s+", " ").trim();
 	}
 
 	//---------- title_horizontal.vm: 46文字以上で構造調整 ----------
 
 	@Test
-	public void longTitleDropsSpacersAndFixedHeight()
+	public void longTitleDropsSpacers()
 	{
 		String out = renderHorizontal("長いタイトル", 90, null);
 		//min-height でタイトルが50%を超えた時だけ伸びる(著者名と重ならず、通常は下段位置を維持)
-		assertTrue(out.contains(".upper { padding:5% 5% 0 5%; min-height:50%; text-align:center; }"));
-		assertFalse(out.contains("; height:50%"));
+		assertEquals("padding:5% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 		assertEquals(0, countOf(out, "<div class=\"space\"></div>"));
 	}
 
@@ -132,10 +175,10 @@ public class TitlePageAutofitTemplateTest
 		assertEquals("font-size:2em;", titleBlockFontSize(renderHorizontal(twentyChars, null, null)));
 	}
 
-	/** TITLEもTITLE_LENGTHも無い場合(タイトル無し変換)は旧レイアウトを維持する
+	/** TITLEもTITLE_LENGTHも無い場合(タイトル無し変換)は短い題名と同じ形になる
 	 * (フォールバックの #set が no-op になり null 比較で space が消えるバグの回帰テスト) */
 	@Test
-	public void noTitleKeepsLegacyLayout()
+	public void noTitleUsesTheShortTitleLayout()
 	{
 		VelocityContext ctx = new VelocityContext();
 		ctx.put("title", "t");
@@ -144,7 +187,7 @@ public class TitlePageAutofitTemplateTest
 		engine.getTemplate("title_horizontal.vm", "UTF-8").merge(ctx, sw);
 		String out = sw.toString();
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
-		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; height:50%; text-align:center; }"));
+		assertEquals("padding:10% 5% 0 5%; min-height:50%; text-align:center;", rule(out, ".upper"));
 		assertEquals("font-size:2em;", titleBlockFontSize(out));
 	}
 

@@ -26,12 +26,11 @@ body { margin:0; padding:0; height:98%; text-align:center; line-height: 1.5; }
 border:1px solid black;
 #end
 }
-#if (${TITLE_LENGTH} > 45)
-.upper { padding:5% 5% 0 5%; min-height:50%; text-align:center; }
-#else
-.upper { padding:10% 5% 0 5%; height:50%; text-align:center; }
-#end
-.lower { padding:0 5%; height:25%; text-align:center; }
+## 高さは固定しない（固定すると、スマホで文字を大きくしたとき題名が段からあふれ、著者と重なるか次のページへ送られる。internal #67）
+## 著者の段は題名の段の後ろに置くので、高さを取らなくても収まる間の位置は変わらない
+## 外側の枠の高さは固定のまま（min-height にすると親の高さが決まらず、題名の段の min-height:50% が効かなくなる。Apple Books で確認）
+.upper { padding:#if (${TITLE_LENGTH} > 45)5%#{else}10%#{end} 5% 0 5%; min-height:50%; text-align:center; }
+.lower { padding:0 5%; text-align:center; }
 
 .title, .subtitle, .orgtitle, .suborgtitle, .creator, .subcreator, .series, .publisher { text-align:center; line-height: 1.25; }
 .series { padding-bottom:.5em; font-size:1.25em; }
