@@ -95,9 +95,22 @@ public class TitlePageAutofitTemplateTest
 	public void shortTitleKeepsLegacyLayout()
 	{
 		String out = renderHorizontal("短いタイトル", 20, null);
-		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; height:50%; text-align:center; }"));
+		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; min-height:50%; text-align:center; }"));
 		//SERIES/ORGTITLE/SUBTITLE/SUBORGTITLE なし → space 4個
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
+	}
+
+	/** 上下の段は高さを固定しない。固定すると、スマホで文字を大きくしたときに題名が段からあふれて、
+	 * 著者と重なる（Apple Books）か、著者だけ次のページへ送られる（Kindle）。internal #67 */
+	@Test
+	public void blocksGrowInsteadOfOverflowing()
+	{
+		for (int length : new int[]{10, 28, 45, 90}) {
+			String out = renderHorizontal("タイトル", length, null);
+			assertFalse(length + ": " + out, out.contains("; height:50%"));
+			assertFalse(length + ": " + out, out.contains("; height:25%"));
+			assertTrue(length + ": " + out, out.contains(".lower { padding:0 5%; min-height:25%; text-align:center; }"));
+		}
 	}
 
 	//---------- title_horizontal.vm: 46文字以上で構造調整 ----------
@@ -144,7 +157,7 @@ public class TitlePageAutofitTemplateTest
 		engine.getTemplate("title_horizontal.vm", "UTF-8").merge(ctx, sw);
 		String out = sw.toString();
 		assertEquals(4, countOf(out, "<div class=\"space\"></div>"));
-		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; height:50%; text-align:center; }"));
+		assertTrue(out.contains(".upper { padding:10% 5% 0 5%; min-height:50%; text-align:center; }"));
 		assertEquals("font-size:2em;", titleBlockFontSize(out));
 	}
 
