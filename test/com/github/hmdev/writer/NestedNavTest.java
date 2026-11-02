@@ -211,6 +211,27 @@ public class NestedNavTest {
 		assertTrue(nav, nav.matches("(?s).*第一部</a>\\s*<ol>.*第三章</a></li></ol></li>\\s*</ol>.*"));
 	}
 
+	/** Apple Books の目次パネルが壊れるので、NAV の項目名の &amp; と &lt; だけ全角にする。本文と NCX と .mobi はそのまま */
+	@Test
+	public void ampersandAndLessThanAreFullWidthOnlyInNavLabels() throws Exception {
+		String text = "表題\n著者\n\n［＃中見出し］甲&乙<丙>丁［＃中見出し終わり］\n本文。\n［＃中見出し］次の章［＃中見出し終わり］\n本文。\n";
+		try (ZipFile zf = new ZipFile(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text))) {
+			String nav = new String(zf.getInputStream(zf.getEntry("OPS/xhtml/nav.xhtml")).readAllBytes(), StandardCharsets.UTF_8);
+			assertTrue(nav, nav.contains(">甲＆乙＜丙&gt;丁</a>"));
+			StringBuilder body = new StringBuilder();
+			for (java.util.zip.ZipEntry e : java.util.Collections.list(zf.entries())) {
+				if (e.getName().matches(".*/\\d+\\.xhtml")) body.append(new String(zf.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+			}
+			assertTrue("本文はそのまま:\n" + body, body.toString().contains("甲&amp;乙&lt;丙&gt;丁"));
+		}
+	}
+
+	@Test
+	public void kindleKeepsAmpersandInItsContentsPage() throws Exception {
+		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
+		assertTrue(nav(writeBook(true, true, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲&amp;乙</a>"));
+	}
+
 	@Test
 	public void navStaysFlatWhenTurnedOff() throws Exception {
 		String nav = nav(writeBook(false, false));

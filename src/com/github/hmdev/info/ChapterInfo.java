@@ -61,6 +61,15 @@ public class ChapterInfo
 		return CharUtils.removeTag(chapterName);
 	}
 	
+	/**
+	 * NAV の目次に出す名前。Apple Books は目次の項目名を文字参照を戻したまま別の XHTML に入れるので、
+	 * &amp; と &lt; があると目次パネルに XML のエラーが出てページ番号も消える（2026-11-02 に実測）。全角にして避ける。
+	 */
+	public String getNavLabel()
+	{
+		return this.chapterName.replace("&amp;", "＆").replace("&lt;", "＜");
+	}
+
 	public int getChapterLevel()
 	{
 		return chapterLevel;

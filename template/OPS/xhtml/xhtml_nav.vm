@@ -83,10 +83,15 @@ nav#landmarks { display:none; }
 #if ($chapter.ChapterName)
 #set($hasChapter = true)
 #set($idx=$idx+1)
-#if ($chapter.ChapterId)
-			<li class="chapter" id="toc${idx}"><a href="${chapter.SectionId}.xhtml#${chapter.ChapterId}">${chapter.ChapterName}</a>${chapter.NavAfter}
+#if (${kindle})
+#set($navLabel = $chapter.ChapterName)
 #else
-			<li class="chapter" id="toc${idx}"><a href="${chapter.SectionId}.xhtml">${chapter.ChapterName}</a>${chapter.NavAfter}
+#set($navLabel = $chapter.NavLabel)
+#end
+#if ($chapter.ChapterId)
+			<li class="chapter" id="toc${idx}"><a href="${chapter.SectionId}.xhtml#${chapter.ChapterId}">${navLabel}</a>${chapter.NavAfter}
+#else
+			<li class="chapter" id="toc${idx}"><a href="${chapter.SectionId}.xhtml">${navLabel}</a>${chapter.NavAfter}
 #end
 #end
 #end
