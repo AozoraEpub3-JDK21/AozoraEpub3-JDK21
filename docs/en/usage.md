@@ -654,7 +654,7 @@ The elements for older readers (the cover `<meta>` and `toc.ncx`) are not writte
 LegacyOutput=1
 ```
 
-Output with the extension `.kepub.epub`, `.fxl.kepub.epub` or `.mobi`, and `-device kindle`, always has them, and the Sony Reader presets turn them on. Without them `NcxNest` has no effect, so with `NavNest` also off the book has no hierarchy.
+Output with the extension `.kepub.epub`, `.fxl.kepub.epub` or `.mobi`, and `-device kindle`, always has them, and choosing a Sony Reader preset turns them on. Without them `NcxNest` has no effect, so with `NavNest` also off the book has no hierarchy.
 
 Whether chapter headings nest under their parent chapter is also an ini setting:
 

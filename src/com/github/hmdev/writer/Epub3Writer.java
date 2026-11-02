@@ -126,8 +126,8 @@ public class Epub3Writer
 	final static String TOC_FILE = "toc.ncx";
 	/** tocファイル Velocityテンプレート */
 	final static String TOC_VM = "toc.ncx.vm";
-	/** OPF の manifest が toc.ncx を指す href */
-	private final static java.util.regex.Pattern OPF_NCX_ITEM = java.util.regex.Pattern.compile("href\\s*=\\s*[\"'](?:\\./)?toc\\.ncx[\"']");
+	/** OPF の manifest で toc.ncx を指す item */
+	private final static java.util.regex.Pattern OPF_NCX_ITEM = java.util.regex.Pattern.compile("<item\\b[^>]*\\bhref\\s*=\\s*[\"'](?:\\./)?toc\\.ncx[\"']");
 	
 	/** コピーのみのファイル */
 	final static String[] TEMPLATE_FILE_NAMES_VERTICAL = new String[]{
@@ -219,7 +219,7 @@ public class Epub3Writer
 	/** nav.xhtml階層化 */
 	boolean navNest = false;
 	/** EPUB 2 向けの要素（meta name="cover" と toc.ncx）を出力する */
-	boolean legacyOutput = true;
+	boolean legacyOutput = false;
 	/** 出力の拡張子。呼び出し側が決める（出力先のファイル名は一時ファイルのことがあるので当てにしない） */
 	String outputExt = ".epub";
 	/** toc.ncx階層化 */
@@ -549,17 +549,18 @@ public class Epub3Writer
 	 * 今回の出力に EPUB 2 向けの要素を入れるか。
 	 * Kobo 向け（.kepub.epub）は端末が無く測れていないので、.mobi は目次が NCX 頼りなので、設定によらず入れる。
 	 */
-	static boolean opfListsNcx(String opf)
-	{
-		return OPF_NCX_ITEM.matcher(opf).find();
-	}
-
 	static boolean usesLegacyOutput(boolean legacyOutput, boolean kindle, String outputExt)
 	{
 		String ext = outputExt.trim().toLowerCase(Locale.ROOT);
 		return legacyOutput || kindle || ext.endsWith(".kepub.epub") || ext.startsWith(".mobi");
 	}
 	
+	/** OPF の manifest が toc.ncx を載せているか（差し替えた package.vm でも実体とずれないように、これで決める） */
+	static boolean opfListsNcx(String opf)
+	{
+		return OPF_NCX_ITEM.matcher(opf.replaceAll("(?s)<!--.*?-->", "")).find();
+	}
+
 	public void setTocParam(boolean navNest, boolean ncxNest)
 	{
 		this.navNest = navNest;
@@ -705,7 +706,6 @@ public class Epub3Writer
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
-		//同梱の package.vm の項目と toc.ncx の実体がずれないよう、1 回だけ決める
 		boolean legacyElements = usesLegacyOutput(this.legacyOutput, this.isKindle, this.outputExt);
 		velocityContext.put("legacyOutput", legacyElements);
 		
@@ -972,7 +972,7 @@ public class Epub3Writer
 		velocityContext.put("hasContentImage", hasContentImage);
 		velocityContext.put("stillImagesOnly", stillImagesOnly);
 		velocityContext.put("vecGaijiInfo", this.vecGaijiInfo);
-		//差し替えた package.vm が toc.ncx を載せていたら実体も書くので、先に文字列へ作る
+		//toc.ncx の実体は OPF の項目に合わせて書くので、先に文字列へ作る
 		java.io.StringWriter opf = new java.io.StringWriter();
 		BufferedWriter opfOut = new BufferedWriter(opf);
 		mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, opfOut);
@@ -1095,7 +1095,7 @@ public class Epub3Writer
 		
 		//tocファイル
 		velocityContext.put("chapters", chapterInfos);
-		if (legacyElements || opfListsNcx(opf.toString())) {
+		if (opfListsNcx(opf.toString())) {
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+TOC_FILE));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
 			mergeTemplate(templatePath+OPS_PATH+TOC_VM, bw);

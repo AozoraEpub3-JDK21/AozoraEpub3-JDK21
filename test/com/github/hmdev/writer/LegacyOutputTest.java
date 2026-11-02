@@ -56,6 +56,17 @@ public class LegacyOutputTest {
 		writer.setIsKindle(kindle);
 	}
 
+	private static void copyTemplates(Path templates) throws Exception {
+		Path source = VelocityTestUtils.templateDir();
+		try (java.util.stream.Stream<Path> tree = Files.walk(source)) {
+			for (Path from : (Iterable<Path>) tree::iterator) {
+				Path to = templates.resolve(source.relativize(from).toString());
+				if (Files.isDirectory(from)) Files.createDirectories(to);
+				else Files.copy(from, to);
+			}
+		}
+	}
+
 	private static org.apache.velocity.app.VelocityEngine engineFor(Path templates) {
 		Properties vp = new Properties();
 		vp.setProperty("resource.loaders", "file");
@@ -214,14 +225,7 @@ public class LegacyOutputTest {
 	@Test
 	public void customTemplateThatListsNcxStillGetsTheFile() throws Exception {
 		Path templates = tempFolder.newFolder("template").toPath();
-		Path source = VelocityTestUtils.templateDir();
-		try (java.util.stream.Stream<Path> tree = Files.walk(source)) {
-			for (Path from : (Iterable<Path>) tree::iterator) {
-				Path to = templates.resolve(source.relativize(from).toString());
-				if (Files.isDirectory(from)) Files.createDirectories(to);
-				else Files.copy(from, to);
-			}
-		}
+		copyTemplates(templates);
 		Path packageVm = templates.resolve(Paths.get("OPS", "package.vm"));
 		String vm = new String(Files.readAllBytes(packageVm), StandardCharsets.UTF_8);
 		String old = vm.replaceAll("#if \\(\\$\\{legacyOutput\\}\\) toc=\"ncx\"#end", " toc=\"ncx\"")
@@ -239,7 +243,24 @@ public class LegacyOutputTest {
 	}
 
 	@Test
+	public void customTemplateWithoutNcxGetsNoFileOnKobo() throws Exception {
+		Path templates = tempFolder.newFolder("template").toPath();
+		copyTemplates(templates);
+		Path packageVm = templates.resolve(Paths.get("OPS", "package.vm"));
+		String vm = new String(Files.readAllBytes(packageVm), StandardCharsets.UTF_8);
+		String stripped = vm.replaceAll("\\R\\s*<item href=\"toc\\.ncx\"[^\\r\\n]*", "").replaceAll("#if \\(\\$\\{legacyOutput\\}\\) toc=\"ncx\"#end", "");
+		assertFalse("書き換えられていない", stripped.contains("toc.ncx"));
+		Files.write(packageVm, stripped.getBytes(StandardCharsets.UTF_8));
+		templateOverride = templates;
+		try (ZipFile zf = new ZipFile(textBook(false, false, ".kepub.epub"))) {
+			assertTrue("OPF にない toc.ncx を書いた", zf.getEntry("OPS/toc.ncx") == null);
+		}
+	}
+
+	@Test
 	public void recognizesTheNcxItemInTheOpf() {
+		assertFalse(Epub3Writer.opfListsNcx("<!-- <item href=\"toc.ncx\" id=\"ncx\"/> -->"));
+		assertFalse(Epub3Writer.opfListsNcx("<reference href=\"toc.ncx\" type=\"toc\"/>"));
 		assertTrue(Epub3Writer.opfListsNcx("<item href=\"toc.ncx\" id=\"ncx\"/>"));
 		assertTrue(Epub3Writer.opfListsNcx("<item id='ncx' href = './toc.ncx'/>"));
 		assertFalse(Epub3Writer.opfListsNcx("<item href=\"xhtml/nav.xhtml\" properties=\"nav\"/>"));

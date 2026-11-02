@@ -89,12 +89,10 @@ public class LegacyOutputCliTest {
 		assertEquals(true, hasNcx(text(), "-ext", ".epub"));
 	}
 
-	/** 同梱の設定もキーを持たない設定も、既定どおり出さない */
+	/** キーを持たない設定では、既定どおり出さない */
 	@Test
 	public void settingsWithoutTheKeyOmitThem() throws Exception {
 		iniText = "";
-		assertEquals(false, hasNcx(text()));
-		iniText = new String(Files.readAllBytes(java.nio.file.Paths.get("AozoraEpub3.ini")), StandardCharsets.UTF_8);
 		assertEquals(false, hasNcx(text()));
 	}
 

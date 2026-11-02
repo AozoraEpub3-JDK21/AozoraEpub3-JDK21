@@ -49,6 +49,7 @@ public class WebAozoraConverterChukiEscapeTest {
 	private Object savedBookTitle;
 	private Method printEpisode;
 	private String toc;
+	private String nav;
 
 	@Before
 	public void setUp() throws Exception {
@@ -213,16 +214,18 @@ public class WebAozoraConverterChukiEscapeTest {
 		assertTrue("柱が閉じていない・作品名が欠けた:\n" + xhtml, xhtml.contains("<div class=\"running_head yoko\">作［＃品</div>"));
 		assertTrue("章題の「［＃」が消えた:\n" + xhtml, xhtml.contains("章［＃題"));
 		assertTrue("返り点が注記として効いていない:\n" + xhtml, xhtml.contains("学<span class=\"sub\">二</span>而時習<span class=\"sub\">一</span>之"));
-		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains(">章［＃題</a>"));
+		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains("<text>章［＃題</text>"));
+		assertTrue("NAV の章の名前の「［＃」が消えた:\n" + nav, nav.contains(">章［＃題</a>"));
 	}
 
-	/** AozoraEpub3 で変換し、表題ページと目次を除く XHTML をつなげて返す。nav.xhtml は toc に入れる */
+	/** AozoraEpub3 で変換し、表題ページと目次を除く XHTML をつなげて返す。toc.ncx は toc に、nav.xhtml は nav に入れる */
 	private String convert(String text) throws Exception {
 		File src = tempFolder.newFolder();
 		File dst = tempFolder.newFolder();
 		File txt = new File(src, "book.txt");
 		Files.write(txt.toPath(), text.getBytes(StandardCharsets.UTF_8));
 		File ini = tempFolder.newFile();
+		Files.write(ini.toPath(), "LegacyOutput=1\n".getBytes(StandardCharsets.UTF_8));
 		String orgClassPath = System.getProperty("java.class.path");
 		PrintStream orgOut = System.out;
 		try {
@@ -239,7 +242,8 @@ public class WebAozoraConverterChukiEscapeTest {
 			for (ZipEntry e : java.util.Collections.list(zip.entries())) {
 				String name = e.getName();
 				String body = new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8);
-				if (name.endsWith("nav.xhtml")) toc = body;
+				if (name.endsWith("toc.ncx")) toc = body;
+				if (name.endsWith("nav.xhtml")) nav = body;
 				if (name.endsWith(".xhtml") && !name.endsWith("nav.xhtml") && !name.endsWith("title.xhtml")) xhtml.append(body);
 			}
 		}

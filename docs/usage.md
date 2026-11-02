@@ -246,7 +246,7 @@ PageBreakChapterSize=200
 LegacyOutput=1
 ```
 
-出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときと `-device kindle` のときは、この設定によらず出します。Sony Reader のプリセットではオンにします。出さないときは `NcxNest` が効かないので、`NavNest` もオフだと階層がなくなります。
+出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときと `-device kindle` のときは、この設定によらず出します。Sony Reader のプリセットを選ぶとオンになります。出さないときは `NcxNest` が効かないので、`NavNest` もオフだと階層がなくなります。
 
 目次を入れ子にするかどうか:
 
