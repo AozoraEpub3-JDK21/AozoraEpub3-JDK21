@@ -68,7 +68,7 @@ EPUB Reading Systems 3.4 の草案では、**リーダーは、3.4 に準拠し�
 | そのほかの OPF 2 の `<meta>`（`primary-writing-mode`、画像だけの本の `original-resolution` など） | legacy | outdated | 出す | 出す | 画像だけの本で、`viewport` がない状態で外すと Kindle Previewer で右端が切れた（`viewport` があると切れない）。どの `meta` が原因かは切り分けていないので残す。文字の本では確かめていない |
 | `-epub-text-combine`（縦中横） | deprecated | deprecated | 出す | 出す | Google Play ブックスはこれがないと縦中横にならない。標準の `text-combine-upright` も併記 |
 | `-epub-writing-mode`、`-epub-text-orientation`、`-epub-text-emphasis-*`、`-epub-line-break`、`-epub-word-break` | 3.3 で残された接頭辞付きの指定 | outdated | 出す | 出す | 古いリーダーのために残す。接頭辞のない標準の指定も併記。接頭辞を外した試作でも、傍点・正立・ルビの表示は 4 つのリーダーとも変わらなかった |
-| `rendition:spread`（画像だけの本） | 通常 | outdated | 出す（`landscape`） | 出す | 見開きの指定として残す。外した場合は確かめていない |
+| `rendition:spread`（画像だけの本） | 通常 | outdated | 出す（`landscape`） | 出す | 画像だけの本で外しても、Apple Books と Google Play ブックスの表示は変わらなかった。見開きの指定として残す |
 
 次の要素は出力に使っていません: `rendition:viewport`（deprecated）、`bindings`・`switch`・`epub:trigger`（deprecated）、`collection`（3.4 草案で outdated）、フォントの難読化（同）。
 
@@ -100,6 +100,34 @@ EPUB Reading Systems 3.4 の草案では、**リーダーは、3.4 に準拠し�
 | 目次の項目名に `&`・`<`・`]]>` がある | Apple Books の目次パネルにエラーが出て、ページ番号も消えた（EPUB の検査は通る）。v1.8.0-jdk21 では、目次の項目名にあるこれらの文字だけ全角にしている |
 | 目次の階層を Kindle Previewer で開く | 入れ子の項目は閉じた状態で表示される |
 | 画像だけの本で、ページごとに `viewport` の大きさが違う | Apple Books で、先頭と形の違うページが切れた。本全体で同じ大きさにすると、4 つとも切れなくなった |
+
+### 見た目の比較
+
+いずれも、このアプリの試験用に作った本で撮影しました。
+
+![Apple Books の目次パネル。左は平らな目次、右は「第一部」の下に章が入った階層つきの目次](assets/epub33/toc-flat-nested.png)
+
+*Apple Books の目次パネル。左は v1.7.6 までの出力（平ら）、右は NAV に階層を出した出力。*
+
+![Google Play ブックスの縦書き本文。左は 123・AB・!! が 1 文字分に収まり、右は横倒しのまま並んでいる](assets/epub33/tcy-play.png)
+
+*Google Play ブックスの縦中横。左は `-epub-text-combine` あり、右は標準の `text-combine-upright` だけ。右では「123」「AB」「!!」が 1 文字分に収まらない。*
+
+![Google Play ブックスで本を開いたところ。左は表紙、右は本文から始まっている](assets/epub33/guide-play.png)
+
+*Google Play ブックスで本を開いた位置。左は `<guide>` なし（表紙から開く）、右は `<guide>` あり（本文から開く）。*
+
+![Apple Books の目次パネル。左はエラーの表示が出て項目が途中で止まり、右はすべての項目とページ番号が出ている](assets/epub33/toc-ampersand-books.png)
+
+*Apple Books の目次パネル。左は項目名に `&` がある本、右は同じ文字を全角の `＆` にした本。左ではエラーが出て、項目もページ番号も途中から表示されない。*
+
+![Apple Books の画像だけの本。左はページの上下が切れ、右はページ全体が見えている](assets/epub33/image-only-books.png)
+
+*Apple Books の画像だけの本（見開き）。左は v1.7.6 の出力で上下が切れ、右は `viewport` を入れた出力。*
+
+![Google Play ブックスの画像だけの本。左は真っ黒で何も出ず、右は絵が出ている](assets/epub33/image-only-play.png)
+
+*Google Play ブックスの画像だけの本。左は v1.7.6 の出力で絵が出ず、右は `viewport` を入れた出力。*
 
 ### 確かめていないもの
 

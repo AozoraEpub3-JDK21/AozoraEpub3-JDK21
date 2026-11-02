@@ -65,7 +65,7 @@ The EPUB Reading Systems 3.4 draft says that **reading systems must not support 
 | Other OPF 2 `<meta>` (`primary-writing-mode`, `original-resolution` in image-only books, and others) | legacy | outdated | written | written | In an image-only book without `viewport`, removing them cut off the right edge in Kindle Previewer (not with `viewport`). Which `meta` causes it was not narrowed down, so they stay. Not checked for text books |
 | `-epub-text-combine` (tate-chu-yoko) | deprecated | deprecated | written | written | Google Play Books does not set tate-chu-yoko without it. The standard `text-combine-upright` is written as well |
 | `-epub-writing-mode`, `-epub-text-orientation`, `-epub-text-emphasis-*`, `-epub-line-break`, `-epub-word-break` | prefixed properties kept in 3.3 | outdated | written | written | Kept for older readers, with the unprefixed standard properties as well. In a test without the prefixes, emphasis dots, upright text and ruby looked the same in all four readers |
-| `rendition:spread` (image-only books) | normal | outdated | written (`landscape`) | written | Kept as the spread setting. Removing it was not checked |
+| `rendition:spread` (image-only books) | normal | outdated | written (`landscape`) | written | Removing it from an image-only book changed nothing in Apple Books or Google Play Books. Kept as the spread setting |
 
 Not used in the output: `rendition:viewport` (deprecated), `bindings`, `switch` and `epub:trigger` (deprecated), `collection` (outdated in the 3.4 draft), and font obfuscation (the same).
 
@@ -97,6 +97,34 @@ Measured in November 2026 in these readers. Readers can change their behaviour i
 | `&`, `<` or `]]>` in a contents entry | Apple Books shows an error in its contents panel and the page numbers disappear (the EPUB checker passes). v1.8.0-jdk21 makes those characters full-width in contents entries only |
 | Nested contents in Kindle Previewer | Nested entries are shown closed |
 | Image-only book with a different `viewport` size per page | Apple Books cut off pages with a different shape from the first page. With one size for the whole book, none of the four cut anything off |
+
+### What it looks like
+
+All screenshots are of books made for testing this app.
+
+![Apple Books contents panel: flat on the left, nested with chapters under Part One on the right](../assets/epub33/toc-flat-nested.png)
+
+*Apple Books contents panel. Left: output up to v1.7.6 (flat). Right: output with the hierarchy in the NAV.*
+
+![Vertical text in Google Play Books: on the left 123, AB and !! fit in one character cell, on the right they lie sideways](../assets/epub33/tcy-play.png)
+
+*Tate-chu-yoko in Google Play Books. Left: with `-epub-text-combine`. Right: only the standard `text-combine-upright`. On the right, "123", "AB" and "!!" do not fit in one character cell.*
+
+![A book opened in Google Play Books: the cover on the left, the body on the right](../assets/epub33/guide-play.png)
+
+*Where Google Play Books opens a book. Left: without `<guide>` (opens at the cover). Right: with `<guide>` (opens at the body).*
+
+![Apple Books contents panel: an error message and entries that stop early on the left, all entries and page numbers on the right](../assets/epub33/toc-ampersand-books.png)
+
+*Apple Books contents panel. Left: a book with `&` in an entry. Right: the same book with the full-width `＆`. On the left an error is shown, and entries and page numbers stop part way.*
+
+![An image-only book in Apple Books: top and bottom cut off on the left, the whole page on the right](../assets/epub33/image-only-books.png)
+
+*An image-only book in Apple Books (two-page spread). Left: v1.7.6 output, cut off at the top and bottom. Right: output with `viewport`.*
+
+![An image-only book in Google Play Books: black with nothing shown on the left, the picture on the right](../assets/epub33/image-only-play.png)
+
+*An image-only book in Google Play Books. Left: v1.7.6 output, no picture. Right: output with `viewport`.*
 
 ### Not checked
 
