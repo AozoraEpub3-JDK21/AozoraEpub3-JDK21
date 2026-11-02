@@ -89,7 +89,7 @@ EPUB Reading Systems 3.4 の草案では、**リーダーは、3.4 に準拠し�
 - Apple Books（macOS）
 - Google Play ブックス 2026.10.2.1（Android）
 - Thorium 3.5.1（Windows）
-- Kindle Previewer 4.0.3.0（Windows。Tablet・Phone・E-reader）
+- Kindle Previewer 4.0.3.0（Windows）の Tablet・Phone・E-reader
 
 | 内容 | 結果 |
 |---|---|
@@ -132,7 +132,6 @@ EPUB Reading Systems 3.4 の草案では、**リーダーは、3.4 に準拠し�
 ### 確かめていないもの
 
 - Kobo の端末（Kobo 向けの出力は従来の形のままです）
-- Kindle の実機と Send to Kindle
 - iPhone・iPad の Apple Books
 - 上記以外のリーダー
 
