@@ -307,10 +307,10 @@ epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で�
 - [x] 互換設定のオンとオフの本（文字と画像、master 4e0cdbc3）を 4 リーダーで比べる（2026-11-02）。サムネイルか Cover、開始位置、目次、先頭ページに、オフによる差は見つからなかった。Kindle Previewer の Book Information の NCX は `toc.ncx` が無くても Specified と出るので、有無の判断には使えない。Kobo と実機 Kindle は確かめていない
 
 **ゲート条件**:
-- [ ] `gradlew test` PASS
-- [ ] CI の EPUB 6 本が epubcheck で 0 errors / 0 warnings のまま
-- [ ] 互換設定を有効にした出力に S-1〜S-2 の要素が従来どおり入ること（`<meta name="cover">` は表紙ページを入れたとき）
-- [ ] 既定の出力に `<guide>` と `-epub-text-combine` が残ること（`<guide>` は表紙ページか目次ページを入れたとき）
+- [x] `gradlew test` PASS
+- [x] CI の EPUB 6 本が epubcheck で 0 errors / 0 warnings のまま
+- [x] 互換設定を有効にした出力に S-1〜S-2 の要素が従来どおり入ること（`<meta name="cover">` は表紙ページを入れたとき）
+- [x] 既定の出力に `<guide>` と `-epub-text-combine` が残ること（`<guide>` は表紙ページか目次ページを入れたとき）
 
 **注意点**:
 - `<package version="...">` の値は触らない。INI で上書き可能化する案はステージ S/S+ 全体で**採用しない**
