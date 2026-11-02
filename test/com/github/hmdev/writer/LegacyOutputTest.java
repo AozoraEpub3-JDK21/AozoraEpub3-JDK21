@@ -45,12 +45,34 @@ public class LegacyOutputTest {
 	@Rule
 	public TemporaryFolder tempFolder = new TemporaryFolder();
 
+	/** null なら同梱のテンプレートを使う */
+	private Path templateOverride;
+
 	private static void setParams(Epub3Writer writer, boolean legacy, boolean kindle) {
 		writer.setImageParam(600, 800, 600, 800, 0, 0, 480, 640, 600, SectionInfo.IMAGE_SIZE_TYPE_ASPECT, true, false, 0,
 			1.0f, 0, 0, 0, 0.8f, 1.0f, 0, 0, 100, 0f, 0, 0.03f);
 		writer.setStyles(new String[]{"0","0","0","0"}, new String[]{"0","0","0","0"}, 1.6f, 100, true, true);
 		writer.setLegacyOutput(legacy);
 		writer.setIsKindle(kindle);
+	}
+
+	private static void copyTemplates(Path templates) throws Exception {
+		Path source = VelocityTestUtils.templateDir();
+		try (java.util.stream.Stream<Path> tree = Files.walk(source)) {
+			for (Path from : (Iterable<Path>) tree::iterator) {
+				Path to = templates.resolve(source.relativize(from).toString());
+				if (Files.isDirectory(from)) Files.createDirectories(to);
+				else Files.copy(from, to);
+			}
+		}
+	}
+
+	private static org.apache.velocity.app.VelocityEngine engineFor(Path templates) {
+		Properties vp = new Properties();
+		vp.setProperty("resource.loaders", "file");
+		vp.setProperty("resource.loader.file.class", "org.apache.velocity.runtime.resource.loader.FileResourceLoader");
+		vp.setProperty("resource.loader.file.path", templates.toString());
+		return new org.apache.velocity.app.VelocityEngine(vp);
 	}
 
 	private File textBook(boolean legacy, boolean kindle, String outputExt) throws Exception {
@@ -61,7 +83,9 @@ public class LegacyOutputTest {
 	private File textBook(boolean legacy, boolean kindle, String outputExt, boolean vertical) throws Exception {
 		Path txt = tempFolder.newFile().toPath();
 		Files.write(txt, "表題\n著者\n\n本文です。\n".getBytes(StandardCharsets.UTF_8));
-		Epub3Writer writer = new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""));
+		Epub3Writer writer = templateOverride == null
+			? new Epub3Writer(VelocityTestUtils.templateDir() + File.separator, VelocityTestUtils.engineForTemplateSubpath(""))
+			: new Epub3Writer(templateOverride + File.separator, engineFor(templateOverride));
 		setParams(writer, legacy, kindle);
 		writer.setOutputExt(outputExt);
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
@@ -177,8 +201,70 @@ public class LegacyOutputTest {
 	}
 
 	@Test
-	public void defaultKeepsThemForNow() {
-		assertTrue(SettingDefaults.getBoolean(new Properties(), "LegacyOutput"));
+	public void defaultOmitsThem() {
+		assertFalse(SettingDefaults.getBoolean(new Properties(), "LegacyOutput"));
+	}
+
+	/** Sony Reader は toc.ncx を読むので、そのプリセットではオンにする。ほかのプリセットはキーを持たず、切り替えると既定へ戻る */
+	@Test
+	public void onlySonyReaderPresetsTurnThemOn() throws Exception {
+		Path root = VelocityTestUtils.templateDir().getParent();
+		try (java.util.stream.Stream<Path> presets = Files.list(root.resolve("presets"))) {
+			for (Path path : (Iterable<Path>) presets.filter(p -> p.toString().endsWith(".ini"))::iterator) {
+				Properties preset = new Properties();
+				try (InputStream in = Files.newInputStream(path)) {
+					preset.load(in);
+				}
+				boolean sonyReader = path.getFileName().toString().startsWith("reader");
+				assertEquals(path.toString(), sonyReader ? "1" : null, preset.getProperty("LegacyOutput"));
+			}
+		}
+	}
+
+	/** 前の版の package.vm を使い続けている場合。OPF が指す toc.ncx を書かないと、本が壊れる */
+	@Test
+	public void customTemplateThatListsNcxStillGetsTheFile() throws Exception {
+		Path templates = tempFolder.newFolder("template").toPath();
+		copyTemplates(templates);
+		Path packageVm = templates.resolve(Paths.get("OPS", "package.vm"));
+		String vm = new String(Files.readAllBytes(packageVm), StandardCharsets.UTF_8);
+		String old = vm.replaceAll("#if \\(\\$\\{legacyOutput\\}\\) toc=\"ncx\"#end", " toc=\"ncx\"")
+			.replaceAll("#if \\(\\$\\{legacyOutput\\}\\)(\\R\\s*<item href=\"toc\\.ncx\"[^\\r\\n]*\\R)#end", "$1");
+		old = old.replace(" && ${legacyOutput}", "");
+		assertFalse("書き換えられていない:\n" + old, old.contains("legacyOutput"));
+		Files.write(packageVm, old.getBytes(StandardCharsets.UTF_8));
+		templateOverride = templates;
+		File epub = textBook(false, false, ".epub");
+		try (ZipFile zf = new ZipFile(epub)) {
+			String opf = new String(zf.getInputStream(zf.getEntry("OPS/package.opf")).readAllBytes(), StandardCharsets.UTF_8);
+			assertTrue(opf, opf.contains("href=\"toc.ncx\""));
+			assertTrue("OPF が指す toc.ncx が無い", zf.getEntry("OPS/toc.ncx") != null);
+		}
+	}
+
+	@Test
+	public void customTemplateWithoutNcxGetsNoFileOnKobo() throws Exception {
+		Path templates = tempFolder.newFolder("template").toPath();
+		copyTemplates(templates);
+		Path packageVm = templates.resolve(Paths.get("OPS", "package.vm"));
+		String vm = new String(Files.readAllBytes(packageVm), StandardCharsets.UTF_8);
+		String stripped = vm.replaceAll("\\R\\s*<item href=\"toc\\.ncx\"[^\\r\\n]*", "").replaceAll("#if \\(\\$\\{legacyOutput\\}\\) toc=\"ncx\"#end", "");
+		assertFalse("書き換えられていない", stripped.contains("toc.ncx"));
+		Files.write(packageVm, stripped.getBytes(StandardCharsets.UTF_8));
+		templateOverride = templates;
+		try (ZipFile zf = new ZipFile(textBook(false, false, ".kepub.epub"))) {
+			assertTrue("OPF にない toc.ncx を書いた", zf.getEntry("OPS/toc.ncx") == null);
+		}
+	}
+
+	@Test
+	public void recognizesTheNcxItemInTheOpf() {
+		assertFalse(Epub3Writer.opfListsNcx("<!-- <item href=\"toc.ncx\" id=\"ncx\"/> -->"));
+		assertFalse(Epub3Writer.opfListsNcx("<reference href=\"toc.ncx\" type=\"toc\"/>"));
+		assertTrue(Epub3Writer.opfListsNcx("<item href=\"toc.ncx\" id=\"ncx\"/>"));
+		assertTrue(Epub3Writer.opfListsNcx("<item id='ncx' href = './toc.ncx'/>"));
+		assertFalse(Epub3Writer.opfListsNcx("<item href=\"xhtml/nav.xhtml\" properties=\"nav\"/>"));
+		assertFalse(Epub3Writer.opfListsNcx("<item href=\"xhtml/toc.ncx.xhtml\"/>"));
 	}
 
 	/** INI の値が文字の本と画像の本の両方の writer に届く */

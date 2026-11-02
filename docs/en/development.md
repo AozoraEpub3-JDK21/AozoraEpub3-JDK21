@@ -317,7 +317,7 @@ String opf = out.toString();
 | Template | Purpose | Output File |
 |----------|---------|-------------|
 | `package.vm` | EPUB metadata/manifest | `package.opf` |
-| `toc.ncx.vm` | Table of contents (NCX) | `toc.ncx` |
+| `toc.ncx.vm` | Table of contents (NCX). Used when `LegacyOutput` is on and for Kobo and `.mobi` output | `toc.ncx` |
 | `css/vertical_text.vm` | Vertical text CSS | `vertical_text.css` |
 | `css/horizontal_text.vm` | Horizontal text CSS | `horizontal_text.css` |
 | `xhtml/*.vm` | Content XHTML | `*.xhtml` |

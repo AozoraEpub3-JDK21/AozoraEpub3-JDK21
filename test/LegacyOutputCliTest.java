@@ -38,9 +38,11 @@ public class LegacyOutputCliTest {
 		System.setProperty("java.class.path", classPath);
 	}
 
+	private String iniText = "LegacyOutput=\n";
+
 	private File ini() throws Exception {
 		File ini = File.createTempFile("off", ".ini", tempFolder.getRoot());
-		Files.write(ini.toPath(), "LegacyOutput=\n".getBytes(StandardCharsets.UTF_8));
+		Files.write(ini.toPath(), iniText.getBytes(StandardCharsets.UTF_8));
 		return ini;
 	}
 
@@ -83,6 +85,15 @@ public class LegacyOutputCliTest {
 	@Test
 	public void plainEpubFollowsTheSetting() throws Exception {
 		assertEquals(false, hasNcx(text(), "-ext", ".epub"));
+		iniText = "LegacyOutput=1\n";
+		assertEquals(true, hasNcx(text(), "-ext", ".epub"));
+	}
+
+	/** キーを持たない設定では、既定どおり出さない */
+	@Test
+	public void settingsWithoutTheKeyOmitThem() throws Exception {
+		iniText = "";
+		assertEquals(false, hasNcx(text()));
 	}
 
 	@Test
