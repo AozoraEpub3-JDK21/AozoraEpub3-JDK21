@@ -512,18 +512,28 @@ public class Epub3Writer
 
 	/**
 	 * 目次での深さ。改ページの後の本文の行はレベルが大見出しと同じだが、本の構造ではないので親にしない。
-	 * 前の項目と次の見出しの深いほうに置く。
+	 * 形から自動で拾った行も、後ろに注記の見出しがある本では親にしない（前書きの「第三部」や本文の「第三話」の下に、後の話がみな入る）。
+	 * 注記の見出しが無い本では、自動で拾った行の階層が本の構造なので残す。
+	 * 親にしない行は、前の項目と次の見出しの深いほうに置く。
 	 */
 	private static int[] navLevels(List<ChapterInfo> chapterInfos)
 	{
 		int[] levels = new int[chapterInfos.size()];
+		//後ろから見て、注記の見出しがこの先にあるか
+		boolean[] notParent = new boolean[levels.length];
+		boolean headingLater = false;
+		for (int i = levels.length-1; i >= 0; i--) {
+			ChapterInfo chapterInfo = chapterInfos.get(i);
+			notParent[i] = chapterInfo.pageBreakLine || (chapterInfo.autoLine && headingLater);
+			if (!chapterInfo.pageBreakLine && !chapterInfo.autoLine) headingLater = true;
+		}
 		for (int i = 0; i < levels.length; i++) {
 			ChapterInfo chapterInfo = chapterInfos.get(i);
 			levels[i] = chapterInfo.getChapterLevel();
-			if (!chapterInfo.pageBreakLine) continue;
+			if (!notParent[i]) continue;
 			int level = i > 0 ? levels[i-1] : levels[i];
 			for (int j = i+1; j < levels.length; j++) {
-				if (!chapterInfos.get(j).pageBreakLine) {
+				if (!notParent[j]) {
 					level = Math.max(level, chapterInfos.get(j).getChapterLevel());
 					break;
 				}
@@ -1522,14 +1532,18 @@ public class Epub3Writer
 	/** 章を追加 */
 	public void addChapter(String chapterId, String name, int chapterLevel)
 	{
-		addChapter(chapterId, name, chapterLevel, false);
+		addChapter(chapterId, name, chapterLevel, false, false);
 	}
-	/** @param pageBreakLine 見出しではなく、改ページの後の本文の行から作った項目なら true */
-	public void addChapter(String chapterId, String name, int chapterLevel, boolean pageBreakLine)
+	/**
+	 * @param pageBreakLine 見出しではなく、改ページの後の本文の行から作った項目なら true
+	 * @param autoLine 注記ではなく、章の名前や数字の形から自動で拾った項目なら true
+	 */
+	public void addChapter(String chapterId, String name, int chapterLevel, boolean pageBreakLine, boolean autoLine)
 	{
 		SectionInfo sectionInfo = this.sectionInfos.get(this.sectionInfos.size() - 1);
 		ChapterInfo chapterInfo = new ChapterInfo(sectionInfo.sectionId, chapterId, name, chapterLevel);
 		chapterInfo.pageBreakLine = pageBreakLine;
+		chapterInfo.autoLine = autoLine;
 		this.chapterInfos.add(chapterInfo);
 	}
 	/** 追加済の章の名称を変更 */

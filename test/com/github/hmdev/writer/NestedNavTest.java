@@ -103,6 +103,49 @@ public class NestedNavTest {
 			nestWithPageBreakLines(new int[]{0, 0, 1}, new boolean[]{false, true, false}));
 	}
 
+	private static String nestWithAutoLines(int[] levels, boolean[] autoLines) {
+		List<ChapterInfo> chapters = new ArrayList<>();
+		for (int i = 0; i < levels.length; i++) {
+			ChapterInfo chapter = new ChapterInfo("s", null, "c" + i, levels[i]);
+			chapter.autoLine = autoLines[i];
+			chapters.add(chapter);
+		}
+		Epub3Writer.nestNavChapters(chapters);
+		StringBuilder out = new StringBuilder();
+		for (ChapterInfo chapter : chapters) {
+			out.append(chapter.getChapterName()).append(chapter.getNavAfter().replaceAll("\\s", "")).append(' ');
+		}
+		return out.toString().trim();
+	}
+
+	/** 本文の「第三話」を自動で拾っても、後ろの注記の見出しの親にならない（FC2 の実作品） */
+	@Test
+	public void autoLineIsNotTheParentOfLaterHeadings() {
+		assertEquals("c0</li> c1</li> c2</li> c3</li>",
+			nestWithAutoLines(new int[]{1, 0, 1, 1}, new boolean[]{false, true, false, false}));
+	}
+
+	/** 前書きに自動で拾う行が続いても、後ろの見出しを子に取らない（Arcadia の実作品） */
+	@Test
+	public void consecutiveAutoLinesAreNotParentsEither() {
+		assertEquals("c0</li> c1</li> c2</li> c3</li>",
+			nestWithAutoLines(new int[]{0, 0, 1, 1}, new boolean[]{true, true, false, false}));
+	}
+
+	/** 注記の見出しの無い本では、自動で拾った行の階層が本の構造なので残す */
+	@Test
+	public void autoLinesKeepTheirTreeWithoutHeadings() {
+		assertEquals("c0<ol> c1</li> c2</li></ol></li>",
+			nestWithAutoLines(new int[]{0, 1, 1}, new boolean[]{true, true, true}));
+	}
+
+	/** 注記の見出しどうしの階層は変わらない。最後の見出しの後の自動の行も親にならない位置のまま */
+	@Test
+	public void annotatedHeadingsKeepTheirTree() {
+		assertEquals("c0<ol> c1</li> c2</li></ol></li>",
+			nestWithAutoLines(new int[]{0, 1, 1}, new boolean[]{false, false, true}));
+	}
+
 	/** 見出しの無い本は、本文の行だけが平らに並ぶ */
 	@Test
 	public void onlyPageBreakLinesStayFlat() {
@@ -136,6 +179,9 @@ public class NestedNavTest {
 		return writeBook(navNest, kindle, titleType, text);
 	}
 
+	/** 章の名前の形の行も見出しとして拾う */
+	private boolean autoChapterName = false;
+
 	private File writeBook(boolean navNest, boolean kindle, BookInfo.TitleType titleType, String text) throws Exception {
 		java.nio.file.Path txt = tempFolder.newFile().toPath();
 		Files.write(txt, text.getBytes(StandardCharsets.UTF_8));
@@ -146,7 +192,7 @@ public class NestedNavTest {
 		writer.setIsKindle(kindle);
 		writer.setStyles(new String[]{"0","0","0","0"}, new String[]{"0","0","0","0"}, 1.6f, 100, true, true);
 		AozoraEpub3Converter converter = new AozoraEpub3Converter(writer, VelocityTestUtils.templateDir().getParent() + File.separator);
-		converter.setChapterLevel(64, false, false, true, true, true, true, true, false, false, false, false, false, false, null);
+		converter.setChapterLevel(64, false, false, true, true, true, true, true, false, autoChapterName, false, false, false, false, null);
 		ImageInfoReader imageInfoReader = new ImageInfoReader(true, txt.toFile());
 		BookInfo bookInfo;
 		try (BufferedReader src = Files.newBufferedReader(txt, StandardCharsets.UTF_8)) {
@@ -199,6 +245,18 @@ public class NestedNavTest {
 		String nav = nav(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text));
 		assertEquals(nav, 1, count(nav, "<ol>"));
 		assertTrue(nav, nav.contains("前書きの行。</a></li>"));
+	}
+
+	/** 本文の「第三話」の行を拾っても、後の話がその下に入らない（FC2 の実作品の形） */
+	@Test
+	public void bodyLineThatLooksLikeAChapterDoesNotTakeChapters() throws Exception {
+		autoChapterName = true;
+		String text = "表題\n著者\n\n［＃中見出し］第３話［＃中見出し終わり］\n［＃改ページ］\n第三話\n本文。\n"
+			+ "［＃改ページ］\n［＃中見出し］第４話［＃中見出し終わり］\n本文。\n［＃改ページ］\n［＃中見出し］第５話［＃中見出し終わり］\n本文。\n";
+		String nav = nav(writeBook(true, false, BookInfo.TitleType.TITLE_AUTHOR, text));
+		assertTrue("本文の行も目次に残る:\n" + nav, nav.contains(">第三話</a>"));
+		assertFalse("親にならない:\n" + nav, nav.matches("(?s).*第三話</a>\\s*<ol>.*"));
+		assertTrue("後の話が並ぶ:\n" + nav, nav.contains(">第４話</a></li>") && nav.contains(">第５話</a></li>"));
 	}
 
 	/** 章の間の改ページの後の本文の行が、次の章を子に取らない */

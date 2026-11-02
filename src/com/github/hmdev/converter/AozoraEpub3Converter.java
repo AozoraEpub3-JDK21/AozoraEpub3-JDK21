@@ -4218,7 +4218,8 @@ public class AozoraEpub3Converter
 			if (name != null && name.length() > 0) {
 				//自動抽出で+10されているのは1桁のレベルに戻す
 				boolean pageBreakLine = chapterLineInfo.type == ChapterLineInfo.TYPE_PAGEBREAK;
-				this.writer.addChapter(chapterLineInfo.pageBreakChapter ? null : chapterId, name, chapterLineInfo.level%10, pageBreakLine);
+				boolean autoLine = chapterLineInfo.type >= ChapterLineInfo.TYPE_CHAPTER_NAME;
+				this.writer.addChapter(chapterLineInfo.pageBreakChapter ? null : chapterId, name, chapterLineInfo.level%10, pageBreakLine, autoLine);
 				lastChapterLine = lineNum;
 			}
 		}
