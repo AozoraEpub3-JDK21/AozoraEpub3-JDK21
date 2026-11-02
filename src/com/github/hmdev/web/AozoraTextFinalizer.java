@@ -591,6 +591,7 @@ public class AozoraTextFinalizer {
 	 *
 	 * ［＃改ページ］の直後の行を見出しとして検出し、
 	 * ［＃３字下げ］［＃中見出し］...［＃中見出し終わり］で囲む。
+	 * Web 変換が本の最後に書く「底本：」の行は囲まない（見出しにすると目次の項目になる。変換器は底本：を目次に出さない決まり）。
 	 */
 	private String enchantMidashi(String text) {
 		String[] lines = text.split("\n", -1);
@@ -611,7 +612,7 @@ public class AozoraTextFinalizer {
 			// 改ページ直後の行を見出し化
 			if (nextLineIsMidashi && !line.isEmpty() && !line.startsWith("［＃")) {
 				// 既に見出し注記がある場合はスキップ
-				if (!line.contains("［＃中見出し］") && !line.contains("［＃大見出し］")) {
+				if (!line.contains("［＃中見出し］") && !line.contains("［＃大見出し］") && !line.startsWith("底本：")) {
 					line = "［＃３字下げ］［＃中見出し］" + line + "［＃中見出し終わり］";
 				}
 				nextLineIsMidashi = false;
