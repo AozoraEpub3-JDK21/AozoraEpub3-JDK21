@@ -63,7 +63,7 @@ public class AozoraEpub3HashiraTest {
 		try (ZipFile zip = new ZipFile(dst.listFiles((d, n) -> n.endsWith(".epub"))[0])) {
 			for (ZipEntry e : java.util.Collections.list(zip.entries())) {
 				String body = new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8);
-				if (e.getName().endsWith("toc.ncx")) toc = body;
+				if (e.getName().endsWith("nav.xhtml")) toc = body;
 				else if (e.getName().endsWith(".xhtml") && !e.getName().endsWith("nav.xhtml") && !e.getName().endsWith("title.xhtml")) xhtml.append(body);
 				if (e.getName().endsWith(".xhtml")) pages.add(body);
 				if (e.getName().endsWith("title.xhtml")) titlePage = body;
@@ -81,9 +81,9 @@ public class AozoraEpub3HashiraTest {
 			+ "［＃改ページ］\n［＃中見出し］開幕一軍［＃中見出し終わり］\n本文です。\n");
 		assertTrue("柱が running_head で出ていない:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">作品タイトル</div>"));
 		assertFalse("柱の作品名が段落になった:\n" + allXhtml, allXhtml.contains("<p>作品タイトル</p>"));
-		assertTrue("目次の章のラベルが章の名前でない:\n" + toc, toc.contains("<text>日本編</text>"));
+		assertTrue("目次の章のラベルが章の名前でない:\n" + toc, toc.contains(">日本編</a>"));
 		//本文のページを指す目次の項目（表題ページの項目を除く）に作品名は出ない
-		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<text>([^<]*)</text>\\s*</navLabel>\\s*<content src=\"xhtml/0").matcher(toc);
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<a href=\"0[^\"]*\">([^<]*)</a>").matcher(toc);
 		int found = 0;
 		while (m.find()) { found++; assertFalse("目次のラベルが作品名:\n" + toc, m.group(1).contains("作品タイトル")); }
 		assertTrue("本文のページを指す目次の項目が無い:\n" + toc, found >= 2);
@@ -93,7 +93,7 @@ public class AozoraEpub3HashiraTest {
 	@Test
 	public void aHashiraWithAnnotationsInsideIsNotAChapterName() throws Exception {
 		convert("題\n作者\n\n［＃改ページ］\n［＃ここから柱］作品［＃縦中横］12［＃縦中横終わり］※［＃始め二重山括弧］名［＃ここで柱終わり］\n［＃大見出し］第一章［＃大見出し終わり］\n本文。\n");
-		assertTrue("目次の章のラベルが章の名前でない:\n" + toc, toc.contains("<text>第一章</text>"));
+		assertTrue("目次の章のラベルが章の名前でない:\n" + toc, toc.contains(">第一章</a>"));
 		assertFalse(toc, toc.contains("作品"));
 	}
 
@@ -112,9 +112,9 @@ public class AozoraEpub3HashiraTest {
 	@Test
 	public void aTitleThatLooksLikeAChapterIsNotAnAutoChapter() throws Exception {
 		convert("1 始まりの物語\n作者\n\n［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］1 始まりの物語［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n［＃改ページ］\n本文です。\n", "ChapterNumTitle=1\nChapterNumOnly=1\n");
-		assertFalse("目次に空の項目:\n" + toc, toc.contains("<text></text>"));
-		assertTrue(toc, toc.contains("<text>日本編</text>"));
-		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<text>([^<]*)</text>\\s*</navLabel>\\s*<content src=\"xhtml/0").matcher(toc);
+		assertFalse("目次に空の項目:\n" + toc, toc.contains("\"></a>"));
+		assertTrue(toc, toc.contains(">日本編</a>"));
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<a href=\"0[^\"]*\">([^<]*)</a>").matcher(toc);
 		while (m.find()) assertFalse("柱の作品名が章になった:\n" + toc, m.group(1).contains("始まりの物語"));
 		//章として拾うと、柱の div に章の目印（id）が付く
 		assertTrue("柱が章として拾われた:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">1 始まりの物語</div>"));

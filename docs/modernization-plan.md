@@ -285,7 +285,7 @@ Velocity の `UberspectImpl` は `$obj.Foo` を以下の順で解決する:
 | 3 | S-6 | NAV doc の目次を階層化する（2026-11-01 実装）。それまで階層は `toc.ncx` にしか無く（`navNest` はテンプレートに渡されるが使われていなかった）、仕様上 EPUB 3 リーダーは NCX を使わない。`NavNest` の既定値はオンにそろえた。`.mobi` の出力は変えない。NCX を外した後の GUI の「目次(ncx)階層化」は S-1 で扱う | `template/OPS/xhtml/xhtml_nav.vm`、`Epub3Writer` | epubcheck、リーダーの目次表示 |
 | 4 | S-4 | アクセシビリティメタデータの追加（2026-11-01 実装。`schema:accessMode`、`accessModeSufficient`、`accessibilityFeature`、`accessibilityHazard`、`accessibilitySummary`。`.mobi` には入れない）。確かめられることだけを書き、`dcterms:conformsTo` は適合を確かめられた場合だけ書く。入力の `alt` は変換で捨てているので、持ち越せば `alternativeText` を名乗れる（未着手） | `template/OPS/package.vm`、`Epub3Writer` の context 投入 | epubcheck PASS、Ace by DAISY などで accessibility report |
 | 5 | S-7 | `<meta name="cover">` と NCX を出力する互換設定 `LegacyOutput` を足す（2026-11-01 実装。INI・GUI）。出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`（GUI では Kobo のプリセットもこれ）・`.mobi` のときと `-device kindle` のときは設定によらず出す。この時点では既定を変えない | `template/OPS/package.vm`、`Epub3Writer`、設定、`presets/` | 設定の有無とプリセットごとに OPF を比較 |
-| 6 | S-1〜S-2 | `<meta name="cover">`、`toc` 属性と NCX を既定の出力から外す（互換設定と Kobo 向けの出力では残す）。`<guide>`（S-3）は下記の実測により既定に残す。`.mobi`（Kindle モード）の出力は変えない（nav に `epub:type` が付かないので、NCX を外すと機械可読の目次が無くなる）。画像のみの本で `<meta name="cover">` を外した測定はまだ無いので、切り替える前にリーダーで確かめる | `template/OPS/package.vm`、`toc.ncx.vm` | epubcheck、下記の確認 |
+| 6 | S-1〜S-2 | `<meta name="cover">`、`toc` 属性と NCX を既定の出力から外す（2026-11-02 実装。互換設定、Kobo 向けの出力、Sony Reader のプリセットでは残す）。`<guide>`（S-3）は下記の実測により既定に残す。`.mobi`（Kindle モード）の出力は変えない（nav に `epub:type` が付かないので、NCX を外すと機械可読の目次が無くなる）。差し替えた `package.vm` が `toc.ncx` を載せていれば実体も書く | `template/OPS/package.vm`、`toc.ncx.vm` | epubcheck、下記の確認 |
 
 **実測（2026-11-01、試作の EPUB で比較。Thorium と Kindle Previewer の EPUB は Windows で同じ変換から作ったもので、mac の EPUB とは本文の一部が違う）**:
 
@@ -304,6 +304,7 @@ epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で�
 - [x] Kindle は Kindle Previewer で確認する（Send to Kindle の代わり、2026-11-01 決定）。Tablet・Phone・E-reader とも問題なし。実機での表紙の認識は確かめていない
 - [x] 本プロジェクトのプレビューで目次の階層が保たれること（NCX が無ければ NAV を読み、試作で同じ階層になった。表紙は `cover-image` を先に見る）
 - [x] 画像のみの本の `rendition:spread` と OPF 2 の `meta`（`<meta name="cover">` は S-1 で扱う）は残す。`viewport` と画像の配置を足す（S-8）
+- [x] 互換設定のオンとオフの本（文字と画像、master 4e0cdbc3）を 4 リーダーで比べる（2026-11-02）。サムネイルか Cover、開始位置、目次、先頭ページに、オフによる差は見つからなかった。Kindle Previewer の Book Information の NCX は `toc.ncx` が無くても Specified と出るので、有無の判断には使えない。Kobo と実機 Kindle は確かめていない
 
 **ゲート条件**:
 - [ ] `gradlew test` PASS
@@ -315,7 +316,7 @@ epubcheck は 5.3.0（EPUB 3.3 の規則）と 5.4.0（EPUB 3.4 の規則）で�
 - `<package version="...">` の値は触らない。INI で上書き可能化する案はステージ S/S+ 全体で**採用しない**
 - 各項目は個別 PR にする
 - Kobo は実機で確かめていない（手元に端末がない）ので、Kobo 向けの出力は従来の要素を残す
-- 既定の切り替えは出力が変わるので、リリースノートに互換設定とあわせて書く。テンプレートを差し替えている利用者の出力は変わらない
+- 既定の切り替えは出力が変わるので、リリースノートに互換設定とあわせて書く。`package.vm` を差し替えている場合、`toc.ncx` を載せたテンプレートならその出力は変わらない
 - `file-as` は legacy ではなく EPUB 3.4 草案でも定義されているので、本ステージでは外さない
 
 ### ステージ S+ — EPUB 3.4 移行（**保留**、3.4 が W3C Recommendation 化されたら開始）

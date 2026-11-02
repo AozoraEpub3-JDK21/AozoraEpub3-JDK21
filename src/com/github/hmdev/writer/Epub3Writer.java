@@ -126,6 +126,8 @@ public class Epub3Writer
 	final static String TOC_FILE = "toc.ncx";
 	/** tocファイル Velocityテンプレート */
 	final static String TOC_VM = "toc.ncx.vm";
+	/** OPF の manifest が toc.ncx を指す href */
+	private final static java.util.regex.Pattern OPF_NCX_ITEM = java.util.regex.Pattern.compile("href\\s*=\\s*[\"'](?:\\./)?toc\\.ncx[\"']");
 	
 	/** コピーのみのファイル */
 	final static String[] TEMPLATE_FILE_NAMES_VERTICAL = new String[]{
@@ -547,6 +549,11 @@ public class Epub3Writer
 	 * 今回の出力に EPUB 2 向けの要素を入れるか。
 	 * Kobo 向け（.kepub.epub）は端末が無く測れていないので、.mobi は目次が NCX 頼りなので、設定によらず入れる。
 	 */
+	static boolean opfListsNcx(String opf)
+	{
+		return OPF_NCX_ITEM.matcher(opf).find();
+	}
+
 	static boolean usesLegacyOutput(boolean legacyOutput, boolean kindle, String outputExt)
 	{
 		String ext = outputExt.trim().toLowerCase(Locale.ROOT);
@@ -698,7 +705,7 @@ public class Epub3Writer
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
-		//OPF の項目と toc.ncx の実体がずれないよう、1 回だけ決める
+		//同梱の package.vm の項目と toc.ncx の実体がずれないよう、1 回だけ決める
 		boolean legacyElements = usesLegacyOutput(this.legacyOutput, this.isKindle, this.outputExt);
 		velocityContext.put("legacyOutput", legacyElements);
 		
@@ -965,9 +972,14 @@ public class Epub3Writer
 		velocityContext.put("hasContentImage", hasContentImage);
 		velocityContext.put("stillImagesOnly", stillImagesOnly);
 		velocityContext.put("vecGaijiInfo", this.vecGaijiInfo);
+		//差し替えた package.vm が toc.ncx を載せていたら実体も書くので、先に文字列へ作る
+		java.io.StringWriter opf = new java.io.StringWriter();
+		BufferedWriter opfOut = new BufferedWriter(opf);
+		mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, opfOut);
+		opfOut.flush();
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+PACKAGE_FILE));
 		bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
-		mergeTemplate(templatePath+OPS_PATH+PACKAGE_VM, bw);
+		bw.write(opf.toString());
 		bw.flush();
 		zos.closeArchiveEntry();
 		
@@ -1083,7 +1095,7 @@ public class Epub3Writer
 		
 		//tocファイル
 		velocityContext.put("chapters", chapterInfos);
-		if (legacyElements) {
+		if (legacyElements || opfListsNcx(opf.toString())) {
 			zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+TOC_FILE));
 			bw = new BufferedWriter(new OutputStreamWriter(zos, "UTF-8"));
 			mergeTemplate(templatePath+OPS_PATH+TOC_VM, bw);

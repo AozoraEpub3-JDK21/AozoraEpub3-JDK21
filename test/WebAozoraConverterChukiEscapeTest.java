@@ -213,10 +213,10 @@ public class WebAozoraConverterChukiEscapeTest {
 		assertTrue("柱が閉じていない・作品名が欠けた:\n" + xhtml, xhtml.contains("<div class=\"running_head yoko\">作［＃品</div>"));
 		assertTrue("章題の「［＃」が消えた:\n" + xhtml, xhtml.contains("章［＃題"));
 		assertTrue("返り点が注記として効いていない:\n" + xhtml, xhtml.contains("学<span class=\"sub\">二</span>而時習<span class=\"sub\">一</span>之"));
-		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains("<text>章［＃題</text>"));
+		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains(">章［＃題</a>"));
 	}
 
-	/** AozoraEpub3 で変換し、表題ページと目次を除く XHTML をつなげて返す。toc.ncx は toc に入れる */
+	/** AozoraEpub3 で変換し、表題ページと目次を除く XHTML をつなげて返す。nav.xhtml は toc に入れる */
 	private String convert(String text) throws Exception {
 		File src = tempFolder.newFolder();
 		File dst = tempFolder.newFolder();
@@ -239,7 +239,7 @@ public class WebAozoraConverterChukiEscapeTest {
 			for (ZipEntry e : java.util.Collections.list(zip.entries())) {
 				String name = e.getName();
 				String body = new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8);
-				if (name.endsWith("toc.ncx")) toc = body;
+				if (name.endsWith("nav.xhtml")) toc = body;
 				if (name.endsWith(".xhtml") && !name.endsWith("nav.xhtml") && !name.endsWith("title.xhtml")) xhtml.append(body);
 			}
 		}

@@ -240,13 +240,13 @@ PageBreakChapterSize=200
 `PageBreakChapterSize` より小さい場合、内部でそれらの最大値まで引き上げられます
 （空行・章見出しでの改ページ機会を無条件分割が先取りしないようにするため）。
 
-古いリーダー向けの要素（表紙の `<meta>` と `toc.ncx`）を出すかどうか:
+古いリーダー向けの要素（表紙の `<meta>` と `toc.ncx`）は既定では出しません。古いリーダーで表紙や目次が出ないときは、次のように書くと出します:
 
 ```ini
 LegacyOutput=1
 ```
 
-空にすると出しません（`NcxNest` も効かなくなるので、`NavNest` もオフだと階層がなくなります）。出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときと `-device kindle` のときは、この設定によらず出します。
+出力の拡張子が `.kepub.epub`・`.fxl.kepub.epub`・`.mobi` のときと `-device kindle` のときは、この設定によらず出します。Sony Reader のプリセットではオンにします。出さないときは `NcxNest` が効かないので、`NavNest` もオフだと階層がなくなります。
 
 目次を入れ子にするかどうか:
 

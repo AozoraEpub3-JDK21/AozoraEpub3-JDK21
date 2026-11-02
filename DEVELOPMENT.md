@@ -327,7 +327,7 @@ String opf = out.toString();
 | テンプレート | 用途 | 出力 |
 |-------------|------|------|
 | `package.vm` | EPUB メタデータ・マニフェスト | `package.opf` |
-| `toc.ncx.vm` | 目次（NCX形式） | `toc.ncx` |
+| `toc.ncx.vm` | 目次（NCX形式）。`LegacyOutput` がオンのときと Kobo 向け・`.mobi` で使う | `toc.ncx` |
 | `css/vertical_text.vm` | 縦書きテキスト CSS | `vertical_text.css` |
 | `css/horizontal_text.vm` | 横書きテキスト CSS | `horizontal_text.css` |
 | `xhtml/*.vm` | 本文 XHTML | `*.xhtml` |
