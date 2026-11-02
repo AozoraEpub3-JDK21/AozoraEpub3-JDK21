@@ -24,17 +24,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.8.0-jdk21 (2026年11月2日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.8.1-jdk21 (2026年11月3日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.1-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.1-jdk21/AozoraEpub3-1.8.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.1-jdk21/AozoraEpub3-1.8.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.1-jdk21/AozoraEpub3-1.8.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -43,6 +43,13 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 </div>
 
 ---
+
+## v1.8.1-jdk21 の主な変更
+
+- **表題ページ**: 表題ページの種類が「横書き」のとき、スマホで文字を大きくすると、題名が著者と重なったり、著者だけ次のページへ送られたりする問題を直しました
+- **配布物**: 同梱している FlatLaf のライセンス文が配布物に含まれていなかった問題を直しました
+
+変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.1-jdk21) を参照してください。
 
 ## v1.8.0-jdk21 の主な変更
 

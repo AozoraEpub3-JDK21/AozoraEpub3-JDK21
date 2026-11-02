@@ -92,12 +92,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.8.0-jdk21.zip
+AozoraEpub3-1.8.1-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.8.0-jdk21.tar.gz
+AozoraEpub3-1.8.1-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -148,6 +148,9 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.8.1-jdk21 (2026-11-03)
+- **表題ページ**: スマホで文字を大きくすると題名と著者が重なる問題を修正しました。また、配布物に FlatLaf のライセンス文が含まれていなかった問題を修正しました。
 
 ### v1.8.0-jdk21 (2026-11-02)
 - **EPUB 3.3 対応の見直し**: 表紙の meta と toc.ncx を既定で出さないようにしました。目次タブで出す設定に戻せます。Kobo・.mobi は今までどおりです。目次の階層、画像だけの本の表示、カクヨムで最初の話が 2 回入る問題などを修正しました。
