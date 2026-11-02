@@ -605,6 +605,19 @@ public class AozoraTextFinalizerTest {
 		assertFalse(result, result.contains("［＃中見出し］底本"));
 	}
 
+	/** 既定の自動字下げが付いても、底本の行は見出しにならない（変換器は行頭の空白を除いてから底本：を見る） */
+	@Test
+	public void testSourceLineIsNotAHeadingWithAutoIndent() throws Exception {
+		String url = "https://ncode.syosetu.com/n1/";
+		writeTestFile("タイトル\n著者名\n\n本文です。\n［＃改ページ］\n底本： <a href=\"" + url + "\">" + url + "</a>\n");
+		settings.setEnableEnchantMidashi(true);
+		settings.setEnableAutoIndent(true);
+		finalizer.finalize(tempFile);
+		String result = readTestFile();
+		assertFalse(result, result.contains("［＃中見出し］"));
+		assertTrue(result, result.matches("(?s).*\\n[\\s　]*底本： <a href=.*"));
+	}
+
 	/**
 	 * 見出しでない通常行のタグ内も変換対象外であること。
 	 *
