@@ -7,16 +7,19 @@ original copyright notices and licenses under which these components were
 received are detailed below.
 
 All licenses can be found in the LICENSE/ directory included with this
-distribution.
+distribution. AozoraEpub3.jar contains every library listed here.
 
 ================================================================================
 
 1. Apache Commons Libraries
    - commons-cli 1.11.0
+   - commons-codec 1.19.0
    - commons-collections4 4.6.0
    - commons-compress 1.28.0
+   - commons-io 2.20.0
    - commons-lang3 3.21.0
-   
+   - commons-logging 1.3.0
+
    Copyright: The Apache Software Foundation
    License: Apache License 2.0
    URL: https://commons.apache.org/
@@ -26,27 +29,65 @@ distribution.
 
 2. Apache Velocity
    - velocity-engine-core 2.4.1
-   
-   Copyright: 2000-2007 The Apache Software Foundation
+
+   Copyright: 2000-2024 The Apache Software Foundation
    License: Apache License 2.0
    URL: https://velocity.apache.org/
    License File: LICENSE/velocity.txt
 
 --------------------------------------------------------------------------------
 
-3. Apache Batik
-   - batik-transcoder 1.20 (and dependencies)
-   
-   Copyright: 2025 The Apache Software Foundation
+3. Apache Batik and Apache XML Graphics Commons
+   - batik-anim 1.20
+   - batik-awt-util 1.20
+   - batik-bridge 1.20
+   - batik-constants 1.20
+   - batik-css 1.20
+   - batik-dom 1.20
+   - batik-ext 1.20
+   - batik-gvt 1.20
+   - batik-i18n 1.20
+   - batik-parser 1.20
+   - batik-script 1.20
+   - batik-shared-resources 1.20
+   - batik-svg-dom 1.20
+   - batik-svggen 1.20
+   - batik-transcoder 1.20
+   - batik-util 1.20
+   - batik-xml 1.20
+   - xmlgraphics-commons 2.12
+
+   Copyright: The Apache Software Foundation
    License: Apache License 2.0
-   URL: https://xmlgraphics.apache.org/batik/
+   URL: https://xmlgraphics.apache.org/
    License File: LICENSE/batik.txt
 
 --------------------------------------------------------------------------------
 
-4. jsoup
+4. Apache XML Commons External (XML APIs)
+   - xml-apis 1.4.01
+   - xml-apis-ext 1.3.04
+
+   Copyright: 1999-2009 The Apache Software Foundation
+   License: Apache License 2.0
+   URL: https://xerces.apache.org/xml-commons/
+   License File: LICENSE/commons.txt
+
+   These libraries also contain the W3C DOM and SVG DOM interfaces (W3C
+   Software License), the SAX interfaces (public domain) and the W3C SAC
+   interfaces (W3C IPR Software Notice):
+     LICENSE/xml-apis/LICENSE.dom-software.txt
+     LICENSE/xml-apis/LICENSE.dom-documentation.txt
+     LICENSE/xml-apis/LICENSE.sax.txt
+     LICENSE/xml-apis-ext/LICENSE.dom-software.txt
+     LICENSE/xml-apis-ext/LICENSE.dom-documentation.txt
+     LICENSE/xml-apis-ext/LICENSE.sac.html
+
+--------------------------------------------------------------------------------
+
+5. jsoup
    - jsoup 1.23.2
-   
+
    Copyright: 2009-2025 Jonathan Hedley
    License: MIT License
    URL: https://jsoup.org/
@@ -54,10 +95,10 @@ distribution.
 
 --------------------------------------------------------------------------------
 
-5. SLF4J (Simple Logging Facade for Java)
+6. SLF4J (Simple Logging Facade for Java)
    - slf4j-api 2.0.17
    - slf4j-simple 2.0.17
-   
+
    Copyright: 2004-2025 QOS.ch
    License: MIT License
    URL: https://www.slf4j.org/
@@ -65,27 +106,122 @@ distribution.
 
 --------------------------------------------------------------------------------
 
-6. Junrar
+7. Junrar
    - junrar 7.6.1
-   
+
    Copyright: Alexander Roshal (UnRAR)
    License: UnRAR Free License
    URL: https://github.com/junrar/junrar
    License File: LICENSE/junrar.txt
-   
+
    Note: This library uses UnRAR sources which may be freely used in any
    software to handle RAR archives without limitations free of charge, but
    cannot be used to re-create the RAR compression algorithm.
 
 --------------------------------------------------------------------------------
 
-7. FlatLaf (Flat Look and Feel)
+8. FlatLaf (Flat Look and Feel)
    - flatlaf 3.7.2
 
    Copyright: 2019 FormDev Software GmbH
    License: Apache License 2.0
    URL: https://www.formdev.com/flatlaf/
    License File: LICENSE/flatlaf.txt
+
+================================================================================
+NOTICE FILES OF THE APACHE LICENSE 2.0 COMPONENTS
+================================================================================
+
+The following notices are reproduced from the NOTICE files of the components
+above, as section 4(d) of the Apache License 2.0 requires. Inside
+AozoraEpub3.jar only one META-INF/NOTICE of each name survives, so they are
+collected here. FlatLaf ships no NOTICE file.
+
+--------------------------------------------------------------------------------
+Apache Commons CLI
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Commons Codec
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Commons Collections
+Copyright 2001-2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Commons Compress
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Commons IO
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Commons Lang
+Copyright 2001-2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Commons Logging
+Copyright 2001-2023 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Velocity - Engine
+Copyright 2000-2024 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache Batik
+Copyright 1999-2022 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+This software contains code from the World Wide Web Consortium (W3C) for the
+Document Object Model API (DOM API) and SVG Document Type Definition (DTD).
+
+This software contains code from the International Organisation for
+Standardization for the definition of character entities used in the software's
+documentation.
+
+This product includes images from the Tango Desktop Project
+(http://tango.freedesktop.org/).
+
+This product includes images from the Pasodoble Icon Theme
+(http://www.jesusda.com/projects/pasodoble).
+--------------------------------------------------------------------------------
+Apache XML Graphics Commons
+Copyright 2006-2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+--------------------------------------------------------------------------------
+Apache XML Commons XML APIs
+Copyright 1999-2009 The Apache Software Foundation.
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+Portions of this software were originally based on the following:
+  - software copyright (c) 1999, IBM Corporation., http://www.ibm.com.
+  - software copyright (c) 1999, Sun Microsystems., http://www.sun.com.
+  - software copyright (c) 2000 World Wide Web Consortium, http://www.w3.org
+--------------------------------------------------------------------------------
 
 ================================================================================
 
