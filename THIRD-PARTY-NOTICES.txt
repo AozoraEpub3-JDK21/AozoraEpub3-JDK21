@@ -13,9 +13,9 @@ distribution.
 
 1. Apache Commons Libraries
    - commons-cli 1.11.0
-   - commons-collections4 4.5.0
+   - commons-collections4 4.6.0
    - commons-compress 1.28.0
-   - commons-lang3 3.20.0
+   - commons-lang3 3.21.0
    
    Copyright: The Apache Software Foundation
    License: Apache License 2.0
@@ -35,7 +35,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 3. Apache Batik
-   - batik-transcoder 1.19 (and dependencies)
+   - batik-transcoder 1.20 (and dependencies)
    
    Copyright: 2025 The Apache Software Foundation
    License: Apache License 2.0
@@ -45,7 +45,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 4. jsoup
-   - jsoup 1.22.1
+   - jsoup 1.23.2
    
    Copyright: 2009-2025 Jonathan Hedley
    License: MIT License
@@ -55,8 +55,8 @@ distribution.
 --------------------------------------------------------------------------------
 
 5. SLF4J (Simple Logging Facade for Java)
-   - slf4j-api 2.0.16
-   - slf4j-simple 2.0.16
+   - slf4j-api 2.0.17
+   - slf4j-simple 2.0.17
    
    Copyright: 2004-2025 QOS.ch
    License: MIT License
@@ -66,7 +66,7 @@ distribution.
 --------------------------------------------------------------------------------
 
 6. Junrar
-   - junrar 7.5.7
+   - junrar 8.1.2
    
    Copyright: Alexander Roshal (UnRAR)
    License: UnRAR Free License
