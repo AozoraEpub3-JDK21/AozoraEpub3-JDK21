@@ -1277,21 +1277,21 @@ public class WebAozoraConverter
 				//一覧のhrefをすべて取得（残した要素の日付だけを、話の URL と同じ並びで残す）
 				List<String> chapterPostDates = new ArrayList<>();
 				List<String> chapterPublishDates = new ArrayList<>();
-				Set<String> seenChapterHrefs = new HashSet<>();
+				//同じ話は 1 回だけ取る。残すのは最後のリンク（目次の前に置かれた「1 話目から読む」「最新話を読む」で順番を変えない）
+				Map<String, Integer> lastLinks = new HashMap<>();
 				for (int hrefIdx = 0; hrefIdx < hrefs.size(); hrefIdx++) {
-					Element href = hrefs.get(hrefIdx);
-					String hrefString = href.attr("href");
-					if (hrefString == null || hrefString.length() == 0) continue;
-					//パターンがあればマッチング
-					ExtractInfo extractInfo = this.queryMap.get(ExtractId.HREF)[0];
-					if (!extractInfo.hasPattern() || extractInfo.matches(hrefString)) {
-						String chapterHref = hrefString;
-						if (!hrefString.startsWith("http")) {
-							if (hrefString.charAt(0) == '/') chapterHref = baseUri+hrefString;
-							else chapterHref = listBaseUrl+hrefString;
-						}
-						//同じ話は 1 回だけ取る
-						if (!seenChapterHrefs.add(chapterHref)) {
+					String chapterHref = chapterHrefOf(hrefs.get(hrefIdx), listBaseUrl);
+					if (chapterHref != null) lastLinks.put(chapterHref, hrefIdx);
+				}
+				boolean subtitlePerLink = subtitles != null && subtitles.size() == hrefs.size();
+				for (int hrefIdx = hrefs.size()-1; hrefIdx >= 0; hrefIdx--) {
+					String chapterHref = chapterHrefOf(hrefs.get(hrefIdx), listBaseUrl);
+					if (subtitlePerLink && chapterHref != null && lastLinks.get(chapterHref) != hrefIdx) subtitles.remove(hrefIdx);
+				}
+				for (int hrefIdx = 0; hrefIdx < hrefs.size(); hrefIdx++) {
+					String chapterHref = chapterHrefOf(hrefs.get(hrefIdx), listBaseUrl);
+					if (chapterHref != null) {
+						if (lastLinks.get(chapterHref) != hrefIdx) {
 							repeatedLinks++;
 							continue;
 						}
@@ -1314,7 +1314,6 @@ public class WebAozoraConverter
 				LogAppender.println("__NEXT_DATA__ JSON からエピソード一覧取得: " + nextDataEpisodes.size() + "話");
 				chapterHrefs.clear();
 				chapterHrefs.addAll(nextDataEpisodes);
-				repeatedLinks = 0;
 				// Phase 2-2: 更新日時マップが構築されていれば更新チェックに使用 (カクヨム SUB_UPDATE対応)
 				if (this.nextDataEpisodeDateMap != null) {
 					noUpdateUrls = createNoUpdateUrlsFromNextData(updateInfoFile, urlString, contentsUpdate);
@@ -1338,7 +1337,8 @@ public class WebAozoraConverter
 			//本棚の更新は、上書きする本の記録と比べる（無ければ作品の話数）
 			boolean bookGuard = this.updateGuard && this.guardBook != null;
 			int previous = ledger == null ? -1 : bookGuard ? ledger.episodesFor(this.guardBook) : ledger.episodes;
-			//台帳は同じ話へのリンクも数えてきた。数え方を変えると今ある本がみな「減った」に見えるので、比べる数はリンクの数のままにする
+			//台帳は同じ話へのリンクも数えてきた。数え方を変えると今ある本がみな「減った」に見えるので、比べる数は話数＋同じ話へのリンクのままにする
+			//（__NEXT_DATA__ の一覧でも足す。足さないと、一覧の出どころが変わった作品で数が 1 つずれる）
 			int now = chapterHrefs.size() + repeatedLinks;
 			if (this.updateGuard && !this.allowFewerEpisodes && previous > now) {
 				this.shrunkFrom = previous;
@@ -1380,7 +1380,7 @@ public class WebAozoraConverter
 				//更新で話は取れたが本を書けなかった・同じ作品を別に変換した、と、キャッシュを消しただけの話を、どちらも正しく数える。
 				//PR の手元の codex・PR の codex）。記録が無ければキャッシュに無い話
 				if (previous >= 0) newCount = Math.max(0, now - previous);
-				this.checkedEpisodes = now;
+				this.checkedEpisodes = chapterHrefs.size();
 				this.checkedNew = newCount;
 				this.checkedRevised = revisedCount;
 				this.pendingEpisodes = -1;
@@ -1924,6 +1924,18 @@ public class WebAozoraConverter
 		} catch (Exception e) {
 			logger.warn("更新情報ファイルの書き込みに失敗: {}", info.file, e);
 		}
+	}
+
+	/** 目次のリンクが指す話の URL。話のリンクでなければ null */
+	private String chapterHrefOf(Element href, String listBaseUrl)
+	{
+		String hrefString = href.attr("href");
+		if (hrefString == null || hrefString.length() == 0) return null;
+		//パターンがあればマッチング
+		ExtractInfo extractInfo = this.queryMap.get(ExtractId.HREF)[0];
+		if (extractInfo.hasPattern() && !extractInfo.matches(hrefString)) return null;
+		if (hrefString.startsWith("http")) return hrefString;
+		return hrefString.charAt(0) == '/' ? baseUri+hrefString : listBaseUrl+hrefString;
 	}
 
 	/** 更新情報の生成と保存 */
