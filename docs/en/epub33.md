@@ -129,7 +129,6 @@ All screenshots are of books made for testing this app.
 ### Not checked
 
 - Kobo devices (Kobo output keeps the earlier form)
-- Kindle devices and Send to Kindle
 - Apple Books on iPhone and iPad
 - Other readers
 
