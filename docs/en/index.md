@@ -21,17 +21,17 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 ## AozoraEpub3-JDK21 Download
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>Latest: </strong> v1.7.6-jdk21 (October 20, 2026) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.6-jdk21">Release Notes</a></p>
+  <p><strong>Latest: </strong> v1.8.0-jdk21 (November 2, 2026) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21">Release Notes</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS (TAR.GZ)
     </a>
   </div>
@@ -40,6 +40,15 @@ description: AozoraEpub3-JDK21 converts Aozora Bunko text to EPUB 3.3. Java 21�
 </div>
 
 ---
+
+## What's New in v1.8.0-jdk21
+
+- **EPUB output reviewed**: the elements for older readers (the cover meta and toc.ncx) are no longer written by default. "Elements for older readers" on the TOC tab turns them back on. Kobo and .mobi output keep them as before
+- **Nested contents**: "Nest TOC page" now works, so readers show the heading levels in their contents
+- **Image-only books**: fixed pictures that some readers cut off, stretched or did not show
+- **Web novels**: fixed Kakuyomu's first episode appearing twice, a 底本 entry at the end of the contents, and an error in Apple Books' contents panel, among others
+
+See the [release notes](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21) for the full list.
 
 ## What's New in v1.7.6-jdk21
 

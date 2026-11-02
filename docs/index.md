@@ -24,17 +24,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.7.6-jdk21 (2026年10月20日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.7.6-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.8.0-jdk21 (2026年11月2日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.7.6-jdk21/AozoraEpub3-1.7.6-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.0-jdk21/AozoraEpub3-1.8.0-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -43,6 +43,15 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 </div>
 
 ---
+
+## v1.8.0-jdk21 の主な変更
+
+- **EPUB の見直し**: 古いリーダー向けの要素（表紙の meta と toc.ncx）を既定で出さないようにしました。目次タブの「古いリーダー向けの要素」で出す設定に戻せます。Kobo 向けと .mobi は今までどおりです
+- **目次の階層**: 「目次ページ階層化」が効くようになり、リーダーの目次に見出しの階層が表示されます
+- **画像だけの本**: リーダーによって絵が切れたり、歪んだり、表示されなかったりする問題を直しました
+- **Web 小説**: カクヨムで最初の話が 2 回入る問題、目次の最後に「底本」が出る問題、Apple Books で目次にエラーが出る問題などを直しました
+
+変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21) を参照してください。
 
 ## v1.7.6-jdk21 の主な変更
 
