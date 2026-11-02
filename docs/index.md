@@ -51,7 +51,7 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 - **画像だけの本**: リーダーによって絵が切れたり、歪んだり、表示されなかったりする問題を直しました
 - **Web 小説**: カクヨムで最初の話が 2 回入る問題、目次の最後に「底本」が出る問題、Apple Books で目次にエラーが出る問題などを直しました
 
-変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21) を参照してください。
+EPUB 3.3・3.4 への対応方針と、リーダーごとの違いは [EPUB 3.3 と 3.4 への対応](epub33-ja.html) にまとめています。変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.0-jdk21) を参照してください。
 
 ## v1.7.6-jdk21 の主な変更
 
