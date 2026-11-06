@@ -319,8 +319,39 @@ ext.distCommonContent = { CopySpec spec ->
     spec.from('lib/LICENSE') { into 'LICENSE' }
 }
 
+// 配布物に入る作業ツリーのパス（distCommonContent の from と揃える）
+ext.distSourcePaths = ['README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt',
+    'THIRD-PARTY-NOTICES.txt', 'chuki_*.txt', 'AozoraEpub3.ico', 'AozoraEpub3.ini', 'setting_narourb.ini',
+    'gaiji', 'presets', 'web', 'template', 'lib/LICENSE']
+
+// 配布物は作業ツリーから写すので、コミットしていない変更や gitignore したファイルがあれば混ざる
+// （v1.8.0 の最初のビルドに web/www.aozora.gr.jp/replace.txt の下書きが入った。GUI は終了時に AozoraEpub3.ini を書き換える。internal #66）。
+// 配布物に入るパスに、コミットと違うものがあれば止める。.DS_Store は Gradle が既定で配布物から外すので数えない。
+// 承知で作るときは -PallowDirtyDist。git の無い木（ソースの tarball など）では確かめられないので警告だけ
+tasks.register('verifyDistSources') {
+    description = '配布物に入るパスが、コミットした内容だけかを確かめる'
+    def paths = distSourcePaths
+    def root = projectDir
+    def allowDirty = project.hasProperty('allowDirtyDist')
+    doLast {
+        if (!new File(root, '.git').exists()) {
+            logger.warn("verifyDistSources: git の木ではないので、配布物に入るファイルを確かめていません")
+            return
+        }
+        def cmd = ['git', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--'] + paths
+        def proc = new ProcessBuilder(cmd).directory(root).redirectErrorStream(true).start()
+        def out = proc.inputStream.getText('UTF-8')
+        if (proc.waitFor() != 0) throw new GradleException("verifyDistSources: git status に失敗しました:\n" + out)
+        def dirty = out.readLines().findAll { it.trim() && !it.endsWith('.DS_Store') }
+        if (dirty.isEmpty()) return
+        def msg = "配布物に入るパスに、コミットと違うファイルがあります（?? 未追跡 / !! gitignore / M 変更）:\n  " +
+            dirty.join('\n  ') + "\nきれいな worktree で作り直すか、承知のうえなら -PallowDirtyDist を付けてください"
+        if (allowDirty) logger.warn(msg) else throw new GradleException(msg)
+    }
+}
+
 // 配布用の ZIP アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
-task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
+task zipDistribution(type: Zip, dependsOn: [build, createExe, 'verifyDistSources']) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
     destinationDirectory = file('build/distributions')
     preserveFileTimestamps = true
@@ -337,7 +368,7 @@ task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
 }
 
 // 配布用の TAR アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
-task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
+task tarDistribution(type: Tar, dependsOn: [build, createLauncher, 'verifyDistSources']) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
     destinationDirectory = file('build/distributions')
     compression = Compression.GZIP

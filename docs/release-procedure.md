@@ -31,7 +31,7 @@
 - [ ] `gradlew test` がローカルで PASS
 - [ ] `.NET` ポート `JavaComparisonTests` 5/5 PASS（`D:\git\aozoraepub3-dotnet\tests\AozoraEpub3.Tests\` で `dotnet test --filter "FullyQualifiedName~JavaComparisonTests"`）
 - [ ] CI（master 最終コミット）が GREEN
-- [ ] `git status -s` がクリーン（前回 dist の残骸が残っていないか確認）
+- [ ] `git status -s` がクリーン（前回 dist の残骸が残っていないか確認）（配布物に入るパスは `dist` の `verifyDistSources` も確かめる。gitignore したファイルは `git status -s` に出ないので、そちらで止まる。§6.12）
 
 ### 2.1.1 リリース前 E2E（**必須ゲート**）
 
@@ -520,6 +520,17 @@ cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 > **EPUB 側に問題があるかのようなメッセージ**で落ちる。実体は jar 不在なので、まず jar の存在を確認する。
 > 壊れていた `tools/epubcheck-5.2.0.jar`（未追跡・9 bytes の `Not Found`）は削除済み。
 > ローカル検証には `tools/epubcheck-5.1.0/epubcheck.jar` が使える。
+
+### 6.12 `verifyDistSources` で止まる（配布物に入るパスがコミットと違う）
+
+**症状**: `zipDistribution`・`tarDistribution` の前に「配布物に入るパスに、コミットと違うファイルがあります」で落ちる。
+`??`（未追跡）・`!!`（gitignore）・`M`（変更）のファイルが並ぶ。
+
+**理由**: 配布物は作業ツリーから写すので、そのままだと下書きが混ざる。v1.8.0 の最初のビルドに、gitignore した
+`web/www.aozora.gr.jp/replace.txt`（底本：の行を消す規則の下書き）が入った。GUI は終了時に `AozoraEpub3.ini` を書き換える。
+
+**対処**: きれいな worktree で作り直す（`git worktree add --detach <リポジトリの外のパス> <タグ>`）。
+並んだファイルが配布物に入ってよいと分かっているときだけ `-PallowDirtyDist` を付ける（警告に変わる）。
 
 ---
 
