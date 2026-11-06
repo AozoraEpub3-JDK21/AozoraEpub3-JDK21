@@ -785,12 +785,9 @@ public class AozoraEpub3Converter
 			} else if (middleIndentOverChukiPattern.matcher(chukiName).find()) {
 				if (this.middleCountLine >= 0) this.forceMiddleTable("indent-unreadable");
 			} else if ((chukiName.startsWith("ここで字下げ") && chukiName.endsWith("終わり")) || chukiName.endsWith("字下げ終わり")) {
+				//この行の字下げ (lineIndent) は減らさない。同じ行の1行の字下げや、出力の閉じ方の写しを持たずに、
+				//見積もりを多め (表組みに倒れる側) に保つ
 				this.middleBlockIndent = 0;
-				//文字より前で閉じた字下げは、この行の文字には効かない
-				if (!lineCounted) {
-					lineChars -= lineIndent;
-					lineIndent = 0;
-				}
 			}
 			if (chukiFlagPageBreak.contains(chukiName)) {
 				//変換時は改ページで字下げを閉じる
