@@ -405,7 +405,7 @@ java -jar AozoraEpub3.jar [オプション] 入力ファイル
 | `-d <パス>` | 出力先ディレクトリ | `-d ./output/` |
 | `-ext <拡張子>` | 出力ファイル拡張子 | `-ext .kepub.epub` |
 | `-of` | 出力ファイル名を入力ファイル名に合わせる（既定は `[著者名] 表題.epub`） | |
-| `-hor` | 横書きで出力（既定は縦書き） | |
+| `-hor` | 横書きで出力（既定は縦書き）。目次も横書きになる | |
 | `-device <種別>` | 端末種別を指定 | `-device kindle` |
 | `-url <URL>` | Web小説URL・アーカイブURL（zip / txtz / rar）から直接変換（複数指定可） | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | narou.rb互換フォーマット設定を適用 | |
