@@ -27,7 +27,7 @@ public class SectionInfo
 	/** ページ左右中央で、長い節なので従来の表組みで出力するならtrue */
 	public boolean isMiddleTable = false;
 	
-	/** ページ左右中央で、1列に収まらない行があるので縦書きのブロックの高さを決めて折り返すならtrue (html.hltr のときだけ効く。internal #8) */
+	/** ページ左右中央で、1列に収まらない行があるので縦書きのブロックの高さを決めて折り返すならtrue (html.hltr のときだけ立つ。internal #8) */
 	public boolean isMiddleWrap = false;
 	
 	/** ページ左右中央を、横書きの親 (html.hltr) の中に縦書きのブロックを置いて出力するならtrue

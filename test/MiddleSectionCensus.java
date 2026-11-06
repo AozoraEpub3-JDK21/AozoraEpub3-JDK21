@@ -79,7 +79,7 @@ public class MiddleSectionCensus {
 				for (BookInfo.MiddleSection m : info.getMiddleSections()) {
 					sections++;
 					boolean table = info.isLongMiddleLine(m.line);
-					boolean wrap = !table && info.isWrapMiddleLine(m.line);
+					boolean wrap = info.isWrapMiddleLine(m.line);
 					if (table) { tables++; anyTable = true; }
 					if (wrap) wraps++;
 					out.println(f.getPath() + "\t" + (m.line + 1) + "\t" + m.lines + "\t" + (table ? "table" : wrap ? "wrap" : "centered") + "\t" + String.join(",", m.reasons));

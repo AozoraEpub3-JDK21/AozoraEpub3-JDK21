@@ -684,7 +684,8 @@ public class AozoraEpub3Converter
 	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ)。
 	 * そういう行のある節は、ブロックの高さをページより短く決めて (div.vrtl.wrap、80vh) 列の終わりより手前で折り返す (internal #8) */
 	static final int MIDDLE_LONG_LINE_CHARS = 20;
-	/** 折り返す左右中央の節 (div.vrtl.wrap) の1列の字数。高さ 80vh なので MIDDLE_LONG_LINE_CHARS の 8 割 */
+	/** 折り返す左右中央の節 (div.vrtl.wrap) の1列の字数。高さ 80vh なので MIDDLE_LONG_LINE_CHARS の 8 割
+	 * (vertical_middle.css の html.hltr div.vrtl.wrap の height と組。変えるときは両方を変える) */
 	static final int MIDDLE_WRAP_COLUMN_CHARS = 16;
 	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない、改行は列の数が読めない) */
 	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字|^改行$|字詰め|折り返して");
@@ -700,9 +701,8 @@ public class AozoraEpub3Converter
 	int middleCountBlankLines = 0;
 	/** 数えている左右中央の節に、1列に収まらない行があればtrue (折り返して出す) */
 	boolean middleCountWrap = false;
-	/** 数えている左右中央の節を折り返して出したときの列の数 (行ごとに MIDDLE_WRAP_COLUMN_CHARS で割った列と、間の空行) */
+	/** 数えている左右中央の節を折り返して出したときの列の数 (行ごとに、字下げを除いた1列の字数で割った列と、間の空行) */
 	int middleCountWrapColumns = 0;
-	/** 数えている左右中央の節に、画像・1列に収まらない行・表組みに倒す注記があればtrue (従来の表組みに倒す) */
 	/** 数えている左右中央の節を表組みに倒すか（理由が 1 つでもあれば倒す。{@link #forceMiddleTable} だけが理由を足す） */
 	private boolean middleCountForceTable() { return !this.middleForceReasons.isEmpty(); }
 	/** 数えている左右中央の節を表組みに倒した理由（出た順。計器 internal #8 用） */
@@ -745,6 +745,8 @@ public class AozoraEpub3Converter
 		boolean lineCounted = false;
 		//行頭・行末の空白と、ブロックの字下げも1字ずつ場所を取る
 		int lineChars = edgeSpaces + this.middleBlockIndent;
+		//字下げはブロックの上の余白になり、折り返した列ごとに場所を取る
+		int lineIndent = this.middleBlockIndent;
 		while (true) {
 			boolean found = m.find();
 			int end = found ? m.start() : noRubyLine.length();
@@ -779,6 +781,7 @@ public class AozoraEpub3Converter
 				//ここからN字下げ は同じ行の後ろの文字にも効く
 				if (im.group(1) != null) this.middleBlockIndent = indent;
 				lineChars += indent;
+				lineIndent += indent;
 			} else if (middleIndentOverChukiPattern.matcher(chukiName).find()) {
 				if (this.middleCountLine >= 0) this.forceMiddleTable("indent-unreadable");
 			} else if ((chukiName.startsWith("ここで字下げ") && chukiName.endsWith("終わり")) || chukiName.endsWith("字下げ終わり")) {
@@ -788,7 +791,7 @@ public class AozoraEpub3Converter
 				//変換時は改ページで字下げを閉じる
 				this.middleBlockIndent = 0;
 				//閉じる節に、この行の改ページより前の文字の列を足す
-				if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars);
+				if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars, lineIndent);
 				this.endMiddleSection(bookInfo, chukiFlagMiddle.contains(chukiName) ? -1 : lineNum);
 				if (chukiFlagMiddle.contains(chukiName)) {
 					this.middleCountLine = lineNum;
@@ -800,6 +803,7 @@ public class AozoraEpub3Converter
 					//同じ行の注記より前の文字は前の節のもの
 					lineCounted = false;
 					lineChars = edgeSpaces + this.middleBlockIndent;
+					lineIndent = this.middleBlockIndent;
 				}
 			} else if (this.middleCountLine >= 0) {
 				//画像注記と、タグ (chukiPatternはタグにも一致する。img・brは列を足し、対応しないタグは文字のまま出力されるので数えずに表組みに倒す)
@@ -813,12 +817,18 @@ public class AozoraEpub3Converter
 			}
 		}
 		//行の終わりで、この行の字数から折り返したときの列の数を足す (改ページで閉じた節には閉じる前に足してある)
-		if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars);
+		if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars, lineIndent);
 	}
-	/** 折り返す左右中央の節 (div.vrtl.wrap) で、この字数の行が取る列の数 */
-	private static int wrapColumns(int lineChars)
+	/** 折り返す左右中央の節で、1列に字下げのほかこれだけの字が入らなければ、その行は1ページに収まらないとみなす */
+	static final int MIDDLE_WRAP_MIN_CHARS = 4;
+	/** 折り返す左右中央の節 (div.vrtl.wrap) で、この行が取る列の数。字下げは列ごとに場所を取るので、1列に入る字数から引く
+	 * (残りが MIDDLE_WRAP_MIN_CHARS より少なければ、列の上限を超える数を返して表組みに倒す) */
+	static int wrapColumns(int lineChars, int lineIndent)
 	{
-		return Math.max(1, (lineChars + MIDDLE_WRAP_COLUMN_CHARS - 1) / MIDDLE_WRAP_COLUMN_CHARS);
+		int perColumn = MIDDLE_WRAP_COLUMN_CHARS - lineIndent;
+		if (perColumn < MIDDLE_WRAP_MIN_CHARS) return MIDDLE_LONG_LINES + 1;
+		int text = Math.max(1, lineChars - lineIndent);
+		return (text + perColumn - 1) / perColumn;
 	}
 	/** 行に左右中央の注記（ページの左右中央 など）があるか */
 	private static boolean containsMiddleChuki(String line)
@@ -849,8 +859,8 @@ public class AozoraEpub3Converter
 		} else if (pageBreakLine >= 0) {
 			this.middleClosedByPageBreak.add(new int[]{this.middleCountLine, pageBreakLine});
 		}
-		//表組みに倒さなかった節の印。表組みに倒した節 (後で画像単ページで倒すものを含む) は isLongMiddleLine が先に効く
-		if (this.middleCountWrap) bookInfo.addWrapMiddleLine(this.middleCountLine);
+		//表組みに倒さなかった節だけ、折り返す印を付ける (後で画像単ページで倒すときは外す)
+		if (this.middleCountWrap && !this.middleCountForceTable()) bookInfo.addWrapMiddleLine(this.middleCountLine);
 		this.middleCountLine = -1;
 	}
 	/** 走査の後で、改ページの次が画像単ページの節を表組みに倒す (表紙に移す画像の前の改ページは変換時に省かれ、後ろの本文が同じ節に入る) */
@@ -860,6 +870,7 @@ public class AozoraEpub3Converter
 		for (int[] closed : this.middleClosedByPageBreak) {
 			if (bookInfo.isImageSectionLine(closed[1]+1)) {
 				bookInfo.addLongMiddleLine(closed[0]);
+				bookInfo.removeWrapMiddleLine(closed[0]);
 				bookInfo.addMiddleSectionReason(closed[0], "image-page-after");
 			}
 		}

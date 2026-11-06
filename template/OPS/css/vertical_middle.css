@@ -94,7 +94,8 @@ writing-mode: vertical-rl;
 -epub-writing-mode: vertical-rl;
 }
 /* 1 列に収まらない行（長い章名など）のある節: ブロックの高さをページより短く決め、列の終わりより手前で折り返す。
-   80vh なら Books（見開き・1 ページ）に白紙が出ず、Thorium で字が切れない。max-height は Thorium で効かない（internal #8） */
+   80vh なら Books（見開き・1 ページ）に白紙が出ず、Thorium で字が切れない。max-height は Thorium で効かない（internal #8）。
+   変換器の MIDDLE_WRAP_COLUMN_CHARS（1 列の字数の見積もり）はこの高さと組。変えるときは両方を変える */
 html.hltr div.vrtl.wrap {
 height: 80vh;
 }

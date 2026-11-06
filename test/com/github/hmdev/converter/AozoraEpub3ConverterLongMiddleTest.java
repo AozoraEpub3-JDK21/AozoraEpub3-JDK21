@@ -1,5 +1,6 @@
 package com.github.hmdev.converter;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -49,6 +50,13 @@ public class AozoraEpub3ConverterLongMiddleTest
 	static boolean overLong(BookInfo bookInfo, int lineNum)
 	{
 		return bookInfo.isWrapMiddleLine(lineNum) || bookInfo.isLongMiddleLine(lineNum);
+	}
+
+	/** 事前走査が控えた、その節を表組みに倒した理由 */
+	static java.util.Set<String> reasons(BookInfo bookInfo, int lineNum)
+	{
+		for (BookInfo.MiddleSection m : bookInfo.getMiddleSections()) if (m.line == lineNum) return m.reasons;
+		throw new AssertionError("節が無い: " + lineNum);
 	}
 
 	static String repeat(String s, int n)
@@ -534,6 +542,8 @@ public class AozoraEpub3ConverterLongMiddleTest
 		fit[1] = repeat("長", c*3 + 1);
 		BookInfo b2 = scan(fit);
 		assertTrue(b2.isLongMiddleLine(0));
+		assertFalse("表組みの節には折り返す印を付けない", b2.isWrapMiddleLine(0));
+		assertTrue(reasons(b2, 0).toString(), reasons(b2, 0).contains("wrap-columns>" + max));
 	}
 
 	@Test
@@ -549,13 +559,17 @@ public class AozoraEpub3ConverterLongMiddleTest
 		for (int k=0; k<max-3; k++) lines[i++] = "";
 		lines[i++] = "短";
 		lines[i++] = "［＃改ページ］";
-		assertFalse(scan(java.util.Arrays.copyOf(lines, i)).isLongMiddleLine(0));
+		BookInfo fit = scan(java.util.Arrays.copyOf(lines, i));
+		assertTrue(fit.isWrapMiddleLine(0));
+		assertFalse(fit.isLongMiddleLine(0));
 		// 空行を 1 つ足すと max を超える
 		String[] more = new String[i + 1];
 		System.arraycopy(lines, 0, more, 0, 2);
 		more[2] = "";
 		System.arraycopy(lines, 2, more, 3, i - 2);
-		assertTrue(scan(more).isLongMiddleLine(0));
+		BookInfo over = scan(more);
+		assertTrue(over.isLongMiddleLine(0));
+		assertTrue(reasons(over, 0).toString(), reasons(over, 0).contains("wrap-columns>" + max));
 	}
 
 	@Test
@@ -586,6 +600,61 @@ public class AozoraEpub3ConverterLongMiddleTest
 				"［＃挿絵（fig01.png）入る］",
 				"［＃改ページ］");
 		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertFalse(bookInfo.isWrapMiddleLine(0));
+	}
+
+	@Test
+	public void 長い行の節も改ページの次が画像単ページなら折り返さない() throws Exception
+	{
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				repeat("あ", AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS+1),
+				"［＃改ページ］",
+				"［＃挿絵（cover.jpg）入る］",
+				"［＃改ページ］",
+				"本文");
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertFalse(bookInfo.isWrapMiddleLine(0));
+	}
+
+	@Test
+	public void 字下げは折り返した列ごとに場所を取る() throws Exception
+	{
+		int max = AozoraEpub3Converter.MIDDLE_LONG_LINES;
+		// 字下げの無い 30 字は 2 列、１０字下げの 30 字は 1 列に 6 字で 5 列。短い行 6 列を足すと 8 列と 11 列
+		String[] plain = new String[max];
+		int i = 0;
+		plain[i++] = "［＃ページの左右中央］";
+		plain[i++] = repeat("長", 30);
+		for (int k=0; k<6; k++) plain[i++] = "短";
+		plain[i++] = "［＃改ページ］";
+		BookInfo b1 = scan(java.util.Arrays.copyOf(plain, i));
+		assertTrue(b1.isWrapMiddleLine(0));
+		plain[1] = "［＃１０字下げ］" + repeat("長", 30);
+		BookInfo b2 = scan(java.util.Arrays.copyOf(plain, i));
+		assertTrue(b2.isLongMiddleLine(0));
+		assertTrue(reasons(b2, 0).toString(), reasons(b2, 0).contains("wrap-columns>" + max));
+		// ブロックの字下げも同じ
+		BookInfo b3 = scan("［＃ページの左右中央］", "［＃ここから１０字下げ］", repeat("長", 30),
+				"短", "短", "短", "短", "短", "短", "［＃ここで字下げ終わり］", "［＃改ページ］");
+		assertTrue(b3.isLongMiddleLine(0));
+	}
+
+	@Test
+	public void 字下げが大きく1列に字が入らない節は表組み() throws Exception
+	{
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"［＃２５字下げ］献辞",
+				"［＃改ページ］");
+		assertTrue(bookInfo.isLongMiddleLine(0));
+		assertFalse(bookInfo.isWrapMiddleLine(0));
+		int c = AozoraEpub3Converter.MIDDLE_WRAP_COLUMN_CHARS, min = AozoraEpub3Converter.MIDDLE_WRAP_MIN_CHARS;
+		assertEquals(1, AozoraEpub3Converter.wrapColumns(c, 0));
+		assertEquals(2, AozoraEpub3Converter.wrapColumns(c + 1, 0));
+		assertEquals("字下げを除いた字で割る", 2, AozoraEpub3Converter.wrapColumns(3 + (c - 3) + 1, 3));
+		assertEquals(AozoraEpub3Converter.MIDDLE_LONG_LINES + 1, AozoraEpub3Converter.wrapColumns(c, c - min + 1));
+		assertEquals(1, AozoraEpub3Converter.wrapColumns(c, c - min));
 	}
 
 	@Test

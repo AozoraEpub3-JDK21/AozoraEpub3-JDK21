@@ -325,7 +325,11 @@ public class BookInfo
 		if (this.mapWrapMiddleLine == null) this.mapWrapMiddleLine = new HashSet<Integer>();
 		this.mapWrapMiddleLine.add(lineNum);
 	}
-	/** 折り返す左右中央の節の注記行ならtrue (表組みに倒した節は isLongMiddleLine が先) */
+	public void removeWrapMiddleLine(int lineNum)
+	{
+		if (this.mapWrapMiddleLine != null) this.mapWrapMiddleLine.remove(lineNum);
+	}
+	/** 折り返す左右中央の節の注記行ならtrue (表組みに倒した節には付かない) */
 	public boolean isWrapMiddleLine(int lineNum)
 	{
 		return this.mapWrapMiddleLine != null && this.mapWrapMiddleLine.contains(lineNum);
