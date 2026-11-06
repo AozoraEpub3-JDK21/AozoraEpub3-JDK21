@@ -159,6 +159,69 @@ public class VerticalMiddleLayoutTest {
 	 * 左右中央のページの柱は、ページの角に置かず、章題の横の縦の 1 行として並びに入れる（CSS）
 	 * （角に置くと、位置の決め方がリーダーごとに違い、Thorium では章題に重なった）
 	 */
+		/** /code-review（#216）: 左右中央の注記と柱が同じ行でも、数える側と書き出す側が揃う */
+	@Test
+	public void 左右中央と同じ行の柱も出さない() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］［＃ここから柱］声が出せないので無詠唱魔法でもいいですか長い長い作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第１章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String page = read(zf, "OPS/xhtml/0001.xhtml");
+			assertTrue(page, page.contains("<div class=\"vrtl middle\">"));
+			assertFalse(page, page.contains("running_head"));
+			assertFalse(page, page.contains("無詠唱魔法"));
+			assertTrue(page, page.contains("第１章"));
+		}
+	}
+
+	/** /code-review（#216）: 柱だけの行を外しても、空の列を残さない */
+	@Test
+	public void 柱だけの行は空の列を残さない() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"第一部",
+			"［＃ここから柱］作品名［＃ここで柱終わり］",
+			"第１章",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String page = read(zf, "OPS/xhtml/0001.xhtml");
+			assertFalse(page, page.contains("作品名"));
+			assertFalse("空の列が入った:\n" + page, page.contains("<br/>"));
+			assertTrue(page, page.contains("第一部"));
+			assertTrue(page, page.contains("第１章"));
+		}
+	}
+
+	/** 左右中央の節が終わった後の柱は出す（外す行は節の中だけ） */
+	@Test
+	public void 中扉の後の本文の柱は出す() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃３字下げ］［＃大見出し］第１章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"［＃ここから柱］作品名［＃ここで柱終わり］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String page = read(zf, "OPS/xhtml/0002.xhtml");
+			assertTrue(page, page.contains("<div class=\"running_head yoko\">作品名</div>"));
+		}
+	}
+
 	@Test
 	public void 表組みの中扉にも柱を出さない() throws Exception {
 		Files.write(txt, String.join("\n",

@@ -694,13 +694,13 @@ public class AozoraEpub3Converter
 	/** 数えている左右中央の節で、文字のある行の後に続いている空行の数 (次に文字のある行が来たら行数に足す) */
 	int middleCountBlankLines = 0;
 	/** 数えている左右中央の節に、画像・1列に収まらない行・表組みに倒す注記があればtrue (従来の表組みに倒す) */
-	boolean middleCountForceTable = false;
+	/** 数えている左右中央の節を表組みに倒すか（理由が 1 つでもあれば倒す。{@link #forceMiddleTable} だけが理由を足す） */
+	private boolean middleCountForceTable() { return !this.middleForceReasons.isEmpty(); }
 	/** 数えている左右中央の節を表組みに倒した理由（出た順。計器 internal #8 用） */
 	java.util.LinkedHashSet<String> middleForceReasons = new java.util.LinkedHashSet<String>();
 	/** 数えている左右中央の節を表組みに倒し、理由を控える */
 	private void forceMiddleTable(String reason)
 	{
-		this.middleCountForceTable = true;
 		this.middleForceReasons.add(reason);
 	}
 	/** ブロックの字下げ (ここからN字下げ) の字数 */
@@ -718,8 +718,18 @@ public class AozoraEpub3Converter
 	{
 		//左右中央の節の外で、注記も無ければ数えるものは無い
 		if (this.middleCountLine < 0 && noRubyLine.indexOf("［＃") < 0) return;
-		//柱は左右中央の節では出さない（convertTextLineToEpub3）ので数えない
-		noRubyLine = CharUtils.removeHashira(noRubyLine);
+		//左右中央の節（章の中扉）には柱（作品名）を出さない。Web 小説の長い題は 1 列に収まらず、節が表組みに倒れて
+		//ページの右に寄っていた（利用者の本棚で中扉 57 節中 49 節。internal #8）。
+		//ここで外す行を決めて控え、書き出し（convertTextLineToEpub3）はその控えだけを見る（数える側と書き出す側を揃える）。
+		//節の中の行か、この行で節が始まるなら外す。柱だけの行は、行ごと出さない（空の列を作らない）
+		if (noRubyLine.indexOf("柱］") >= 0 && (this.middleCountLine >= 0 || containsMiddleChuki(noRubyLine))) {
+			String removed = CharUtils.removeHashira(noRubyLine);
+			if (removed.length() != noRubyLine.length()) {
+				bookInfo.addHashiraDropLine(lineNum);
+				if (removed.isBlank()) bookInfo.addIgnoreLine(lineNum);
+				noRubyLine = removed;
+			}
+		}
 		Matcher m = chukiPattern.matcher(noRubyLine);
 		int pos = 0;
 		boolean lineCounted = false;
@@ -771,7 +781,6 @@ public class AozoraEpub3Converter
 					this.middleCountLine = lineNum;
 					this.middleCountLines = 0;
 					this.middleCountBlankLines = 0;
-					this.middleCountForceTable = false;
 					this.middleForceReasons = new java.util.LinkedHashSet<String>();
 					//同じ行の注記より前の文字は前の節のもの
 					lineCounted = false;
@@ -789,6 +798,16 @@ public class AozoraEpub3Converter
 			}
 		}
 	}
+	/** 行に左右中央の注記（ページの左右中央 など）があるか */
+	private static boolean containsMiddleChuki(String line)
+	{
+		Matcher m = chukiPattern.matcher(line);
+		while (m.find()) {
+			String tag = m.group();
+			if (tag.startsWith("［＃") && chukiFlagMiddle.contains(tag.substring(2, tag.length()-1))) return true;
+		}
+		return false;
+	}
 	/** 左右中央の節の中の空行を数える。文字のある行の前後の空行は出力されない (mapIgnoreLine) ので、間の空行だけ後で行数に足す */
 	void countMiddleBlankLine()
 	{
@@ -801,7 +820,7 @@ public class AozoraEpub3Converter
 		if (this.middleCountLine < 0) return;
 		if (this.middleCountLines > MIDDLE_LONG_LINES) this.forceMiddleTable("lines>" + MIDDLE_LONG_LINES);
 		bookInfo.recordMiddleSection(this.middleCountLine, this.middleCountLines, this.middleForceReasons);
-		if (this.middleCountForceTable) {
+		if (this.middleCountForceTable()) {
 			bookInfo.addLongMiddleLine(this.middleCountLine);
 		} else if (pageBreakLine >= 0) {
 			this.middleClosedByPageBreak.add(new int[]{this.middleCountLine, pageBreakLine});
@@ -2325,9 +2344,8 @@ public class AozoraEpub3Converter
 		//表題より前の行は 2 回通ることがある（下見と書き出し）。重なっても、出ないよりはよいので毎回出す
 		if (balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
 		line = balanced;
-		//左右中央の節（章の中扉）には柱（作品名）を出さない。Web 小説の長い題は 1 列に収まらず、節が表組みに倒れて
-		//ページの右に寄っていた（利用者の本棚で中扉 57 節中 49 節。internal #8）。事前の走査も柱を数えない（countMiddleSection）
-		if (this.inMiddleSection) line = CharUtils.removeHashira(line);
+		//左右中央の節（章の中扉）には柱（作品名）を出さない。外す行は事前の走査が決める（countMiddleSection。数える側と揃える）
+		if (this.bookInfo != null && this.bookInfo.isHashiraDropLine(lineNum)) line = CharUtils.removeHashira(line);
 		
 		//キャプション指定の画像の場合はすぐにキャプションでなければ画像タグを閉じる
 		if (this.nextLineIsCaption) {
@@ -4022,16 +4040,11 @@ public class AozoraEpub3Converter
 	 * 設定済みだが連続行で書かれていたり空行除外で改行されていない場合は上書きされて無視される
 	 * @param trigger 改ページトリガ nullなら改ページ設定キャンセル
 	 * @param 改ページの後ろに文字がある場合に改行を出すならfalse */
-	/** 書き出している節が左右中央か（中扉の柱を出さない。internal #8） */
-	boolean inMiddleSection = false;
-
 	void setPageBreakTrigger(PageBreakType trigger)
 	{
 		//改ページ前の空行は無視
 		this.printEmptyLines = 0;
 		this.pageBreakTrigger = trigger;
-		//改ページのたびに、次の節が左右中央かを控える（null は改ページしない＝同じ節のまま）
-		if (trigger != null) this.inMiddleSection = trigger.pageType == PageBreakType.PAGE_MIDDLE || trigger.pageType == PageBreakType.PAGE_MIDDLE_TABLE;
 		if (this.pageBreakTrigger != null && this.pageBreakTrigger.pageType != PageBreakType.PAGE_NORMAL) this.skipMiddleEmpty = true;
 	}
 	

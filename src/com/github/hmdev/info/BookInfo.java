@@ -287,7 +287,9 @@ public class BookInfo
 		this.mapLongMiddleLine.add(lineNum);
 	}
 	/** 左右中央の節の控え（計器 internal #8 用。変換には使わない）: 注記行 → {行数, 表組みに倒した理由} */
-	public final java.util.LinkedHashMap<Integer, MiddleSection> middleSections = new java.util.LinkedHashMap<Integer, MiddleSection>();
+	private final java.util.LinkedHashMap<Integer, MiddleSection> middleSections = new java.util.LinkedHashMap<Integer, MiddleSection>();
+	/** 閉じた左右中央の節の控え（注記行の順） */
+	public java.util.Collection<MiddleSection> getMiddleSections() { return java.util.Collections.unmodifiableCollection(this.middleSections.values()); }
 	public static final class MiddleSection {
 		public final int line;
 		public final int lines;
@@ -304,6 +306,17 @@ public class BookInfo
 	{
 		MiddleSection m = this.middleSections.get(lineNum);
 		if (m != null) m.reasons.add(reason);
+	}
+	/** 柱を外す行（左右中央の節の中。事前の走査が決め、書き出しはこれだけを見る。internal #8） */
+	HashSet<Integer> mapHashiraDropLine = null;
+	public void addHashiraDropLine(int lineNum)
+	{
+		if (this.mapHashiraDropLine == null) this.mapHashiraDropLine = new HashSet<Integer>();
+		this.mapHashiraDropLine.add(lineNum);
+	}
+	public boolean isHashiraDropLine(int lineNum)
+	{
+		return this.mapHashiraDropLine != null && this.mapHashiraDropLine.contains(lineNum);
 	}
 	/** 長い左右中央の節の注記行ならtrue */
 	public boolean isLongMiddleLine(int lineNum)

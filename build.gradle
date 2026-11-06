@@ -402,11 +402,10 @@ task runRealTest(type: JavaExec) {
 }
 
 // 計器（internal #8）: 左右中央の節が中央に出るか表組みに倒れるかと、その理由を数える
-// ./gradlew middleCensus -Pargs="<out.tsv> <dir-or-file>..."
+// ./gradlew middleCensus --args="<out.tsv> <dir-or-file>..."（--args は引用符の中の空白を保つ）
 tasks.register('middleCensus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
     mainClass = 'MiddleSectionCensus'
-    args = (project.findProperty('args') ?: '').toString().split(' ').findAll { it }
 }
 
 task runFullFlowTest(type: JavaExec) {
