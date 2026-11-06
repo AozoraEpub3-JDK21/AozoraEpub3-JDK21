@@ -157,7 +157,8 @@ public final class MarkdownToAozora {
 		if (n instanceof Heading && indent > 0) {
 			//箇条書き・引用の中の見出しは、改ページも見出しの注記も入れず、太字の段落にする
 			String t = inline(n);
-			if (!t.isBlank()) paragraph(NOTE_BOLD_OPEN + t + NOTE_BOLD_CLOSE, indent, indent, "");
+			//強制改行で行が分かれても、太字は行ごとに閉じる（span が <p> をまたがない）
+			if (!t.isBlank()) paragraph(NOTE_BOLD_OPEN + t.replace("\n", NOTE_BOLD_CLOSE + "\n" + NOTE_BOLD_OPEN) + NOTE_BOLD_CLOSE, indent, indent, "");
 		} else if (n instanceof Heading) {
 			heading((Heading) n);
 		} else if (n instanceof Paragraph) {

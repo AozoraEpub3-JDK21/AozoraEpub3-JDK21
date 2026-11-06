@@ -231,6 +231,18 @@ public class MarkdownToAozoraTest {
 		assertFalse(MarkdownToAozora.looksLikeFrontMatter("---\n# 見出し\n"));
 	}
 
+	/** codex（#215）: リストの中の見出しに強制改行があっても、太字は行ごとに閉じる */
+	@Test
+	public void aMultilineHeadingInAListKeepsBoldPerLine() {
+		//複数行になれるのは setext の見出し（下線）。強制改行は行末の空白 2 つ
+		String out = conv("# 題\n\n- 一行目  \n  二行目\n  ---\n");
+		for (String line : out.split("\n")) {
+			assertEquals(line, count(line, "［＃太字］"), count(line, "［＃太字終わり］"));
+		}
+		assertTrue(out, out.contains("一行目"));
+		assertTrue(out, out.contains("二行目"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;
