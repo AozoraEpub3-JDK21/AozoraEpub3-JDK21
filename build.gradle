@@ -341,10 +341,14 @@ ext.verifyDistSourcesNow = { Task task ->
         task.logger.warn("verifyDistSources: git の木ではないので、配布物に入るファイルを確かめていません")
         return
     }
-    def cmd = ['git', 'status', '--porcelain', '-z', '--ignored', '--untracked-files=all', '--'] + distCheckedPaths
+    // パスは :(glob) で渡す: git の素の * は / をまたぐ（chuki_*.txt が chuki_old/x.txt にも当たる）が、Gradle の include はまたがない
+    def cmd = ['git', 'status', '--porcelain', '-z', '--ignored', '--untracked-files=all', '--'] + distCheckedPaths.collect { ':(glob)' + it }
     def out, err, code
     try {
-        def proc = new ProcessBuilder(cmd).directory(root).start()
+        def pb = new ProcessBuilder(cmd).directory(root)
+        // フックやスクリプトが向けた別の index・木を見ない（Gradle が写すのはこの作業ツリー）
+        ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'].each { pb.environment().remove(it) }
+        def proc = pb.start()
         def errBuf = new StringBuilder()
         def errThread = Thread.start { errBuf.append(proc.errorStream.getText('UTF-8')) }
         out = proc.inputStream.getText('UTF-8')
@@ -359,14 +363,19 @@ ext.verifyDistSourcesNow = { Task task ->
         fail("verifyDistSources: git status に失敗し、配布物に入るファイルを確かめられませんでした:\n" + err)
         return
     }
-    // -z の 1 項目は「XY パス」。名前の変更・写し（X か Y が R/C）は次の項目に元のパスが続く
+    // -z の 1 項目は「XY パス」。名前の変更・写し（X か Y が R/C）は次の項目に元のパスが続く。
+    // 除外の判定はどちらのパスでも見る（除外に当たる名前へ変えても、元のファイルが無くなったことは残す）
     def entries = []
+    def origins = [:]
     def parts = out.split('\u0000', -1).toList()
     for (int n = 0; n < parts.size(); n++) {
         def e = parts[n]
         if (e.length() < 4) continue
         entries << e
-        if ('RC'.indexOf(e.substring(0, 1)) >= 0 || 'RC'.indexOf(e.substring(1, 2)) >= 0) n++
+        if ('RC'.indexOf(e.substring(0, 1)) >= 0 || 'RC'.indexOf(e.substring(1, 2)) >= 0) {
+            if (n + 1 < parts.size()) origins[e] = parts[n + 1]
+            n++
+        }
     }
     // Gradle の既定の除外（Ant の **/名前 と **/名前/**）を名前の型にして、パスのどの段に当たっても除く
     // （除外に当たるフォルダは Gradle が中へ入らない）。git のパスは OS によらず / 区切り。
@@ -377,7 +386,7 @@ ext.verifyDistSourcesNow = { Task task ->
     def defaultExcluded = { String path ->
         path.split('/').any { seg -> namePatterns.any { org.apache.tools.ant.types.selectors.SelectorUtils.match(it, seg, true) } }
     }
-    entries = entries.findAll { !defaultExcluded(it.substring(3)) }
+    entries = entries.findAll { !defaultExcluded(it.substring(3)) || (origins[it] != null && !defaultExcluded(origins[it])) }
     // 警告で済ますのは、追跡しているファイルの中身の変更（X・Y が空白か M）だけ。
     // 未追跡・gitignore・add した新しいファイル・消したファイル・名前の変更・解決していない衝突はリポジトリの内容と違うので止める
     def foreign = entries.findAll { !(' M'.indexOf(it.substring(0, 1)) >= 0 && ' M'.indexOf(it.substring(1, 2)) >= 0) }
