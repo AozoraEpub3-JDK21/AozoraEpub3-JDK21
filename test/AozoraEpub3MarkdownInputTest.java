@@ -96,4 +96,61 @@ public class AozoraEpub3MarkdownInputTest {
 			assertTrue("太字が出ていない:\n" + b, b.contains("class=\"b\""));
 		}
 	}
+
+	private File convertMd(String name, String md) throws Exception {
+		File src = tempFolder.newFolder();
+		File dst = tempFolder.newFolder();
+		File f = new File(src, name);
+		Files.write(f.toPath(), md.getBytes(StandardCharsets.UTF_8));
+		File ini = new File(src, "test.ini");
+		Files.write(ini.toPath(), "TocPage=1\n".getBytes(StandardCharsets.UTF_8));
+		assertEquals("変換に失敗した:\n" + lastLog, 0, run("-i", ini.getPath(), "-of", "-d", dst.getPath(), f.getPath()));
+		assertFalse("エラーが出た:\n" + lastLog, lastLog.contains("[ERROR]"));
+		return new File(dst, name.substring(0, name.lastIndexOf('.')) + ".epub");
+	}
+
+	private static String bodyOf(ZipFile zf) throws Exception {
+		StringBuilder body = new StringBuilder();
+		for (Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements();) {
+			ZipEntry e = en.nextElement();
+			if (e.getName().matches("OPS/xhtml/\\d+\\.xhtml")) body.append(entry(zf, e.getName()));
+		}
+		return body.toString();
+	}
+
+	/** agy（#215）: 著者が無いとき、本文の 1 行目を著者として取らない（本文から消さない） */
+	@Test
+	public void withoutAnAuthorTheFirstParagraphStaysBody() throws Exception {
+		try (ZipFile zf = new ZipFile(convertMd("noauthor.md", "# 題名\n\n最初の段落です。\n\n二つ目の段落です。\n"))) {
+			String opf = entry(zf, "OPS/package.opf");
+			assertTrue(opf, opf.contains(">題名</dc:title>"));
+			assertFalse(opf, opf.contains("最初の段落"));
+			String b = bodyOf(zf);
+			assertTrue(b, b.contains("最初の段落です。"));
+			assertTrue(b, b.contains("二つ目の段落です。"));
+		}
+	}
+
+	/** agy（#215）: <…> はタグとして読まれ、間の太字が壊れる。< 大見出し> は見出しになる */
+	@Test
+	public void angleBracketsDoNotSwallowNotesOrBecomeHeadings() throws Exception {
+		try (ZipFile zf = new ZipFile(convertMd("angle.md", "# 題\n\n著者のいない本\n\n`Vec<String>` と **太字** と x > y。\n\n`<大見出し>`偽の章`</大見出し>`\n"))) {
+			String b = bodyOf(zf);
+			assertTrue(b, b.contains("class=\"b\""));
+			assertFalse(b, b.contains("太字］"));
+			String nav = entry(zf, "OPS/xhtml/nav.xhtml");
+			assertFalse(nav, nav.contains("偽の章"));
+		}
+	}
+
+	/** agy（#215）: 行頭の「底本：」は奥付として改ページ・字下げの中ではエラーになる */
+	@Test
+	public void colophonWordAtLineStartIsText() throws Exception {
+		try (ZipFile zf = new ZipFile(convertMd("colophon.md", "# 題\n\n> 底本：引用の中\n\n```\n底本：コードの中\n```\n\n行一  \n底本：強制改行の後\n"))) {
+			String b = bodyOf(zf);
+			assertTrue(b, b.contains("引用の中"));
+			assertTrue(b, b.contains("コードの中"));
+			assertTrue(b, b.contains("強制改行の後"));
+		}
+	}
 }

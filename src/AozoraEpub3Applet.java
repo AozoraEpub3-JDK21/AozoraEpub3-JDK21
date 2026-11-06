@@ -4136,7 +4136,7 @@ public class AozoraEpub3Applet extends JPanel
 			if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 		} else if ("cbz".equals(ext)) {
 			imageOnly = true;
-		} else if ("txt".equals(ext)) {
+		} else if (ArchiveTextExtractor.isPlainText(ext)) {
 			LogAppender.println();
 		}
 		if (this.convertCanceled){

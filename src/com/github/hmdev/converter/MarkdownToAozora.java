@@ -73,7 +73,7 @@ public final class MarkdownToAozora {
 	 * @return 青空文庫形式のテキスト（改行は \n）
 	 */
 	public static String convert(String markdown, String defaultTitle) {
-		Node doc = PARSER.parse(markdown);
+		Node doc = PARSER.parse(markdown == null ? "" : markdown);
 		YamlFrontMatterVisitor fm = new YamlFrontMatterVisitor();
 		doc.accept(fm);
 		Map<String, List<String>> data = fm.getData();
@@ -82,20 +82,24 @@ public final class MarkdownToAozora {
 		Node first = firstContent(doc);
 		//題名は注記を含めない（表題ページと dc:title に注記の字が出る）。front matter とファイル名はここで逃がし、
 		//見出しから取るときは文字の節点が逃がし済みなので、太字などの注記を書かずに文字だけ取る
+		//題名は空にしない（1 行目が空だと、変換器が著者や本文の行を表題・著者に取る）
 		String title = first(data, "title");
-		if (title != null) {
-			title = oneLine(title, true);
-		} else if (first instanceof Heading && ((Heading) first).getLevel() == 1) {
+		if (title != null) title = oneLine(title, true);
+		if ((title == null || title.isEmpty()) && first instanceof Heading && ((Heading) first).getLevel() == 1) {
 			w.plain = true;
 			title = oneLine(w.inline(first), false);
 			w.plain = false;
 			first.unlink();
 		}
-		if (title == null || title.isBlank()) title = oneLine(defaultTitle == null ? "" : defaultTitle, true);
+		if (title == null || title.isEmpty()) title = oneLine(defaultTitle == null ? "" : defaultTitle, true);
+		if (title.isEmpty()) title = "無題";
 		String author = first(data, "author");
+		author = author == null ? "" : oneLine(author, true);
+		//変換器は ― や【 で始まる著者の行を副題などとみなして捨てる
+		if (author.startsWith("―") || author.startsWith("【")) author = JOINER + author;
 
 		w.out.append(title).append('\n');
-		w.out.append(author == null ? "" : oneLine(author, true)).append('\n');
+		w.out.append(author).append('\n');
 		w.out.append('\n');
 		w.blocks(doc, 0);
 		return w.out.toString();
@@ -105,13 +109,16 @@ public final class MarkdownToAozora {
 		List<String> v = data.get(key);
 		if (v == null || v.isEmpty()) return null;
 		String s = v.get(0);
-		return s == null || s.isBlank() ? null : s.trim();
+		if (s == null) return null;
+		s = literal(s).strip();
+		return s.isEmpty() ? null : s;
 	}
 
 	/** front matter を飛ばした最初のブロック */
 	private static Node firstContent(Node doc) {
 		Node n = doc.getFirstChild();
-		while (n != null && n.getClass().getSimpleName().startsWith("YamlFrontMatter")) n = n.getNext();
+		//捨てる HTML（先頭のコメントなど）も飛ばす。飛ばさないと続く # が題名にならない
+		while (n != null && (n instanceof HtmlBlock || n.getClass().getSimpleName().startsWith("YamlFrontMatter"))) n = n.getNext();
 		return n;
 	}
 
@@ -243,6 +250,7 @@ public final class MarkdownToAozora {
 						if (!(cell instanceof TableCell)) continue;
 						String value = oneLine(inline(cell), false);
 						String name = col < header.size() ? header.get(col) : "";
+						if (name.isEmpty() && value.isEmpty()) continue;
 						if (line.length() > 0) line.append('／');
 						if (!name.isEmpty()) line.append(name).append('：');
 						line.append(value);
@@ -311,7 +319,16 @@ public final class MarkdownToAozora {
 
 	/** 入力の文字。仮置きの字と取り違えないよう、入力にある同じ字は外す */
 	private static String literal(String s) {
-		return s.indexOf(NOTE) < 0 ? s : s.replace(String.valueOf(NOTE), "");
+		//変換器が入口で消す内部の字（CharUtils.stripInternalChars: \u0001・\uFDD0・\uFDD1）も先に外す。
+		//残すと逃がしの並びを分けたまま、変換器で消えて ［＃ や << が組み上がる
+		StringBuilder b = null;
+		for (int i = 0; i < s.length(); i++) {
+			char c = s.charAt(i);
+			boolean drop = c == NOTE || c == '\u0001' || c == '\uFDD0' || c == '\uFDD1';
+			if (drop && b == null) b = new StringBuilder(s.length()).append(s, 0, i);
+			else if (!drop && b != null) b.append(c);
+		}
+		return b == null ? s : b.toString();
 	}
 
 	/** 末尾の注記（NOTE…］）を飛ばした、最後の見える字 */
@@ -344,7 +361,7 @@ public final class MarkdownToAozora {
 
 	/** 見出し・題名・表の升は 1 行にする（強制改行は空白に） */
 	private static String oneLine(String s, boolean escapeIt) {
-		String t = (escapeIt ? escape(s) : s).replace('\n', ' ').trim();
+		String t = (escapeIt ? escape(literal(s)) : s).replace('\n', ' ').strip();
 		return t;
 	}
 
@@ -375,13 +392,20 @@ public final class MarkdownToAozora {
 				if (dashRun(b) >= 16) b.append(JOINER);
 				b.append(c);
 				break;
-			case '<':
-				//変換器は <img・<a のタグを画像・リンクとして読む。< の直後に英字か / が来たら崩す
-				if (b.length() > 0 && b.charAt(b.length() - 1) == c) b.append(JOINER);
-				b.append(c);
-				if (i + 1 < s.length() && (Character.isLetter(s.charAt(i + 1)) || s.charAt(i + 1) == '/')) b.append(JOINER);
+			case '<': case '>': {
+				//変換器は <…> をすべてタグとして読む（<img・<a は画像・リンク、<大見出し> は見出し、間の ［＃太字］ は飲まれる）。
+				//半角の < > は全角にする
+				char z = c == '<' ? '＜' : '＞';
+				if (b.length() > 0 && b.charAt(b.length() - 1) == z) b.append(JOINER);
+				b.append(z);
 				break;
-			case '>': case '＜': case '＞':
+			}
+			case '底':
+				//変換器は行頭の「底本：」を奥付として読み、改ページする（字下げの中ではエラー）
+				b.append(c);
+				if (s.startsWith("本：", i + 1)) b.append(JOINER);
+				break;
+			case '＜': case '＞':
 				//変換器は 2 つ並んだ < > を《》と読む（3 つ以上は読まない）
 				if (b.length() > 0 && b.charAt(b.length() - 1) == c) b.append(JOINER);
 				b.append(c);

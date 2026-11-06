@@ -141,6 +141,48 @@ public class MarkdownToAozoraTest {
 		assertFalse(out, out.contains("／″"));
 	}
 
+	/** agy（#215）: 先頭の HTML コメントの後の # を題名にする */
+	@Test
+	public void aLeadingHtmlCommentDoesNotHideTheTitle() {
+		String out = conv("<!-- generated -->\n# 題名\n\n本文。\n");
+		assertTrue(out, out.startsWith("題名\n"));
+	}
+
+	/** agy（#215）: 題名が空にならない（1 行目が空だと本文が表題・著者に取られる） */
+	@Test
+	public void theTitleIsNeverEmpty() {
+		assertFalse(MarkdownToAozora.convert("---\ntitle: \"\u0001\"\n---\n本文。\n", "").startsWith("\n"));
+		assertTrue(MarkdownToAozora.convert("---\ntitle: \"\u0001\"\n---\n# 見出し\n\n本文。\n", "f").startsWith("見出し\n"));
+		assertFalse(MarkdownToAozora.convert("", "").startsWith("\n"));
+		assertFalse(MarkdownToAozora.convert(null, null).startsWith("\n"));
+	}
+
+	/** agy（#215）: 変換器が入口で消す内部の字で、逃がしの並びが元に戻らない */
+	@Test
+	public void internalCharactersAreRemovedBeforeEscaping() {
+		String out = conv("# 題\n\n［\u0001＃改ページ］ と 〔\uFDD0abc〕\n");
+		assertFalse(out, out.contains("\u0001"));
+		assertFalse(out, out.contains("\uFDD0"));
+		assertFalse(out, out.contains("［＃改ページ］"));
+		assertFalse(out, out.contains("〔a"));
+	}
+
+	/** agy（#215）: ― や【 で始まる著者は変換器が捨てる */
+	@Test
+	public void anAuthorStartingWithADashIsKept() {
+		String out = conv("---\nauthor: \"【編】春雨\"\n---\n# 題\n");
+		String author = out.split("\n", -1)[1];
+		assertFalse(out, author.startsWith("【"));
+		assertTrue(out, author.contains("【編】春雨"));
+	}
+
+	/** agy（#215）: 見出しも値も空の升で ／ が重ならない */
+	@Test
+	public void emptyTableColumnsAreSkipped() {
+		String out = conv("# 題\n\n| A | | C |\n|---|---|---|\n| 1 | | 3 |\n");
+		assertTrue(out, out.contains("・A：1／C：3\n"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;
