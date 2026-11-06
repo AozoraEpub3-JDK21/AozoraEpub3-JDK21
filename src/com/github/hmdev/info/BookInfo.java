@@ -286,6 +286,38 @@ public class BookInfo
 		if (this.mapLongMiddleLine == null) this.mapLongMiddleLine = new HashSet<Integer>();
 		this.mapLongMiddleLine.add(lineNum);
 	}
+	/** 左右中央の節の控え（計器 internal #8 用。変換には使わない）: 注記行 → {行数, 表組みに倒した理由} */
+	private final java.util.LinkedHashMap<Integer, MiddleSection> middleSections = new java.util.LinkedHashMap<Integer, MiddleSection>();
+	/** 閉じた左右中央の節の控え（注記行の順） */
+	public java.util.Collection<MiddleSection> getMiddleSections() { return java.util.Collections.unmodifiableCollection(this.middleSections.values()); }
+	public static final class MiddleSection {
+		public final int line;
+		public final int lines;
+		public final java.util.LinkedHashSet<String> reasons;
+		MiddleSection(int line, int lines, java.util.Set<String> reasons) { this.line = line; this.lines = lines; this.reasons = new java.util.LinkedHashSet<String>(reasons); }
+	}
+	/** 閉じた左右中央の節を控える */
+	public void recordMiddleSection(int lineNum, int lines, java.util.Set<String> reasons)
+	{
+		this.middleSections.put(lineNum, new MiddleSection(lineNum, lines, reasons));
+	}
+	/** 閉じた後で表組みに倒した理由を足す */
+	public void addMiddleSectionReason(int lineNum, String reason)
+	{
+		MiddleSection m = this.middleSections.get(lineNum);
+		if (m != null) m.reasons.add(reason);
+	}
+	/** 柱を外す行（左右中央の節の中。事前の走査が決め、書き出しはこれだけを見る。internal #8） */
+	HashSet<Integer> mapHashiraDropLine = null;
+	public void addHashiraDropLine(int lineNum)
+	{
+		if (this.mapHashiraDropLine == null) this.mapHashiraDropLine = new HashSet<Integer>();
+		this.mapHashiraDropLine.add(lineNum);
+	}
+	public boolean isHashiraDropLine(int lineNum)
+	{
+		return this.mapHashiraDropLine != null && this.mapHashiraDropLine.contains(lineNum);
+	}
 	/** 長い左右中央の節の注記行ならtrue */
 	public boolean isLongMiddleLine(int lineNum)
 	{

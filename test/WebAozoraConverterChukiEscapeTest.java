@@ -211,7 +211,9 @@ public class WebAozoraConverterChukiEscapeTest {
 		//中間テキストを変換して、柱が閉じ、題名に「［＃」がそのまま出て、目次の章の名前にも残り、本文の返り点は効くことを見る
 		String text = "作品\n作者\n\n" + episode("作［＃品", "章［＃題", "<p id=\"L1\">学［＃二］而時習［＃一］之</p>");
 		String xhtml = convert(text);
-		assertTrue("柱が閉じていない・作品名が欠けた:\n" + xhtml, xhtml.contains("<div class=\"running_head yoko\">作［＃品</div>"));
+		//中扉には柱を出さない（internal #8）。柱が閉じていれば中身ごと外れ、作品名の欠片も印も残らない
+		assertFalse("中扉に柱が出た:\n" + xhtml, xhtml.contains("running_head"));
+		assertFalse("柱が閉じず、作品名の欠片が中扉に残った:\n" + xhtml, xhtml.contains("作［＃品") || xhtml.contains("［＃ここ"));
 		assertTrue("章題の「［＃」が消えた:\n" + xhtml, xhtml.contains("章［＃題"));
 		assertTrue("返り点が注記として効いていない:\n" + xhtml, xhtml.contains("学<span class=\"sub\">二</span>而時習<span class=\"sub\">一</span>之"));
 		assertTrue("目次の章の名前の「［＃」が消えた:\n" + toc, toc.contains("<text>章［＃題</text>"));

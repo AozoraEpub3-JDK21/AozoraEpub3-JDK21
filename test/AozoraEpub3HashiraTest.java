@@ -91,8 +91,10 @@ public class AozoraEpub3HashiraTest {
 		convert("作品タイトル\n作者\n\n"
 			+ "［＃改ページ］\n［＃ページの左右中央］\n［＃ここから柱］作品タイトル［＃ここで柱終わり］\n［＃３字下げ］［＃大見出し］日本編［＃大見出し終わり］\n"
 			+ "［＃改ページ］\n［＃中見出し］開幕一軍［＃中見出し終わり］\n本文です。\n");
-		assertTrue("柱が running_head で出ていない:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">作品タイトル</div>"));
+		//左右中央の節（中扉）には柱を出さない（長い作品名で節が表組みに倒れ、右に寄っていた。internal #8）
+		assertFalse("中扉に柱が出た:\n" + allXhtml, allXhtml.contains("running_head"));
 		assertFalse("柱の作品名が段落になった:\n" + allXhtml, allXhtml.contains("<p>作品タイトル</p>"));
+		assertTrue("中扉の章題が無い:\n" + allXhtml, allXhtml.contains(">日本編<"));
 		assertTrue("目次の章のラベルが章の名前でない:\n" + toc, toc.contains("<text>日本編</text>"));
 		//本文のページを指す目次の項目（表題ページの項目を除く）に作品名は出ない
 		java.util.regex.Matcher m = java.util.regex.Pattern.compile("<text>([^<]*)</text>\\s*</navLabel>\\s*<content src=\"xhtml/0").matcher(toc);
@@ -103,6 +105,13 @@ public class AozoraEpub3HashiraTest {
 		assertTrue("NAV の章のラベルが章の名前でない:\n" + nav, labels.contains("日本編"));
 		assertTrue("本文のページを指す NAV の項目が無い:\n" + nav, labels.size() >= 2);
 		for (String label : labels) assertFalse("NAV のラベルが作品名:\n" + nav, label.contains("作品タイトル"));
+	}
+
+	/** 左右中央の節の外の柱は、今まで通り running_head で出す（外すのは中扉だけ。internal #8） */
+	@Test
+	public void aHashiraOutsideAMiddlePageIsStillShown() throws Exception {
+		convert("題\n作者\n\n［＃改ページ］\n［＃ここから柱］作品名［＃ここで柱終わり］\n［＃大見出し］第一章［＃大見出し終わり］\n本文。\n");
+		assertTrue("柱が running_head で出ていない:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">作品名</div>"));
 	}
 
 	/** 柱の中の注記（Web 変換は外字・縦中横を入れうる）も、目次の章のラベルに出ない */
@@ -141,8 +150,8 @@ public class AozoraEpub3HashiraTest {
 			assertFalse("NAV に空の項目:\n" + nav, label.isBlank());
 			assertFalse("柱の作品名が NAV の章になった:\n" + nav, label.contains("始まりの物語"));
 		}
-		//章として拾うと、柱の div に章の目印（id）が付く
-		assertTrue("柱が章として拾われた:\n" + allXhtml, allXhtml.contains("<div class=\"running_head yoko\">1 始まりの物語</div>"));
+		//中扉には柱を出さない（internal #8）。章として拾われていないことは上の目次・NAV で見る
+		assertFalse("中扉に柱が出た:\n" + allXhtml, allXhtml.contains("running_head"));
 		assertWellFormed();
 	}
 

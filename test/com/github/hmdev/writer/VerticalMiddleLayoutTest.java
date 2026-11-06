@@ -123,7 +123,7 @@ public class VerticalMiddleLayoutTest {
 	 * 短い作品名なら 1 ページに収まる中扉（横書きの親の中の縦書きのブロック）、長い作品名なら表組み
 	 */
 	@Test
-	public void 中扉の柱は1行として数える() throws Exception {
+	public void 中扉には柱を出さず長い作品名でも中央に組む() throws Exception {
 		Files.write(txt, String.join("\n",
 			"表題",
 			"著者",
@@ -141,12 +141,17 @@ public class VerticalMiddleLayoutTest {
 			"［＃改ページ］",
 			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			//internal #8: 柱（作品名）を出していたころは、長い作品名で節が表組みに倒れ、ページの右に寄っていた
 			String shortHead = read(zf, "OPS/xhtml/0001.xhtml");
 			assertTrue(shortHead, shortHead.contains("<div class=\"vrtl middle\">"));
-			assertTrue(shortHead, shortHead.contains("<div class=\"running_head yoko\">短い作品名</div>"));
+			assertFalse(shortHead, shortHead.contains("running_head"));
+			assertTrue(shortHead, shortHead.contains("第１章"));
 			String longHead = read(zf, "OPS/xhtml/0003.xhtml");
-			assertTrue(longHead, longHead.contains("<table class=\"middle\"><tr><td>"));
-			assertTrue(longHead, longHead.contains("running_head"));
+			assertTrue(longHead, longHead.contains("<div class=\"vrtl middle\">"));
+			assertFalse(longHead, longHead.contains("<table"));
+			assertFalse(longHead, longHead.contains("running_head"));
+			assertFalse(longHead, longHead.contains("無詠唱魔法"));
+			assertTrue(longHead, longHead.contains("第２章"));
 		}
 	}
 
@@ -154,8 +159,71 @@ public class VerticalMiddleLayoutTest {
 	 * 左右中央のページの柱は、ページの角に置かず、章題の横の縦の 1 行として並びに入れる（CSS）
 	 * （角に置くと、位置の決め方がリーダーごとに違い、Thorium では章題に重なった）
 	 */
+		/** /code-review（#216）: 左右中央の注記と柱が同じ行でも、数える側と書き出す側が揃う */
 	@Test
-	public void 表組みの中扉の柱は並びに入れる() throws Exception {
+	public void 左右中央と同じ行の柱も出さない() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］［＃ここから柱］声が出せないので無詠唱魔法でもいいですか長い長い作品名［＃ここで柱終わり］",
+			"［＃３字下げ］［＃大見出し］第１章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String page = read(zf, "OPS/xhtml/0001.xhtml");
+			assertTrue(page, page.contains("<div class=\"vrtl middle\">"));
+			assertFalse(page, page.contains("running_head"));
+			assertFalse(page, page.contains("無詠唱魔法"));
+			assertTrue(page, page.contains("第１章"));
+		}
+	}
+
+	/** /code-review（#216）: 柱だけの行を外しても、空の列を残さない */
+	@Test
+	public void 柱だけの行は空の列を残さない() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"第一部",
+			"［＃ここから柱］作品名［＃ここで柱終わり］",
+			"第１章",
+			"［＃改ページ］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String page = read(zf, "OPS/xhtml/0001.xhtml");
+			assertFalse(page, page.contains("作品名"));
+			assertFalse("空の列が入った:\n" + page, page.contains("<br/>"));
+			assertTrue(page, page.contains("第一部"));
+			assertTrue(page, page.contains("第１章"));
+		}
+	}
+
+	/** 左右中央の節が終わった後の柱は出す（外す行は節の中だけ） */
+	@Test
+	public void 中扉の後の本文の柱は出す() throws Exception {
+		Files.write(txt, String.join("\n",
+			"表題",
+			"著者",
+			"",
+			"［＃改ページ］",
+			"［＃ページの左右中央］",
+			"［＃３字下げ］［＃大見出し］第１章［＃大見出し終わり］",
+			"［＃改ページ］",
+			"［＃ここから柱］作品名［＃ここで柱終わり］",
+			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
+		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			String page = read(zf, "OPS/xhtml/0002.xhtml");
+			assertTrue(page, page.contains("<div class=\"running_head yoko\">作品名</div>"));
+		}
+	}
+
+	@Test
+	public void 表組みの中扉にも柱を出さない() throws Exception {
 		Files.write(txt, String.join("\n",
 			"表題",
 			"著者",
@@ -168,8 +236,10 @@ public class VerticalMiddleLayoutTest {
 			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
 			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
+			//章題が長いので表組みのまま。柱は出さない（internal #8）
 			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td>"));
-			assertTrue(chapter, chapter.contains("<div class=\"running_head yoko\">作品名</div>"));
+			assertFalse(chapter, chapter.contains("running_head"));
+			assertTrue(chapter, chapter.contains("一列に収まらないほど長い長い章題です"));
 			String css = read(zf, "OPS/css/vertical_middle.css");
 			assertTrue(css, css.contains(".middle div.running_head {"));
 			assertTrue(css, css.contains("position: static !important;"));
