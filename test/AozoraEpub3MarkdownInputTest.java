@@ -153,4 +153,32 @@ public class AozoraEpub3MarkdownInputTest {
 			assertTrue(b, b.contains("強制改行の後"));
 		}
 	}
+
+	/** /code-review（#215）: 表題の種別が「著者名→表題」でも、Markdown の題名と著者を入れ替えない */
+	@Test
+	public void theTitleTypeOptionDoesNotSwapTitleAndAuthor() throws Exception {
+		File src = tempFolder.newFolder();
+		File dst = tempFolder.newFolder();
+		File f = new File(src, "swap.md");
+		Files.write(f.toPath(), "---\nauthor: 著者B\n---\n# 題名A\n\n本文。\n".getBytes(StandardCharsets.UTF_8));
+		File ini = new File(src, "test.ini");
+		Files.write(ini.toPath(), "TocPage=1\n".getBytes(StandardCharsets.UTF_8));
+		assertEquals(lastLog, 0, run("-i", ini.getPath(), "-t", "1", "-of", "-d", dst.getPath(), f.getPath()));
+		try (ZipFile zf = new ZipFile(new File(dst, "swap.epub"))) {
+			String opf = entry(zf, "OPS/package.opf");
+			assertTrue(opf, opf.contains(">題名A</dc:title>"));
+			assertTrue(opf, opf.contains(">著者B</dc:creator>"));
+		}
+	}
+
+	/** /code-review（#215）: UTF-8 でない .md は、黙って化けさせずに知らせる */
+	@Test
+	public void aNonUtf8MarkdownFileIsReported() throws Exception {
+		File src = tempFolder.newFolder();
+		File dst = tempFolder.newFolder();
+		File f = new File(src, "sjis.md");
+		Files.write(f.toPath(), "# 題\n\n日本語の本文。\n".getBytes("MS932"));
+		run("-of", "-d", dst.getPath(), f.getPath());
+		assertTrue(lastLog, lastLog.contains("UTF-8 として読めない字"));
+	}
 }

@@ -1013,6 +1013,8 @@ public class AozoraEpub3
 	static public BookInfo getBookInfo(File srcFile, String ext, int txtIdx, ImageInfoReader imageInfoReader, AozoraEpub3Converter aozoraConverter,
 			String encType, BookInfo.TitleType titleType, boolean pubFirst)
 	{
+		//Markdown は題名・著者の順で書き出すので、表題の種別と出版社の先頭は設定によらず固定する（文字コードと同じ）
+		if ("md".equals(ext)) { titleType = BookInfo.TitleType.TITLE_AUTHOR; pubFirst = false; }
 		try {
 			String[] textEntryName = new String[1];
 			InputStream is = ArchiveTextExtractor.getTextInputStream(srcFile, ext, imageInfoReader, textEntryName, txtIdx);

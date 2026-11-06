@@ -183,6 +183,45 @@ public class MarkdownToAozoraTest {
 		assertTrue(out, out.contains("・A：1／C：3\n"));
 	}
 
+	/** /code-review（#215）: 先頭の --- が区切り線なら本文を捨てない */
+	@Test
+	public void aLeadingRuleIsNotFrontMatter() {
+		String out = conv("---\n# 見出し\n\n本文です\n");
+		assertTrue(out, out.contains("本文です"));
+		out = conv("---\n第一章\n\nあいう\n\n---\n\n残り\n");
+		assertTrue(out, out.contains("第一章"));
+		assertTrue(out, out.contains("あいう"));
+		assertTrue(out, out.contains("残り"));
+		//本物の front matter は今まで通り
+		assertTrue(conv("---\nauthor: 春雨\ntags:\n  - a\n---\n# 題\n").startsWith("題\n春雨\n"));
+	}
+
+	/** /code-review（#215）: ※ の後ろの自分の注記が外字の注記に読まれない */
+	@Test
+	public void aKomeBeforeOurNotesIsNotGaiji() {
+		String out = conv("# 題\n\n注意※**重要**\n\n## 注意事項※\n");
+		assertFalse(out, out.contains("※［＃"));
+		assertTrue(out, out.contains("［＃太字］重要［＃太字終わり］"));
+		assertTrue(out, out.contains("［＃大見出し終わり］"));
+	}
+
+	/** /code-review（#215）: 箇条書き・引用の中の見出しで改ページしない */
+	@Test
+	public void aHeadingInsideAListDoesNotBreakThePage() {
+		String out = conv("# 題\n\n本文。\n\n- ## h\n- x\n\n> ## q\n");
+		assertFalse(out, out.contains("［＃改ページ］"));
+		assertFalse(out, out.contains("大見出し］h"));
+		assertTrue(out, out.contains("［＃太字］h［＃太字終わり］"));
+		assertTrue(out, out.contains("［＃太字］q［＃太字終わり］"));
+	}
+
+	/** /code-review（#215）: 本文の ］ の後の改行に、前の太字を見て空白を足さない */
+	@Test
+	public void aLiteralClosingBracketIsVisibleText() {
+		String out = conv("# 題\n\n**x** a］\nb\n");
+		assertTrue(out, out.contains("a］b"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.commonmark.Extension;
+import org.commonmark.ext.front.matter.YamlFrontMatterBlock;
 import org.commonmark.ext.front.matter.YamlFrontMatterExtension;
 import org.commonmark.ext.front.matter.YamlFrontMatterVisitor;
 import org.commonmark.ext.gfm.tables.TableBlock;
@@ -56,8 +57,12 @@ public final class MarkdownToAozora {
 	/** 並びを崩すために挟む文字（WORD JOINER。幅が無く、改行も起こさない） */
 	static final char JOINER = '⁠';
 
-	private static final List<Extension> EXTENSIONS = List.of(TablesExtension.create(), YamlFrontMatterExtension.create());
-	private static final Parser PARSER = Parser.builder().extensions(EXTENSIONS).build();
+	private static final Parser PARSER_WITH_FRONT_MATTER = Parser.builder()
+		.extensions(List.<Extension>of(TablesExtension.create(), YamlFrontMatterExtension.create())).build();
+	private static final Parser PARSER = Parser.builder().extensions(List.<Extension>of(TablesExtension.create())).build();
+	/** front matter として読む形: 1 行目が ---、閉じの ---（か ...）があり、間は「キー: 値」・リストの項目・空行だけ */
+	private static final java.util.regex.Pattern FRONT_MATTER = java.util.regex.Pattern.compile(
+		"\\A---[ \\t]*\\r?\\n(?:(?:[ \\t]*[A-Za-z0-9_-]+[ \\t]*:.*|[ \\t]+-.*|[ \\t]*)\\r?\\n)*?(?:---|\\.\\.\\.)[ \\t]*(?:\\r?\\n|\\z)");
 
 	private final StringBuilder out = new StringBuilder();
 	/** 注記を書かずに文字だけ取る（題名） */
@@ -73,7 +78,10 @@ public final class MarkdownToAozora {
 	 * @return 青空文庫形式のテキスト（改行は \n）
 	 */
 	public static String convert(String markdown, String defaultTitle) {
-		Node doc = PARSER.parse(markdown == null ? "" : markdown);
+		if (markdown == null) markdown = "";
+		//先頭の --- が区切り線のこともある。front matter の形のときだけ front matter として読む
+		//（拡張に任せると、次の --- まで、閉じが無ければ全部を front matter として捨てる）
+		Node doc = (FRONT_MATTER.matcher(markdown).lookingAt() ? PARSER_WITH_FRONT_MATTER : PARSER).parse(markdown);
 		YamlFrontMatterVisitor fm = new YamlFrontMatterVisitor();
 		doc.accept(fm);
 		Map<String, List<String>> data = fm.getData();
@@ -118,7 +126,7 @@ public final class MarkdownToAozora {
 	private static Node firstContent(Node doc) {
 		Node n = doc.getFirstChild();
 		//捨てる HTML（先頭のコメントなど）も飛ばす。飛ばさないと続く # が題名にならない
-		while (n != null && (n instanceof HtmlBlock || n.getClass().getSimpleName().startsWith("YamlFrontMatter"))) n = n.getNext();
+		while (n != null && (n instanceof HtmlBlock || n instanceof YamlFrontMatterBlock)) n = n.getNext();
 		return n;
 	}
 
@@ -129,7 +137,11 @@ public final class MarkdownToAozora {
 	}
 
 	private void block(Node n, int indent) {
-		if (n instanceof Heading) {
+		if (n instanceof Heading && indent > 0) {
+			//箇条書き・引用の中の見出しは、改ページも見出しの注記も入れず、太字の段落にする
+			String t = inline(n);
+			if (!t.isBlank()) paragraph(NOTE_BOLD_OPEN + t + NOTE_BOLD_CLOSE, indent, indent, "");
+		} else if (n instanceof Heading) {
 			heading((Heading) n);
 		} else if (n instanceof Paragraph) {
 			paragraph(inline(n), indent, indent, "");
@@ -149,7 +161,7 @@ public final class MarkdownToAozora {
 			//HTML は読まない（AI のレポートのコメント <!-- --> など）
 		} else if (n.getFirstChild() != null) {
 			//front matter など、知らない入れ物は中身だけ
-			if (!n.getClass().getSimpleName().startsWith("YamlFrontMatter")) blocks(n, indent);
+			if (!(n instanceof YamlFrontMatterBlock)) blocks(n, indent);
 		}
 	}
 
@@ -316,6 +328,8 @@ public final class MarkdownToAozora {
 
 	/** 自分で書く注記の ［＃ の仮置き（私用領域の字。入力の同じ字は {@link #literal} で外す） */
 	static final char NOTE = '\uE000';
+	/** 段落の文字の中に置く太字の注記（逃がしの前。inline と同じ仮置き） */
+	private static final String NOTE_BOLD_OPEN = "［＃太字］", NOTE_BOLD_CLOSE = "［＃太字終わり］";
 
 	/** 入力の文字。仮置きの字と取り違えないよう、入力にある同じ字は外す */
 	private static String literal(String s) {
@@ -331,13 +345,16 @@ public final class MarkdownToAozora {
 		return b == null ? s : b.toString();
 	}
 
-	/** 末尾の注記（NOTE…］）を飛ばした、最後の見える字 */
+	/** 末尾の注記（NOTE…］）を飛ばした、最後の見える字。NOTE から末尾の ］ までの間に ］ がほかにあれば、それは本文の ］ */
 	private static char lastVisible(CharSequence b) {
 		int end = b.length();
 		while (end > 0 && b.charAt(end - 1) == '］') {
 			int open = -1;
 			for (int i = end - 1; i >= 0; i--) if (b.charAt(i) == NOTE) { open = i; break; }
 			if (open < 0) break;
+			boolean ours = true;
+			for (int i = open + 1; i < end - 1; i++) if (b.charAt(i) == '］') { ours = false; break; }
+			if (!ours) break;
 			end = open;
 		}
 		return end == 0 ? 0 : b.charAt(end - 1);
@@ -400,6 +417,10 @@ public final class MarkdownToAozora {
 				b.append(z);
 				break;
 			}
+			case '※':
+				//変換器は ※［＃…］ を外字の注記と読む。後ろに自分で書く注記（太字・見出しの閉じ）が来ても外字にしない
+				b.append(c).append(JOINER);
+				break;
 			case '底':
 				//変換器は行頭の「底本：」を奥付として読み、改ページする（字下げの中ではエラー）
 				b.append(c);

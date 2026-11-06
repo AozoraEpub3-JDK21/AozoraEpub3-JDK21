@@ -4098,6 +4098,8 @@ public class AozoraEpub3Applet extends JPanel
 				//サブディレクトリ 再帰
 				_convertFiles(srcFile.listFiles(), dstPath, srcFile);
 			} else if (srcFile.isFile()) {
+				//フォルダを辿って見つけた .md（README など）は変換しない。.md を直接渡したときだけ Markdown として変換する
+				if (parent != null && srcFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".md")) continue;
 				convertFile(srcFile, dstPath);
 			}
 			//キャンセル
