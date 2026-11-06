@@ -89,6 +89,32 @@ public class MarkdownToAozoraTest {
 		assertTrue(out, out.contains("　日本語の行と ［＃太字］太字［＃太字終わり］ とEnglish words\n"));
 	}
 
+	/** codex P2（#215）: - が 50 個並ぶ行はコメントの区切りとして読まれ、後ろが消える */
+	@Test
+	public void aLongDashLineInCodeIsNotACommentDelimiter() {
+		String dashes = "-".repeat(60);
+		String out = conv("# 題\n\n```\n" + dashes + "\n```\n\n後ろ。\n");
+		for (String line : out.split("\n")) assertFalse(out, line.startsWith("--------------------------------"));
+		assertTrue(out, out.contains("後ろ。"));
+	}
+
+	/** codex P2（#215）: <img・<a は変換器が画像・リンクとして読む */
+	@Test
+	public void htmlTagsInCodeStayText() {
+		String out = conv("# 題\n\n`<img src=\"x.png\">` と `<a href=\"u\">t</a>`\n");
+		assertFalse(out, out.toLowerCase().contains("<img"));
+		assertFalse(out, out.toLowerCase().contains("<a "));
+		assertFalse(out, out.toLowerCase().contains("</a>"));
+		assertTrue(out, out.contains("img src"));
+	}
+
+	/** codex P2（#215）: 太字の入った # の題名に注記の字を出さない */
+	@Test
+	public void aBoldTitleHasNoNotationInIt() {
+		String out = conv("# **報告**と題\n\n本文。\n");
+		assertTrue(out, out.startsWith("報告と題\n"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;

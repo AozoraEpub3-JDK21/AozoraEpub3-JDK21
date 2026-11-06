@@ -60,6 +60,8 @@ public final class MarkdownToAozora {
 	private static final Parser PARSER = Parser.builder().extensions(EXTENSIONS).build();
 
 	private final StringBuilder out = new StringBuilder();
+	/** 注記を書かずに文字だけ取る（題名） */
+	private boolean plain = false;
 	/** 題名の後に本文を書いたか（最初の大見出しの前に改ページを入れるかどうか） */
 	private boolean bodyWritten = false;
 
@@ -78,15 +80,21 @@ public final class MarkdownToAozora {
 
 		MarkdownToAozora w = new MarkdownToAozora();
 		Node first = firstContent(doc);
+		//題名は注記を含めない（表題ページと dc:title に注記の字が出る）。front matter とファイル名はここで逃がし、
+		//見出しから取るときは文字の節点が逃がし済みなので、太字などの注記を書かずに文字だけ取る
 		String title = first(data, "title");
-		if (title == null && first instanceof Heading && ((Heading) first).getLevel() == 1) {
-			title = w.inline(first);
+		if (title != null) {
+			title = oneLine(title, true);
+		} else if (first instanceof Heading && ((Heading) first).getLevel() == 1) {
+			w.plain = true;
+			title = oneLine(w.inline(first), false);
+			w.plain = false;
 			first.unlink();
 		}
-		if (title == null || title.isBlank()) title = defaultTitle == null ? "" : defaultTitle;
+		if (title == null || title.isBlank()) title = oneLine(defaultTitle == null ? "" : defaultTitle, true);
 		String author = first(data, "author");
 
-		w.out.append(oneLine(title, true)).append('\n');
+		w.out.append(title).append('\n');
 		w.out.append(author == null ? "" : oneLine(author, true)).append('\n');
 		w.out.append('\n');
 		w.blocks(doc, 0);
@@ -269,7 +277,8 @@ public final class MarkdownToAozora {
 			b.append('\n');
 		} else if (n instanceof StrongEmphasis) {
 			String inner = inline(n);
-			if (!inner.isEmpty()) b.append("［＃太字］").append(inner).append("［＃太字終わり］");
+			if (plain) b.append(inner);
+			else if (!inner.isEmpty()) b.append("［＃太字］").append(inner).append("［＃太字終わり］");
 		} else if (n instanceof Emphasis) {
 			b.append(inline(n));
 		} else if (n instanceof Link) {
@@ -309,7 +318,18 @@ public final class MarkdownToAozora {
 				if (b.length() > 0 && b.charAt(b.length() - 1) == '［') b.append(JOINER);
 				b.append(c);
 				break;
-			case '<': case '>': case '＜': case '＞':
+			case '-':
+				//変換器は行頭の - の並び（32 個で警告、50 個でコメントの区切り）を読む。16 個ごとに崩す
+				if (dashRun(b) >= 16) b.append(JOINER);
+				b.append(c);
+				break;
+			case '<':
+				//変換器は <img・<a のタグを画像・リンクとして読む。< の直後に英字か / が来たら崩す
+				if (b.length() > 0 && b.charAt(b.length() - 1) == c) b.append(JOINER);
+				b.append(c);
+				if (i + 1 < s.length() && (Character.isLetter(s.charAt(i + 1)) || s.charAt(i + 1) == '/')) b.append(JOINER);
+				break;
+			case '>': case '＜': case '＞':
 				//変換器は 2 つ並んだ < > を《》と読む（3 つ以上は読まない）
 				if (b.length() > 0 && b.charAt(b.length() - 1) == c) b.append(JOINER);
 				b.append(c);
@@ -319,6 +339,13 @@ public final class MarkdownToAozora {
 			}
 		}
 		return b.toString();
+	}
+
+	/** b の末尾に続く - の数（崩した印より後ろだけ） */
+	private static int dashRun(StringBuilder b) {
+		int n = 0;
+		for (int i = b.length() - 1; i >= 0 && b.charAt(i) == '-'; i--) n++;
+		return n;
 	}
 
 	private static String zen(int n) {
