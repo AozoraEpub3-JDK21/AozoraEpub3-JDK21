@@ -523,13 +523,14 @@ cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 
 ### 6.12 `verifyDistSources` で止まる（配布物に入るパスがコミットと違う）
 
-**症状**: `zipDistribution`・`tarDistribution` の前に「配布物に入るパスに、コミットと違うファイルがあります」で落ちる。
+**症状**: `zipDistribution`・`tarDistribution`・`installDist` が写す直前に「配布物に入るパスに、コミットと違うファイルがあります」で落ちる（jar の元の `src/`・`build.gradle` も確かめる）。
 `??`（未追跡）・`!!`（gitignore）・`M`（変更）のファイルが並ぶ。
 
 **理由**: 配布物は作業ツリーから写すので、そのままだと下書きが混ざる。v1.8.0 の最初のビルドに、gitignore した
 `web/www.aozora.gr.jp/replace.txt`（底本：の行を消す規則の下書き）が入った。GUI は終了時に `AozoraEpub3.ini` を書き換える。
+改行だけの違い（CRLF↔LF）は git が揃えて比べるので、この検査では見えない（§3 の改行の注意を参照）。
 
-**対処**: きれいな worktree で作り直す（`git worktree add --detach <リポジトリの外のパス> <タグ>`）。
+**対処**: きれいな worktree で作り直す（`git worktree add --detach <リポジトリの外のパス> HEAD`。dist はタグを打つ §4.1 より前なので、タグではなくリリースするコミットから）。
 並んだファイルが配布物に入ってよいと分かっているときだけ `-PallowDirtyDist` を付ける（警告に変わる）。
 
 ---
