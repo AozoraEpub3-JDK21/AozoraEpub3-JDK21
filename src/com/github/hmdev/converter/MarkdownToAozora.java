@@ -55,14 +55,31 @@ import org.commonmark.parser.Parser;
 public final class MarkdownToAozora {
 
 	/** 並びを崩すために挟む文字（WORD JOINER。幅が無く、改行も起こさない） */
-	static final char JOINER = '⁠';
+	static final char JOINER = '\u2060';
 
 	private static final Parser PARSER_WITH_FRONT_MATTER = Parser.builder()
 		.extensions(List.<Extension>of(TablesExtension.create(), YamlFrontMatterExtension.create())).build();
 	private static final Parser PARSER = Parser.builder().extensions(List.<Extension>of(TablesExtension.create())).build();
-	/** front matter として読む形: 1 行目が ---、閉じの ---（か ...）があり、間は「キー: 値」・リストの項目・空行だけ */
-	private static final java.util.regex.Pattern FRONT_MATTER = java.util.regex.Pattern.compile(
-		"\\A---[ \\t]*\\r?\\n(?:(?:[ \\t]*[A-Za-z0-9_-]+[ \\t]*:.*|[ \\t]+-.*|[ \\t]*)\\r?\\n)*?(?:---|\\.\\.\\.)[ \\t]*(?:\\r?\\n|\\z)");
+	/** 「キー: 値」の行（front matter の中身） */
+	private static final java.util.regex.Pattern FRONT_MATTER_KEY = java.util.regex.Pattern.compile("[A-Za-z0-9_-]+[ \\t]*:.*");
+
+	/**
+	 * front matter として読む形か: 1 行目が ---、閉じの ---（か ...）があり、間は「キー: 値」・字下げした行（リストの項目など）・空行だけ。
+	 * 正規表現 1 本で書くと、行の選択肢が重なって入力によっては極端に遅くなる（CodeQL）ので、1 行ずつ見る
+	 */
+	static boolean looksLikeFrontMatter(String md) {
+		String[] lines = md.split("\r?\n", -1);
+		if (lines.length < 2 || !lines[0].strip().equals("---") || !lines[0].startsWith("---")) return false;
+		for (int i = 1; i < lines.length; i++) {
+			String line = lines[i];
+			String t = line.strip();
+			if (t.equals("---") || t.equals("...")) return line.startsWith(t);
+			if (t.isEmpty()) continue;
+			if (Character.isWhitespace(line.charAt(0))) continue;
+			if (!FRONT_MATTER_KEY.matcher(line).matches()) return false;
+		}
+		return false;
+	}
 
 	private final StringBuilder out = new StringBuilder();
 	/** 注記を書かずに文字だけ取る（題名） */
@@ -81,7 +98,7 @@ public final class MarkdownToAozora {
 		if (markdown == null) markdown = "";
 		//先頭の --- が区切り線のこともある。front matter の形のときだけ front matter として読む
 		//（拡張に任せると、次の --- まで、閉じが無ければ全部を front matter として捨てる）
-		Node doc = (FRONT_MATTER.matcher(markdown).lookingAt() ? PARSER_WITH_FRONT_MATTER : PARSER).parse(markdown);
+		Node doc = (looksLikeFrontMatter(markdown) ? PARSER_WITH_FRONT_MATTER : PARSER).parse(markdown);
 		YamlFrontMatterVisitor fm = new YamlFrontMatterVisitor();
 		doc.accept(fm);
 		Map<String, List<String>> data = fm.getData();

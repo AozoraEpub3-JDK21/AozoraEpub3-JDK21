@@ -222,6 +222,15 @@ public class MarkdownToAozoraTest {
 		assertTrue(out, out.contains("a］b"));
 	}
 
+	/** CodeQL（#215）: front matter の判定が、長い空白の行で極端に遅くならない */
+	@Test(timeout = 5000)
+	public void frontMatterDetectionIsLinear() {
+		String md = "---\n" + " \t".repeat(50000) + "x\n" + "a:" + " ".repeat(50000) + "\n本文\n";
+		assertTrue(conv(md).contains("本文"));
+		assertTrue(MarkdownToAozora.looksLikeFrontMatter("---\nauthor: a\n---\n"));
+		assertFalse(MarkdownToAozora.looksLikeFrontMatter("---\n# 見出し\n"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;
