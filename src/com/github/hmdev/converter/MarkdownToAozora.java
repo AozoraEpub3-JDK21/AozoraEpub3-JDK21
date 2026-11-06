@@ -361,6 +361,15 @@ public final class MarkdownToAozora {
 				if (b.length() > 0 && b.charAt(b.length() - 1) == '［') b.append(JOINER);
 				b.append(c);
 				break;
+			case '〔':
+				//変換器は 〔 〕 の中が半角だけなら欧文アクセントの注記として読み、括弧を外す。半角でない字を挟んで字のまま残す
+				b.append(c).append(JOINER);
+				break;
+			case '／':
+				//変換器は ／＼・／″＼ をくの字点に変える
+				b.append(c);
+				if (i + 1 < s.length() && (s.charAt(i + 1) == '＼' || s.charAt(i + 1) == '″')) b.append(JOINER);
+				break;
 			case '-':
 				//変換器は行頭の - の並び（32 個で警告、50 個でコメントの区切り）を読む。16 個ごとに崩す
 				if (dashRun(b) >= 16) b.append(JOINER);

@@ -131,6 +131,16 @@ public class MarkdownToAozoraTest {
 		assertTrue(out, out.contains("hello［＃太字終わり］ world and ［＃太字］bold"));
 	}
 
+	/** codex P2（#215）: 〔半角〕は欧文アクセント、／＼ はくの字点として読まれる */
+	@Test
+	public void latinBracketsAndRepeatMarksStayText() {
+		String out = conv("# 題\n\n〔e'tiquette〕 と `〔abc〕` と ／＼ と ／″＼\n");
+		assertFalse(out, out.contains("〔e"));
+		assertFalse(out, out.contains("〔a"));
+		assertFalse(out, out.contains("／＼"));
+		assertFalse(out, out.contains("／″"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;
