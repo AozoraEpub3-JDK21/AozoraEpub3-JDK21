@@ -306,7 +306,11 @@ public final class MarkdownToAozora {
 		} else if (n instanceof StrongEmphasis) {
 			String inner = rawInline(n);
 			if (plain) b.append(inner);
-			else if (!inner.isEmpty()) b.append(NOTE).append("太字］").append(inner).append(NOTE).append("太字終わり］");
+			else if (!inner.isEmpty()) {
+				//強制改行は行（<p>）を分けるので、太字は行ごとに閉じて開き直す（span が <p> をまたぐと XHTML が壊れる。#215 の codex P2）
+				String open = NOTE + "太字］", close = NOTE + "太字終わり］";
+				b.append(open).append(inner.replace("\n", close + "\n" + open)).append(close);
+			}
 		} else if (n instanceof Emphasis) {
 			b.append(rawInline(n));
 		} else if (n instanceof Link) {

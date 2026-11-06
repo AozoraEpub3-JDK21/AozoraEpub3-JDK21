@@ -181,4 +181,22 @@ public class AozoraEpub3MarkdownInputTest {
 		run("-of", "-d", dst.getPath(), f.getPath());
 		assertTrue(lastLog, lastLog.contains("UTF-8 として読めない字"));
 	}
+
+	/** codex（#215）: 太字の中の強制改行で、span が <p> をまたがない */
+	@Test
+	public void boldAcrossAHardBreakStaysWellFormed() throws Exception {
+		try (ZipFile zf = new ZipFile(convertMd("hard.md", "# 題\n\n**一行目  \n二行目**\n"))) {
+			String b = bodyOf(zf);
+			javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+			f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+			for (Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements();) {
+				ZipEntry e = en.nextElement();
+				if (e.getName().matches("OPS/xhtml/\\d+\\.xhtml")) {
+					try (InputStream is = zf.getInputStream(e)) { f.newDocumentBuilder().parse(is); }
+				}
+			}
+			assertTrue(b, b.contains("一行目"));
+			assertTrue(b, b.contains("二行目"));
+		}
+	}
 }
