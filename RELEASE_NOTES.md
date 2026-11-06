@@ -4,6 +4,7 @@
 
 - **配布物:** 同梱ライブラリの一覧（`THIRD-PARTY-NOTICES.txt`）に、jar に入っている間接依存のライブラリ（commons-codec・commons-io・commons-logging・xmlgraphics-commons・xml-apis など）を加えました。Apache License 2.0 のライブラリの NOTICE の内容と、xml-apis に含まれる W3C・SAX のライセンス文（`LICENSE/xml-apis/`・`LICENSE/xml-apis-ext/`）も同梱します。Apache License 2.0 のライセンス文は全文の `LICENSE/apache-2.0.txt` にまとめ、本文のなかった `LICENSE/batik.txt`・`LICENSE/velocity.txt`・重複していた `LICENSE/commons.txt` は外しました。
 - **コマンドライン:** `-hor`（横書き）で変換すると、目次のページだけ縦書きのまま残っていた問題を直しました。ini の「目次 縦書き」（`TocVertical`）より優先して、目次も横書きにします。本文が横書きで目次だけ縦書きの本は、Kindle でページをめくる向きが逆になっていました。narou.rb で「横書き」を選んでいる場合（narou.rb は `-hor` を付けて呼びます）も、目次が横書きになります。GUI の変換は変わりません。
+- **章の中扉（左右中央のページ）:** 柱（作品名）を出さないようにしました。Web 小説の長い作品名は 1 列に収まらず、そのせいで中扉がページの右に寄っていました（手元の本棚では中扉 57 のうち 49）。中扉は章題だけになり、作品名が長くても左右中央に出ます。本文のページの柱は変わりません。
 （次期バージョンの変更をここに追記する。リリース時は正式なバージョン節へ書き換えること。）
 
 ---

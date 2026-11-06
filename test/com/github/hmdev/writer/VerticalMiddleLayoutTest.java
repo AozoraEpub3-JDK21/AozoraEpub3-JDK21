@@ -123,7 +123,7 @@ public class VerticalMiddleLayoutTest {
 	 * 短い作品名なら 1 ページに収まる中扉（横書きの親の中の縦書きのブロック）、長い作品名なら表組み
 	 */
 	@Test
-	public void 中扉の柱は1行として数える() throws Exception {
+	public void 中扉には柱を出さず長い作品名でも中央に組む() throws Exception {
 		Files.write(txt, String.join("\n",
 			"表題",
 			"著者",
@@ -141,12 +141,17 @@ public class VerticalMiddleLayoutTest {
 			"［＃改ページ］",
 			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
+			//internal #8: 柱（作品名）を出していたころは、長い作品名で節が表組みに倒れ、ページの右に寄っていた
 			String shortHead = read(zf, "OPS/xhtml/0001.xhtml");
 			assertTrue(shortHead, shortHead.contains("<div class=\"vrtl middle\">"));
-			assertTrue(shortHead, shortHead.contains("<div class=\"running_head yoko\">短い作品名</div>"));
+			assertFalse(shortHead, shortHead.contains("running_head"));
+			assertTrue(shortHead, shortHead.contains("第１章"));
 			String longHead = read(zf, "OPS/xhtml/0003.xhtml");
-			assertTrue(longHead, longHead.contains("<table class=\"middle\"><tr><td>"));
-			assertTrue(longHead, longHead.contains("running_head"));
+			assertTrue(longHead, longHead.contains("<div class=\"vrtl middle\">"));
+			assertFalse(longHead, longHead.contains("<table"));
+			assertFalse(longHead, longHead.contains("running_head"));
+			assertFalse(longHead, longHead.contains("無詠唱魔法"));
+			assertTrue(longHead, longHead.contains("第２章"));
 		}
 	}
 
@@ -155,7 +160,7 @@ public class VerticalMiddleLayoutTest {
 	 * （角に置くと、位置の決め方がリーダーごとに違い、Thorium では章題に重なった）
 	 */
 	@Test
-	public void 表組みの中扉の柱は並びに入れる() throws Exception {
+	public void 表組みの中扉にも柱を出さない() throws Exception {
 		Files.write(txt, String.join("\n",
 			"表題",
 			"著者",
@@ -168,8 +173,10 @@ public class VerticalMiddleLayoutTest {
 			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
 			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
+			//章題が長いので表組みのまま。柱は出さない（internal #8）
 			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td>"));
-			assertTrue(chapter, chapter.contains("<div class=\"running_head yoko\">作品名</div>"));
+			assertFalse(chapter, chapter.contains("running_head"));
+			assertTrue(chapter, chapter.contains("一列に収まらないほど長い長い章題です"));
 			String css = read(zf, "OPS/css/vertical_middle.css");
 			assertTrue(css, css.contains(".middle div.running_head {"));
 			assertTrue(css, css.contains("position: static !important;"));

@@ -718,6 +718,8 @@ public class AozoraEpub3Converter
 	{
 		//左右中央の節の外で、注記も無ければ数えるものは無い
 		if (this.middleCountLine < 0 && noRubyLine.indexOf("［＃") < 0) return;
+		//柱は左右中央の節では出さない（convertTextLineToEpub3）ので数えない
+		noRubyLine = CharUtils.removeHashira(noRubyLine);
 		Matcher m = chukiPattern.matcher(noRubyLine);
 		int pos = 0;
 		boolean lineCounted = false;
@@ -2323,6 +2325,9 @@ public class AozoraEpub3Converter
 		//表題より前の行は 2 回通ることがある（下見と書き出し）。重なっても、出ないよりはよいので毎回出す
 		if (balanced.length() != line.length()) LogAppender.warn(lineNum, "柱の注記が1行の中で閉じていないので、注記だけ外しました");
 		line = balanced;
+		//左右中央の節（章の中扉）には柱（作品名）を出さない。Web 小説の長い題は 1 列に収まらず、節が表組みに倒れて
+		//ページの右に寄っていた（利用者の本棚で中扉 57 節中 49 節。internal #8）。事前の走査も柱を数えない（countMiddleSection）
+		if (this.inMiddleSection) line = CharUtils.removeHashira(line);
 		
 		//キャプション指定の画像の場合はすぐにキャプションでなければ画像タグを閉じる
 		if (this.nextLineIsCaption) {
@@ -4017,11 +4022,16 @@ public class AozoraEpub3Converter
 	 * 設定済みだが連続行で書かれていたり空行除外で改行されていない場合は上書きされて無視される
 	 * @param trigger 改ページトリガ nullなら改ページ設定キャンセル
 	 * @param 改ページの後ろに文字がある場合に改行を出すならfalse */
+	/** 書き出している節が左右中央か（中扉の柱を出さない。internal #8） */
+	boolean inMiddleSection = false;
+
 	void setPageBreakTrigger(PageBreakType trigger)
 	{
 		//改ページ前の空行は無視
 		this.printEmptyLines = 0;
 		this.pageBreakTrigger = trigger;
+		//改ページのたびに、次の節が左右中央かを控える（null は改ページしない＝同じ節のまま）
+		if (trigger != null) this.inMiddleSection = trigger.pageType == PageBreakType.PAGE_MIDDLE || trigger.pageType == PageBreakType.PAGE_MIDDLE_TABLE;
 		if (this.pageBreakTrigger != null && this.pageBreakTrigger.pageType != PageBreakType.PAGE_NORMAL) this.skipMiddleEmpty = true;
 	}
 	
