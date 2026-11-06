@@ -128,6 +128,18 @@ distribution. AozoraEpub3.jar contains every library listed here.
    URL: https://www.formdev.com/flatlaf/
    License File: LICENSE/flatlaf.txt
 
+--------------------------------------------------------------------------------
+
+9. commonmark-java
+   - commonmark 0.31.0
+   - commonmark-ext-gfm-tables 0.31.0
+   - commonmark-ext-yaml-front-matter 0.31.0
+
+   Copyright: 2015 Atlassian Pty Ltd; 2015 Robin Stocker
+   License: BSD 2-Clause License
+   URL: https://github.com/commonmark/commonmark-java
+   License File: LICENSE/commonmark.txt
+
 ================================================================================
 NOTICE FILES OF THE APACHE LICENSE 2.0 COMPONENTS
 ================================================================================

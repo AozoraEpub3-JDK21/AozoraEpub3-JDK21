@@ -3374,7 +3374,7 @@ public class AozoraEpub3Applet extends JPanel
 			
 			JFileChooser fileChooser = new JFileChooser(currentPath);
 			fileChooser.setDialogTitle("変換する青空文庫テキストを開く");
-			fileChooser.setFileFilter(new FileNameExtensionFilter("青空文庫(txt,zip,rar,txtz),画像(zip,rar,cbz),ショートカット(url)", new String[]{"txt","zip","rar","cbz","txtz","url"}));
+			fileChooser.setFileFilter(new FileNameExtensionFilter("青空文庫(txt,zip,rar,txtz),Markdown(md),画像(zip,rar,cbz),ショートカット(url)", new String[]{"txt","md","zip","rar","cbz","txtz","url"}));
 			fileChooser.setMultiSelectionEnabled(true);
 			int state = fileChooser.showOpenDialog(parent);
 			switch (state) {
@@ -4098,6 +4098,8 @@ public class AozoraEpub3Applet extends JPanel
 				//サブディレクトリ 再帰
 				_convertFiles(srcFile.listFiles(), dstPath, srcFile);
 			} else if (srcFile.isFile()) {
+				//フォルダを辿って見つけた .md（README など）は変換しない。.md を直接渡したときだけ Markdown として変換する
+				if (parent != null && srcFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".md")) continue;
 				convertFile(srcFile, dstPath);
 			}
 			//キャンセル
@@ -4136,7 +4138,7 @@ public class AozoraEpub3Applet extends JPanel
 			if (txtCount == 0) { txtCount = 1; imageOnly = true; }
 		} else if ("cbz".equals(ext)) {
 			imageOnly = true;
-		} else if ("txt".equals(ext)) {
+		} else if (ArchiveTextExtractor.isPlainText(ext)) {
 			LogAppender.println();
 		}
 		if (this.convertCanceled){
@@ -4183,9 +4185,9 @@ public class AozoraEpub3Applet extends JPanel
 	private void convertFile(File srcFile, File dstPath, String ext, int txtIdx, boolean imageOnly)
 	{
 		//パラメータ設定
-		if (!"txt".equals(ext) && !"txtz".equals(ext) && !"zip".equals(ext) && !"cbz".equals(ext) && !"rar".equals(ext) ) {
+		if (!"txt".equals(ext) && !"md".equals(ext) && !"txtz".equals(ext) && !"zip".equals(ext) && !"cbz".equals(ext) && !"rar".equals(ext) ) {
 			if (!"png".equals(ext) && !"jpg".equals(ext) && !"jpeg".equals(ext) && !"gif".equals(ext)) {
-				LogAppender.println("txt, txtz, zip, cbz rar 以外は変換できません");
+				LogAppender.println("txt, md, txtz, zip, cbz rar 以外は変換できません");
 			}
 			return;
 		}
@@ -4202,7 +4204,7 @@ public class AozoraEpub3Applet extends JPanel
 			coverFileName = null; //表紙無し
 		}
 		
-		boolean isFile = "txt".equals(ext);
+		boolean isFile = ArchiveTextExtractor.isPlainText(ext);
 		ImageInfoReader imageInfoReader = new ImageInfoReader(isFile, srcFile);
 		
 		//zip内の画像をロード

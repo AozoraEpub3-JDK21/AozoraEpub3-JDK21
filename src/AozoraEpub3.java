@@ -392,7 +392,7 @@ public class AozoraEpub3
 				//zipならzip内のテキストを検索
 				int txtCount = 1;
 				boolean imageOnly = false;
-				boolean isFile = "txt".equals(ext);
+				boolean isFile = ArchiveTextExtractor.isPlainText(ext);
 				if("zip".equals(ext) || "txtz".equals(ext)) { 
 					try {
 						txtCount = ArchiveTextExtractor.countZipText(srcFile);
@@ -551,7 +551,7 @@ public class AozoraEpub3
 							LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 							errorCount++;
 							//書庫の本文の控えは convertFile の最後で捨てている。飛ばすときも同じく捨てる（断られた書庫が続くと溜まる）
-							if (!"txt".equals(ext)) ArchiveTextExtractor.clearCache(srcFile);
+							if (!ArchiveTextExtractor.isPlainText(ext)) ArchiveTextExtractor.clearCache(srcFile);
 							continue;
 						}
 						if (!AozoraEpub3.convertFile(
@@ -1013,13 +1013,15 @@ public class AozoraEpub3
 	static public BookInfo getBookInfo(File srcFile, String ext, int txtIdx, ImageInfoReader imageInfoReader, AozoraEpub3Converter aozoraConverter,
 			String encType, BookInfo.TitleType titleType, boolean pubFirst)
 	{
+		//Markdown は題名・著者の順で書き出すので、表題の種別と出版社の先頭は設定によらず固定する（文字コードと同じ）
+		if ("md".equals(ext)) { titleType = BookInfo.TitleType.TITLE_AUTHOR; pubFirst = false; }
 		try {
 			String[] textEntryName = new String[1];
 			InputStream is = ArchiveTextExtractor.getTextInputStream(srcFile, ext, imageInfoReader, textEntryName, txtIdx);
 			if (is == null) return null;
 			
 			//タイトル、画像注記、左右中央注記、目次取得
-			BufferedReader src = new BufferedReader(new InputStreamReader(is, (String)encType));
+			BufferedReader src = new BufferedReader(new InputStreamReader(is, ArchiveTextExtractor.encodingFor(ext, encType)));
 			BookInfo bookInfo = aozoraConverter.getBookInfo(srcFile, src, imageInfoReader, titleType, pubFirst);
 			is.close();
 			bookInfo.textEntryName = textEntryName[0];
@@ -1066,7 +1068,7 @@ public class AozoraEpub3
 					LogAppender.println("入力ファイルからテキストが取得できませんでした : "+srcFile.getPath());
 					return false;
 				}
-				src = new BufferedReader(new InputStreamReader(is, encType));
+				src = new BufferedReader(new InputStreamReader(is, ArchiveTextExtractor.encodingFor(ext, encType)));
 			}
 			
 			//本文を読み始める今の台帳の話数を、この本の話数として控える（getBookInfo の後、GUI の確認画面の間などに txt が更新されても、書く本文と合う）
@@ -1092,7 +1094,7 @@ public class AozoraEpub3
 			}
 
 			// アーカイブキャッシュをクリア（メモリ解放）
-			if (!"txt".equals(ext)) {
+			if (!ArchiveTextExtractor.isPlainText(ext)) {
 				ArchiveTextExtractor.clearCache(srcFile);
 			}
 

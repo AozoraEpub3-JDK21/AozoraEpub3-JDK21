@@ -952,7 +952,7 @@ public class Epub3Writer
 		} else {
 			//本文にないzip内の表紙を出力対象に追加 (テキストからの相対パス)
 			if (bookInfo.coverImageIndex > -1 && imageInfoReader.countImageFileNames() > bookInfo.coverImageIndex) {
-				if (!"txt".equals(srcExt)) {
+				if (!com.github.hmdev.io.ArchiveTextExtractor.isPlainText(srcExt)) {
 					String imageFileName = imageInfoReader.getImageFileName(bookInfo.coverImageIndex);
 					if (imageFileName != null) {
 						ImageInfo imageInfo = imageInfoReader.getImageInfo(imageFileName);
@@ -1268,7 +1268,7 @@ public class Epub3Writer
 		}
 		
 		//本文画像出力 (画像のみの場合は出力済)
-		if ("txt".equals(srcExt)) {
+		if (com.github.hmdev.io.ArchiveTextExtractor.isPlainText(srcExt)) {
 			////////////////////////////////
 			//txtの場合はファイルシステムから取得
 			for (String srcImageFileName : imageInfoReader.getImageFileNames()) {

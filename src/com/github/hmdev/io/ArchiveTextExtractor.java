@@ -42,8 +42,38 @@ public final class ArchiveTextExtractor {
 		cacheMap.remove(srcFile.getAbsolutePath());
 	}
 
+	/** ファイルの拡張子が、書庫ではなくそのまま読むテキスト（txt と Markdown）か。画像は入力のフォルダから探す */
+	public static boolean isPlainText(String ext) {
+		return "txt".equals(ext) || "md".equals(ext);
+	}
+
+	/** その入力を読む文字コード。Markdown は青空文庫形式に直した UTF-8 を渡すので、-enc や GUI の指定によらず UTF-8 */
+	public static String encodingFor(String ext, String encType) {
+		return "md".equals(ext) ? "UTF-8" : encType;
+	}
+
+	/** Markdown のファイルを青空文庫形式のテキストにする（internal #72）。Markdown 自体は UTF-8 として読む */
+	static String markdownAsAozora(File srcFile) throws IOException {
+		byte[] bytes = Files.readAllBytes(srcFile.toPath());
+		String md;
+		try {
+			md = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+				.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+				.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+				.decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+		} catch (java.nio.charset.CharacterCodingException e) {
+			//黙って化けさせない。読めない字は置き換えて続ける（Shift_JIS などの .md）
+			LogAppender.warn(0, "Markdown を UTF-8 として読めない字がありました（UTF-8 で保存し直してください）: " + srcFile.getName());
+			md = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+		}
+		if (md.startsWith("\uFEFF")) md = md.substring(1);
+		String name = srcFile.getName();
+		int dot = name.lastIndexOf('.');
+		return com.github.hmdev.converter.MarkdownToAozora.convert(md, dot > 0 ? name.substring(0, dot) : name);
+	}
+
 	/**
-	 * Opens an InputStream for the txt content from txt/zip/txtz/rar.
+	 * Opens an InputStream for the txt content from txt/md/zip/txtz/rar.
 	 * Uses cache for archives to avoid multiple scans.
 	 * Caller must close the returned stream.
 	 */
@@ -51,6 +81,9 @@ public final class ArchiveTextExtractor {
 			throws IOException, RarException {
 		if ("txt".equals(ext)) {
 			return Files.newInputStream(srcFile.toPath());
+		} else if ("md".equals(ext)) {
+			//Markdown は青空文庫形式に直して渡す。読み手は UTF-8 で読む（{@link #encodingFor}）
+			return new java.io.ByteArrayInputStream(markdownAsAozora(srcFile).getBytes(java.nio.charset.StandardCharsets.UTF_8));
 		} else if ("zip".equals(ext) || "txtz".equals(ext) || "rar".equals(ext)) {
 			ArchiveCache cache = getCache(srcFile, ext);
 			cache.scan();
@@ -67,7 +100,7 @@ public final class ArchiveTextExtractor {
 			
 			return cache.getTextInputStream(txtIdx, null);
 		} else {
-			LogAppender.append("txt, zip, rar, txtz, cbz のみ変換可能です: ");
+			LogAppender.append("txt, md, zip, rar, txtz, cbz のみ変換可能です: ");
 			LogAppender.println(srcFile.getPath());
 		}
 		return null;
