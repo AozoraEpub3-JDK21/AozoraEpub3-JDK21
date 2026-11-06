@@ -328,6 +328,10 @@ ext.verifyDistSourcesNow = { Task task ->
     def root = projectDir
     def flag = project.findProperty('allowDirtyDist')
     def allowDirty = flag != null && (flag.toString().isEmpty() || flag.toString().equalsIgnoreCase('true'))
+    if (flag != null && !allowDirty && !flag.toString().equalsIgnoreCase('false')) {
+        task.logger.warn("verifyDistSources: -PallowDirtyDist=" + flag + " は値なしか true のときだけ効きます。この値では許しません")
+    }
+    if (allowDirty) task.logger.warn("verifyDistSources: -PallowDirtyDist が効いています（gradle.properties や ORG_GRADLE_PROJECT_allowDirtyDist から来ることもあります）")
     def fail = { String msg -> if (allowDirty) task.logger.warn(msg) else throw new GradleException(msg) }
     if (!new File(root, '.git').exists()) {
         task.logger.warn("verifyDistSources: git の木ではないので、配布物に入るファイルを確かめていません")
@@ -360,19 +364,25 @@ ext.verifyDistSourcesNow = { Task task ->
         entries << e
         if ('RC'.indexOf(e.substring(0, 1)) >= 0 || 'RC'.indexOf(e.substring(1, 2)) >= 0) n++
     }
-    def excludes = org.apache.tools.ant.DirectoryScanner.getDefaultExcludes()
+    // Gradle の既定の除外（Ant の **/名前 と **/名前/**）を名前の glob にして、パスのどの段に当たっても除く
+    // （除外に当たるフォルダは Gradle が中へ入らない）。git のパスは OS によらず / 区切り
+    def nameGlobs = org.apache.tools.ant.DirectoryScanner.getDefaultExcludes().collect {
+        java.nio.file.FileSystems.getDefault().getPathMatcher('glob:' + it.replaceFirst('^\\*\\*/', '').replaceFirst('/\\*\\*$', ''))
+    }
     def defaultExcluded = { String path ->
-        excludes.any { org.apache.tools.ant.types.selectors.SelectorUtils.matchPath(it, path) }
+        path.split('/').any { seg -> nameGlobs.any { it.matches(java.nio.file.Paths.get(seg)) } }
     }
     entries = entries.findAll { !defaultExcluded(it.substring(3)) }
-    def foreign = entries.findAll { it.startsWith('??') || it.startsWith('!!') }
+    // 警告で済ますのは、追跡しているファイルの中身の変更（X・Y が空白か M）だけ。
+    // 未追跡・gitignore・add した新しいファイル・消したファイル・名前の変更・解決していない衝突はリポジトリの内容と違うので止める
+    def foreign = entries.findAll { !(' M'.indexOf(it.substring(0, 1)) >= 0 && ' M'.indexOf(it.substring(1, 2)) >= 0) }
     def modified = entries - foreign
     if (!modified.isEmpty()) {
         task.logger.warn("verifyDistSources: コミットしていない変更が配布物に入ります（バージョンの書き換えなど意図したものか確かめてください）:\n  " +
             modified.join('\n  '))
     }
     if (!foreign.isEmpty()) {
-        fail("配布物に入るパスに、リポジトリに無いファイルがあります（?? 未追跡 / !! gitignore）:\n  " +
+        fail("配布物に入るパスに、コミットに無いファイルがあります（?? 未追跡 / !! gitignore / A 追加 / D 削除 / R 名前の変更 / U 衝突）:\n  " +
             foreign.join('\n  ') + "\n消すか、きれいな worktree で作り直すか、承知のうえなら -PallowDirtyDist を付けてください")
     }
 }
@@ -391,9 +401,8 @@ task zipDistribution(type: Zip, dependsOn: [build, createExe, 'verifyDistSources
     preserveFileTimestamps = true
     reproducibleFileOrder = false
 
-    from('build/libs') {
-        include '*.jar'
-    }
+    // jar タスクが作った 1 本だけ（build/libs に残った古い jar を拾わない）
+    from(tasks.named('jar'))
     from("${buildDir}/launch4j") {
         // ZIP (Windows-oriented) - .exe launcher（.bat から .exe に変更）
         include 'AozoraEpub3.exe'
@@ -409,9 +418,8 @@ task tarDistribution(type: Tar, dependsOn: [build, createLauncher, 'verifyDistSo
     preserveFileTimestamps = true
     reproducibleFileOrder = false
 
-    from('build/libs') {
-        include '*.jar'
-    }
+    // jar タスクが作った 1 本だけ（build/libs に残った古い jar を拾わない）
+    from(tasks.named('jar'))
     from('build/distributions') {
         // TAR (Unix-oriented) - include only the Unix shell launcher
         include 'AozoraEpub3.sh'
