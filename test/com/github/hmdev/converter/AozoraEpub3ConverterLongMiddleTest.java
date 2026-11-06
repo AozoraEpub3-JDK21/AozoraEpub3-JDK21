@@ -653,8 +653,39 @@ public class AozoraEpub3ConverterLongMiddleTest
 		assertEquals(1, AozoraEpub3Converter.wrapColumns(c, 0));
 		assertEquals(2, AozoraEpub3Converter.wrapColumns(c + 1, 0));
 		assertEquals("字下げを除いた字で割る", 2, AozoraEpub3Converter.wrapColumns(3 + (c - 3) + 1, 3));
-		assertEquals(AozoraEpub3Converter.MIDDLE_LONG_LINES + 1, AozoraEpub3Converter.wrapColumns(c, c - min + 1));
-		assertEquals(1, AozoraEpub3Converter.wrapColumns(c, c - min));
+		assertEquals(AozoraEpub3Converter.MIDDLE_LONG_LINES + 1, AozoraEpub3Converter.wrapColumns(c + 1, c - min + 1));
+		assertEquals(2, AozoraEpub3Converter.wrapColumns(c + 1, c - min));
+		assertEquals("字下げの横に収まる行は 1 列", 1, AozoraEpub3Converter.wrapColumns(c, c - min + 1));
+		assertEquals(1, AozoraEpub3Converter.wrapColumns(c, c - 1));
+	}
+
+	@Test
+	public void 字下げの大きい短い行があっても長い行の節は折り返す() throws Exception
+	{
+		assertEquals("１３字下げの前提", 16, AozoraEpub3Converter.MIDDLE_WRAP_COLUMN_CHARS);
+		// 献辞は字下げの横の 1 列に収まる
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				repeat("長", 30),
+				"［＃１３字下げ］献辞",
+				"［＃改ページ］");
+		assertTrue(reasons(bookInfo, 0).toString(), bookInfo.isWrapMiddleLine(0));
+		assertFalse(bookInfo.isLongMiddleLine(0));
+	}
+
+	@Test
+	public void 文字より前で閉じた字下げは列に数えない() throws Exception
+	{
+		assertEquals("１３字下げの前提", 16, AozoraEpub3Converter.MIDDLE_WRAP_COLUMN_CHARS);
+		// 字下げを数えると 1 列に 3 字で表組みに倒れる。閉じた後の文字には字下げが付かない
+		BookInfo bookInfo = scan(
+				"［＃ページの左右中央］",
+				"［＃ここから１３字下げ］",
+				"献辞",
+				"［＃ここで字下げ終わり］" + repeat("長", 30),
+				"［＃改ページ］");
+		assertTrue(reasons(bookInfo, 0).toString(), bookInfo.isWrapMiddleLine(0));
+		assertFalse(bookInfo.isLongMiddleLine(0));
 	}
 
 	@Test

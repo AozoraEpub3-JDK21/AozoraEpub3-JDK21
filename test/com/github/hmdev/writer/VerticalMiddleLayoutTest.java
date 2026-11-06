@@ -277,7 +277,10 @@ public class VerticalMiddleLayoutTest {
 			String css = read(zf, "OPS/css/vertical_middle.css");
 			assertTrue(css, css.contains("html.hltr div.vrtl {"));
 			//max-height は Thorium で効かない。高さそのものを決める
-			assertTrue(css, css.contains("html.hltr div.vrtl.wrap {\nheight: 80vh;\n}"));
+			//高さは変換器の 1 列の字数の見積もりと組 (MIDDLE_WRAP_COLUMN_CHARS / MIDDLE_LONG_LINE_CHARS)
+			int vh = com.github.hmdev.converter.AozoraEpub3Converter.MIDDLE_WRAP_COLUMN_CHARS * 100
+					/ com.github.hmdev.converter.AozoraEpub3Converter.MIDDLE_LONG_LINE_CHARS;
+			assertTrue(css, css.contains("html.hltr div.vrtl.wrap {\nheight: " + vh + "vh;\n}"));
 		}
 	}
 

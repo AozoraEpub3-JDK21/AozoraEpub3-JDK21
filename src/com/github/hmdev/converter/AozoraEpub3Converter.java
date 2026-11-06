@@ -683,10 +683,10 @@ public class AozoraEpub3Converter
 	/** 左右中央の節で、1行がこれを超える字数 (表示文字・空白・字下げ) なら1列に収まらないとみなす
 	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ)。
 	 * そういう行のある節は、ブロックの高さをページより短く決めて (div.vrtl.wrap、80vh) 列の終わりより手前で折り返す (internal #8) */
-	static final int MIDDLE_LONG_LINE_CHARS = 20;
+	public static final int MIDDLE_LONG_LINE_CHARS = 20;
 	/** 折り返す左右中央の節 (div.vrtl.wrap) の1列の字数。高さ 80vh なので MIDDLE_LONG_LINE_CHARS の 8 割
 	 * (vertical_middle.css の html.hltr div.vrtl.wrap の height と組。変えるときは両方を変える) */
-	static final int MIDDLE_WRAP_COLUMN_CHARS = 16;
+	public static final int MIDDLE_WRAP_COLUMN_CHARS = 16;
 	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない、改行は列の数が読めない) */
 	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字|^改行$|字詰め|折り返して");
 	/** 字下げ注記 (N字下げ・ここからN字下げ・ここからN字下げ、…) の字数。桁が多すぎるものは数えずに表組みに倒す */
@@ -786,12 +786,17 @@ public class AozoraEpub3Converter
 				if (this.middleCountLine >= 0) this.forceMiddleTable("indent-unreadable");
 			} else if ((chukiName.startsWith("ここで字下げ") && chukiName.endsWith("終わり")) || chukiName.endsWith("字下げ終わり")) {
 				this.middleBlockIndent = 0;
+				//文字より前で閉じた字下げは、この行の文字には効かない
+				if (!lineCounted) {
+					lineChars -= lineIndent;
+					lineIndent = 0;
+				}
 			}
 			if (chukiFlagPageBreak.contains(chukiName)) {
 				//変換時は改ページで字下げを閉じる
 				this.middleBlockIndent = 0;
 				//閉じる節に、この行の改ページより前の文字の列を足す
-				if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars, lineIndent);
+				this.addLineWrapColumns(lineCounted, lineChars, lineIndent);
 				this.endMiddleSection(bookInfo, chukiFlagMiddle.contains(chukiName) ? -1 : lineNum);
 				if (chukiFlagMiddle.contains(chukiName)) {
 					this.middleCountLine = lineNum;
@@ -817,17 +822,23 @@ public class AozoraEpub3Converter
 			}
 		}
 		//行の終わりで、この行の字数から折り返したときの列の数を足す (改ページで閉じた節には閉じる前に足してある)
+		this.addLineWrapColumns(lineCounted, lineChars, lineIndent);
+	}
+	/** 数えている左右中央の節に、この行の文字が折り返して取る列を足す (行の終わりと、同じ行の改ページで節を閉じる前に呼ぶ) */
+	private void addLineWrapColumns(boolean lineCounted, int lineChars, int lineIndent)
+	{
 		if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars, lineIndent);
 	}
 	/** 折り返す左右中央の節で、1列に字下げのほかこれだけの字が入らなければ、その行は1ページに収まらないとみなす */
 	static final int MIDDLE_WRAP_MIN_CHARS = 4;
 	/** 折り返す左右中央の節 (div.vrtl.wrap) で、この行が取る列の数。字下げは列ごとに場所を取るので、1列に入る字数から引く
-	 * (残りが MIDDLE_WRAP_MIN_CHARS より少なければ、列の上限を超える数を返して表組みに倒す) */
+	 * (1列に収まる行は1列。折り返す行で、残りが MIDDLE_WRAP_MIN_CHARS より少なければ、列の上限を超える数を返して表組みに倒す) */
 	static int wrapColumns(int lineChars, int lineIndent)
 	{
 		int perColumn = MIDDLE_WRAP_COLUMN_CHARS - lineIndent;
-		if (perColumn < MIDDLE_WRAP_MIN_CHARS) return MIDDLE_LONG_LINES + 1;
 		int text = Math.max(1, lineChars - lineIndent);
+		if (text <= perColumn) return 1;
+		if (perColumn < MIDDLE_WRAP_MIN_CHARS) return MIDDLE_LONG_LINES + 1;
 		return (text + perColumn - 1) / perColumn;
 	}
 	/** 行に左右中央の注記（ページの左右中央 など）があるか */
