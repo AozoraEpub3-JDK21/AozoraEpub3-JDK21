@@ -222,7 +222,7 @@ public final class MarkdownToAozora {
 				lead.append(line.charAt(i) == '\t' ? "　　" : "　");
 				i++;
 			}
-			out.append(lead).append(escape(line.substring(i))).append('\n');
+			out.append(lead).append(escape(literal(line.substring(i)))).append('\n');
 		}
 		out.append("［＃ここで字下げ終わり］\n");
 	}
@@ -255,8 +255,17 @@ public final class MarkdownToAozora {
 
 	// ---- インライン ----
 
-	/** 子のインラインを文字にする。改行は \n で残す（段落の中の強制改行） */
+	/**
+	 * 子のインラインを文字にする。改行は \n で残す（段落の中の強制改行）。
+	 * 逃がしは節点ごとではなく、つなぎ終えた文字に 1 回かける（節点の境目で ［＃ や << が組み上がる。#215 の codex P2）。
+	 * 自分で書く注記の ［＃ は {@link #NOTE} で仮に置き、逃がした後で戻す
+	 */
 	private String inline(Node parent) {
+		return escape(rawInline(parent)).replace(String.valueOf(NOTE), "［＃");
+	}
+
+	/** 逃がす前の文字（自分の注記は {@link #NOTE} で始まる） */
+	private String rawInline(Node parent) {
 		StringBuilder b = new StringBuilder();
 		for (Node n = parent.getFirstChild(); n != null; n = n.getNext()) inline(n, b);
 		return b.toString();
@@ -264,31 +273,29 @@ public final class MarkdownToAozora {
 
 	private void inline(Node n, StringBuilder b) {
 		if (n instanceof Text) {
-			b.append(escape(((Text) n).getLiteral()));
+			b.append(literal(((Text) n).getLiteral()));
 		} else if (n instanceof Code) {
-			b.append(escape(((Code) n).getLiteral()));
+			b.append(literal(((Code) n).getLiteral()));
 		} else if (n instanceof SoftLineBreak) {
-			//日本語どうしは詰め、英数字どうしは空白でつなぐ
-			Node next = n.getNext();
-			char prev = b.length() == 0 ? 0 : b.charAt(b.length() - 1);
-			char nextCh = next instanceof Text && !((Text) next).getLiteral().isEmpty() ? ((Text) next).getLiteral().charAt(0) : 0;
+			//日本語どうしは詰め、英数字どうしは空白でつなぐ。前後の字は注記を飛ばした見える字で見る
+			char prev = lastVisible(b);
+			char nextCh = firstVisible(n.getNext());
 			if (prev < 0x80 && prev > ' ' && (nextCh == 0 || nextCh < 0x80)) b.append(' ');
 		} else if (n instanceof HardLineBreak) {
 			b.append('\n');
 		} else if (n instanceof StrongEmphasis) {
-			String inner = inline(n);
+			String inner = rawInline(n);
 			if (plain) b.append(inner);
-			else if (!inner.isEmpty()) b.append("［＃太字］").append(inner).append("［＃太字終わり］");
+			else if (!inner.isEmpty()) b.append(NOTE).append("太字］").append(inner).append(NOTE).append("太字終わり］");
 		} else if (n instanceof Emphasis) {
-			b.append(inline(n));
+			b.append(rawInline(n));
 		} else if (n instanceof Link) {
-			String text = inline(n);
-			String url = ((Link) n).getDestination();
-			String escapedUrl = escape(url);
-			if (text.isEmpty() || text.equals(escapedUrl) || ("mailto:" + text).equals(url)) b.append(text.isEmpty() ? escapedUrl : text);
-			else b.append(text).append('（').append(escapedUrl).append('）');
+			String text = rawInline(n);
+			String url = literal(((Link) n).getDestination());
+			if (text.isEmpty() || text.equals(url) || ("mailto:" + text).equals(url)) b.append(text.isEmpty() ? url : text);
+			else b.append(text).append('（').append(url).append('）');
 		} else if (n instanceof Image) {
-			String alt = inline(n);
+			String alt = rawInline(n);
 			b.append("（図").append(alt.isEmpty() ? "" : "：" + alt).append('）');
 		} else if (n instanceof HtmlInline) {
 			//捨てる
@@ -298,6 +305,42 @@ public final class MarkdownToAozora {
 	}
 
 	// ---- 文字 ----
+
+	/** 自分で書く注記の ［＃ の仮置き（私用領域の字。入力の同じ字は {@link #literal} で外す） */
+	static final char NOTE = '\uE000';
+
+	/** 入力の文字。仮置きの字と取り違えないよう、入力にある同じ字は外す */
+	private static String literal(String s) {
+		return s.indexOf(NOTE) < 0 ? s : s.replace(String.valueOf(NOTE), "");
+	}
+
+	/** 末尾の注記（NOTE…］）を飛ばした、最後の見える字 */
+	private static char lastVisible(CharSequence b) {
+		int end = b.length();
+		while (end > 0 && b.charAt(end - 1) == '］') {
+			int open = -1;
+			for (int i = end - 1; i >= 0; i--) if (b.charAt(i) == NOTE) { open = i; break; }
+			if (open < 0) break;
+			end = open;
+		}
+		return end == 0 ? 0 : b.charAt(end - 1);
+	}
+
+	/** 節点から始まる最初の見える字（無ければ 0） */
+	private static char firstVisible(Node n) {
+		for (; n != null; n = n.getNext()) {
+			if (n instanceof Text || n instanceof Code) {
+				String t = n instanceof Text ? ((Text) n).getLiteral() : ((Code) n).getLiteral();
+				if (!t.isEmpty()) return t.charAt(0);
+			} else if (n instanceof SoftLineBreak || n instanceof HardLineBreak) {
+				return 0;
+			} else if (n.getFirstChild() != null) {
+				char c = firstVisible(n.getFirstChild());
+				if (c != 0) return c;
+			}
+		}
+		return 0;
+	}
 
 	/** 見出し・題名・表の升は 1 行にする（強制改行は空白に） */
 	private static String oneLine(String s, boolean escapeIt) {

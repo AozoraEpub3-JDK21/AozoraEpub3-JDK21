@@ -115,6 +115,22 @@ public class MarkdownToAozoraTest {
 		assertTrue(out, out.startsWith("報告と題\n"));
 	}
 
+	/** codex P2（#215）: 節点の境目で ［＃ や << が組み上がらない */
+	@Test
+	public void notationDoesNotFormAcrossInlineNodes() {
+		String out = conv("# 題\n\n［`＃改ページ`］ と a<`<b` と *<*img\n");
+		assertFalse(out, out.contains("［＃改ページ］"));
+		assertFalse(out, out.contains("<<"));
+		assertFalse(out, out.contains("<img"));
+	}
+
+	/** codex P2（#215）: 太字の後の改行でも、英語の語は空白で区切る */
+	@Test
+	public void aSoftBreakAfterBoldKeepsTheSpace() {
+		String out = conv("# 題\n\n**hello**\nworld and\n**bold** next\n");
+		assertTrue(out, out.contains("hello［＃太字終わり］ world and ［＃太字］bold"));
+	}
+
 	private static int count(String s, String sub) {
 		int n = 0;
 		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;
