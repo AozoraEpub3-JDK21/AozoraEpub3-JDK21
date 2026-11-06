@@ -1,0 +1,97 @@
+package com.github.hmdev.converter;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import org.junit.Test;
+
+/** internal #72: Markdown を青空文庫形式に直す規則 */
+public class MarkdownToAozoraTest {
+
+	private static String conv(String md) {
+		return MarkdownToAozora.convert(md, "既定の題");
+	}
+
+	@Test
+	public void theFirstH1IsTheTitleAndFrontMatterGivesTheAuthor() {
+		String out = conv("---\nauthor: 春雨\n---\n# 題名\n\n本文。\n");
+		assertTrue(out, out.startsWith("題名\n春雨\n\n　本文。\n"));
+	}
+
+	@Test
+	public void frontMatterTitleWinsAndTheH1BecomesAHeading() {
+		String out = conv("---\ntitle: 表の題\n---\n# 章\n\n本文。\n");
+		assertTrue(out, out.startsWith("表の題\n\n\n"));
+		assertTrue(out, out.contains("［＃大見出し］章［＃大見出し終わり］"));
+	}
+
+	@Test
+	public void withoutAnyTitleTheDefaultIsUsed() {
+		String out = conv("本文だけ。\n");
+		assertTrue(out, out.startsWith("既定の題\n\n\n　本文だけ。\n"));
+	}
+
+	@Test
+	public void headingsMapToAozoraLevelsAndH2BreaksThePageAfterBody() {
+		String out = conv("# 題\n\n## 最初\n\n本文。\n\n## 次\n\n### 中\n\n#### 小\n");
+		//題名の直後の ## には改ページを入れない（空のページを作らない）
+		assertTrue(out, out.contains("\n\n［＃大見出し］最初［＃大見出し終わり］\n"));
+		assertTrue(out, out.contains("［＃改ページ］\n［＃大見出し］次［＃大見出し終わり］"));
+		assertTrue(out, out.contains("［＃中見出し］中［＃中見出し終わり］"));
+		assertTrue(out, out.contains("［＃小見出し］小［＃小見出し終わり］"));
+	}
+
+	@Test
+	public void notationCharactersInTextAreNeutralised() {
+		String out = conv("# 題\n\n漢字《かんじ》と｜縦棒と［＃注記］と a << b >> c と ＜＜全角＞＞。\n");
+		assertFalse(out, out.contains("《"));
+		assertFalse(out, out.contains("》"));
+		assertFalse(out, out.contains("｜"));
+		assertFalse(out, out.contains("［＃注記"));
+		assertFalse(out, out.contains("<<"));
+		assertFalse(out, out.contains(">>"));
+		assertFalse(out, out.contains("＜＜"));
+		assertFalse(out, out.contains("＞＞"));
+	}
+
+	@Test
+	public void codeIsNeutralisedAndMarkdownInsideAFenceIsNotRead() {
+		String out = conv("# 題\n\n```\n# 見出しではない\n**太字ではない** ［＃注記］\n```\n");
+		assertFalse(out, out.contains("見出し］見出しではない"));
+		assertFalse(out, out.contains("［＃太字］"));
+		assertTrue(out, out.contains("# 見出しではない"));
+		assertFalse(out, out.contains("［＃注記"));
+	}
+
+	@Test
+	public void listsAndQuotesUseUnnestedIndentBlocks() {
+		String out = conv("# 題\n\n- 一\n  - 二\n\n> 引用\n");
+		assertTrue(out, out.contains("［＃ここから１字下げ、折り返して２字下げ］\n・一\n［＃ここで字下げ終わり］\n"));
+		assertTrue(out, out.contains("［＃ここから２字下げ、折り返して３字下げ］\n・二\n［＃ここで字下げ終わり］\n"));
+		assertTrue(out, out.contains("［＃ここから２字下げ］\n引用\n［＃ここで字下げ終わり］\n"));
+		//開きと閉じが同じ数（入れ子にしない）
+		assertEquals(out, count(out, "［＃ここから"), count(out, "［＃ここで字下げ終わり］"));
+	}
+
+	@Test
+	public void tableRowsBecomeLinesAndLinksKeepTheUrl() {
+		String out = conv("# 題\n\n| 名前 | 値 |\n|---|---|\n| 版 | 3.4 |\n\n[文](https://example.com) と <https://example.org>\n");
+		assertTrue(out, out.contains("・名前：版／値：3.4\n"));
+		assertTrue(out, out.contains("文（https://example.com）"));
+		assertTrue(out, out.contains("https://example.org"));
+		assertFalse(out, out.contains("https://example.org（"));
+	}
+
+	@Test
+	public void boldAndSoftBreaks() {
+		String out = conv("# 題\n\n日本語の\n行と **太字** と\nEnglish\nwords\n");
+		assertTrue(out, out.contains("　日本語の行と ［＃太字］太字［＃太字終わり］ とEnglish words\n"));
+	}
+
+	private static int count(String s, String sub) {
+		int n = 0;
+		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + 1)) n++;
+		return n;
+	}
+}

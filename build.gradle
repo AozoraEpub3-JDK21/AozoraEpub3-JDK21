@@ -86,6 +86,11 @@ dependencies {
 
     // Swing の Look and Feel（GUI モダン化）
         implementation 'com.formdev:flatlaf:3.7.2'
+
+    // Markdown の入力（構文の木だけ使い、青空文庫形式へは自前で書き出す。internal #72）
+        implementation 'org.commonmark:commonmark:0.31.0'
+        implementation 'org.commonmark:commonmark-ext-gfm-tables:0.31.0'
+        implementation 'org.commonmark:commonmark-ext-yaml-front-matter:0.31.0'
     
     // テストフレームワーク
     testImplementation 'junit:junit:4.13.2'

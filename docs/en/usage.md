@@ -202,6 +202,23 @@ bundled ini the GUI normally reads and writes. Note that because of step 2, a fi
 `AozoraEpub3.ini` in your working directory silently takes precedence. The startup log
 (`設定ファイルを読み込みました: <path>`) shows which file was read.
 
+### Converting Markdown
+
+A file with the `.md` extension is read as Markdown and turned into Aozora-format text before conversion (CLI and GUI). It is always read as UTF-8, whatever `-enc` says.
+
+- Title: `title:` in the front matter, else the first `#` heading, else the file name
+- Author: `author:` in the front matter (empty if absent)
+- `#` (other than the title) and `##` start a new page as a large heading, `###` is a medium heading, `####` and below are small headings
+- Lists, quotes and code are indented; `**bold**` is bold
+- A table becomes one line per row (`・header：value／header：value`), a link becomes `text（URL）`, an image becomes `（図：alt text）`. HTML is ignored
+- `《》｜［＃` in the text are not read as notation or ruby
+
+Keep the title type (`-t`) at its default, title then author.
+
+```bash
+java -jar AozoraEpub3.jar -of -d output report.md
+```
+
 ### EPUB Preview
 
 Check the result in a browser before transferring it to a device.
