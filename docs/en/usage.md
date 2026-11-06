@@ -158,7 +158,7 @@ java -jar AozoraEpub3.jar [OPTIONS] input_file
 | `-d <directory>` | Output directory | `-d ./output/` |
 | `-ext <extension>` | Output file extension | `-ext .kepub.epub` |
 | `-of` | Name the output after the input file (default is `[author] title.epub`) | |
-| `-hor` | Horizontal writing mode (default: vertical) | |
+| `-hor` | Horizontal writing mode (default: vertical). The table of contents is horizontal too | |
 | `-device <type>` | Apply device-specific handling | `-device kindle` |
 | `-url <URL>` | Convert directly from a web novel URL, or a `.zip` / `.txtz` / `.rar` archive URL (repeatable) | `-url https://ncode.syosetu.com/nXXXX/` |
 | `-narou` | Apply narou.rb-compatible format settings | |

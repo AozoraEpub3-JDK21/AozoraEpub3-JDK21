@@ -240,7 +240,9 @@ public class AozoraEpub3
 			//if(commandLine.hasOption("cb")) commentPrint = true;
 			//if(commandLine.hasOption("cc")) commentConvert = true;
 			//if(commandLine.hasOption("cp")) coverPage = true;
-			if(commandLine.hasOption("hor")) vertical = false;
+			//-hor は目次も横書きにする。本文が横書きで目次だけ縦書きだと、Kindle がページの向きを
+			//逆にした（spine は ltr でも）。CLI には目次の向きの指定が無いので、ini の TocVertical より優先する（internal #73）
+			if(commandLine.hasOption("hor")) { vertical = false; tocVertical = false; }
 			if(commandLine.hasOption("device")) {
 				targetDevice = commandLine.getOptionValue("device");
 				if (targetDevice.equalsIgnoreCase("kindle")) {
