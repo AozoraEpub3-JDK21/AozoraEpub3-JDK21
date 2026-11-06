@@ -38,6 +38,8 @@ public class PageBreakType
 	final static public int PAGE_BOTTOM = 2;
 	/** ページ左右中央 (1ページに収まらない長い節なので従来の表組みで出力) */
 	final static public int PAGE_MIDDLE_TABLE = 3;
+	/** ページ左右中央 (1列に収まらない行があるので、縦書きのブロックの高さを決めて折り返す。internal #8) */
+	final static public int PAGE_MIDDLE_WRAP = 4;
 	
 	/** 空のページは無視する */
 	boolean ignoreEmptyPage = true;

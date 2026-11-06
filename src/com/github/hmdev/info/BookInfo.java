@@ -318,6 +318,22 @@ public class BookInfo
 	{
 		return this.mapHashiraDropLine != null && this.mapHashiraDropLine.contains(lineNum);
 	}
+	/** 1列に収まらない行があるので折り返す左右中央の節の注記行 (internal #8) */
+	HashSet<Integer> mapWrapMiddleLine = null;
+	public void addWrapMiddleLine(int lineNum)
+	{
+		if (this.mapWrapMiddleLine == null) this.mapWrapMiddleLine = new HashSet<Integer>();
+		this.mapWrapMiddleLine.add(lineNum);
+	}
+	public void removeWrapMiddleLine(int lineNum)
+	{
+		if (this.mapWrapMiddleLine != null) this.mapWrapMiddleLine.remove(lineNum);
+	}
+	/** 折り返す左右中央の節の注記行ならtrue (表組みに倒した節には付かない) */
+	public boolean isWrapMiddleLine(int lineNum)
+	{
+		return this.mapWrapMiddleLine != null && this.mapWrapMiddleLine.contains(lineNum);
+	}
 	/** 長い左右中央の節の注記行ならtrue */
 	public boolean isLongMiddleLine(int lineNum)
 	{

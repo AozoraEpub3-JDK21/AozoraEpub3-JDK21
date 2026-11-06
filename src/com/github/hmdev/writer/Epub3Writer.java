@@ -1552,10 +1552,13 @@ public class Epub3Writer
 		}
 		if (pageType == PageBreakType.PAGE_MIDDLE) sectionInfo.setMiddle(true);
 		else if (pageType == PageBreakType.PAGE_MIDDLE_TABLE) { sectionInfo.setMiddle(true); sectionInfo.setMiddleTable(true); }
+		else if (pageType == PageBreakType.PAGE_MIDDLE_WRAP) sectionInfo.setMiddle(true);
 		else if (pageType == PageBreakType.PAGE_BOTTOM) sectionInfo.setBottom(true);
 		//縦書きの短い左右中央は、横書きの親の中に縦書きのブロックを置く (Kindleは従来の表組み 監査34)
 		sectionInfo.setHltr(sectionInfo.isMiddle() && !sectionInfo.isMiddleTable() && !sectionInfo.isImagePage()
 				&& this.bookInfo != null && this.bookInfo.vertical && !this.isKindle);
+		//1列に収まらない行のある節は、縦書きのブロックの高さを決めて折り返す (横書きの親のときだけ。Kindle・横書きは表組み)
+		sectionInfo.setMiddleWrap(sectionInfo.isHltr() && pageType == PageBreakType.PAGE_MIDDLE_WRAP);
 		this.sectionInfos.add(sectionInfo);
 		//セクション開始は名称がnullなので改ページ処理で文字列が設定されなければ出力されない 階層レベルは1
 		//this.addChapter(null, null, 1);
