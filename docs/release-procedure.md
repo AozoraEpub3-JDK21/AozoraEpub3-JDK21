@@ -356,9 +356,9 @@ gh attestation generate build/distributions/AozoraEpub3-*.tar.gz
 
 新しいリソース（`chuki_新規.txt`、`web/<新サイト>/`、新しいプリセット等）を追加するときは `distRootFiles`・`distDirs` に足す（3 経路と検査に入る）。以前の 3 箇所の定義では、1〜2 箇所しか更新せずにコミットすると特定経路で生成したアーカイブから漏れた。**AI エージェント（Sonnet 等）の自動修正で特に頻発する**ため要警戒。
 
-#### dist 生成経路マップ（どれを使うかで参照される include 定義が違う）
+#### dist 生成経路マップ（中身はどれも `distCommonContent`。違うのは起動用のファイルと形式）
 
-| コマンド | 生成物 | 参照される include 定義 |
+| コマンド | 生成物 | 走るタスク |
 |---|---|---|
 | `./gradlew dist` ✅ | ZIP + TAR | `zipDistribution` + `tarDistribution` |
 | `./gradlew zipDistribution` | ZIP のみ | `zipDistribution` のみ |
@@ -437,9 +437,10 @@ gzip AozoraEpub3-*.tar
 
 **症状**: 配布 ZIP のサイズが想定（〜25 MB）より大きい、`AozoraEpub3-old.jar` が同梱されている
 
-**原因**: `from('build/libs') { include '*.jar' }` がワイルドカードで拾うため、前回のバージョンの JAR が残っているとそれも含まれる
+**原因**: 以前は `from('build/libs') { include '*.jar' }` がワイルドカードで拾っていたため、前回のバージョンの JAR が残っているとそれも含まれた。
+今は zip・tar・installDist とも `from(tasks.named('jar'))` で jar タスクが作った 1 本だけを入れる（internal #66）
 
-**対処**: §3.1 の事前クリーンアップを徹底。`./gradlew clean` ではなく `rm -rf build/libs/*.jar` でも可
+**対処**: それでも JAR が 2 本入るなら、`build.gradle` の zip・tar・`distributions` の `from` を確かめる。§3.1 の事前クリーンアップも続ける
 
 ### 6.5 ZIP/TAR にテンプレート/外字が二重に含まれる
 
@@ -526,13 +527,14 @@ cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 ### 6.12 `verifyDistSources` で止まる（配布物に入るパスに、コミットに無いファイルがある）
 
 **症状**: `dist`（`zipDistribution`・`tarDistribution`）や `installDist` の前の `verifyDistSources` が
-「配布物に入るパスに、コミットに無いファイルがあります」で落ちる。`??`（未追跡）・`!!`（gitignore）・`A`（add した新しいファイル）・`D`（消したファイル）・`R`（名前の変更）・`U`（解決していない衝突）が並ぶ。
+「配布物に入るパスに、コミットに無いファイルがあります」で落ちる。`??`（未追跡）・`!!`（gitignore）・`A`（add した新しいファイル）・`D`（消したファイル）・`R`/`C`（名前の変更・写し）・`T`（種類の変更）・`U`（解決していない衝突）が並ぶ。
 確かめるのは配布物に写すパスと、jar の元の `src/`・`build.gradle`。
 
 **理由**: 配布物は作業ツリーから写すので、そのままだと下書きが混ざる。v1.8.0 の最初のビルドに、gitignore した
 `web/www.aozora.gr.jp/replace.txt`（底本：の行を消す規則の下書き）が入った。
 
-**対処**: 並んだファイルを消す（下書きなら別の場所へ移す）か、きれいな worktree で作り直す。
+**対処**: `??`・`!!` は消す（下書きなら別の場所へ移す）。`A` は `git restore --staged` して消す（入れるならコミットする）。
+`D`・`R`・`C`・`T` は `git restore` で戻すかコミットする。`U` は衝突を解いてコミットする。迷ったらきれいな worktree で作り直す。
 入ってよいと分かっているときだけ `-PallowDirtyDist` を付ける（警告に変わる）。
 
 **警告だけのもの**: 追跡しているファイルの中身の変更（`M`）は止めずに一覧を出す。§2.3 のバージョンの書き換えは §4.1 まで
