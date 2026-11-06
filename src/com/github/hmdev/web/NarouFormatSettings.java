@@ -499,7 +499,8 @@ public class NarouFormatSettings {
 			writeEntry(bw, "enable_yokogaki", enableYokogaki, "横書きモード");
 			writeEntry(bw, "enable_display_end_of_book", enableDisplayEndOfBook, "本の終了マーカー表示");
 			writeEntry(bw, "chapter_use_center_page", chapterUseCenterPage, "章中表紙のページ中央");
-			writeEntry(bw, "chapter_use_hashira", chapterUseHashira, "章中表紙の柱表示");
+			//中扉（左右中央）の柱は EPUB の変換で外す（internal #8）。テキストには今まで通り書くので、narou.rb と同じ形のテキストが残る
+			writeEntry(bw, "chapter_use_hashira", chapterUseHashira, "章中表紙の柱表示（中扉が左右中央のときは EPUB に出ない）");
 			writeEntry(bw, "include_story", includeStory, "あらすじを表紙に含める");
 			writeEntry(bw, "include_toc_url", includeTocUrl, "掲載URLを表紙に含める");
 			writeEntry(bw, "show_post_date", showPostDate, "更新日時を各話に表示");

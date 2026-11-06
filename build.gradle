@@ -401,6 +401,13 @@ task runRealTest(type: JavaExec) {
     mainClass = 'AozoraRealTest'
 }
 
+// 計器（internal #8）: 左右中央の節が中央に出るか表組みに倒れるかと、その理由を数える
+// ./gradlew middleCensus --args="<out.tsv> <dir-or-file>..."（--args は引用符の中の空白を保つ）
+tasks.register('middleCensus', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+    mainClass = 'MiddleSectionCensus'
+}
+
 task runFullFlowTest(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
     mainClass = 'AozoraFullFlowTest'
