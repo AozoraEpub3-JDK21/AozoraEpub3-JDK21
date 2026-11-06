@@ -17,7 +17,7 @@ import com.github.hmdev.writer.Epub3Writer;
 
 /**
  * 計器（internal #8）: 左右中央の節が、横書きの親の中の縦書きのブロック（中央に出る）と
- * 従来の表組み（右に寄ることがある）のどちらで組まれるかを、本ごと・節ごとに数える。
+ * 従来の表組み（右に寄ることがある）・折り返す縦書きのブロック（長い行のある節）のどれで組まれるかを、本ごと・節ごとに数える。
  *
  * 判定は変換器そのもの（AozoraEpub3Converter.getBookInfo の事前走査）を使い、理由は変換器が
  * 表組みに倒したその場所で控えたもの（BookInfo.middleSections）を読む。判定を書き直さない。
@@ -25,7 +25,7 @@ import com.github.hmdev.writer.Epub3Writer;
  * 使い方: ./gradlew middleCensus --args="&lt;出力 TSV&gt; &lt;入力のフォルダかファイル&gt;..."（空白を含むパスは引用符で囲む）
  *   入力は txt / zip（zip の中の 1 つ目のテキスト）。txt は UTF-8 として読めなければ MS932、zip は MS932（青空文庫）で読む。
  *   ini はリポジトリの AozoraEpub3.ini（配布の既定）。
- * 出力: 1 行 1 節の TSV（file, line, lines, layout, reasons）と、最後に理由ごとの件数を標準出力へ。
+ * 出力: 1 行 1 節の TSV（file, line, lines, layout=centered/wrap/table, reasons）と、最後に理由ごとの件数を標準出力へ。
  */
 public class MiddleSectionCensus {
 
@@ -46,7 +46,7 @@ public class MiddleSectionCensus {
 		for (int i = 1; i < args.length; i++) collect(new File(args[i]), files);
 		files.sort(null);
 
-		int books = 0, booksWithMiddle = 0, booksWithTable = 0, failed = 0, sections = 0, tables = 0;
+		int books = 0, booksWithMiddle = 0, booksWithTable = 0, failed = 0, sections = 0, tables = 0, wraps = 0;
 		Map<String, Integer> anyReason = new TreeMap<>();
 		Map<String, Integer> firstReason = new TreeMap<>();
 		try (PrintStream out = new PrintStream(new File(args[0]), StandardCharsets.UTF_8)) {
@@ -79,8 +79,10 @@ public class MiddleSectionCensus {
 				for (BookInfo.MiddleSection m : info.getMiddleSections()) {
 					sections++;
 					boolean table = info.isLongMiddleLine(m.line);
+					boolean wrap = !table && info.isWrapMiddleLine(m.line);
 					if (table) { tables++; anyTable = true; }
-					out.println(f.getPath() + "\t" + (m.line + 1) + "\t" + m.lines + "\t" + (table ? "table" : "centered") + "\t" + String.join(",", m.reasons));
+					if (wrap) wraps++;
+					out.println(f.getPath() + "\t" + (m.line + 1) + "\t" + m.lines + "\t" + (table ? "table" : wrap ? "wrap" : "centered") + "\t" + String.join(",", m.reasons));
 					if (table) {
 						for (String r : m.reasons) anyReason.merge(r, 1, Integer::sum);
 						if (!m.reasons.isEmpty()) firstReason.merge(m.reasons.iterator().next(), 1, Integer::sum);
@@ -91,7 +93,7 @@ public class MiddleSectionCensus {
 			}
 		}
 		System.out.println("books=" + books + " failed=" + failed + " booksWithMiddle=" + booksWithMiddle + " booksWithTable=" + booksWithTable);
-		System.out.println("sections=" + sections + " table=" + tables + " centered=" + (sections - tables));
+		System.out.println("sections=" + sections + " table=" + tables + " wrap=" + wraps + " centered=" + (sections - tables - wraps));
 		System.out.println("table sections by any reason: " + anyReason);
 		System.out.println("table sections by first reason: " + firstReason);
 	}

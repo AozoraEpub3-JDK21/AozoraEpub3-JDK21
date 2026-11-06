@@ -27,6 +27,9 @@ public class SectionInfo
 	/** ページ左右中央で、長い節なので従来の表組みで出力するならtrue */
 	public boolean isMiddleTable = false;
 	
+	/** ページ左右中央で、1列に収まらない行があるので縦書きのブロックの高さを決めて折り返すならtrue (html.hltr のときだけ効く。internal #8) */
+	public boolean isMiddleWrap = false;
+	
 	/** ページ左右中央を、横書きの親 (html.hltr) の中に縦書きのブロックを置いて出力するならtrue
 	 * (縦書き・Kindle以外・短い節。xhtml_header.vm と xhtml_footer.vm はこれだけを見る) */
 	public boolean isHltr = false;
@@ -90,6 +93,14 @@ public class SectionInfo
 		this.isMiddle = isMiddle;
 	}
 
+	public boolean isMiddleWrap()
+	{
+		return isMiddleWrap;
+	}
+	public void setMiddleWrap(boolean isMiddleWrap)
+	{
+		this.isMiddleWrap = isMiddleWrap;
+	}
 	public boolean isMiddleTable()
 	{
 		return isMiddleTable;

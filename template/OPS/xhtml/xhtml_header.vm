@@ -56,7 +56,9 @@ img{position:absolute;left:${place.LeftPercent}%;top:${place.TopPercent}%;width:
 #else
 <body>
 #end
-#if (${sectionInfo.Hltr})
+#if (${sectionInfo.Hltr} && ${sectionInfo.MiddleWrap})
+<div class="vrtl middle wrap">
+#elseif (${sectionInfo.Hltr})
 <div class="vrtl middle">
 #else
 #if (${sectionInfo.Middle})

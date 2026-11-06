@@ -302,6 +302,8 @@ public class AozoraEpub3Converter
 	final static PageBreakType pageBreakBottom = new PageBreakType(true, PageBreakType.PAGE_BOTTOM, PageBreakType.IMAGE_PAGE_NONE);
 	/** 左右中央 (長い節なので従来の表組み) */
 	final static PageBreakType pageBreakMiddleTable = new PageBreakType(true, PageBreakType.PAGE_MIDDLE_TABLE, PageBreakType.IMAGE_PAGE_NONE);
+	/** 左右中央 (1列に収まらない行があるので、ブロックの高さを決めて折り返す) */
+	final static PageBreakType pageBreakMiddleWrap = new PageBreakType(true, PageBreakType.PAGE_MIDDLE_WRAP, PageBreakType.IMAGE_PAGE_NONE);
 	/** 改ページ画像単一ページ サイズに応じて自動調整 */
 	final static PageBreakType pageBreakImageAuto = new PageBreakType(true, 0, PageBreakType.IMAGE_PAGE_AUTO);
 	/** 改ページ画像単一ページ 幅100% */
@@ -679,8 +681,11 @@ public class AozoraEpub3Converter
 	/** 左右中央の節で、これを超える行数 (文字のある行と、その間の空行) なら1ページに収まらないとみなす */
 	static final int MIDDLE_LONG_LINES = 10;
 	/** 左右中央の節で、1行がこれを超える字数 (表示文字・空白・字下げ) なら1列に収まらないとみなす
-	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ) */
+	 * (列の終わりまで届くとBooksは白紙のページを足し、Thoriumは列の終わりの文字を切る。大見出し150%で狭い端末の1列に収まる長さ)。
+	 * そういう行のある節は、ブロックの高さをページより短く決めて (div.vrtl.wrap、80vh) 列の終わりより手前で折り返す (internal #8) */
 	static final int MIDDLE_LONG_LINE_CHARS = 20;
+	/** 折り返す左右中央の節 (div.vrtl.wrap) の1列の字数。高さ 80vh なので MIDDLE_LONG_LINE_CHARS の 8 割 */
+	static final int MIDDLE_WRAP_COLUMN_CHARS = 16;
 	/** 左右中央の節を従来の表組みに倒す注記 (地付き・字上げは表の高さがないと下寄せにならない、大きな文字は1列の字数が読めない、改行は列の数が読めない) */
 	final static Pattern middleTableChukiPattern = Pattern.compile("地付き|字上げ|大きな文字|^改行$|字詰め|折り返して");
 	/** 字下げ注記 (N字下げ・ここからN字下げ・ここからN字下げ、…) の字数。桁が多すぎるものは数えずに表組みに倒す */
@@ -693,6 +698,10 @@ public class AozoraEpub3Converter
 	int middleCountLines = 0;
 	/** 数えている左右中央の節で、文字のある行の後に続いている空行の数 (次に文字のある行が来たら行数に足す) */
 	int middleCountBlankLines = 0;
+	/** 数えている左右中央の節に、1列に収まらない行があればtrue (折り返して出す) */
+	boolean middleCountWrap = false;
+	/** 数えている左右中央の節を折り返して出したときの列の数 (行ごとに MIDDLE_WRAP_COLUMN_CHARS で割った列と、間の空行) */
+	int middleCountWrapColumns = 0;
 	/** 数えている左右中央の節に、画像・1列に収まらない行・表組みに倒す注記があればtrue (従来の表組みに倒す) */
 	/** 数えている左右中央の節を表組みに倒すか（理由が 1 つでもあれば倒す。{@link #forceMiddleTable} だけが理由を足す） */
 	private boolean middleCountForceTable() { return !this.middleForceReasons.isEmpty(); }
@@ -711,7 +720,8 @@ public class AozoraEpub3Converter
 	/** 左右中央の節の長さを1行ぶん数える (getBookInfoの事前走査から呼ぶ)
 	 * 横書きの親の中の縦書きのブロックはページを超えると分割されずに本文が見えなくなり、
 	 * 列の終わりまで届く行があると白紙のページや文字の切れが出るため、
-	 * 行数が多い節と1列に収まらない行のある節は従来の表組みで出力する (監査34)。
+	 * 行数が多い節は従来の表組みで出力し (監査34)、1列に収まらない行のある節はブロックの高さを決めて折り返す
+	 * (折り返した列が多すぎれば表組み。internal #8)。
 	 * 迷う形 (画像・下寄せ・大きな文字等) は従来の表組みに倒す
 	 * @param edgeSpaces 事前走査で除去した行頭・行末の空白の数 */
 	void countMiddleSection(BookInfo bookInfo, String noRubyLine, int lineNum, int edgeSpaces)
@@ -748,10 +758,11 @@ public class AozoraEpub3Converter
 				}
 				if (chars > 0) {
 					lineChars += chars;
-					if (lineChars > MIDDLE_LONG_LINE_CHARS) this.forceMiddleTable("long-line");
+					if (lineChars > MIDDLE_LONG_LINE_CHARS) this.middleCountWrap = true;
 					if (!lineCounted) {
 						//間の空行も1列ずつ場所を取る
 						this.middleCountLines += this.middleCountBlankLines + 1;
+						this.middleCountWrapColumns += this.middleCountBlankLines;
 						this.middleCountBlankLines = 0;
 						lineCounted = true;
 					}
@@ -776,11 +787,15 @@ public class AozoraEpub3Converter
 			if (chukiFlagPageBreak.contains(chukiName)) {
 				//変換時は改ページで字下げを閉じる
 				this.middleBlockIndent = 0;
+				//閉じる節に、この行の改ページより前の文字の列を足す
+				if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars);
 				this.endMiddleSection(bookInfo, chukiFlagMiddle.contains(chukiName) ? -1 : lineNum);
 				if (chukiFlagMiddle.contains(chukiName)) {
 					this.middleCountLine = lineNum;
 					this.middleCountLines = 0;
 					this.middleCountBlankLines = 0;
+					this.middleCountWrap = false;
+					this.middleCountWrapColumns = 0;
 					this.middleForceReasons = new java.util.LinkedHashSet<String>();
 					//同じ行の注記より前の文字は前の節のもの
 					lineCounted = false;
@@ -797,6 +812,13 @@ public class AozoraEpub3Converter
 				}
 			}
 		}
+		//行の終わりで、この行の字数から折り返したときの列の数を足す (改ページで閉じた節には閉じる前に足してある)
+		if (this.middleCountLine >= 0 && lineCounted) this.middleCountWrapColumns += wrapColumns(lineChars);
+	}
+	/** 折り返す左右中央の節 (div.vrtl.wrap) で、この字数の行が取る列の数 */
+	private static int wrapColumns(int lineChars)
+	{
+		return Math.max(1, (lineChars + MIDDLE_WRAP_COLUMN_CHARS - 1) / MIDDLE_WRAP_COLUMN_CHARS);
 	}
 	/** 行に左右中央の注記（ページの左右中央 など）があるか */
 	private static boolean containsMiddleChuki(String line)
@@ -819,12 +841,16 @@ public class AozoraEpub3Converter
 	{
 		if (this.middleCountLine < 0) return;
 		if (this.middleCountLines > MIDDLE_LONG_LINES) this.forceMiddleTable("lines>" + MIDDLE_LONG_LINES);
+		//折り返すと列が増えて1ページに収まらない
+		if (this.middleCountWrap && this.middleCountWrapColumns > MIDDLE_LONG_LINES) this.forceMiddleTable("wrap-columns>" + MIDDLE_LONG_LINES);
 		bookInfo.recordMiddleSection(this.middleCountLine, this.middleCountLines, this.middleForceReasons);
 		if (this.middleCountForceTable()) {
 			bookInfo.addLongMiddleLine(this.middleCountLine);
 		} else if (pageBreakLine >= 0) {
 			this.middleClosedByPageBreak.add(new int[]{this.middleCountLine, pageBreakLine});
 		}
+		//表組みに倒さなかった節の印。表組みに倒した節 (後で画像単ページで倒すものを含む) は isLongMiddleLine が先に効く
+		if (this.middleCountWrap) bookInfo.addWrapMiddleLine(this.middleCountLine);
 		this.middleCountLine = -1;
 	}
 	/** 走査の後で、改ページの次が画像単ページの節を表組みに倒す (表紙に移す画像の前の改ページは変換時に省かれ、後ろの本文が同じ節に入る) */
@@ -2514,8 +2540,9 @@ public class AozoraEpub3Converter
 					
 					//改ページフラグ設定
 					if (chukiFlagMiddle.contains(chukiName)) {
-						//左右中央 1ページに収まらない長い節は従来の表組み
-						this.setPageBreakTrigger(bookInfo.isLongMiddleLine(lineNum) ? pageBreakMiddleTable : pageBreakMiddle);
+						//左右中央 1ページに収まらない長い節は従来の表組み、1列に収まらない行のある節は折り返す
+						this.setPageBreakTrigger(bookInfo.isLongMiddleLine(lineNum) ? pageBreakMiddleTable
+								: bookInfo.isWrapMiddleLine(lineNum) ? pageBreakMiddleWrap : pageBreakMiddle);
 					} else if (chukiFlagBottom.contains(chukiName)) {
 						//ページ左
 						this.setPageBreakTrigger(pageBreakBottom);

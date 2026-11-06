@@ -232,11 +232,12 @@ public class VerticalMiddleLayoutTest {
 			"［＃ページの左右中央］",
 			"［＃ここから柱］作品名［＃ここで柱終わり］",
 			"［＃３字下げ］［＃大見出し］第一部　第十二章　一列に収まらないほど長い長い章題です［＃大見出し終わり］",
+			"［＃地付き］献辞",
 			"［＃改ページ］",
 			"本文。").concat("\n").getBytes(StandardCharsets.UTF_8));
 		try (ZipFile zf = new ZipFile(convert(true, false))) {
 			String chapter = read(zf, "OPS/xhtml/0001.xhtml");
-			//章題が長いので表組みのまま。柱は出さない（internal #8）
+			//地付きがあるので表組みのまま。柱は出さない（internal #8）
 			assertTrue(chapter, chapter.contains("<table class=\"middle\"><tr><td>"));
 			assertFalse(chapter, chapter.contains("running_head"));
 			assertTrue(chapter, chapter.contains("一列に収まらないほど長い長い章題です"));
@@ -255,12 +256,15 @@ public class VerticalMiddleLayoutTest {
 			assertFalse(shortMiddle, shortMiddle.contains("<table"));
 			assertTrue(shortMiddle, shortMiddle.contains("第一章"));
 			assertTrue(shortMiddle, shortMiddle.trim().endsWith("</div>\n</body>\n</html>"));
+			assertFalse("短い中扉は高さを決めない:\n" + shortMiddle, shortMiddle.contains("wrap"));
 
+			//1 列に収まらない章題は、表組みにせず高さを決めたブロックで折り返す（internal #8）
 			String longMiddle = read(zf, "OPS/xhtml/0003.xhtml");
-			assertTrue(longMiddle, longMiddle.contains("<table class=\"middle\"><tr><td>"));
-			assertTrue(longMiddle, longMiddle.contains("</td></tr></table>"));
-			assertFalse(longMiddle, longMiddle.contains("hltr"));
-			assertFalse(longMiddle, longMiddle.contains("vrtl"));
+			assertTrue(longMiddle, longMiddle.contains("lang=\"ja\" class=\"hltr\">"));
+			assertTrue(longMiddle, longMiddle.contains("<div class=\"vrtl middle wrap\">"));
+			assertFalse(longMiddle, longMiddle.contains("<table"));
+			assertTrue(longMiddle, longMiddle.contains("一列に収まらないほど長い章題を持つ中扉です"));
+			assertTrue(longMiddle, longMiddle.trim().endsWith("</div>\n</body>\n</html>"));
 
 			String bottom = read(zf, "OPS/xhtml/0005.xhtml");
 			assertTrue(bottom, bottom.contains("<table class=\"bottom\"><tr><td>"));
@@ -272,6 +276,8 @@ public class VerticalMiddleLayoutTest {
 
 			String css = read(zf, "OPS/css/vertical_middle.css");
 			assertTrue(css, css.contains("html.hltr div.vrtl {"));
+			//max-height は Thorium で効かない。高さそのものを決める
+			assertTrue(css, css.contains("html.hltr div.vrtl.wrap {\nheight: 80vh;\n}"));
 		}
 	}
 
@@ -282,6 +288,9 @@ public class VerticalMiddleLayoutTest {
 			assertTrue(shortMiddle, shortMiddle.contains("<div class=\"kindle_outer\"><div class=\"kindle_inner\">"));
 			assertTrue(shortMiddle, shortMiddle.contains("<table class=\"middle\"><tr><td>"));
 			assertFalse(shortMiddle, shortMiddle.contains("hltr"));
+			String longMiddle = read(zf, "OPS/xhtml/0003.xhtml");
+			assertTrue(longMiddle, longMiddle.contains("<table class=\"middle\"><tr><td>"));
+			assertFalse(longMiddle, longMiddle.contains("vrtl"));
 		}
 	}
 

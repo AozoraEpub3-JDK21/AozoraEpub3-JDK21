@@ -80,7 +80,8 @@ height: auto;
 /* 章の中扉など、1ページに収まる左右中央の節（Kindle 以外）: 横書きの親の中に縦書きのブロックを置く。
    縦書きの表は width:100% が効かずに中身の幅へ縮み、ページ右端に寄るリーダーがある（監査 34）。
    ブロックに高さ（100% や 100vh）や上の余白を付けると、Apple Books はページの後に白紙を入れ、
-   Thorium は列の終わりの文字を切るので、どちらも付けない（下寄せ・地付きは効かない） */
+   Thorium は列の終わりの文字を切るので、どちらも付けない（下寄せ・地付きは効かない）。
+   ただし列の終わりまで届く長い行があると、高さを付けなくても同じことが起きるので、その節だけ下の .wrap で短い高さを付ける */
 html.hltr {
 writing-mode: horizontal-tb;
 -webkit-writing-mode: horizontal-tb;
@@ -91,6 +92,11 @@ margin: 0 auto;
 writing-mode: vertical-rl;
 -webkit-writing-mode: vertical-rl;
 -epub-writing-mode: vertical-rl;
+}
+/* 1 列に収まらない行（長い章名など）のある節: ブロックの高さをページより短く決め、列の終わりより手前で折り返す。
+   80vh なら Books（見開き・1 ページ）に白紙が出ず、Thorium で字が切れない。max-height は Thorium で効かない（internal #8） */
+html.hltr div.vrtl.wrap {
+height: 80vh;
 }
 
 /* 左右中央のページ（章の中扉など）の柱: ページの角に置かず（position:absolute をやめ）、章題の横の小さな縦の 1 行として並びに入れる。
