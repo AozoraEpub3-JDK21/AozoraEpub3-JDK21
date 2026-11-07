@@ -525,36 +525,44 @@ ext {
 }
 
 // Download and prepare epubcheck unless user provides -PepubcheckJar=<path>
+// The jar itself decides whether to download, not the folder: a failed run used to leave an empty
+// epubcheck-<version> folder, and the task then reported success without a jar (internal #76).
+// No outputs are declared, because Gradle would mark the task UP-TO-DATE over that empty folder.
+// A missing jar at the end fails the build, so a check never runs silently without epubcheck.
 tasks.register('setupEpubcheck') {
-    outputs.dir(epubcheckDir)
     doLast {
         if (project.hasProperty('epubcheckJar')) {
-            println "Using user-provided epubcheck JAR: ${project.property('epubcheckJar')}"
+            def given = file(project.property('epubcheckJar'))
+            if (!given.isFile()) {
+                throw new GradleException("epubcheck JAR given with -PepubcheckJar does not exist: ${given}")
+            }
+            println "Using user-provided epubcheck JAR: ${given}"
             return
         }
-        if (!epubcheckDir.exists()) {
+        def jar = file("${epubcheckDir}/epubcheck.jar")
+        if (!jar.isFile()) {
             epubcheckToolsDir.mkdirs()
             println "Downloading epubcheck ${epubcheckVersion} from ${epubcheckBaseUrl}"
             try {
-                ant.get(src: epubcheckBaseUrl, dest: epubcheckZip, skipexisting: 'true')
+                ant.get(src: epubcheckBaseUrl, dest: epubcheckZip)
                 ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
-            } catch(Exception e) {
-                println "WARNING: Failed to download epubcheck automatically."
-                println "You can manually download the ZIP and set -PepubcheckJar=/path/to/epubcheck.jar"
+            } catch (Exception e) {
+                // Do not keep a partial zip: the next run would unzip it again
+                epubcheckZip.delete()
+                throw new GradleException("Failed to download epubcheck ${epubcheckVersion} (${e.message}). " +
+                    "Download ${epubcheckBaseUrl} by hand and pass -PepubcheckJar=/path/to/epubcheck.jar", e)
+            }
+            if (!jar.isFile()) {
+                throw new GradleException("epubcheck JAR not found after unzipping ${epubcheckZip}: ${jar}")
             }
         }
-        def jar = file("${epubcheckDir}/epubcheck.jar")
-        if (jar.exists()) {
-            println "epubcheck is ready: ${jar}"
-            // Show version (best-effort)
-            try {
-                def p = ["java","-jar", jar.absolutePath, "-version"].execute()
-                p.in.eachLine { println it }
-                p.waitFor()
-            } catch(Exception ignore) {}
-        } else {
-            println "epubcheck JAR not found. Provide -PepubcheckJar or check network access."
-        }
+        println "epubcheck is ready: ${jar}"
+        // Show version (best-effort)
+        try {
+            def p = ["java","-jar", jar.absolutePath, "-version"].execute()
+            p.in.eachLine { println it }
+            p.waitFor()
+        } catch(Exception ignore) {}
     }
 }
 
