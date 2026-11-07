@@ -130,25 +130,6 @@ public class ImageInfoReader
 		return this.imageFileInfos.size();
 		//return this.imageFileNames.size();
 	}
-	/** 出力順の画像のうち、EPUB に書ける形式（ImageInfo.isPageFormat）の最初の位置。無ければ -1。
-	 * 「先頭の挿絵」を表紙にするとき、先頭が BMP なら次の画像を表紙にする（internal #64） */
-	public int firstPageImageIndex() throws IOException
-	{
-		for (int i = 0; i < this.imageFileNames.size(); i++) {
-			ImageInfo imageInfo = this.getImageInfo(i);
-			if (imageInfo != null && ImageInfo.isPageFormat(imageInfo.getExt())) return i;
-		}
-		return -1;
-	}
-	/** EPUB に書ける形式（ImageInfo.isPageFormat）の画像の件数。BMP だけの書庫は 0（internal #64） */
-	public int countPageImageInfos()
-	{
-		int count = 0;
-		for (ImageInfo imageInfo : this.imageFileInfos.values()) {
-			if (imageInfo != null && ImageInfo.isPageFormat(imageInfo.getExt())) count++;
-		}
-		return count;
-	}
 	/** テキスト内の画像順で格納された画像ファイル名の件数
 	 * zipテキストの場合は、本文以外の画像も後から追加される
 	 * zip画像のみ場合はソートされてすべての画像の件数 */
@@ -301,6 +282,12 @@ public class ImageInfoReader
 			} catch (Exception e) {
 				LogAppender.error("画像が読み込めませんでした: " + entryName);
 				logger.error("画像情報の取得に失敗: {}", entryName, e);
+			}
+			//画像だけの本では、EPUB に書けない形式（BMP など）を最初から外す。残すと、表紙の位置・件数・ページの番号が
+			//書く画像とずれ、manifest に無い画像を指す本や、ページの無い本ができる（internal #64）
+			if (imageInfo != null && addFileName && !ImageInfo.isPageFormat(imageInfo.getExt())) {
+				LogAppender.println("[WARN] 書けない形式の画像なので飛ばします: "+entryName);
+				continue;
 			}
 			if (imageInfo != null) {
 				this.imageFileInfos.put(entryName, imageInfo);

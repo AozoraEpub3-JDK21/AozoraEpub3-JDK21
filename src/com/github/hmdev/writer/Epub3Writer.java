@@ -956,9 +956,7 @@ public class Epub3Writer
 					String imageFileName = imageInfoReader.getImageFileName(bookInfo.coverImageIndex);
 					if (imageFileName != null) {
 						ImageInfo imageInfo = imageInfoReader.getImageInfo(imageFileName);
-						//画像だけの本で書けない形式（BMP）は表紙にしない。id も名前も無いまま manifest に載ってしまう（internal #64）
-						//文字の本の表紙は今までどおり（測っていないので変えない）
-						if (imageInfo != null && (!bookInfo.imageOnly || ImageInfo.isPageFormat(imageInfo.getExt()))) {
+						if (imageInfo != null) {
 							imageFileName = imageFileName.substring(archivePathLength);
 							outImageFileNames.add(imageFileName);
 							//表紙フラグも設定
@@ -981,12 +979,6 @@ public class Epub3Writer
 			if (insertCoverInfo == null && bookInfo.coverImageIndex > -1) {
 				//本文中の挿絵の場合
 				insertCoverInfo = imageInfoReader.getImageInfo(bookInfo.coverImageIndex);
-				//画像だけの本で、表紙に選んだ画像が書けない形式（BMP）なら、表紙のページは作らない
-				//（manifest に無い画像を指すと RSC-008。internal #64）
-				if (insertCoverInfo != null && bookInfo.imageOnly && !ImageInfo.isPageFormat(insertCoverInfo.getExt())) {
-					LogAppender.println("[WARN] 表紙に選んだ画像は書けない形式なので、表紙のページを作りません: "+imageInfoReader.getImageFileName(bookInfo.coverImageIndex));
-					insertCoverInfo = null;
-				}
 				if (insertCoverInfo != null) {
 					insertCoverInfo.setIsCover(true);
 					if (!bookInfo.imageOnly && insertCoverInfo.getId() == null) {

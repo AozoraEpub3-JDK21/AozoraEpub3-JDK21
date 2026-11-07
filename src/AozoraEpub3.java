@@ -490,8 +490,8 @@ public class AozoraEpub3
 								//Writerを画像出力用派生クラスに入れ替え
 								writer = epub3ImageWriter;
 								
-								//BMP など書けない形式の画像しか無い書庫も同じ（書くと本文も表紙も無い壊れた EPUB になる。internal #64）
-								if (imageInfoReader.countPageImageInfos() == 0) {
+								//BMP など書けない形式の画像は読み込みで外すので、それしか無い書庫もここで止まる（internal #64）
+								if (imageInfoReader.countImageFileInfos() == 0) {
 									LogAppender.error("画像がありませんでした");
 									LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 									//画像の無い書庫も、その本だけ失敗として次の本へ進む（internal #31）
@@ -501,8 +501,6 @@ public class AozoraEpub3
 								}
 								//名前順で並び替え
 								imageInfoReader.sortImageFileNames();
-								//「先頭の挿絵」は書ける形式の最初の画像（先頭の BMP は書かないので表紙にならない。internal #64）
-								if (coverImageIndex == 0) coverImageIndex = imageInfoReader.firstPageImageIndex();
 							}
 						}
 						//先頭からの場合で指定行数以降なら表紙無し

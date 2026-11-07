@@ -397,23 +397,43 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** 表紙に選んだ画像が書けない形式（BMP）なら、表紙のページは作らず、書かない画像を指さない。
-	 * 「先頭の挿絵」は呼び出し側が書ける最初の画像に合わせる（AozoraEpub3BatchPerBookTest）。ここは確認の画面などで BMP を選んだとき（internal #64） */
+	/** 画像だけの本は、書けない形式（BMP）を読み込みで外す。先頭の BMP は表紙にならず、次の画像が表紙になり、
+	 * ページの番号も書く画像だけで振る（internal #64） */
 	@Test
-	public void unusableCoverImageMakesNoCoverPage() throws Exception {
+	public void unusableImagesAreDroppedOnLoad() throws Exception {
 		for (boolean svg : new boolean[]{false, true}) {
 			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 			setParams(writer, svg);
-			File zip = imageZip(new String[]{"png", "bmp", "png"}, new int[][]{{600, 800}, {600, 800}, {600, 800}});
-			try (ZipFile zf = new ZipFile(writeBook(zip, writer, bookInfo -> {
-				bookInfo.insertCoverPage = true;
-				bookInfo.coverImageIndex = 1;
-			}, "bmpcover" + svg))) {
-				assertTrue("BMP を書いている", zf.getEntry("OPS/images/0002.bmp") == null);
-				assertTrue("表紙のページがある", zf.getEntry("OPS/xhtml/cover.xhtml") == null);
-				assertEquals(List.of("OPS/xhtml/0001.xhtml", "OPS/xhtml/0002.xhtml"), spinePages(zf));
+			File zip = imageZip(new String[]{"bmp", "png", "bmp", "png"}, new int[][]{{600, 800}, {600, 800}, {600, 800}, {600, 800}});
+			try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "bmpcover" + svg))) {
+				String cover = read(zf, "OPS/xhtml/cover.xhtml");
+				assertTrue(cover, cover.contains("../images/0001.png"));
+				assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("href=\"images/0001.png\" media-type=\"image/png\" properties=\"cover-image\""));
+				assertFalse(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains(".bmp"));
+				//表紙にした画像は本文から外し、残りの 1 枚が本文のページになる
+				assertEquals(List.of("OPS/xhtml/cover.xhtml", "OPS/xhtml/0001.xhtml"), spinePages(zf));
+				assertTrue(read(zf, "OPS/xhtml/0001.xhtml"), read(zf, "OPS/xhtml/0001.xhtml").contains("../images/0002.png"));
 				assertReferencesResolve(zf);
 			}
+		}
+	}
+
+	/** 名前が .bmp でも中身が PNG なら、ページとして書く（形式は名前でなく中身で決める） */
+	@Test
+	public void pngNamedBmpIsWritten() throws Exception {
+		File zip = File.createTempFile("pngbmp", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			for (String name : new String[]{"p0.bmp", "p1.png"}) {
+				zos.putNextEntry(new ZipEntry(name));
+				ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "png", zos);
+				zos.closeEntry();
+			}
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "pngbmp"))) {
+			assertEquals(2, spinePages(zf).size());
+			assertReferencesResolve(zf);
 		}
 	}
 
