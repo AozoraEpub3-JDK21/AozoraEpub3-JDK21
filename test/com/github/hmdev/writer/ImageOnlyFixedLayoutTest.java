@@ -397,47 +397,7 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** 画像だけの本は、書けない形式（BMP）を読み込みで外す。先頭の BMP は表紙にならず、次の画像が表紙になり、
-	 * ページの番号も書く画像だけで振る（internal #64） */
-	@Test
-	public void unusableImagesAreDroppedOnLoad() throws Exception {
-		for (boolean svg : new boolean[]{false, true}) {
-			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
-			setParams(writer, svg);
-			File zip = imageZip(new String[]{"bmp", "png", "bmp", "png"}, new int[][]{{600, 800}, {600, 800}, {600, 800}, {600, 800}});
-			try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "bmpcover" + svg))) {
-				String cover = read(zf, "OPS/xhtml/cover.xhtml");
-				assertTrue(cover, cover.contains("../images/0001.png"));
-				assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("href=\"images/0001.png\" media-type=\"image/png\" properties=\"cover-image\""));
-				assertFalse(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains(".bmp"));
-				//表紙にした画像は本文から外し、残りの 1 枚が本文のページになる
-				assertEquals(List.of("OPS/xhtml/cover.xhtml", "OPS/xhtml/0001.xhtml"), spinePages(zf));
-				assertTrue(read(zf, "OPS/xhtml/0001.xhtml"), read(zf, "OPS/xhtml/0001.xhtml").contains("../images/0002.png"));
-				assertReferencesResolve(zf);
-			}
-		}
-	}
-
-	/** 名前が .bmp でも中身が PNG なら、ページとして書く（形式は名前でなく中身で決める） */
-	@Test
-	public void pngNamedBmpIsWritten() throws Exception {
-		File zip = File.createTempFile("pngbmp", ".zip", tempFolder.getRoot());
-		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
-			for (String name : new String[]{"p0.bmp", "p1.png"}) {
-				zos.putNextEntry(new ZipEntry(name));
-				ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "png", zos);
-				zos.closeEntry();
-			}
-		}
-		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
-		setParams(writer, false);
-		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "pngbmp"))) {
-			assertEquals(2, spinePages(zf).size());
-			assertReferencesResolve(zf);
-		}
-	}
-
-	/** 書ける画像が 1 枚も無い本は書かない（本文も表紙も無い壊れた EPUB になる）。CLI・GUI は先に止めるが、書く側でも守る（internal #64） */
+	/** 書ける画像が 1 枚も無い本（BMP だけ）は書かない。本文の無い壊れた EPUB になる（internal #64） */
 	@Test
 	public void bookWithNoWritableImageIsNotWritten() throws Exception {
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);

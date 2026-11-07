@@ -283,12 +283,6 @@ public class ImageInfoReader
 				LogAppender.error("画像が読み込めませんでした: " + entryName);
 				logger.error("画像情報の取得に失敗: {}", entryName, e);
 			}
-			//画像だけの本では、EPUB に書けない形式（BMP など）を最初から外す。残すと、表紙の位置・件数・ページの番号が
-			//書く画像とずれ、manifest に無い画像を指す本や、ページの無い本ができる（internal #64）
-			if (imageInfo != null && addFileName && !ImageInfo.isPageFormat(imageInfo.getExt())) {
-				LogAppender.println("[WARN] 書けない形式の画像なので飛ばします: "+entryName);
-				continue;
-			}
 			if (imageInfo != null) {
 				this.imageFileInfos.put(entryName, imageInfo);
 				if (addFileName) this.addImageFileName(entryName);

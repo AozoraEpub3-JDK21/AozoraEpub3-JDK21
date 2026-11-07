@@ -490,7 +490,6 @@ public class AozoraEpub3
 								//Writerを画像出力用派生クラスに入れ替え
 								writer = epub3ImageWriter;
 								
-								//BMP など書けない形式の画像は読み込みで外すので、それしか無い書庫もここで止まる（internal #64）
 								if (imageInfoReader.countImageFileInfos() == 0) {
 									LogAppender.error("画像がありませんでした");
 									LogAppender.println("変換中止: "+srcFile.getAbsolutePath());

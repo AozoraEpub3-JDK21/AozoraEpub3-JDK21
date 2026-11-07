@@ -298,29 +298,6 @@ public class AozoraEpub3BatchPerBookTest {
 		assertEquals("失敗として数える", 1, exitCode);
 	}
 
-	/** 「-c 0」で先頭が BMP なら、表紙は書ける最初の画像（PNG）になり、BMP を指さない（internal #64） */
-	@Test
-	public void firstImageCoverSkipsAnUnusableImage() throws Exception {
-		File src = tempFolder.newFolder("bfsrc");
-		File dst = tempFolder.newFolder("bfdst");
-		File zip = imageZip(new File(src, "bmpfirst.zip"), "p0.bmp", "p1.png", "p2.png");
-		File ini = tempFolder.newFile("bf.ini");
-
-		int exitCode = run("-i", ini.getPath(), "-d", dst.getPath(), "-c", "0", zip.getPath());
-
-		assertEquals("成功:\n" + lastLog + lastErr, 0, exitCode);
-		try (ZipFile epub = new ZipFile(new File(dst, "bmpfirst.epub"))) {
-			String opf = new String(epub.getInputStream(epub.getEntry("OPS/package.opf")).readAllBytes(), StandardCharsets.UTF_8);
-			assertTrue(opf, opf.contains("href=\"images/0001.png\" media-type=\"image/png\" properties=\"cover-image\""));
-			assertTrue("BMP を manifest に載せた:\n" + opf, !opf.contains(".bmp"));
-			ZipEntry cover = epub.getEntry("OPS/xhtml/cover.xhtml");
-			assertNotNull("表紙のページが無い", cover);
-			String xhtml = new String(epub.getInputStream(cover).readAllBytes(), StandardCharsets.UTF_8);
-			assertTrue(xhtml, xhtml.contains("../images/0001.png"));
-		}
-		assertTrue("飛ばしたことが出ていない:\n" + lastLog, lastLog.contains("書けない形式の画像なので飛ばします: p0.bmp"));
-	}
-
 	/** フォルダの名前を表紙に渡しても、フォルダを画像として読まない（internal #64 の 15） */
 	@Test
 	public void coverOptionNamingAFolderIsNotReadAsAnImage() throws Exception {

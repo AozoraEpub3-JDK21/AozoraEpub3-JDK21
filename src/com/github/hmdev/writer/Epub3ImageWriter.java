@@ -92,8 +92,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			pageNum++;
 			vecFileName.add(this.getImageFilePath(srcFilePath.trim(), pageNum));
 		}
-		//書ける画像が 1 枚も無いと、本文の無い EPUB になる（別ファイルの表紙が読めなければ、目次が無いページを指す）。
-		//書かずに失敗にする。CLI・GUI は先に countImageFileInfos で止めるので、ここは他の入口のための守り（internal #64）
+		//書ける画像が 1 枚も無い（BMP だけなど）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64）
 		if (this.imageInfos.isEmpty()) {
 			throw new IOException("画像がありませんでした");
 		}
@@ -236,13 +235,12 @@ public class Epub3ImageWriter extends Epub3Writer
 		ImageInfo imageInfo;
 		try {
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
-			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
-				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
-				//書かない画像には id を付けない（付けると isWrittenImage が通し、manifest に無い画像を書く。internal #64）
-				return null;
-			}
 			imageInfo.setId(imageId);
 			imageInfo.setOutFileName(imageId+"."+ext);
+			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
+				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
+				return null;
+			}
 			if (this.imageIndex-1 == bookInfo.coverImageIndex) {
 				imageInfo.setIsCover(true);
 				isCover = true;
