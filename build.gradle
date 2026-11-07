@@ -15,19 +15,12 @@ wrapper {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-// ソースコードの文字コードをUTF-8に指定（文字化け対策）
-// -D プロパティをテスト JVM に転送（例: -DhamelnE2E=true）。
-// ただし JVM が自分で決めるプロパティ（java.home・java.version・user.dir・区切り文字など）は写さない。
-// 写すと、試験の JVM が Gradle を動かす JVM と別の版のとき（-PjavaToolchainVersion=25 など）、
-// 試験の JVM が Gradle 側の JDK を指し、java.text.Normalizer がその JDK の中の別の版のデータを探して
-// 初期化に失敗していた（internal #47）
-def jvmOwnedProperty = { String k ->
-    ['java.', 'jdk.', 'sun.', 'os.', 'user.', 'apple.', 'library.jansi.'].any { k.startsWith(it) } ||
-        k in ['line.separator', 'path.separator', 'file.separator', 'file.encoding',
-              'native.encoding', 'stdout.encoding', 'stderr.encoding']
-}
+// コマンドラインの -D だけをテスト JVM に転送する（例: -DhamelnE2E=true・-Djdk.internal.httpclient.debug=true）。
+// Gradle を動かす JVM の System.properties を丸ごと写すと java.home・java.version なども写り、試験の JVM が
+// 別の版のとき（-PjavaToolchainVersion=25 など）Gradle 側の JDK を指して、java.text.Normalizer が
+// その JDK の中の別の版のデータを探して初期化に失敗していた（internal #47）
 tasks.withType(Test) {
-    systemProperties System.properties.findAll { k, v -> !jvmOwnedProperty(k.toString()) }
+    systemProperties gradle.startParameter.systemPropertiesArgs
 
     // 試験が作業ディレクトリから直接読むフォルダを入力に入れる。入れないと、サイトの規則（web/*/extract.txt）・
     // テンプレート・外字を直しても、試験の段が「変わっていない」として飛ばされ、走らずに緑に見える
