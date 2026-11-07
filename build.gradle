@@ -15,12 +15,20 @@ wrapper {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-// コマンドラインの -D だけをテスト JVM に転送する（例: -DhamelnE2E=true・-Djdk.internal.httpclient.debug=true）。
-// Gradle を動かす JVM の System.properties を丸ごと写すと java.home・java.version なども写り、試験の JVM が
-// 別の版のとき（-PjavaToolchainVersion=25 など）Gradle 側の JDK を指して、java.text.Normalizer が
-// その JDK の中の別の版のデータを探して初期化に失敗していた（internal #47）
+// テスト JVM へ渡す -D（internal #47）。Gradle を動かす JVM の System.properties を丸ごと写すと java.home・java.version なども写り、
+// 試験の JVM が別の版のとき（-PjavaToolchainVersion=25 など）Gradle 側の JDK を指して、java.text.Normalizer が
+// その JDK の中の別の版のデータを探して初期化に失敗していた。渡すのは次の 2 つ:
+//  1. コマンドラインで打った -D（例: -DhamelnE2E=true・-Djdk.internal.httpclient.debug=true）。Gradle 自身の org.gradle.* は除く
+//  2. 試験が読む切り替えとネットワークの設定。gradle.properties の systemProp.* や GRADLE_OPTS で付けたものも届くように、
+//     Gradle を動かす JVM から名前で拾う（E2E がプロキシの外へ出られずに Assume で飛ばされ、緑に見えるのを防ぐ）
+def testOptInProperties = ['hamelnE2E', 'archiveUrlE2E', 'referenceCompare']
+def networkPropertyPrefixes = ['http.proxy', 'https.proxy', 'http.nonProxyHosts', 'socksProxy', 'javax.net.ssl.']
 tasks.withType(Test) {
-    systemProperties gradle.startParameter.systemPropertiesArgs
+    systemProperties System.properties.findAll { k, v ->
+        def key = k.toString()
+        key in testOptInProperties || networkPropertyPrefixes.any { key.startsWith(it) }
+    }
+    systemProperties gradle.startParameter.systemPropertiesArgs.findAll { k, v -> !k.startsWith('org.gradle.') }
 
     // 試験が作業ディレクトリから直接読むフォルダを入力に入れる。入れないと、サイトの規則（web/*/extract.txt）・
     // テンプレート・外字を直しても、試験の段が「変わっていない」として飛ばされ、走らずに緑に見える
