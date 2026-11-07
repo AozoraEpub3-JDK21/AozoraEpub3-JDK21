@@ -48,8 +48,8 @@ v1.3.6 にも存在するため回帰ではないが、**ユニットテスト�
   同「17.」に起票し、**v1.3.7 で修正済み**。CI がこれを検出できていなかった理由も同項に記録した
 
 **運用上の注意**: `gradlew --no-daemon clean` の後は `build/tools/` の epubcheck も消えるため、
-`setupEpubcheck` の自動ダウンロードが失敗すると `epubcheck` タスクが「N ファイルで失敗」という
-紛らわしいメッセージで落ちる（実体は epubcheck jar 不在）。
+`setupEpubcheck` の自動ダウンロードが失敗すると、「Failed to download epubcheck …」で止まる
+（以前は成功と出して空のフォルダを残し、`epubcheck` タスクが紛らわしいメッセージで落ちていた。internal #76）。
 `curl -sL -o build/tools/epubcheck-5.3.0.zip https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip`
 で手動取得して展開すれば通る。`tools/epubcheck-5.2.0.jar`（未追跡・9 bytes の `Not Found`）は壊れているので使わないこと。
 

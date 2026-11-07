@@ -519,8 +519,9 @@ cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 ./gradlew --no-daemon epubcheck -PepubDir=build/epub_local
 ```
 
-> **注意**: jar が無い状態で `epubcheck` タスクを実行すると「epubcheck failed for N file(s)」という
-> **EPUB 側に問題があるかのようなメッセージ**で落ちる。実体は jar 不在なので、まず jar の存在を確認する。
+> **注意**: 取得に失敗すると、`setupEpubcheck`（と、それに依る `epubcheck`）は「Failed to download epubcheck …」で止まる。
+> 以前は、取得に失敗しても成功と出し、空の `build/tools/epubcheck-5.3.0/` を残した。その後は二度と取得しなかった（internal #76）。
+> 古い版の木でその空のフォルダが残っていたら、消してから実行する。
 > 壊れていた `tools/epubcheck-5.2.0.jar`（未追跡・9 bytes の `Not Found`）は削除済み。
 > ローカル検証には `tools/epubcheck-5.1.0/epubcheck.jar` が使える。
 
