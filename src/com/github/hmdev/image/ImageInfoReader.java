@@ -130,6 +130,15 @@ public class ImageInfoReader
 		return this.imageFileInfos.size();
 		//return this.imageFileNames.size();
 	}
+	/** EPUB に書ける形式（ImageInfo.isPageFormat）の画像の件数。BMP だけの書庫は 0（internal #64） */
+	public int countPageImageInfos()
+	{
+		int count = 0;
+		for (ImageInfo imageInfo : this.imageFileInfos.values()) {
+			if (imageInfo != null && ImageInfo.isPageFormat(imageInfo.getExt())) count++;
+		}
+		return count;
+	}
 	/** テキスト内の画像順で格納された画像ファイル名の件数
 	 * zipテキストの場合は、本文以外の画像も後から追加される
 	 * zip画像のみ場合はソートされてすべての画像の件数 */

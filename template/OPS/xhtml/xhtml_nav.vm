@@ -95,6 +95,9 @@ nav#landmarks { display:none; }
 #if (${sections.size()} > 0)
 #set($firstSection = ${sections.get(0)})
 			<li class="chapter" id="toc${idx}"><a href="${firstSection.SectionId}.xhtml">コンテンツ</a></li>
+#elseif (${bookInfo.InsertCoverPage})
+## 画像が 1 枚だけの本は、その画像が表紙のページになり本文のページが無い（internal #64）
+			<li class="chapter" id="toc${idx}"><a href="cover.xhtml">コンテンツ</a></li>
 #else
 			<li class="chapter" id="toc${idx}"><a href="text00001.xhtml">コンテンツ</a></li>
 #end

@@ -231,12 +231,16 @@ public class Epub3ImageWriter extends Epub3Writer
 		ImageInfo imageInfo;
 		try {
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
-			imageInfo.setId(imageId);
-			imageInfo.setOutFileName(imageId+"."+ext);
-			if (!imageInfo.getExt().matches("^(png|jpeg|gif|jpg)$")) {
+			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
 				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
+				//書かない画像には id を付けない（付けると isWrittenImage が通し、manifest に無い画像を書く。internal #64）
+				//先頭の挿絵を表紙にする設定で、その画像が書けないなら、表紙は次の画像に回す
+				//（回さないと、表紙のページが manifest に無い画像を指す。internal #64）
+				if (this.imageIndex-1 == bookInfo.coverImageIndex) bookInfo.coverImageIndex++;
 				return null;
 			}
+			imageInfo.setId(imageId);
+			imageInfo.setOutFileName(imageId+"."+ext);
 			if (this.imageIndex-1 == bookInfo.coverImageIndex) {
 				imageInfo.setIsCover(true);
 				isCover = true;

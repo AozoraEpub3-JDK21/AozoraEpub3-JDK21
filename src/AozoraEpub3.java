@@ -490,7 +490,8 @@ public class AozoraEpub3
 								//Writerを画像出力用派生クラスに入れ替え
 								writer = epub3ImageWriter;
 								
-								if (imageInfoReader.countImageFileInfos() == 0) {
+								//BMP など書けない形式の画像しか無い書庫も同じ（書くと本文も表紙も無い壊れた EPUB になる。internal #64）
+								if (imageInfoReader.countPageImageInfos() == 0) {
 									LogAppender.error("画像がありませんでした");
 									LogAppender.println("変換中止: "+srcFile.getAbsolutePath());
 									//画像の無い書庫も、その本だけ失敗として次の本へ進む（internal #31）
@@ -517,7 +518,9 @@ public class AozoraEpub3
 						bookInfo.insertCoverPageToc = coverPageToc;
 						bookInfo.insertCoverPage = coverPage;
 						bookInfo.coverImageIndex = coverImageIndex;
-						if (coverFileName != null && !coverFileName.startsWith("http")) {
+						//"" は「先頭の挿絵」（-c 0）。入力のフォルダを足すとフォルダそのものを表紙として読みに行き、
+						//ERROR を出す（Windows では AccessDeniedException）。GUI と同じく "" のまま渡す（internal #64 の 15）
+						if (coverFileName != null && !coverFileName.isEmpty() && !coverFileName.startsWith("http")) {
 							File coverFile = new File(coverFileName);
 							if (!coverFile.exists()) {
 								coverFileName = srcFile.getParent()+"/"+coverFileName;

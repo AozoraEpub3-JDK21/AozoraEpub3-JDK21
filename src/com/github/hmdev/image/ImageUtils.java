@@ -265,11 +265,12 @@ public class ImageUtils
 			}
 		} else {
 			//縮小
-			int scaledW = (int)(w*scale+0.5);
-			int scaledH = (int)(h*scale+0.5);
+			//とても細い画像は、縮めると幅か高さが 0 になり、画像を書けない。1 画素は残す（internal #64）
+			int scaledW = Math.max(1, (int)(w*scale+0.5));
+			int scaledH = Math.max(1, (int)(h*scale+0.5));
 			if (imageInfo.rotateAngle != 0) {
-				scaledW = (int)(h*scale+0.5);
-				scaledH = (int)(w*scale+0.5);
+				scaledW = Math.max(1, (int)(h*scale+0.5));
+				scaledH = Math.max(1, (int)(w*scale+0.5));
 			}
 			//画像がなければ読み込み
 			if (srcImage == null) srcImage = readImage(ext, is);

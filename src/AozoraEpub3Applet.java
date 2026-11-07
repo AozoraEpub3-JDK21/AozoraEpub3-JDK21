@@ -4257,7 +4257,8 @@ public class AozoraEpub3Applet extends JPanel
 					//Writerを画像出力用派生クラスに入れ替え
 					writer = this.epub3ImageWriter;
 					
-					if (imageInfoReader.countImageFileInfos() == 0) {
+					//BMP など書けない形式の画像しか無い書庫も同じ（書くと本文も表紙も無い壊れた EPUB になる。internal #64）
+					if (imageInfoReader.countPageImageInfos() == 0) {
 						LogAppender.error("画像がありませんでした");
 						return;
 					}
