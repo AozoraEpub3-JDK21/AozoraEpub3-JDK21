@@ -501,6 +501,8 @@ public class AozoraEpub3
 								}
 								//名前順で並び替え
 								imageInfoReader.sortImageFileNames();
+								//「先頭の挿絵」は書ける形式の最初の画像（先頭の BMP は書かないので表紙にならない。internal #64）
+								if (coverImageIndex == 0) coverImageIndex = imageInfoReader.firstPageImageIndex();
 							}
 						}
 						//先頭からの場合で指定行数以降なら表紙無し
@@ -520,11 +522,12 @@ public class AozoraEpub3
 						bookInfo.coverImageIndex = coverImageIndex;
 						//"" は「先頭の挿絵」（-c 0）。入力のフォルダを足すとフォルダそのものを表紙として読みに行き、
 						//ERROR を出す（Windows では AccessDeniedException）。GUI と同じく "" のまま渡す（internal #64 の 15）
+						//フォルダの名前（-c . など）も同じく表紙のファイルとして読まない（isFile で見る）
 						if (coverFileName != null && !coverFileName.isEmpty() && !coverFileName.startsWith("http")) {
 							File coverFile = new File(coverFileName);
-							if (!coverFile.exists()) {
+							if (!coverFile.isFile()) {
 								coverFileName = srcFile.getParent()+"/"+coverFileName;
-								if (!new File(coverFileName).exists()) {
+								if (!new File(coverFileName).isFile()) {
 									coverFileName = null;
 									LogAppender.println("[WARN] 表紙画像ファイルが見つかりません : "+coverFile.getAbsolutePath());
 								}

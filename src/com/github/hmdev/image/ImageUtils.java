@@ -315,27 +315,32 @@ public class ImageUtils
 				}
 				g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 				g.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
-				AffineTransform at = AffineTransform.getScaleInstance(scale, scale);
+				//1 画素に広げた辺は、絵もその幅まで広げて描く（元の倍率のままだと 1 画素に届かず、塗られない。internal #64）
+				//回転すると出力の横は元の縦なので、辺を入れ替えて見る。広げない辺は元の倍率のまま
+				boolean rotated = imageInfo.rotateAngle != 0;
+				double scaleX = Math.max(scale, 1.0/(rotated ? h : w));
+				double scaleY = Math.max(scale, 1.0/(rotated ? w : h));
+				AffineTransform at = AffineTransform.getScaleInstance(scaleX, scaleY);
 				int x = 0;
 				int y = 0;
 				if (imageInfo.rotateAngle == 0) {
 					if (margin != null) {
-						x = (int)(-margin[0]*scale+0.5);
-						y = (int)(-margin[1]*scale+0.5);
+						x = (int)(-margin[0]*scaleX+0.5);
+						y = (int)(-margin[1]*scaleY+0.5);
 					}
 				} else if (imageInfo.rotateAngle == 90) {
 					at.rotate(Math.toRadians(imageInfo.rotateAngle), 0, 0);
 					at.translate(0, -imgH);
 					if (margin != null) {
-						x = (int)(-margin[3]*scale+0.5);
-						y = (int)(-margin[0]*scale+0.5);
+						x = (int)(-margin[3]*scaleX+0.5);
+						y = (int)(-margin[0]*scaleY+0.5);
 					}
 				} else {
 					at.quadrantRotate(-1, 0, 0);
 					at.translate(-imgW, 0);
 					if (margin != null) {
-						x = (int)(-margin[1]*scale+0.5);
-						y = (int)(-margin[2]*scale+0.5);
+						x = (int)(-margin[1]*scaleX+0.5);
+						y = (int)(-margin[2]*scaleY+0.5);
 					}
 				}
 				AffineTransformOp ato = new AffineTransformOp(at, AffineTransformOp.TYPE_BICUBIC);

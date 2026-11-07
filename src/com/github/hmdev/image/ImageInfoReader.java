@@ -130,6 +130,16 @@ public class ImageInfoReader
 		return this.imageFileInfos.size();
 		//return this.imageFileNames.size();
 	}
+	/** 出力順の画像のうち、EPUB に書ける形式（ImageInfo.isPageFormat）の最初の位置。無ければ -1。
+	 * 「先頭の挿絵」を表紙にするとき、先頭が BMP なら次の画像を表紙にする（internal #64） */
+	public int firstPageImageIndex() throws IOException
+	{
+		for (int i = 0; i < this.imageFileNames.size(); i++) {
+			ImageInfo imageInfo = this.getImageInfo(i);
+			if (imageInfo != null && ImageInfo.isPageFormat(imageInfo.getExt())) return i;
+		}
+		return -1;
+	}
 	/** EPUB に書ける形式（ImageInfo.isPageFormat）の画像の件数。BMP だけの書庫は 0（internal #64） */
 	public int countPageImageInfos()
 	{

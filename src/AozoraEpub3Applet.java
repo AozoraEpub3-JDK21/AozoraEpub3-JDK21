@@ -4265,6 +4265,8 @@ public class AozoraEpub3Applet extends JPanel
 					
 					//名前順で並び替え
 					imageInfoReader.sortImageFileNames();
+					//「先頭の挿絵」は書ける形式の最初の画像。確認の画面の表紙もこれを見せる（先頭の BMP は書かない。internal #64）
+					if (coverImageIndex == 0) coverImageIndex = imageInfoReader.firstPageImageIndex();
 					//先頭画像をbookInfoに設定しておく
 					//if (coverImageIndex == 0) {
 					//	bookInfo.coverImage = imageInfoReader.getImage(0);

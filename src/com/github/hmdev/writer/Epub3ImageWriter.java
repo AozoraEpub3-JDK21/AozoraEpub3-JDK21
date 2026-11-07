@@ -76,7 +76,7 @@ public class Epub3ImageWriter extends Epub3Writer
 	private boolean isWrittenImage(String srcImageFileName) throws java.io.IOException
 	{
 		String lower = srcImageFileName.toLowerCase();
-		if (!(lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".bmp"))) return false;
+		if (!ImageInfo.isPageFormat(lower.substring(lower.lastIndexOf('.')+1))) return false;
 		ImageInfo imageInfo = this.imageInfoReader.getImageInfo(this.imageInfoReader.correctExt(srcImageFileName));
 		return imageInfo != null && imageInfo.getId() != null;
 	}
@@ -91,6 +91,11 @@ public class Epub3ImageWriter extends Epub3Writer
 			if (this.canceled) return;
 			pageNum++;
 			vecFileName.add(this.getImageFilePath(srcFilePath.trim(), pageNum));
+		}
+		//書ける画像が 1 枚も無い（BMP だけなど）と、本文も表紙も無い壊れた EPUB になる。書かずに失敗にする（internal #64）
+		//呼び出し側（CLI・GUI）は先に countPageImageInfos で止めるので、ここは他の入口のための守り
+		if (this.imageInfos.isEmpty() && (bookInfo.coverFileName == null || bookInfo.coverFileName.isEmpty()) && bookInfo.coverImage == null) {
+			throw new IOException("画像がありませんでした");
 		}
 		
 		//画像を出力して出力サイズを取得
@@ -234,9 +239,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
 				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
 				//書かない画像には id を付けない（付けると isWrittenImage が通し、manifest に無い画像を書く。internal #64）
-				//先頭の挿絵を表紙にする設定で、その画像が書けないなら、表紙は次の画像に回す
-				//（回さないと、表紙のページが manifest に無い画像を指す。internal #64）
-				if (this.imageIndex-1 == bookInfo.coverImageIndex) bookInfo.coverImageIndex++;
+				//表紙の位置は呼び出し側が書ける画像に合わせる（firstPageImageIndex）。ここでは動かさない
 				return null;
 			}
 			imageInfo.setId(imageId);
