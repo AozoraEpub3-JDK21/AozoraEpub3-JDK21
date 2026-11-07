@@ -956,7 +956,8 @@ public class Epub3Writer
 					String imageFileName = imageInfoReader.getImageFileName(bookInfo.coverImageIndex);
 					if (imageFileName != null) {
 						ImageInfo imageInfo = imageInfoReader.getImageInfo(imageFileName);
-						if (imageInfo != null) {
+						//画像だけの本で、読めずに外した画像（id が無い）は表紙にしない。名前の無いまま manifest に載る（internal #77）
+						if (imageInfo != null && !(bookInfo.imageOnly && imageInfo.getId() == null)) {
 							imageFileName = imageFileName.substring(archivePathLength);
 							outImageFileNames.add(imageFileName);
 							//表紙フラグも設定
@@ -979,6 +980,8 @@ public class Epub3Writer
 			if (insertCoverInfo == null && bookInfo.coverImageIndex > -1) {
 				//本文中の挿絵の場合
 				insertCoverInfo = imageInfoReader.getImageInfo(bookInfo.coverImageIndex);
+				//画像だけの本で、表紙に選んだ画像が書かれていない（読めずに外した）なら表紙のページは作らない（internal #77）
+				if (insertCoverInfo != null && bookInfo.imageOnly && insertCoverInfo.getId() == null) insertCoverInfo = null;
 				if (insertCoverInfo != null) {
 					insertCoverInfo.setIsCover(true);
 					if (!bookInfo.imageOnly && insertCoverInfo.getId() == null) {
@@ -1425,7 +1428,6 @@ public class Epub3Writer
 						imageInfo.rotateAngle = this.rotateAngle;
 					}
 				}
-				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 				//Zip,Rarからの直接読み込みは失敗するので一旦バイト配列にする
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
 				byte[] buf = new byte[16384];
@@ -1435,14 +1437,79 @@ public class Epub3Writer
 				}
 				byte[] bytes = baos.toByteArray();
 				baos.close();
-				ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-				this.writeImage(bais, zos, imageInfo);
-				bais.close();
+				BufferedImage srcImage = null;
+				if (imageInfo.isReencode()) {
+					//元の形式（BMP）のまま写さず、読み直して ext（png）で書く（internal #77）
+					//項目を開く前に読む。読めなければこの画像は書かず、id を外してページと OPF から除く（前と同じく 1 ページだけ抜ける）
+					try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {} ({})", srcImageFileName, e.toString()); } //壊れた画像は想定内なので、トレースは出さない
+					if (srcImage == null) {
+						LogAppender.error("画像が読み込めないので外します : "+srcImageFileName);
+						imageInfo.setId(null);
+						imageInfo.setIsCover(false);
+						this.imageInfos.remove(imageInfo);
+						if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
+						return;
+					}
+					srcImage = normalizeForPage(srcImage);
+					LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
+				}
+				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
+				if (srcImage != null) {
+					this.writeImage(srcImage, zos, imageInfo);
+				} else {
+					ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+					this.writeImage(bais, zos, imageInfo);
+					bais.close();
+				}
 				zos.closeArchiveEntry();
 			}
 			if (this.canceled) return;
 			if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
 		}
+	}
+	
+	/** PNG に直す画像（画像だけの本の BMP）を、縮小・回転の道が扱える形にそろえる。
+	 * それらの道はパレットを保たない（1〜4 ビットは灰色 16 段の表に、回転は既定の表に替わる）し、TYPE_CUSTOM の回転は作れない。
+	 * <ul><li>白と黒 2 色のパレット（白黒の読み取り）は、そのまま（小さい 1 ビットの PNG のまま。回転の既定の表も白黒）
+	 * <li>灰色だけのパレットは TYPE_BYTE_GRAY（灰色の段を保ったまま小さい）
+	 * <li>色のあるパレット・透明・ほかの型は、白地の TYPE_INT_RGB（全部透明の BMP が白紙のページにならない）</ul> */
+	static BufferedImage normalizeForPage(BufferedImage image)
+	{
+		int type = image.getType();
+		if (type == BufferedImage.TYPE_INT_RGB || type == BufferedImage.TYPE_3BYTE_BGR || type == BufferedImage.TYPE_BYTE_GRAY) return image;
+		int target = BufferedImage.TYPE_INT_RGB;
+		if (image.getColorModel() instanceof java.awt.image.IndexColorModel && !image.getColorModel().hasAlpha()) {
+			java.awt.image.IndexColorModel palette = (java.awt.image.IndexColorModel)image.getColorModel();
+			boolean gray = true;
+			boolean blackWhite = palette.getMapSize() <= 2;
+			for (int i = 0; i < palette.getMapSize(); i++) {
+				int r = palette.getRed(i);
+				if (r != palette.getGreen(i) || r != palette.getBlue(i)) { gray = false; break; }
+				if (r != 0 && r != 255) blackWhite = false;
+			}
+			if (gray && blackWhite && type == BufferedImage.TYPE_BYTE_BINARY) return image;
+			if (gray) {
+				//drawImage で TYPE_BYTE_GRAY に描くと、色空間の変換で灰色が明るくずれる（136 が 193 になった）。表の値をそのまま写す
+				BufferedImage out = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+				java.awt.image.Raster src = image.getRaster();
+				java.awt.image.WritableRaster dst = out.getRaster();
+				int[] row = new int[image.getWidth()];
+				for (int y = 0; y < image.getHeight(); y++) {
+					src.getSamples(0, y, image.getWidth(), 1, 0, row);
+					for (int x = 0; x < row.length; x++) row[x] = palette.getRed(row[x]);
+					dst.setSamples(0, y, image.getWidth(), 1, 0, row);
+				}
+				return out;
+			}
+		}
+		BufferedImage out = new BufferedImage(image.getWidth(), image.getHeight(), target);
+		java.awt.Graphics2D g = out.createGraphics();
+		try {
+			g.setColor(java.awt.Color.WHITE);
+			g.fillRect(0, 0, image.getWidth(), image.getHeight());
+			g.drawImage(image, 0, 0, null);
+		} finally { g.dispose(); }
+		return out;
 	}
 	
 	/** タイトルページの表示文字数を返す

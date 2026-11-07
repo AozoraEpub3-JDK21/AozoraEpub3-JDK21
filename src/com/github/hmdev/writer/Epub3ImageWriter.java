@@ -92,10 +92,6 @@ public class Epub3ImageWriter extends Epub3Writer
 			pageNum++;
 			vecFileName.add(this.getImageFilePath(srcFilePath.trim(), pageNum));
 		}
-		//書ける画像が 1 枚も無い（BMP だけなど）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64）
-		if (this.imageInfos.isEmpty()) {
-			throw new IOException("画像がありませんでした");
-		}
 		
 		//画像を出力して出力サイズを取得
 		zos.setLevel(0);
@@ -148,6 +144,12 @@ public class Epub3ImageWriter extends Epub3Writer
 			if (this.canceled) return;
 		}
 		
+		//ページにできる画像が 1 枚も無い（読めない BMP だけも含む）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64・#77）
+		//画像を書いた後に見る。読めずに外した画像は imageInfos から抜けている
+		if (this.imageInfos.isEmpty()) {
+			throw new IOException("画像がありませんでした");
+		}
+		
 		//画像xhtmlを出力
 		zos.setLevel(9);
 		//ページの大きさは本全体で 1 つ。imageInfos はページにできる画像（先頭へ移す表紙を含む）で、別ファイルの表紙はまだ入っていない
@@ -157,6 +159,11 @@ public class Epub3ImageWriter extends Epub3Writer
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
 			if (this.canceled) return;
 			String fileName = vecFileName.get(pageNum++);
+			//書く段で読めずに外した画像（id を外してある）はページにしない
+			if (fileName != null) {
+				ImageInfo written = this.imageInfoReader.getImageInfo(srcFilePath.trim());
+				if (written == null || written.getId() == null) fileName = null;
+			}
 			if (fileName != null) {
 				if (isSvgImage) {
 					this.printSvgImageSection(srcFilePath);
@@ -228,19 +235,22 @@ public class Epub3ImageWriter extends Epub3Writer
 	{
 		boolean isCover = false;
 		this.imageIndex++; //xhtmlと画像ファイル名の番号を合わせるため先に++
-		String ext = "";
-		try { ext = srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(); } catch (Exception e) { /* 意図的: 拡張子なしの画像名は ext="" として続行 */ }
 		String imageId = decimalFormat.format(this.imageIndex);
-		String imageFileName = IMAGES_PATH+imageId+"."+ext;
+		String imageFileName;
 		ImageInfo imageInfo;
 		try {
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
+			//EPUB に書けない形式（BMP）のページは、捨てずに PNG で書く。前は「画像フォーマットエラー」で本から外していた（internal #77）
+			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
+				//読めないときは、書く段（writeArchiveImage）で外す。画像はページと OPF より先に書くので、そこで外せば食い違わない
+				imageInfo.setReencode(true);
+				imageInfo.setExt("png");
+			}
+			//出力の名前の拡張子は、書く形式に合わせる（名前の拡張子でなく。.bmp の名前の PNG を 0001.bmp にしない）
+			String ext = "jpeg".equals(imageInfo.getExt()) ? "jpg" : imageInfo.getExt();
+			imageFileName = IMAGES_PATH+imageId+"."+ext;
 			imageInfo.setId(imageId);
 			imageInfo.setOutFileName(imageId+"."+ext);
-			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
-				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
-				return null;
-			}
 			if (this.imageIndex-1 == bookInfo.coverImageIndex) {
 				imageInfo.setIsCover(true);
 				isCover = true;
