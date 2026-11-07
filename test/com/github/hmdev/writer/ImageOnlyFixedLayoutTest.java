@@ -393,6 +393,33 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
+	/** 灰色 16 段の 4 ビット BMP を回転しても、灰色の段を保つ（回転の道は既定の白黒の表に替える） */
+	@Test
+	public void grayPaletteBmpKeepsItsGraysWhenRotated() throws Exception {
+		byte[] v = new byte[16];
+		for (int i = 0; i < 16; i++) v[i] = (byte)(i * 17);
+		java.awt.image.IndexColorModel palette = new java.awt.image.IndexColorModel(4, 16, v, v, v);
+		BufferedImage gray = new BufferedImage(1000, 600, BufferedImage.TYPE_BYTE_BINARY, palette);
+		java.awt.image.WritableRaster raster = gray.getRaster();
+		for (int y = 0; y < 600; y++) for (int x = 0; x < 1000; x++) raster.setSample(x, y, 0, 8); //8*17=136 の灰色
+		File zip = File.createTempFile("gray", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			zos.putNextEntry(new ZipEntry("p0.bmp"));
+			assertTrue("4 ビットの BMP を書けない", ImageIO.write(gray, "bmp", zos));
+			zos.closeEntry();
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 0, 0, 90, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "grayrot"))) {
+			BufferedImage page = imageOf(zf, read(zf, "OPS/xhtml/0001.xhtml"));
+			assertEquals("回転していない", 600, page.getWidth());
+			//灰色の PNG は TYPE_BYTE_GRAY で読まれ、getRGB は色空間の変換で値がずれる（136 が 193）。画素の値そのものを見る
+			int g = page.getType() == BufferedImage.TYPE_BYTE_GRAY ? page.getRaster().getSample(300, 500, 0) : (page.getRGB(300, 500) & 0xFF);
+			assertTrue("灰色が白か黒に潰れた: " + g, g > 100 && g < 170);
+			assertReferencesResolve(zf);
+		}
+	}
+
 	/** 読めない（途中で切れた）BMP のページは外し、本は書く。前と同じく 1 ページの読めなさで本全体を失敗にしない。
 	 * 先頭に置いて表紙にしても、名前の無い画像を manifest に載せない（internal #77） */
 	@Test

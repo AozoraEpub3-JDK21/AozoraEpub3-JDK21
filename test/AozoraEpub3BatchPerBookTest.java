@@ -300,7 +300,7 @@ public class AozoraEpub3BatchPerBookTest {
 			String opf = new String(epub.getInputStream(epub.getEntry("OPS/package.opf")).readAllBytes(), StandardCharsets.UTF_8);
 			assertTrue("BMP を manifest に載せた:\n" + opf, !opf.contains(".bmp") && !opf.contains("image/bmp"));
 		}
-		assertTrue("変換したことが出ていない:\n" + lastLog, lastLog.contains("画像形式変換: p0.bmp (bmp→png)"));
+		assertTrue("変換したことが出ていない:\n" + lastLog, lastLog.contains("画像形式変換: p0.bmp → 0001.png"));
 	}
 
 	/** フォルダの名前を表紙に渡しても、フォルダを画像として読まない（internal #64 の 15） */

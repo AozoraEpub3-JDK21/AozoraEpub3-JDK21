@@ -1447,9 +1447,11 @@ public class Epub3Writer
 						imageInfo.setId(null);
 						imageInfo.setIsCover(false);
 						this.imageInfos.remove(imageInfo);
+						if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
 						return;
 					}
-					srcImage = toRgbIfColourPalette(srcImage);
+					srcImage = normalizeForPage(srcImage);
+					LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
 				}
 				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 				if (srcImage != null) {
@@ -1466,25 +1468,48 @@ public class Epub3Writer
 		}
 	}
 	
-	/** 色のあるパレットの画像（1〜8 ビットの BMP など）は、白地の RGB にする。縮小・回転の道はパレットを保たない
-	 * （1〜4 ビットは灰色の表に、回転は既定の表に替わる）。灰色だけのパレット（白黒の読み取りなど）はそのまま（小さい PNG のまま） */
-	static BufferedImage toRgbIfColourPalette(BufferedImage image)
+	/** PNG に直す画像（画像だけの本の BMP）を、縮小・回転の道が扱える形にそろえる。
+	 * それらの道はパレットを保たない（1〜4 ビットは灰色 16 段の表に、回転は既定の表に替わる）し、TYPE_CUSTOM の回転は作れない。
+	 * <ul><li>白と黒 2 色のパレット（白黒の読み取り）は、そのまま（小さい 1 ビットの PNG のまま。回転の既定の表も白黒）
+	 * <li>灰色だけのパレットは TYPE_BYTE_GRAY（灰色の段を保ったまま小さい）
+	 * <li>色のあるパレット・透明・ほかの型は、白地の TYPE_INT_RGB（全部透明の BMP が白紙のページにならない）</ul> */
+	static BufferedImage normalizeForPage(BufferedImage image)
 	{
-		if (!(image.getColorModel() instanceof java.awt.image.IndexColorModel)) return image;
-		java.awt.image.IndexColorModel palette = (java.awt.image.IndexColorModel)image.getColorModel();
-		boolean gray = !palette.hasAlpha();
-		for (int i = 0; gray && i < palette.getMapSize(); i++) {
-			gray = palette.getRed(i) == palette.getGreen(i) && palette.getGreen(i) == palette.getBlue(i);
+		int type = image.getType();
+		if (type == BufferedImage.TYPE_INT_RGB || type == BufferedImage.TYPE_3BYTE_BGR || type == BufferedImage.TYPE_BYTE_GRAY) return image;
+		int target = BufferedImage.TYPE_INT_RGB;
+		if (image.getColorModel() instanceof java.awt.image.IndexColorModel && !image.getColorModel().hasAlpha()) {
+			java.awt.image.IndexColorModel palette = (java.awt.image.IndexColorModel)image.getColorModel();
+			boolean gray = true;
+			boolean blackWhite = palette.getMapSize() <= 2;
+			for (int i = 0; i < palette.getMapSize(); i++) {
+				int r = palette.getRed(i);
+				if (r != palette.getGreen(i) || r != palette.getBlue(i)) { gray = false; break; }
+				if (r != 0 && r != 255) blackWhite = false;
+			}
+			if (gray && blackWhite && type == BufferedImage.TYPE_BYTE_BINARY) return image;
+			if (gray) {
+				//drawImage で TYPE_BYTE_GRAY に描くと、色空間の変換で灰色が明るくずれる（136 が 193 になった）。表の値をそのまま写す
+				BufferedImage out = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+				java.awt.image.Raster src = image.getRaster();
+				java.awt.image.WritableRaster dst = out.getRaster();
+				int[] row = new int[image.getWidth()];
+				for (int y = 0; y < image.getHeight(); y++) {
+					src.getSamples(0, y, image.getWidth(), 1, 0, row);
+					for (int x = 0; x < row.length; x++) row[x] = palette.getRed(row[x]);
+					dst.setSamples(0, y, image.getWidth(), 1, 0, row);
+				}
+				return out;
+			}
 		}
-		if (gray) return image;
-		BufferedImage rgb = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-		java.awt.Graphics2D g = rgb.createGraphics();
+		BufferedImage out = new BufferedImage(image.getWidth(), image.getHeight(), target);
+		java.awt.Graphics2D g = out.createGraphics();
 		try {
 			g.setColor(java.awt.Color.WHITE);
 			g.fillRect(0, 0, image.getWidth(), image.getHeight());
 			g.drawImage(image, 0, 0, null);
 		} finally { g.dispose(); }
-		return rgb;
+		return out;
 	}
 	
 	/** タイトルページの表示文字数を返す
