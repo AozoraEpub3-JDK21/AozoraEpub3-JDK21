@@ -15,10 +15,16 @@ wrapper {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-// ソースコードの文字コードをUTF-8に指定（文字化け対策）
-// -D プロパティをテスト JVM に転送（例: -DhamelnE2E=true）
+// テスト JVM へ渡す -D（internal #47）。Gradle を動かす JVM の System.properties を丸ごと写すと java.home・java.version なども写り、
+// 試験の JVM が別の版のとき（-PjavaToolchainVersion=25 など）Gradle 側の JDK を指して、java.text.Normalizer が
+// その JDK の中の別の版のデータを探して初期化に失敗していた。渡すのは次の 2 つだけ:
+//  1. コマンドラインで打った -D（例: -DhamelnE2E=true・-Djdk.internal.httpclient.debug=true）。Gradle 自身の org.gradle.*・gradle.* は除く
+//  2. 試験が読む切り替え（HamelnE2ETest・AozoraEpub3ArchiveUrlTest・JavaAozoraVsReferenceTest）。gradle.properties の
+//     systemProp.* や GRADLE_OPTS で付けても届くように、Gradle を動かす JVM から名前で拾う。試験に切り替えを足したらここにも足す
+def testOptInProperties = ['hamelnE2E', 'archiveUrlE2E', 'referenceCompare']
 tasks.withType(Test) {
-    systemProperties System.properties
+    systemProperties System.properties.findAll { k, v -> k.toString() in testOptInProperties }
+    systemProperties gradle.startParameter.systemPropertiesArgs.findAll { k, v -> !k.startsWith('org.gradle.') && !k.startsWith('gradle.') }
 
     // 試験が作業ディレクトリから直接読むフォルダを入力に入れる。入れないと、サイトの規則（web/*/extract.txt）・
     // テンプレート・外字を直しても、試験の段が「変わっていない」として飛ばされ、走らずに緑に見える
