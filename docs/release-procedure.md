@@ -513,14 +513,19 @@ gh release upload v1.x.x-jdk21 build/distributions/SHA256SUMS
 `setupEpubcheck` の自動ダウンロード（`ant.get`）は失敗することがあるが、`curl` なら通る:
 
 ```bash
-curl -sL -o build/tools/epubcheck-5.3.0.zip --create-dirs \
+curl -fsSL -o build/tools/epubcheck-5.3.0.zip --create-dirs \
   https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
 cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 ./gradlew --no-daemon epubcheck -PepubDir=build/epub_local
 ```
 
-> **注意**: jar が無い状態で `epubcheck` タスクを実行すると「epubcheck failed for N file(s)」という
-> **EPUB 側に問題があるかのようなメッセージ**で落ちる。実体は jar 不在なので、まず jar の存在を確認する。
+> **注意**: 取得に失敗すると、`setupEpubcheck`（と、それに依る `epubcheck`）は「Failed to download epubcheck …」で止まる。
+> jar が在っても `-version` が走らない（中身が `Not Found` の 9 バイト、展開の途中で止まった）ときも止まる。
+> 以前は、取得に失敗しても成功と出し、空の `build/tools/epubcheck-5.3.0/` を残した。その後は二度と取得しなかった（internal #76）。
+> 上の curl で zip を置いておけば、`setupEpubcheck` はそれを先に展開する（取り直さない）。
+>
+> `epubcheck` タスクが「epubcheck failed for N file(s)」で落ちたら、まず各 EPUB の出力を見る。
+> epubcheck 自体が途中で落ちた（Java の例外が出ている）ときは、EPUB でなく jar の側を疑う。
 > 壊れていた `tools/epubcheck-5.2.0.jar`（未追跡・9 bytes の `Not Found`）は削除済み。
 > ローカル検証には `tools/epubcheck-5.1.0/epubcheck.jar` が使える。
 
