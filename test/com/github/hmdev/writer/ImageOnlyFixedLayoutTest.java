@@ -331,13 +331,95 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** BMP はページにならないので、ページの大きさに数えない */
+	/** BMP のページは捨てずに PNG で書く。ページの大きさにも数える（前は本から黙って抜けていた。internal #77） */
 	@Test
-	public void pageSizeSkipsImageThatIsNotAPage() throws Exception {
-		File zip = imageZip(new String[]{"bmp", "png"}, new int[][]{{800, 1100}, {810, 1110}});
+	public void bmpPageIsWrittenAsPng() throws Exception {
+		for (boolean svg : new boolean[]{false, true}) {
+			File zip = imageZip(new String[]{"png", "bmp", "png"}, new int[][]{{810, 1110}, {810, 1110}, {810, 1110}});
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, svg);
+			File epub = writeBook(zip, writer, false, false, "bmpmid" + svg);
+			assertEveryPageIs(epub, 810, 1110);
+			try (ZipFile zf = new ZipFile(epub)) {
+				assertEquals("ページが抜けた", 3, spinePages(zf).size());
+				assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("href=\"images/0002.png\" media-type=\"image/png\""));
+				assertFalse(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains(".bmp"));
+				//中身も PNG（BMP の bytes を .png の名前で写していない）で、絵が同じ
+				BufferedImage page = ImageIO.read(new ByteArrayInputStream(zf.getInputStream(zf.getEntry("OPS/images/0002.png")).readAllBytes()));
+				assertTrue("PNG として読めない", page != null);
+				assertEquals(0xFF0000, page.getRGB(405, 555) & 0xFFFFFF);
+				byte[] head = java.util.Arrays.copyOf(zf.getInputStream(zf.getEntry("OPS/images/0002.png")).readAllBytes(), 4);
+				assertEquals("PNG の署名でない", (byte)0x89, head[0]);
+				assertReferencesResolve(zf);
+			}
+		}
+	}
+
+	/** 先頭の BMP を表紙にすると、PNG にした画像が表紙になる（前は manifest に無い BMP を指した。internal #77） */
+	@Test
+	public void bmpFirstBecomesAPngCover() throws Exception {
+		File zip = imageZip(new String[]{"bmp", "png", "png"}, new int[][]{{600, 800}, {600, 800}, {600, 800}});
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false);
-		assertEveryPageIs(writeBook(zip, writer, false, false, "bmpfirst"), 810, 1110);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "bmpcover"))) {
+			assertTrue(read(zf, "OPS/xhtml/cover.xhtml"), read(zf, "OPS/xhtml/cover.xhtml").contains("../images/0001.png"));
+			assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("href=\"images/0001.png\" media-type=\"image/png\" properties=\"cover-image\""));
+			assertEquals(List.of("OPS/xhtml/cover.xhtml", "OPS/xhtml/0001.xhtml", "OPS/xhtml/0002.xhtml"), spinePages(zf));
+			assertReferencesResolve(zf);
+		}
+	}
+
+	/** 同じ名前で拡張子だけ違う p0.bmp と p0.png は、それぞれ別の画像として書く */
+	@Test
+	public void bmpAndPngWithTheSameStemStaySeparate() throws Exception {
+		File zip = File.createTempFile("stem", ".zip", tempFolder.getRoot());
+		int[] colors = {0xFF0000, 0x00FF00};
+		String[][] entries = {{"p0.bmp", "bmp"}, {"p0.png", "png"}};
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			for (int i = 0; i < entries.length; i++) {
+				BufferedImage image = new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB);
+				for (int y = 0; y < 800; y++) for (int x = 0; x < 600; x++) image.setRGB(x, y, colors[i]);
+				zos.putNextEntry(new ZipEntry(entries[i][0]));
+				ImageIO.write(image, entries[i][1], zos);
+				zos.closeEntry();
+			}
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "stem"))) {
+			java.util.Set<Integer> seen = new java.util.HashSet<>();
+			int images = 0;
+			for (java.util.Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements();) {
+				ZipEntry e = en.nextElement();
+				if (!e.getName().startsWith("OPS/images/")) continue;
+				images++;
+				BufferedImage image = ImageIO.read(new ByteArrayInputStream(zf.getInputStream(e).readAllBytes()));
+				seen.add(image.getRGB(300, 400) & 0xFFFFFF);
+			}
+			assertEquals("画像の数", 2, images);
+			assertEquals("赤と緑が 1 枚ずつ", java.util.Set.of(0xFF0000, 0x00FF00), seen);
+			assertReferencesResolve(zf);
+		}
+	}
+
+	/** 名前が .bmp でも中身が PNG なら、出力の名前は .png（名前の拡張子で付けると PKG-022 の警告） */
+	@Test
+	public void outputNameFollowsTheWrittenFormat() throws Exception {
+		File zip = File.createTempFile("pngbmp", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			for (String name : new String[]{"p0.bmp", "p1.png"}) {
+				zos.putNextEntry(new ZipEntry(name));
+				ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "png", zos);
+				zos.closeEntry();
+			}
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "pngbmp"))) {
+			assertTrue("0001.png が無い", zf.getEntry("OPS/images/0001.png") != null);
+			assertTrue("0001.bmp の名前で書いた", zf.getEntry("OPS/images/0001.bmp") == null);
+			assertReferencesResolve(zf);
+		}
 	}
 
 	/** 丸めても絵は消えず、ページからはみ出さない */
@@ -397,12 +479,13 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** 書ける画像が 1 枚も無い本（BMP だけ）は書かない。本文の無い壊れた EPUB になる（internal #64） */
+	/** ページにできる画像が 1 枚も無い本は書かない。本文の無い壊れた EPUB になる（internal #64）。
+	 * CLI・GUI は先に「画像がありませんでした」で止めるので、ここは他の入口のための守り */
 	@Test
 	public void bookWithNoWritableImageIsNotWritten() throws Exception {
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false);
-		File zip = imageZip(new String[]{"bmp", "bmp"}, new int[][]{{600, 800}, {600, 800}});
+		File zip = imageZip(new String[0], new int[0][]);
 		try {
 			writeBook(zip, writer, true, false, "bmponly");
 			org.junit.Assert.fail("BMP だけの本を書いた");

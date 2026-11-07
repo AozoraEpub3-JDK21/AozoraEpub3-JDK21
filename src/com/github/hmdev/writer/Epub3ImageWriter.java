@@ -92,7 +92,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			pageNum++;
 			vecFileName.add(this.getImageFilePath(srcFilePath.trim(), pageNum));
 		}
-		//書ける画像が 1 枚も無い（BMP だけなど）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64）
+		//ページにできる画像が 1 枚も無いと、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64）
 		if (this.imageInfos.isEmpty()) {
 			throw new IOException("画像がありませんでした");
 		}
@@ -228,19 +228,22 @@ public class Epub3ImageWriter extends Epub3Writer
 	{
 		boolean isCover = false;
 		this.imageIndex++; //xhtmlと画像ファイル名の番号を合わせるため先に++
-		String ext = "";
-		try { ext = srcImageFileName.substring(srcImageFileName.lastIndexOf('.')+1).toLowerCase(); } catch (Exception e) { /* 意図的: 拡張子なしの画像名は ext="" として続行 */ }
 		String imageId = decimalFormat.format(this.imageIndex);
-		String imageFileName = IMAGES_PATH+imageId+"."+ext;
+		String imageFileName;
 		ImageInfo imageInfo;
 		try {
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
+			//EPUB に書けない形式（BMP）のページは、捨てずに PNG で書く。前は本から黙って抜けていた（internal #77）
+			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
+				LogAppender.println("画像形式変換: "+srcImageFileName+" ("+imageInfo.getExt()+"→png)");
+				imageInfo.setReencode(true);
+				imageInfo.setExt("png");
+			}
+			//出力の名前の拡張子は、書く形式に合わせる（名前の拡張子でなく。.bmp の名前の PNG を 0001.bmp にしない）
+			String ext = "jpeg".equals(imageInfo.getExt()) ? "jpg" : imageInfo.getExt();
+			imageFileName = IMAGES_PATH+imageId+"."+ext;
 			imageInfo.setId(imageId);
 			imageInfo.setOutFileName(imageId+"."+ext);
-			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
-				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
-				return null;
-			}
 			if (this.imageIndex-1 == bookInfo.coverImageIndex) {
 				imageInfo.setIsCover(true);
 				isCover = true;

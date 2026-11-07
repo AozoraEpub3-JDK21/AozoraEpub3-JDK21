@@ -283,9 +283,9 @@ public class AozoraEpub3BatchPerBookTest {
 		assertTrue("見つからない警告が出た:\n" + lastLog, !lastLog.contains("表紙画像ファイルが見つかりません"));
 	}
 
-	/** BMP（書けない形式）しか無い書庫は、画像の無い書庫と同じく中止する（書くと本文も表紙も無い EPUB になる。internal #64） */
+	/** BMP しか無い書庫も、PNG にして本にする（前は壊れた本になり、#220 では中止していた。internal #77） */
 	@Test
-	public void archiveWithOnlyUnusableImagesIsSkipped() throws Exception {
+	public void archiveWithOnlyBmpImagesIsConverted() throws Exception {
 		File src = tempFolder.newFolder("bmpsrc");
 		File dst = tempFolder.newFolder("bmpdst");
 		File zip = imageZip(new File(src, "bmps.zip"), "p0.bmp", "p1.bmp");
@@ -293,9 +293,14 @@ public class AozoraEpub3BatchPerBookTest {
 
 		int exitCode = run("-i", ini.getPath(), "-d", dst.getPath(), "-c", "0", zip.getPath());
 
-		assertTrue("中止が出ていない:\n" + lastLog, lastLog.contains("画像がありませんでした"));
-		assertTrue("EPUB を書いた", !new File(dst, "bmps.epub").exists());
-		assertEquals("失敗として数える", 1, exitCode);
+		assertEquals("成功:\n" + lastLog + lastErr, 0, exitCode);
+		try (ZipFile epub = new ZipFile(new File(dst, "bmps.epub"))) {
+			assertNotNull("1 枚目（表紙）が無い", epub.getEntry("OPS/images/0001.png"));
+			assertNotNull("2 枚目が無い", epub.getEntry("OPS/images/0002.png"));
+			String opf = new String(epub.getInputStream(epub.getEntry("OPS/package.opf")).readAllBytes(), StandardCharsets.UTF_8);
+			assertTrue("BMP を manifest に載せた:\n" + opf, !opf.contains(".bmp") && !opf.contains("image/bmp"));
+		}
+		assertTrue("変換したことが出ていない:\n" + lastLog, lastLog.contains("画像形式変換: p0.bmp (bmp→png)"));
 	}
 
 	/** フォルダの名前を表紙に渡しても、フォルダを画像として読まない（internal #64 の 15） */

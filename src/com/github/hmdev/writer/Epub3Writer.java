@@ -1436,7 +1436,14 @@ public class Epub3Writer
 				byte[] bytes = baos.toByteArray();
 				baos.close();
 				ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-				this.writeImage(bais, zos, imageInfo);
+				if (imageInfo.isReencode()) {
+					//元の形式（BMP）のまま写さず、読み直して ext（png）で書く（internal #77）
+					BufferedImage srcImage = ImageUtils.readImage(null, bais);
+					if (srcImage == null) throw new IOException("画像が読み込めませんでした: "+srcImageFileName);
+					this.writeImage(srcImage, zos, imageInfo);
+				} else {
+					this.writeImage(bais, zos, imageInfo);
+				}
 				bais.close();
 				zos.closeArchiveEntry();
 			}

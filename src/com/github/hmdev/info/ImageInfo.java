@@ -42,6 +42,11 @@ public class ImageInfo
 	/** 回転角度 右 90 左 -90 */
 	public int rotateAngle = 0;
 	
+	/** 元の形式のままでは EPUB に書けないので、読み直して PNG で書く（画像だけの本の BMP。internal #77） */
+	boolean reencode = false;
+	public boolean isReencode() { return this.reencode; }
+	public void setReencode(boolean reencode) { this.reencode = reencode; }
+	
 	/** 画像の情報を生成
 	 * @param ext png jpg gif の文字列 */
 	public ImageInfo(String ext, int width, int height, int zipIndex)
