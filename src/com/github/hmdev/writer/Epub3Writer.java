@@ -1441,7 +1441,7 @@ public class Epub3Writer
 				if (imageInfo.isReencode()) {
 					//元の形式（BMP）のまま写さず、読み直して ext（png）で書く（internal #77）
 					//項目を開く前に読む。読めなければこの画像は書かず、id を外してページと OPF から除く（前と同じく 1 ページだけ抜ける）
-					try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {}", srcImageFileName, e); }
+					try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {} ({})", srcImageFileName, e.toString()); } //壊れた画像は想定内なので、トレースは出さない
 					if (srcImage == null) {
 						LogAppender.error("画像が読み込めないので外します : "+srcImageFileName);
 						imageInfo.setId(null);
