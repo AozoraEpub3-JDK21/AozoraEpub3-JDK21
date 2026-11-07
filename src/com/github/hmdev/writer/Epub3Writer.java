@@ -1428,7 +1428,6 @@ public class Epub3Writer
 						imageInfo.rotateAngle = this.rotateAngle;
 					}
 				}
-				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 				//Zip,Rarからの直接読み込みは失敗するので一旦バイト配列にする
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
 				byte[] buf = new byte[16384];
@@ -1438,30 +1437,54 @@ public class Epub3Writer
 				}
 				byte[] bytes = baos.toByteArray();
 				baos.close();
-				ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+				BufferedImage srcImage = null;
 				if (imageInfo.isReencode()) {
 					//元の形式（BMP）のまま写さず、読み直して ext（png）で書く（internal #77）
-					BufferedImage srcImage = ImageUtils.readImage(null, bais);
-					if (srcImage == null) throw new IOException("画像が読み込めませんでした: "+srcImageFileName);
-					//パレットの画像（1〜8 ビットの BMP）は RGB にしてから渡す。縮小・回転の道はパレットを保たない（灰色や既定の色になる）
-					int type = srcImage.getType();
-					if (type == BufferedImage.TYPE_BYTE_BINARY || type == BufferedImage.TYPE_BYTE_INDEXED || type == BufferedImage.TYPE_CUSTOM) {
-						BufferedImage rgb = new BufferedImage(srcImage.getWidth(), srcImage.getHeight(),
-								srcImage.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
-						java.awt.Graphics2D g = rgb.createGraphics();
-						try { g.drawImage(srcImage, 0, 0, null); } finally { g.dispose(); }
-						srcImage = rgb;
+					//項目を開く前に読む。読めなければこの画像は書かず、id を外してページと OPF から除く（前と同じく 1 ページだけ抜ける）
+					try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {}", srcImageFileName, e); }
+					if (srcImage == null) {
+						LogAppender.error("画像が読み込めないので外します : "+srcImageFileName);
+						imageInfo.setId(null);
+						imageInfo.setIsCover(false);
+						this.imageInfos.remove(imageInfo);
+						return;
 					}
+					srcImage = toRgbIfColourPalette(srcImage);
+				}
+				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
+				if (srcImage != null) {
 					this.writeImage(srcImage, zos, imageInfo);
 				} else {
+					ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
 					this.writeImage(bais, zos, imageInfo);
+					bais.close();
 				}
-				bais.close();
 				zos.closeArchiveEntry();
 			}
 			if (this.canceled) return;
 			if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
 		}
+	}
+	
+	/** 色のあるパレットの画像（1〜8 ビットの BMP など）は、白地の RGB にする。縮小・回転の道はパレットを保たない
+	 * （1〜4 ビットは灰色の表に、回転は既定の表に替わる）。灰色だけのパレット（白黒の読み取りなど）はそのまま（小さい PNG のまま） */
+	static BufferedImage toRgbIfColourPalette(BufferedImage image)
+	{
+		if (!(image.getColorModel() instanceof java.awt.image.IndexColorModel)) return image;
+		java.awt.image.IndexColorModel palette = (java.awt.image.IndexColorModel)image.getColorModel();
+		boolean gray = !palette.hasAlpha();
+		for (int i = 0; gray && i < palette.getMapSize(); i++) {
+			gray = palette.getRed(i) == palette.getGreen(i) && palette.getGreen(i) == palette.getBlue(i);
+		}
+		if (gray) return image;
+		BufferedImage rgb = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = rgb.createGraphics();
+		try {
+			g.setColor(java.awt.Color.WHITE);
+			g.fillRect(0, 0, image.getWidth(), image.getHeight());
+			g.drawImage(image, 0, 0, null);
+		} finally { g.dispose(); }
+		return rgb;
 	}
 	
 	/** タイトルページの表示文字数を返す

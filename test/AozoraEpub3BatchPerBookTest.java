@@ -317,4 +317,29 @@ public class AozoraEpub3BatchPerBookTest {
 		assertTrue("フォルダを表紙として読んだ:\n" + lastErr, !lastErr.contains("表紙画像の解析に失敗"));
 		assertTrue("見つからない警告が無い:\n" + lastLog, lastLog.contains("表紙画像ファイルが見つかりません"));
 	}
+
+	/** 読めない BMP しか無い書庫は、壊れた本を書かずに失敗として数える（書く段で全部外れて、ページが 0 になる。internal #77） */
+	@Test
+	public void archiveWithOnlyUnreadableBmpsFails() throws Exception {
+		File src = tempFolder.newFolder("tbsrc");
+		File dst = tempFolder.newFolder("tbdst");
+		ByteArrayOutputStream bmp = new ByteArrayOutputStream();
+		ImageIO.write(new BufferedImage(60, 80, BufferedImage.TYPE_INT_RGB), "bmp", bmp);
+		byte[] truncated = java.util.Arrays.copyOf(bmp.toByteArray(), 100);
+		File zip = new File(src, "broken.zip");
+		try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zip))) {
+			for (String name : new String[]{"p0.bmp", "p1.bmp"}) {
+				zos.putNextEntry(new ZipEntry(name));
+				zos.write(truncated);
+				zos.closeEntry();
+			}
+		}
+		File ini = tempFolder.newFile("tb.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-d", dst.getPath(), "-c", "0", zip.getPath());
+
+		assertTrue("外したことが出ていない:\n" + lastLog, lastLog.contains("画像が読み込めないので外します"));
+		assertTrue("EPUB を書いた", !new File(dst, "broken.epub").exists());
+		assertEquals("失敗として数える", 1, exitCode);
+	}
 }

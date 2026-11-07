@@ -92,10 +92,6 @@ public class Epub3ImageWriter extends Epub3Writer
 			pageNum++;
 			vecFileName.add(this.getImageFilePath(srcFilePath.trim(), pageNum));
 		}
-		//ページにできる画像が 1 枚も無いと、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64）
-		if (this.imageInfos.isEmpty()) {
-			throw new IOException("画像がありませんでした");
-		}
 		
 		//画像を出力して出力サイズを取得
 		zos.setLevel(0);
@@ -148,6 +144,12 @@ public class Epub3ImageWriter extends Epub3Writer
 			if (this.canceled) return;
 		}
 		
+		//ページにできる画像が 1 枚も無い（読めない BMP だけも含む）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64・#77）
+		//画像を書いた後に見る。読めずに外した画像は imageInfos から抜けている
+		if (this.imageInfos.isEmpty()) {
+			throw new IOException("画像がありませんでした");
+		}
+		
 		//画像xhtmlを出力
 		zos.setLevel(9);
 		//ページの大きさは本全体で 1 つ。imageInfos はページにできる画像（先頭へ移す表紙を含む）で、別ファイルの表紙はまだ入っていない
@@ -157,6 +159,11 @@ public class Epub3ImageWriter extends Epub3Writer
 		for (String srcFilePath : this.imageInfoReader.getImageFileNames()) {
 			if (this.canceled) return;
 			String fileName = vecFileName.get(pageNum++);
+			//書く段で読めずに外した画像（id を外してある）はページにしない
+			if (fileName != null) {
+				ImageInfo written = this.imageInfoReader.getImageInfo(srcFilePath.trim());
+				if (written == null || written.getId() == null) fileName = null;
+			}
 			if (fileName != null) {
 				if (isSvgImage) {
 					this.printSvgImageSection(srcFilePath);
@@ -235,13 +242,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
 			//EPUB に書けない形式（BMP）のページは、捨てずに PNG で書く。前は「画像フォーマットエラー」で本から外していた（internal #77）
 			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
-				//先に読めるかを見る。書く段で読めないと本ごと失敗するので、読めないページはここで外す（前と同じ扱い）
-				java.awt.image.BufferedImage probe = null;
-				try { probe = this.imageInfoReader.getImage(srcImageFileName); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {}", srcImageFileName, e); }
-				if (probe == null) {
-					LogAppender.error(lineNum, "画像が読み込めないので外します", srcImageFileName);
-					return null;
-				}
+				//読めないときは、書く段（writeArchiveImage）で外す。画像はページと OPF より先に書くので、そこで外せば食い違わない
 				LogAppender.println("画像形式変換: "+srcImageFileName+" ("+imageInfo.getExt()+"→png)");
 				imageInfo.setReencode(true);
 				imageInfo.setExt("png");
