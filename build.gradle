@@ -561,14 +561,30 @@ tasks.register('setupEpubcheck') {
             return
         }
         epubcheckToolsDir.mkdirs()
+        //After a failed unpack, remove the jar: the output check would otherwise see the jar of the last good run
+        //and mark the next run UP-TO-DATE over a half-written lib/
+        def unpackOrFail = {
+            try {
+                ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
+            } catch (Exception e) {
+                jar.delete()
+                //The zip is valid, so the cause is local (a running epubcheck, antivirus, disk space): downloading again would not help
+                throw new GradleException("Failed to unpack ${epubcheckZip} into ${epubcheckToolsDir} (${e.message}). " +
+                    "Fix the cause (a running epubcheck, antivirus, disk space) and run again", e)
+            }
+        }
+        //Can the zip be opened at all? A truncated download or a saved error page cannot
+        def zipIsValid = {
+            try { new java.util.zip.ZipFile(epubcheckZip).close(); return true } catch (Exception e) { return false }
+        }
         //A zip already here (for example fetched by hand with curl, release-procedure §6.11) is unpacked before downloading again
         boolean unpacked = false
         if (epubcheckZip.isFile()) {
-            try {
-                ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
+            if (zipIsValid()) {
+                unpackOrFail()
                 unpacked = epubcheckRuns(jar)
-            } catch (Exception e) {
-                println "Could not unpack ${epubcheckZip} (${e.message}); downloading it again"
+            } else {
+                println "${epubcheckZip} is not a valid zip; downloading it again"
             }
         }
         if (!unpacked) {
@@ -580,14 +596,13 @@ tasks.register('setupEpubcheck') {
                 throw new GradleException("Failed to download epubcheck ${epubcheckVersion} (${e.message}). " +
                     "Download ${epubcheckBaseUrl} by hand (curl -fsSL) to ${epubcheckZip} and run again, or pass -PepubcheckJar=/path/to/epubcheck.jar", e)
             }
-            try {
-                ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
-            } catch (Exception e) {
-                //Downloaded fine; the cause is local (a locked file, disk full, permissions), so keep the zip
-                throw new GradleException("Failed to unpack ${epubcheckZip} into ${epubcheckToolsDir} (${e.message}). " +
-                    "Fix the cause (a running epubcheck, antivirus, disk space) and run again", e)
+            if (!zipIsValid()) {
+                epubcheckZip.delete()
+                throw new GradleException("The downloaded ${epubcheckZip.name} is not a valid zip. Download ${epubcheckBaseUrl} by hand (curl -fsSL) and run again")
             }
+            unpackOrFail()
             if (!epubcheckRuns(jar)) {
+                jar.delete()
                 throw new GradleException("epubcheck does not run after unpacking ${epubcheckZip}: ${jar}. " +
                     "Delete ${epubcheckDir} and ${epubcheckZip}, then run again")
             }
