@@ -524,45 +524,75 @@ ext {
     epubcheckZip = file("${epubcheckToolsDir}/epubcheck-${epubcheckVersion}.zip")
 }
 
-// Download and prepare epubcheck unless user provides -PepubcheckJar=<path>
-// The jar itself decides whether to download, not the folder: a failed run used to leave an empty
-// epubcheck-<version> folder, and the task then reported success without a jar (internal #76).
-// No outputs are declared, because Gradle would mark the task UP-TO-DATE over that empty folder.
-// A missing jar at the end fails the build, so a check never runs silently without epubcheck.
+// The epubcheck jar to use: -PepubcheckJar, or the one setupEpubcheck unpacks under build/tools
+ext.epubcheckJarFile = { ->
+    project.hasProperty('epubcheckJar') ? file(project.property('epubcheckJar')) : file("${epubcheckDir}/epubcheck.jar")
+}
+// Run "java -jar <jar> -version". A jar that exists but does not run (a 9-byte "Not Found" file,
+// or an unpack stopped before lib/) must not count as ready.
+ext.epubcheckRuns = { File jar ->
+    if (!jar.isFile()) return false
+    def out = new StringBuilder(), err = new StringBuilder()
+    def p = ["java", "-jar", jar.absolutePath, "-version"].execute()
+    p.waitForProcessOutput(out, err)
+    if (out) println out.toString().trim()
+    return p.exitValue() == 0
+}
+
+// Download and prepare epubcheck unless user provides -PepubcheckJar=<path>.
+// The jar decides, not the folder: a failed run used to leave an empty epubcheck-<version> folder,
+// and the task then reported success without a jar, and was UP-TO-DATE after that (internal #76).
+// Only the jar is declared as output, so Gradle reruns the task whenever the jar is missing.
+// The build fails unless the jar runs, so a check never goes ahead without epubcheck.
 tasks.register('setupEpubcheck') {
+    outputs.file("${epubcheckDir}/epubcheck.jar")
+    outputs.upToDateWhen { !project.hasProperty('epubcheckJar') }
     doLast {
+        File jar = epubcheckJarFile()
         if (project.hasProperty('epubcheckJar')) {
-            def given = file(project.property('epubcheckJar'))
-            if (!given.isFile()) {
-                throw new GradleException("epubcheck JAR given with -PepubcheckJar does not exist: ${given}")
+            if (!epubcheckRuns(jar)) {
+                throw new GradleException("epubcheck JAR given with -PepubcheckJar does not exist or does not run: ${jar}")
             }
-            println "Using user-provided epubcheck JAR: ${given}"
+            println "Using user-provided epubcheck JAR: ${jar}"
             return
         }
-        def jar = file("${epubcheckDir}/epubcheck.jar")
-        if (!jar.isFile()) {
-            epubcheckToolsDir.mkdirs()
+        if (epubcheckRuns(jar)) {
+            println "epubcheck is ready: ${jar}"
+            return
+        }
+        epubcheckToolsDir.mkdirs()
+        //A zip already here (for example fetched by hand with curl, release-procedure §6.11) is unpacked before downloading again
+        boolean unpacked = false
+        if (epubcheckZip.isFile()) {
+            try {
+                ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
+                unpacked = epubcheckRuns(jar)
+            } catch (Exception e) {
+                println "Could not unpack ${epubcheckZip} (${e.message}); downloading it again"
+            }
+        }
+        if (!unpacked) {
             println "Downloading epubcheck ${epubcheckVersion} from ${epubcheckBaseUrl}"
             try {
                 ant.get(src: epubcheckBaseUrl, dest: epubcheckZip)
+            } catch (Exception e) {
+                epubcheckZip.delete() //a partial download is not a usable zip
+                throw new GradleException("Failed to download epubcheck ${epubcheckVersion} (${e.message}). " +
+                    "Download ${epubcheckBaseUrl} by hand (curl -fsSL) to ${epubcheckZip} and run again, or pass -PepubcheckJar=/path/to/epubcheck.jar", e)
+            }
+            try {
                 ant.unzip(src: epubcheckZip, dest: epubcheckToolsDir)
             } catch (Exception e) {
-                // Do not keep a partial zip: the next run would unzip it again
-                epubcheckZip.delete()
-                throw new GradleException("Failed to download epubcheck ${epubcheckVersion} (${e.message}). " +
-                    "Download ${epubcheckBaseUrl} by hand and pass -PepubcheckJar=/path/to/epubcheck.jar", e)
+                //Downloaded fine; the cause is local (a locked file, disk full, permissions), so keep the zip
+                throw new GradleException("Failed to unpack ${epubcheckZip} into ${epubcheckToolsDir} (${e.message}). " +
+                    "Fix the cause (a running epubcheck, antivirus, disk space) and run again", e)
             }
-            if (!jar.isFile()) {
-                throw new GradleException("epubcheck JAR not found after unzipping ${epubcheckZip}: ${jar}")
+            if (!epubcheckRuns(jar)) {
+                throw new GradleException("epubcheck does not run after unpacking ${epubcheckZip}: ${jar}. " +
+                    "Delete ${epubcheckDir} and ${epubcheckZip}, then run again")
             }
         }
         println "epubcheck is ready: ${jar}"
-        // Show version (best-effort)
-        try {
-            def p = ["java","-jar", jar.absolutePath, "-version"].execute()
-            p.in.eachLine { println it }
-            p.waitFor()
-        } catch(Exception ignore) {}
     }
 }
 
@@ -589,14 +619,9 @@ tasks.register('epubcheck') {
             return
         }
 
-        // Resolve epubcheck jar path
-        File jarFile
-        if (project.hasProperty('epubcheckJar')) {
-            jarFile = file(project.property('epubcheckJar'))
-        } else {
-            jarFile = file("${epubcheckDir}/epubcheck.jar")
-        }
-        if (!jarFile.exists()) {
+        // The same jar setupEpubcheck prepared and checked
+        File jarFile = epubcheckJarFile()
+        if (!jarFile.isFile()) {
             throw new GradleException("epubcheck jar not found: ${jarFile}. Provide -PepubcheckJar or check setupEpubcheck output.")
         }
 
