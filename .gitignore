@@ -51,7 +51,8 @@ Thumbs.db
 ehthumbs.db
 
 ## アプリケーション設定
-replace.txt
+# 利用者がルートに置く置換の設定だけ（web/<サイト>/replace.txt はサイトの定義なので除外しない。internal #66）
+/replace.txt
 kindlegen.exe
 
 ## テストデータ
