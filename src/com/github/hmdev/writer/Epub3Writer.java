@@ -956,7 +956,8 @@ public class Epub3Writer
 					String imageFileName = imageInfoReader.getImageFileName(bookInfo.coverImageIndex);
 					if (imageFileName != null) {
 						ImageInfo imageInfo = imageInfoReader.getImageInfo(imageFileName);
-						if (imageInfo != null) {
+						//画像だけの本で、読めずに外した画像（id が無い）は表紙にしない。名前の無いまま manifest に載る（internal #77）
+						if (imageInfo != null && !(bookInfo.imageOnly && imageInfo.getId() == null)) {
 							imageFileName = imageFileName.substring(archivePathLength);
 							outImageFileNames.add(imageFileName);
 							//表紙フラグも設定
@@ -979,6 +980,8 @@ public class Epub3Writer
 			if (insertCoverInfo == null && bookInfo.coverImageIndex > -1) {
 				//本文中の挿絵の場合
 				insertCoverInfo = imageInfoReader.getImageInfo(bookInfo.coverImageIndex);
+				//画像だけの本で、表紙に選んだ画像が書かれていない（読めずに外した）なら表紙のページは作らない（internal #77）
+				if (insertCoverInfo != null && bookInfo.imageOnly && insertCoverInfo.getId() == null) insertCoverInfo = null;
 				if (insertCoverInfo != null) {
 					insertCoverInfo.setIsCover(true);
 					if (!bookInfo.imageOnly && insertCoverInfo.getId() == null) {
@@ -1440,6 +1443,15 @@ public class Epub3Writer
 					//元の形式（BMP）のまま写さず、読み直して ext（png）で書く（internal #77）
 					BufferedImage srcImage = ImageUtils.readImage(null, bais);
 					if (srcImage == null) throw new IOException("画像が読み込めませんでした: "+srcImageFileName);
+					//パレットの画像（1〜8 ビットの BMP）は RGB にしてから渡す。縮小・回転の道はパレットを保たない（灰色や既定の色になる）
+					int type = srcImage.getType();
+					if (type == BufferedImage.TYPE_BYTE_BINARY || type == BufferedImage.TYPE_BYTE_INDEXED || type == BufferedImage.TYPE_CUSTOM) {
+						BufferedImage rgb = new BufferedImage(srcImage.getWidth(), srcImage.getHeight(),
+								srcImage.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+						java.awt.Graphics2D g = rgb.createGraphics();
+						try { g.drawImage(srcImage, 0, 0, null); } finally { g.dispose(); }
+						srcImage = rgb;
+					}
 					this.writeImage(srcImage, zos, imageInfo);
 				} else {
 					this.writeImage(bais, zos, imageInfo);

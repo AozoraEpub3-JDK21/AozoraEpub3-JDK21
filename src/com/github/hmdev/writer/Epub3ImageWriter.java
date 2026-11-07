@@ -233,8 +233,15 @@ public class Epub3ImageWriter extends Epub3Writer
 		ImageInfo imageInfo;
 		try {
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
-			//EPUB に書けない形式（BMP）のページは、捨てずに PNG で書く。前は本から黙って抜けていた（internal #77）
+			//EPUB に書けない形式（BMP）のページは、捨てずに PNG で書く。前は「画像フォーマットエラー」で本から外していた（internal #77）
 			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
+				//先に読めるかを見る。書く段で読めないと本ごと失敗するので、読めないページはここで外す（前と同じ扱い）
+				java.awt.image.BufferedImage probe = null;
+				try { probe = this.imageInfoReader.getImage(srcImageFileName); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {}", srcImageFileName, e); }
+				if (probe == null) {
+					LogAppender.error(lineNum, "画像が読み込めないので外します", srcImageFileName);
+					return null;
+				}
 				LogAppender.println("画像形式変換: "+srcImageFileName+" ("+imageInfo.getExt()+"→png)");
 				imageInfo.setReencode(true);
 				imageInfo.setExt("png");

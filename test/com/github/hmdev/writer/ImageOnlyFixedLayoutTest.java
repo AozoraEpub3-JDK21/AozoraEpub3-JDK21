@@ -369,6 +369,59 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
+	/** 色の表（パレット）を持つ 4 ビットの BMP も、縮小して色を保つ（縮小の道はパレットを灰色の表に替える） */
+	@Test
+	public void paletteBmpKeepsItsColourWhenResized() throws Exception {
+		byte[] r = new byte[16], g = new byte[16], b = new byte[16];
+		r[1] = (byte)0xFF; //1 番は赤
+		java.awt.image.IndexColorModel palette = new java.awt.image.IndexColorModel(4, 16, r, g, b);
+		BufferedImage red = new BufferedImage(600, 800, BufferedImage.TYPE_BYTE_BINARY, palette);
+		java.awt.image.WritableRaster raster = red.getRaster();
+		for (int y = 0; y < 800; y++) for (int x = 0; x < 600; x++) raster.setSample(x, y, 0, 1);
+		File zip = File.createTempFile("palette", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			zos.putNextEntry(new ZipEntry("p0.bmp"));
+			assertTrue("4 ビットの BMP を書けない", ImageIO.write(red, "bmp", zos));
+			zos.closeEntry();
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 300, 400, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "palette"))) {
+			BufferedImage page = imageOf(zf, read(zf, "OPS/xhtml/0001.xhtml"));
+			assertEquals(300, page.getWidth());
+			assertEquals("色が変わった", 0xFF0000, page.getRGB(150, 200) & 0xFFFFFF);
+		}
+	}
+
+	/** 読めない（途中で切れた）BMP のページは外し、本は書く。前と同じく 1 ページの読めなさで本全体を失敗にしない。
+	 * 先頭に置いて表紙にしても、名前の無い画像を manifest に載せない（internal #77） */
+	@Test
+	public void unreadableBmpIsLeftOutAndTheBookIsWritten() throws Exception {
+		java.io.ByteArrayOutputStream bmp = new java.io.ByteArrayOutputStream();
+		ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "bmp", bmp);
+		byte[] truncated = java.util.Arrays.copyOf(bmp.toByteArray(), 2000);
+		for (boolean first : new boolean[]{false, true}) {
+			File zip = File.createTempFile("trunc", ".zip", tempFolder.getRoot());
+			try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+				String[] names = first ? new String[]{"p0.bmp", "p1.png", "p2.png"} : new String[]{"p0.png", "p1.bmp", "p2.png"};
+				for (String name : names) {
+					zos.putNextEntry(new ZipEntry(name));
+					if (name.endsWith(".bmp")) zos.write(truncated);
+					else ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "png", zos);
+					zos.closeEntry();
+				}
+			}
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, false);
+			try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "trunc" + first))) {
+				assertFalse(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("${"));
+				assertReferencesResolve(zf);
+				long images = java.util.Collections.list(zf.entries()).stream().filter(e -> e.getName().startsWith("OPS/images/")).count();
+				assertEquals("読める 2 枚は残る", 2, images);
+			}
+		}
+	}
+
 	/** 同じ名前で拡張子だけ違う p0.bmp と p0.png は、それぞれ別の画像として書く */
 	@Test
 	public void bmpAndPngWithTheSameStemStaySeparate() throws Exception {
@@ -487,12 +540,12 @@ public class ImageOnlyFixedLayoutTest {
 		setParams(writer, false);
 		File zip = imageZip(new String[0], new int[0][]);
 		try {
-			writeBook(zip, writer, true, false, "bmponly");
-			org.junit.Assert.fail("BMP だけの本を書いた");
+			writeBook(zip, writer, true, false, "noimage");
+			org.junit.Assert.fail("画像の無い本を書いた");
 		} catch (java.io.IOException e) {
 			assertEquals("画像がありませんでした", e.getMessage());
 		}
-		assertFalse("書きかけの EPUB が残っている", new File(tempFolder.getRoot(), "bmponly.epub").length() > 0);
+		assertFalse("書きかけの EPUB が残っている", new File(tempFolder.getRoot(), "noimage.epub").length() > 0);
 	}
 
 	/** とても細い画像を縮めても、幅は 0 にならない（0 だと画像を書けず、壊れた画像が残る。internal #64） */
