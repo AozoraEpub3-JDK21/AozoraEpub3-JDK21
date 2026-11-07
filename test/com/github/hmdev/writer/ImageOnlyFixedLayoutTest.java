@@ -99,13 +99,25 @@ public class ImageOnlyFixedLayoutTest {
 	}
 
 	private File imageZip(int[][] sizes) throws Exception {
+		String[] formats = new String[sizes.length];
+		java.util.Arrays.fill(formats, "png");
+		return imageZip(formats, sizes);
+	}
+
+	/** p0.<形式>, p1.<形式>… を入れた zip を作る。絵は赤一色 */
+	private File imageZip(String[] formats, int[][] sizes) throws Exception {
 		File zip = File.createTempFile("wide", ".zip", tempFolder.getRoot());
 		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
 			for (int i = 0; i < sizes.length; i++) {
-				zos.putNextEntry(new ZipEntry("p" + i + ".png"));
-				java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
-				ImageIO.write(new BufferedImage(sizes[i][0], sizes[i][1], BufferedImage.TYPE_INT_RGB), "png", png);
-				zos.write(png.toByteArray());
+				zos.putNextEntry(new ZipEntry("p" + i + "." + formats[i]));
+				BufferedImage image = new BufferedImage(sizes[i][0], sizes[i][1], BufferedImage.TYPE_INT_RGB);
+				java.awt.Graphics2D g = image.createGraphics();
+				g.setColor(java.awt.Color.RED);
+				g.fillRect(0, 0, sizes[i][0], sizes[i][1]);
+				g.dispose();
+				java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+				ImageIO.write(image, formats[i], out);
+				zos.write(out.toByteArray());
 				zos.closeEntry();
 			}
 		}
@@ -322,17 +334,7 @@ public class ImageOnlyFixedLayoutTest {
 	/** BMP はページにならないので、ページの大きさに数えない */
 	@Test
 	public void pageSizeSkipsImageThatIsNotAPage() throws Exception {
-		File zip = File.createTempFile("bmpfirst", ".zip", tempFolder.getRoot());
-		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
-			String[][] images = {{"p0.bmp", "bmp", "800", "1100"}, {"p1.png", "png", "810", "1110"}};
-			for (String[] image : images) {
-				zos.putNextEntry(new ZipEntry(image[0]));
-				java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-				ImageIO.write(new BufferedImage(Integer.parseInt(image[2]), Integer.parseInt(image[3]), BufferedImage.TYPE_INT_RGB), image[1], out);
-				zos.write(out.toByteArray());
-				zos.closeEntry();
-			}
-		}
+		File zip = imageZip(new String[]{"bmp", "png"}, new int[][]{{800, 1100}, {810, 1110}});
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false);
 		assertEveryPageIs(writeBook(zip, writer, false, false, "bmpfirst"), 810, 1110);
@@ -354,24 +356,76 @@ public class ImageOnlyFixedLayoutTest {
 		assertEquals(1200, rounded.getHeight());
 	}
 
-	/** 本文にページが無い本（BMP 1 枚を表紙にした本）は、表紙の大きさをページの大きさにする */
+	/** 本文にページが無い本（画像 1 枚を表紙にした本）は、表紙の大きさをページの大きさにする。
+	 * 目次は表紙のページを指す（無い text00001.xhtml を指すと RSC-007。internal #64） */
 	@Test
 	public void bookWithOnlyACoverPageUsesTheCoverSize() throws Exception {
-		File zip = File.createTempFile("bmponly", ".zip", tempFolder.getRoot());
-		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
-			zos.putNextEntry(new ZipEntry("p0.bmp"));
-			java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-			ImageIO.write(new BufferedImage(800, 1100, BufferedImage.TYPE_INT_RGB), "bmp", out);
-			zos.write(out.toByteArray());
-			zos.closeEntry();
-		}
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 		setParams(writer, false);
-		try (ZipFile zf = new ZipFile(writeBook(zip, writer, true, false, "bmponly"))) {
+		try (ZipFile zf = new ZipFile(writeBook(imageZip(new int[][]{{800, 1100}}), writer, true, false, "oneimage"))) {
 			String cover = read(zf, "OPS/xhtml/cover.xhtml");
 			assertTrue(cover, cover.contains("width=800, height=1100"));
 			assertTrue(read(zf, "OPS/package.opf"), read(zf, "OPS/package.opf").contains("<meta name=\"original-resolution\" content=\"800x1100\"/>"));
 			assertFalse(cover, cover.contains("${"));
+			assertEquals("本文のページは無い", List.of("OPS/xhtml/cover.xhtml"), spinePages(zf));
+			assertTrue(read(zf, "OPS/xhtml/nav.xhtml"), read(zf, "OPS/xhtml/nav.xhtml").contains("<a href=\"cover.xhtml\">"));
+			assertReferencesResolve(zf);
+		}
+	}
+
+	/** 目次（nav・ncx）と各ページが指すものが zip に在り、画像は manifest に在る */
+	private static void assertReferencesResolve(ZipFile zf) throws Exception {
+		String opf = read(zf, "OPS/package.opf");
+		Matcher href = Pattern.compile("<item [^>]*href=\"([^\"]+)\"").matcher(opf);
+		java.util.Set<String> manifest = new java.util.HashSet<>();
+		while (href.find()) {
+			manifest.add("OPS/" + href.group(1));
+			assertTrue(href.group(1) + " が zip に無い", zf.getEntry("OPS/" + href.group(1)) != null);
+		}
+		Matcher nav = Pattern.compile("<a href=\"([^\"#]+)").matcher(read(zf, "OPS/xhtml/nav.xhtml"));
+		while (nav.find()) assertTrue("nav の " + nav.group(1) + " が無い", zf.getEntry("OPS/xhtml/" + nav.group(1)) != null);
+		if (zf.getEntry("OPS/toc.ncx") != null) {
+			Matcher ncx = Pattern.compile("<content src=\"([^\"#]+)").matcher(read(zf, "OPS/toc.ncx"));
+			while (ncx.find()) assertTrue("ncx の " + ncx.group(1) + " が無い", zf.getEntry("OPS/" + ncx.group(1)) != null);
+		}
+		for (java.util.Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements();) {
+			String name = en.nextElement().getName();
+			if (name.startsWith("OPS/images/")) assertTrue(name + " が manifest に無い", manifest.contains(name));
+			if (!name.endsWith(".xhtml")) continue;
+			Matcher img = IMAGE.matcher(read(zf, name));
+			while (img.find()) assertTrue(name + " の " + img.group(1) + " が manifest に無い", manifest.contains("OPS/images/" + img.group(1)));
+		}
+	}
+
+	/** 書ける画像が 1 枚も無い本（BMP だけ）は書かない。本文の無い壊れた EPUB になる（internal #64） */
+	@Test
+	public void bookWithNoWritableImageIsNotWritten() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false);
+		File zip = imageZip(new String[]{"bmp", "bmp"}, new int[][]{{600, 800}, {600, 800}});
+		try {
+			writeBook(zip, writer, true, false, "bmponly");
+			org.junit.Assert.fail("BMP だけの本を書いた");
+		} catch (java.io.IOException e) {
+			assertEquals("画像がありませんでした", e.getMessage());
+		}
+		assertFalse("書きかけの EPUB が残っている", new File(tempFolder.getRoot(), "bmponly.epub").length() > 0);
+	}
+
+	/** とても細い画像を縮めても、幅は 0 にならない（0 だと画像を書けず、壊れた画像が残る。internal #64） */
+	@Test
+	public void resizingAVeryThinImageKeepsOnePixel() throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 100, 100, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+		try (ZipFile zf = new ZipFile(writeBook(imageZip(new int[][]{{600, 800}, {3, 5000}}), writer, false, false, "thin"))) {
+			BufferedImage thin = imageOf(zf, read(zf, "OPS/xhtml/0002.xhtml"));
+			assertTrue("画像が読めない", thin != null);
+			assertEquals(1, thin.getWidth());
+			assertEquals(100, thin.getHeight());
+			//大きさだけでなく絵も残る（元の倍率で描くと 1 画素に届かず、黒のままになる）
+			java.awt.Color mid = new java.awt.Color(thin.getRGB(0, 50));
+			assertTrue("絵が塗られていない: " + mid, mid.getRed() > 200 && mid.getGreen() < 60 && mid.getBlue() < 60);
+			assertReferencesResolve(zf);
 		}
 	}
 

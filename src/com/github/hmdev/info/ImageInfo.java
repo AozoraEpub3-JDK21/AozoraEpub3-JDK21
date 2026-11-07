@@ -125,6 +125,13 @@ public class ImageInfo
 	{
 		return this.ext;
 	}
+	/** EPUB に書ける画像の形式（拡張子・ImageIO の形式名とも小文字） */
+	private static final java.util.Set<String> PAGE_FORMATS = java.util.Set.of("png", "jpeg", "jpg", "gif");
+	/** EPUB に書ける画像の形式か（png・jpeg・gif）。BMP などは書かない */
+	public static boolean isPageFormat(String ext)
+	{
+		return ext != null && PAGE_FORMATS.contains(ext);
+	}
 	/** mime形式(image/png)の形式フォーマット文字列を返却 */
 	public String getFormat()
 	{

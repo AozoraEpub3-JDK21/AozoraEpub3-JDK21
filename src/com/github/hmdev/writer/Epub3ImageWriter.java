@@ -92,6 +92,10 @@ public class Epub3ImageWriter extends Epub3Writer
 			pageNum++;
 			vecFileName.add(this.getImageFilePath(srcFilePath.trim(), pageNum));
 		}
+		//書ける画像が 1 枚も無い（BMP だけなど）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64）
+		if (this.imageInfos.isEmpty()) {
+			throw new IOException("画像がありませんでした");
+		}
 		
 		//画像を出力して出力サイズを取得
 		zos.setLevel(0);
@@ -233,7 +237,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			imageInfo = this.imageInfoReader.getImageInfo(srcImageFileName);
 			imageInfo.setId(imageId);
 			imageInfo.setOutFileName(imageId+"."+ext);
-			if (!imageInfo.getExt().matches("^(png|jpeg|gif|jpg)$")) {
+			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
 				LogAppender.error(lineNum, "画像フォーマットエラー", srcImageFileName);
 				return null;
 			}

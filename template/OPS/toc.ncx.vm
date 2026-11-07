@@ -48,6 +48,9 @@
 #if (${sections.size()} > 0)
 #set($firstSection = ${sections.get(0)})
 		<content src="xhtml/${firstSection.SectionId}.xhtml"/>
+#elseif (${bookInfo.InsertCoverPage})
+## 画像が 1 枚だけの本は、その画像が表紙のページになり本文のページが無い（internal #64）
+		<content src="xhtml/cover.xhtml"/>
 #else
 		<content src="xhtml/text00001.xhtml"/>
 #end

@@ -45,7 +45,9 @@ public class AozoraEpub3BatchPerBookTest {
 	private int run(String... args) {
 		String orgClassPath = System.getProperty("java.class.path");
 		PrintStream orgOut = System.out;
+		PrintStream orgErr = System.err;
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		ByteArrayOutputStream errs = new ByteArrayOutputStream();
 		int exitCode;
 		try {
 			//Gradle のテスト JVM では template/ を解決できないので、プロジェクト直下の jar から起動したことにする
@@ -53,16 +55,22 @@ public class AozoraEpub3BatchPerBookTest {
 			//先に走った試験の静的な Velocity を空にする（AozoraEpub3BatchOutPathErrorTest 参照）
 			Velocity.reset();
 			System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
+			//slf4j-simple は書くたびに System.err を見るので、ロガーの ERROR もここに入る
+			System.setErr(new PrintStream(errs, true, StandardCharsets.UTF_8));
 			exitCode = AozoraEpub3.run(args);
 		} finally {
 			System.setOut(orgOut);
+			System.setErr(orgErr);
 			if (orgClassPath == null) System.clearProperty("java.class.path"); else System.setProperty("java.class.path", orgClassPath);
 		}
 		lastLog = baos.toString(StandardCharsets.UTF_8);
+		lastErr = errs.toString(StandardCharsets.UTF_8);
 		System.out.println(lastLog);
+		System.err.print(lastErr);
 		return exitCode;
 	}
 	private String lastLog;
+	private String lastErr;
 
 	/** 壊れた cbz と、画像の無い zip の後ろに置いた txt も変換される。失敗は終了コードに残る */
 	@Test
@@ -246,5 +254,62 @@ public class AozoraEpub3BatchPerBookTest {
 		}
 		assertEquals("画像は 2 枚（テキストを画像として書かない）", 2, images);
 		assertEquals("飛ばしたテキストは失敗として数える", 1, exitCode);
+	}
+
+	private static File imageZip(File zip, String... names) throws Exception {
+		try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zip))) {
+			for (String name : names) {
+				zos.putNextEntry(new ZipEntry(name));
+				ImageIO.write(new BufferedImage(60, 80, BufferedImage.TYPE_INT_RGB), name.substring(name.lastIndexOf('.')+1), zos);
+				zos.closeEntry();
+			}
+		}
+		return zip;
+	}
+
+	/** 「-c 0」（先頭の挿絵）で、入力のフォルダを表紙のファイルとして読みに行かない（internal #64 の 15） */
+	@Test
+	public void firstImageCoverDoesNotReadTheFolder() throws Exception {
+		File src = tempFolder.newFolder("c0src");
+		File dst = tempFolder.newFolder("c0dst");
+		File zip = imageZip(new File(src, "pages.zip"), "p0.png", "p1.png");
+		File ini = tempFolder.newFile("c0.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-d", dst.getPath(), "-c", "0", zip.getPath());
+
+		assertEquals("成功:\n" + lastLog + lastErr, 0, exitCode);
+		assertTrue("EPUB が無い:\n" + lastLog, new File(dst, "pages.epub").isFile());
+		assertTrue("フォルダを表紙として読んだ:\n" + lastErr, !lastErr.contains("表紙画像の解析に失敗"));
+		assertTrue("見つからない警告が出た:\n" + lastLog, !lastLog.contains("表紙画像ファイルが見つかりません"));
+	}
+
+	/** BMP（書けない形式）しか無い書庫は、画像の無い書庫と同じく中止する（書くと本文も表紙も無い EPUB になる。internal #64） */
+	@Test
+	public void archiveWithOnlyUnusableImagesIsSkipped() throws Exception {
+		File src = tempFolder.newFolder("bmpsrc");
+		File dst = tempFolder.newFolder("bmpdst");
+		File zip = imageZip(new File(src, "bmps.zip"), "p0.bmp", "p1.bmp");
+		File ini = tempFolder.newFile("bmp.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-d", dst.getPath(), "-c", "0", zip.getPath());
+
+		assertTrue("中止が出ていない:\n" + lastLog, lastLog.contains("画像がありませんでした"));
+		assertTrue("EPUB を書いた", !new File(dst, "bmps.epub").exists());
+		assertEquals("失敗として数える", 1, exitCode);
+	}
+
+	/** フォルダの名前を表紙に渡しても、フォルダを画像として読まない（internal #64 の 15） */
+	@Test
+	public void coverOptionNamingAFolderIsNotReadAsAnImage() throws Exception {
+		File src = tempFolder.newFolder("fdsrc");
+		File dst = tempFolder.newFolder("fddst");
+		File zip = imageZip(new File(src, "pages.zip"), "p0.png", "p1.png");
+		File ini = tempFolder.newFile("fd.ini");
+
+		int exitCode = run("-i", ini.getPath(), "-d", dst.getPath(), "-c", src.getPath(), zip.getPath());
+
+		assertEquals("成功:\n" + lastLog + lastErr, 0, exitCode);
+		assertTrue("フォルダを表紙として読んだ:\n" + lastErr, !lastErr.contains("表紙画像の解析に失敗"));
+		assertTrue("見つからない警告が無い:\n" + lastLog, lastLog.contains("表紙画像ファイルが見つかりません"));
 	}
 }

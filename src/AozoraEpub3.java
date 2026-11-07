@@ -517,11 +517,14 @@ public class AozoraEpub3
 						bookInfo.insertCoverPageToc = coverPageToc;
 						bookInfo.insertCoverPage = coverPage;
 						bookInfo.coverImageIndex = coverImageIndex;
-						if (coverFileName != null && !coverFileName.startsWith("http")) {
+						//"" は「先頭の挿絵」（-c 0）。入力のフォルダを足すとフォルダそのものを表紙として読みに行き、
+						//ERROR を出す（Windows では AccessDeniedException）。GUI と同じく "" のまま渡す（internal #64 の 15）
+						//フォルダの名前（-c . など）も同じく表紙のファイルとして読まない（isFile で見る）
+						if (coverFileName != null && !coverFileName.isEmpty() && !coverFileName.startsWith("http")) {
 							File coverFile = new File(coverFileName);
-							if (!coverFile.exists()) {
+							if (!coverFile.isFile()) {
 								coverFileName = srcFile.getParent()+"/"+coverFileName;
-								if (!new File(coverFileName).exists()) {
+								if (!new File(coverFileName).isFile()) {
 									coverFileName = null;
 									LogAppender.println("[WARN] 表紙画像ファイルが見つかりません : "+coverFile.getAbsolutePath());
 								}
