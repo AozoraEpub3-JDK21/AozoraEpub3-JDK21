@@ -302,33 +302,123 @@ java -jar "$SCRIPT_DIR/AozoraEpub3.jar"
 }
 
 // 配布物に含める共通コンテンツ（zipDistribution / tarDistribution / installDist で共有）
-// ここを 1 箇所更新すれば 3 経路すべての配布物に反映される（chuki_*.txt 追加忘れ等の事故防止）
+// ここを 1 箇所更新すれば 3 経路すべての配布物に反映される（chuki_*.txt 追加忘れ等の事故防止）。
+// 下の一覧は verifyDistSources が確かめるパスも兼ねる（一覧を 2 つ持たない）
+ext.distRootFiles = ['README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt',
+    'THIRD-PARTY-NOTICES.txt', 'chuki_*.txt', 'AozoraEpub3.ico', 'AozoraEpub3.ini', 'setting_narourb.ini']
+// 作業ツリーのフォルダ → 配布物の中のフォルダ
+ext.distDirs = ['gaiji': 'gaiji', 'presets': 'presets', 'web': 'web', 'template': 'template', 'lib/LICENSE': 'LICENSE']
 ext.distCommonContent = { CopySpec spec ->
     spec.from('.') {
-        include 'README.md', 'LICENSE.txt', 'gpl.txt', 'README_Changes.txt', 'replace_sample.txt'
-        include 'THIRD-PARTY-NOTICES.txt'
-        include 'chuki_*.txt'
-        include 'AozoraEpub3.ico'
-        include 'AozoraEpub3.ini', 'setting_narourb.ini'
+        include distRootFiles
     }
-    spec.from('gaiji')    { into 'gaiji' }
-    spec.from('presets')  { into 'presets' }
-    spec.from('web')      { into 'web' }
-    spec.from('template') { into 'template' }
-    // Include third-party licenses
-    spec.from('lib/LICENSE') { into 'LICENSE' }
+    distDirs.each { src, dst -> spec.from(src) { into dst } }
+}
+
+// 配布物は作業ツリーから写すので、コミットに無いファイルが混ざりうる
+// （v1.8.0 の最初のビルドに、gitignore した web/www.aozora.gr.jp/replace.txt の下書きが入った。internal #66）。
+// 配布物に写すパスと jar の元（src・build.gradle）で、追跡しているファイルの中身の変更（M）のほかの違い
+// （?? 未追跡・!! gitignore・A 追加・D 削除・R/C 名前の変更と写し・T 種類の変更・U 衝突）があれば止める。
+// 中身の変更（M）は止めずに一覧を警告する: リリースの手順はバージョンの書き換えをコミットする前に dist を作る
+// （docs/release-procedure.md §2.3・§3.3・§4.1）。GUI が終了時に書き換える AozoraEpub3.ini もここに出る。
+// Gradle が既定で写さないファイル（DirectoryScanner の既定の除外: .DS_Store・*~・._* など）は数えない。
+// 承知で作るときは -PallowDirtyDist（値なしか true。false・0 などは許さない）。git の無い木（ソースの tarball など）では警告だけ。
+// 改行だけの違い（CRLF↔LF）は git が揃えて比べるので見えない（§6.12）
+ext.distCheckedPaths = distRootFiles + distDirs.keySet().toList() + ['src', 'build.gradle']
+ext.verifyDistSourcesNow = { Task task ->
+    def root = projectDir
+    def flag = project.findProperty('allowDirtyDist')
+    def allowDirty = flag != null && (flag.toString().isEmpty() || flag.toString().equalsIgnoreCase('true'))
+    if (flag != null && !allowDirty && !flag.toString().equalsIgnoreCase('false')) {
+        task.logger.warn("verifyDistSources: -PallowDirtyDist=" + flag + " は値なしか true のときだけ効きます。この値では許しません")
+    }
+    // 許すときは、通したことが分かるように出所の手掛かりも添える (何も通さない走行では言わない)
+    def fail = { String msg ->
+        if (!allowDirty) throw new GradleException(msg)
+        task.logger.warn(msg + "\n（-PallowDirtyDist が効いているので止めずに続けます。gradle.properties や ORG_GRADLE_PROJECT_allowDirtyDist から来ることもあります）")
+    }
+    if (!new File(root, '.git').exists()) {
+        task.logger.warn("verifyDistSources: git の木ではないので、配布物に入るファイルを確かめていません")
+        return
+    }
+    // パスは :(glob) で渡す: git の素の * は / をまたぐ（chuki_*.txt が chuki_old/x.txt にも当たる）が、Gradle の include はまたがない
+    def cmd = ['git', 'status', '--porcelain', '-z', '--ignored', '--untracked-files=all', '--'] + distCheckedPaths.collect { ':(glob)' + it }
+    def out, err, code
+    try {
+        def pb = new ProcessBuilder(cmd).directory(root)
+        // フックやスクリプトが向けた別の index・木を見ない（Gradle が写すのはこの作業ツリー）
+        ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'].each { pb.environment().remove(it) }
+        def proc = pb.start()
+        def errBuf = new StringBuilder()
+        def errThread = Thread.start { errBuf.append(proc.errorStream.getText('UTF-8')) }
+        out = proc.inputStream.getText('UTF-8')
+        code = proc.waitFor()
+        errThread.join()
+        err = errBuf.toString()
+    } catch (IOException e) {
+        fail("verifyDistSources: git を動かせず、配布物に入るファイルを確かめられませんでした（PATH に git が要ります）: " + e.message)
+        return
+    }
+    if (code != 0) {
+        fail("verifyDistSources: git status に失敗し、配布物に入るファイルを確かめられませんでした:\n" + err)
+        return
+    }
+    // -z の 1 項目は「XY パス」。名前の変更・写し（X か Y が R/C）は次の項目に元のパスが続く。
+    // 除外の判定はどちらのパスでも見る（除外に当たる名前へ変えても、元のファイルが無くなったことは残す）
+    def entries = []
+    def origins = [:]
+    def parts = out.split('\u0000', -1).toList()
+    for (int n = 0; n < parts.size(); n++) {
+        def e = parts[n]
+        if (e.length() < 4) continue
+        entries << e
+        if ('RC'.indexOf(e.substring(0, 1)) >= 0 || 'RC'.indexOf(e.substring(1, 2)) >= 0) {
+            if (n + 1 < parts.size()) origins[e] = parts[n + 1]
+            n++
+        }
+    }
+    // Gradle の既定の除外（Ant の **/名前 と **/名前/**）を名前の型にして、パスのどの段に当たっても除く
+    // （除外に当たるフォルダは Gradle が中へ入らない）。git のパスは OS によらず / 区切り。
+    // 照合は Ant の文字列の照合（大文字小文字を区別し、OS のパスの規則に依らない）
+    def namePatterns = org.apache.tools.ant.DirectoryScanner.getDefaultExcludes().collect {
+        it.replaceFirst('^\\*\\*/', '').replaceFirst('/\\*\\*$', '')
+    }
+    def defaultExcluded = { String path ->
+        path.split('/').any { seg -> namePatterns.any { org.apache.tools.ant.types.selectors.SelectorUtils.match(it, seg, true) } }
+    }
+    entries = entries.findAll { !defaultExcluded(it.substring(3)) || (origins[it] != null && !defaultExcluded(origins[it])) }
+    // 警告で済ますのは、追跡しているファイルの中身の変更（X・Y が空白か M）だけ。
+    // 未追跡・gitignore・add した新しいファイル・消したファイル・名前の変更・解決していない衝突はリポジトリの内容と違うので止める
+    def foreign = entries.findAll { !(' M'.indexOf(it.substring(0, 1)) >= 0 && ' M'.indexOf(it.substring(1, 2)) >= 0) }
+    def modified = entries - foreign
+    if (!modified.isEmpty()) {
+        task.logger.warn("verifyDistSources: コミットしていない変更が配布物に入ります（バージョンの書き換えなど意図したものか確かめてください）:\n  " +
+            modified.join('\n  '))
+    }
+    if (!foreign.isEmpty()) {
+        fail("配布物に入るパスに、コミットと違うファイルがあります:\n  " + foreign.join('\n  ') + "\n" +
+            "直し方: ?? !! は消すか別の場所へ移す。A は git restore --staged して消す（入れるならコミットする）。" +
+            "D・R・C・T は git restore で戻すかコミットする。U は衝突を解いてコミットする。" +
+            "迷ったらきれいな worktree で作り直す（docs/release-procedure.md §6.12）。承知のうえなら -PallowDirtyDist")
+    }
+}
+// 配布物を写すタスクの前に毎回走る（結果を持たないので最新扱いで飛ばされない）。ビルドの後に走らせ、写す直前に近づける
+tasks.register('verifyDistSources') {
+    description = '配布物に入るパスと jar の元に、コミットと違うファイルが無いかを確かめる'
+    outputs.upToDateWhen { false }
+    mustRunAfter 'build', 'jar', 'createExe', 'createLauncher'
+    doLast { verifyDistSourcesNow(it) }
 }
 
 // 配布用の ZIP アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
-task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
+task zipDistribution(type: Zip, dependsOn: [build, createExe, 'verifyDistSources']) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.zip"
     destinationDirectory = file('build/distributions')
     preserveFileTimestamps = true
     reproducibleFileOrder = false
 
-    from('build/libs') {
-        include '*.jar'
-    }
+    // jar タスクが作った 1 本だけ（build/libs に残った古い jar を拾わない）
+    from(tasks.named('jar'))
     from("${buildDir}/launch4j") {
         // ZIP (Windows-oriented) - .exe launcher（.bat から .exe に変更）
         include 'AozoraEpub3.exe'
@@ -337,16 +427,15 @@ task zipDistribution(type: Zip, dependsOn: [build, createExe]) {
 }
 
 // 配布用の TAR アーカイブを生成（FAT-JAR版 - ダブルクリック起動可能）
-task tarDistribution(type: Tar, dependsOn: [build, createLauncher]) {
+task tarDistribution(type: Tar, dependsOn: [build, createLauncher, 'verifyDistSources']) {
     archiveFileName = "AozoraEpub3-${project.version ?: 'dist'}.tar.gz"
     destinationDirectory = file('build/distributions')
     compression = Compression.GZIP
     preserveFileTimestamps = true
     reproducibleFileOrder = false
 
-    from('build/libs') {
-        include '*.jar'
-    }
+    // jar タスクが作った 1 本だけ（build/libs に残った古い jar を拾わない）
+    from(tasks.named('jar'))
     from('build/distributions') {
         // TAR (Unix-oriented) - include only the Unix shell launcher
         include 'AozoraEpub3.sh'
@@ -573,14 +662,15 @@ tasks.register('generateLocalSamples') {
     }
 }
 
+// installDist も写す前に確かめる
+tasks.named('installDist') { dependsOn 'verifyDistSources' }
+
 // Application プラグインの distribution（installDist 用）も distCommonContent を共有
 distributions {
     main {
         contents {
             // Copy fat JAR to root for easy access
-            from('build/libs') {
-                include 'AozoraEpub3.jar'
-            }
+            from(tasks.named('jar'))
             distCommonContent(delegate)
         }
     }

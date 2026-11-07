@@ -31,7 +31,7 @@
 - [ ] `gradlew test` がローカルで PASS
 - [ ] `.NET` ポート `JavaComparisonTests` 5/5 PASS（`D:\git\aozoraepub3-dotnet\tests\AozoraEpub3.Tests\` で `dotnet test --filter "FullyQualifiedName~JavaComparisonTests"`）
 - [ ] CI（master 最終コミット）が GREEN
-- [ ] `git status -s` がクリーン（前回 dist の残骸が残っていないか確認）
+- [ ] `git status -s` がクリーン（前回 dist の残骸が残っていないか確認）（配布物に入るパスは `dist` の `verifyDistSources` も確かめる。gitignore したファイルは `git status -s` に出ないので、そちらで止まる。§6.12）
 
 ### 2.1.1 リリース前 E2E（**必須ゲート**）
 
@@ -344,26 +344,28 @@ gh attestation generate build/distributions/AozoraEpub3-*.tar.gz
 
 **症状**: 生成された ZIP/TAR を解凍すると、本来必要な `chuki_*.txt` や `template/`、`gaiji/`、`setting_narourb.ini` 等のファイル/フォルダが**抜けている**。実行時に「テンプレートが見つからない」「外字が出ない」「チューキが解釈できない」等のエラーになる。**過去に最頻発した失敗モード**。
 
-**原因**: `build.gradle` 内で配布物の include リストが **3 箇所に重複定義**されている：
+**原因**: 以前は `build.gradle` 内で配布物の include リストが **3 箇所に重複定義**されていた。今は 3 経路とも
+`distCommonContent` を共有し、中身は `distRootFiles`（ルートのファイル）と `distDirs`（フォルダ）の一覧から作る
+（`verifyDistSources` も同じ一覧を確かめる）：
 
-| 箇所 | 行 | 使われる経路 |
-|---|---|---|
-| `task zipDistribution { ... }` | 203-239 | `./gradlew dist` の ZIP |
-| `task tarDistribution { ... }` | 242-282 | `./gradlew dist` の TAR |
-| `distributions { main { contents { ... } } }` | 493-527 | `./gradlew installDist` の展開ディレクトリ |
+| 箇所（`build.gradle` での名前） | 使われる経路 |
+|---|---|
+| `task zipDistribution { ... }` | `./gradlew dist` の ZIP |
+| `task tarDistribution { ... }` | `./gradlew dist` の TAR |
+| `distributions { main { contents { ... } } }` | `./gradlew installDist` の展開ディレクトリ |
 
-新しいリソース（`chuki_新規.txt`、`web/<新サイト>/`、新しいプリセット等）を追加した際、3 箇所のうち 1〜2 箇所しか更新せずにコミットすると、特定経路で生成したアーカイブから漏れる。**AI エージェント（Sonnet 等）の自動修正で特に頻発する**ため要警戒。
+新しいリソース（`chuki_新規.txt`、`web/<新サイト>/`、新しいプリセット等）を追加するときは `distRootFiles`・`distDirs` に足す（3 経路と検査に入る）。以前の 3 箇所の定義では、1〜2 箇所しか更新せずにコミットすると特定経路で生成したアーカイブから漏れた。**AI エージェント（Sonnet 等）の自動修正で特に頻発する**ため要警戒。
 
-#### dist 生成経路マップ（どれを使うかで参照される include 定義が違う）
+#### dist 生成経路マップ（中身はどれも `distCommonContent`。違うのは起動用のファイルと形式）
 
-| コマンド | 生成物 | 参照される include 定義 |
+| コマンド | 生成物 | 走るタスク |
 |---|---|---|
 | `./gradlew dist` ✅ | ZIP + TAR | `zipDistribution` + `tarDistribution` |
 | `./gradlew zipDistribution` | ZIP のみ | `zipDistribution` のみ |
 | `./gradlew tarDistribution` | TAR のみ | `tarDistribution` のみ |
 | `./gradlew installDist` | 展開ディレクトリ | `distributions.main.contents` のみ |
-| `./gradlew distZip` ❌ | **無効化**（`build.gradle:109`） | — |
-| `./gradlew distTar` ❌ | **無効化**（`build.gradle:110`） | — |
+| `./gradlew distZip` ❌ | **無効化**（`build.gradle` の `distZip.enabled = false`） | — |
+| `./gradlew distTar` ❌ | **無効化**（`build.gradle` の `distTar.enabled = false`） | — |
 
 **リリース時は必ず `./gradlew dist` を使う**。`zipDistribution`/`tarDistribution` の個別実行や `installDist` は確認用途に限定する。
 
@@ -435,9 +437,10 @@ gzip AozoraEpub3-*.tar
 
 **症状**: 配布 ZIP のサイズが想定（〜25 MB）より大きい、`AozoraEpub3-old.jar` が同梱されている
 
-**原因**: `from('build/libs') { include '*.jar' }` がワイルドカードで拾うため、前回のバージョンの JAR が残っているとそれも含まれる
+**原因**: 以前は `from('build/libs') { include '*.jar' }` がワイルドカードで拾っていたため、前回のバージョンの JAR が残っているとそれも含まれた。
+今は zip・tar・installDist とも `from(tasks.named('jar'))` で jar タスクが作った 1 本だけを入れる（internal #66）
 
-**対処**: §3.1 の事前クリーンアップを徹底。`./gradlew clean` ではなく `rm -rf build/libs/*.jar` でも可
+**対処**: それでも JAR が 2 本入るなら、`build.gradle` の zip・tar・`distributions` の `from` を確かめる。§3.1 の事前クリーンアップも続ける
 
 ### 6.5 ZIP/TAR にテンプレート/外字が二重に含まれる
 
@@ -446,7 +449,7 @@ gzip AozoraEpub3-*.tar
 **原因**: 過去に `application` プラグインの `distZip` と `zipDistribution` の両方が同じファイルを含めて競合（コミット `de7c1e4` で対処済み、再発したらリグレッション）
 
 **対処**:
-- `build.gradle` の `distZip.enabled = false` / `distTar.enabled = false`（line 109-110）が残っているか確認
+- `build.gradle` の `distZip.enabled = false` / `distTar.enabled = false` が残っているか確認
 - `distributions { main { contents { ... } } }` ブロックと `task zipDistribution` ブロックの `from(...)` で重複指定がないか目視確認
 
 ### 6.6 文字化け / 行末コード破損
@@ -520,6 +523,23 @@ cd build/tools && unzip -q -o epubcheck-5.3.0.zip && cd ../..
 > **EPUB 側に問題があるかのようなメッセージ**で落ちる。実体は jar 不在なので、まず jar の存在を確認する。
 > 壊れていた `tools/epubcheck-5.2.0.jar`（未追跡・9 bytes の `Not Found`）は削除済み。
 > ローカル検証には `tools/epubcheck-5.1.0/epubcheck.jar` が使える。
+
+### 6.12 `verifyDistSources` で止まる（配布物に入るパスに、コミットに無いファイルがある）
+
+**症状**: `dist`（`zipDistribution`・`tarDistribution`）や `installDist` の前の `verifyDistSources` が
+「配布物に入るパスに、コミットに無いファイルがあります」で落ちる。`??`（未追跡）・`!!`（gitignore）・`A`（add した新しいファイル）・`D`（消したファイル）・`R`/`C`（名前の変更・写し）・`T`（種類の変更）・`U`（解決していない衝突）が並ぶ。
+確かめるのは配布物に写すパスと、jar の元の `src/`・`build.gradle`。
+
+**理由**: 配布物は作業ツリーから写すので、そのままだと下書きが混ざる。v1.8.0 の最初のビルドに、gitignore した
+`web/www.aozora.gr.jp/replace.txt`（底本：の行を消す規則の下書き）が入った。
+
+**対処**: `??`・`!!` は消す（下書きなら別の場所へ移す）。`A` は `git restore --staged` して消す（入れるならコミットする）。
+`D`・`R`・`C`・`T` は `git restore` で戻すかコミットする。`U` は衝突を解いてコミットする。迷ったらきれいな worktree で作り直す。
+入ってよいと分かっているときだけ `-PallowDirtyDist` を付ける（警告に変わる）。
+
+**警告だけのもの**: 追跡しているファイルの中身の変更（`M`）は止めずに一覧を出す。§2.3 のバージョンの書き換えは §4.1 まで
+コミットしないので、ここに並ぶのが正常。それ以外のファイル（GUI が終了時に書き換える `AozoraEpub3.ini` など）が
+並んでいたら、`git diff` で確かめてから作り直す。改行だけの違い（CRLF↔LF）は git が揃えて比べるので、この検査では見えない（§2.3 の改行の注意）。
 
 ---
 
