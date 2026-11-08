@@ -1103,7 +1103,9 @@ public class AozoraEpub3
 
 			return !canceled;
 		} catch (Exception e) {
-			logger.error("EPUB 変換に失敗: {}", srcFile, e);
+			//入力のせいで本にできないのは想定内。トレースは出さない（internal #77）
+			if (e instanceof Epub3Writer.NotConvertibleException) logger.warn("EPUB 変換に失敗: {} ({})", srcFile, e.getMessage());
+			else logger.error("EPUB 変換に失敗: {}", srcFile, e);
 			LogAppender.println("エラーが発生しました : "+e.getMessage());
 			//LogAppender.printStaclTrace(e);
 			return false;

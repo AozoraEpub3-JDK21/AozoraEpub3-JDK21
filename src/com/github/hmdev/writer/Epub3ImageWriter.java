@@ -154,7 +154,7 @@ public class Epub3ImageWriter extends Epub3Writer
 		//ページにできる画像が 1 枚も無い（読めない BMP だけも含む）と、本文の無い壊れた EPUB になる。書かずに失敗にする（internal #64・#77）
 		//画像を書いた後に見る。読めずに外した画像は imageInfos から抜けている
 		if (this.imageInfos.isEmpty()) {
-			throw new IOException("画像がありませんでした");
+			throw new NotConvertibleException("画像がありませんでした");
 		}
 		
 		//表紙に選んだ画像が読めずに外れたら、その後ろで最初に書けた画像（無ければ前で最初の画像）に表紙の印だけ付ける。前は表紙が無くなった（internal #77）
