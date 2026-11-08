@@ -916,17 +916,22 @@ public class Epub3Writer
 				} finally {
 					bais.close();
 				}
+				//書く形式はここで決める。OPF は表紙の画像より先に書くので、後で変えると media-type が食い違う（Kindle で OPF-029。internal #64）
+				//EPUB に書けない形式（BMP）は PNG に、Kindle 向けは JPEG に直す。前は BMP を「表紙画像フォーマットエラー」で外していた（internal #77）
 				String ext = coverImageInfo.getExt();
-				if (isKindle || ext.equals("jpeg")) ext = "jpg";
-				coverImageInfo.setId("0000");
-				coverImageInfo.setOutFileName("0000."+ext);
 				if (!ImageInfo.isPageFormat(ext)) {
-					LogAppender.println("表紙画像フォーマットエラー: "+bookInfo.coverFileName);
-					coverImageInfo = null;
-				} else {
-					coverImageInfo.setIsCover(true);
-					this.imageInfos.add(0, coverImageInfo);
+					coverImageInfo.setReencode(true);
+					ext = "png";
 				}
+				if (isKindle && !ext.startsWith("jp")) {
+					coverImageInfo.setReencode(true);
+					ext = "jpeg";
+				}
+				coverImageInfo.setExt(ext);
+				coverImageInfo.setId("0000");
+				coverImageInfo.setOutFileName("0000."+("jpeg".equals(ext) ? "jpg" : ext));
+				coverImageInfo.setIsCover(true);
+				this.imageInfos.add(0, coverImageInfo);
 			} catch (Exception e) {
 				logger.error("表紙画像の解析に失敗: {}", bookInfo.coverFileName, e);
 			}
@@ -944,6 +949,8 @@ public class Epub3Writer
 				ImageInfo imageInfo = imageInfoReader.getImageInfo(bookInfo.coverImageIndex);
 				if (imageInfo != null) ext = imageInfo.getExt();
 			}
+			//編集した絵は書き直すので、EPUB に書ける形式にする（BMP の挿絵を表紙にしたときなど。internal #77）
+			if (!ImageInfo.isPageFormat(ext)) ext = "png";
 			if (isKindle || ext.equals("jpeg")) ext = "jpg";
 			coverImageInfo = ImageInfo.getImageInfo(ext, bookInfo.coverImage, -1);
 			coverImageInfo.setId("0000");
@@ -990,9 +997,18 @@ public class Epub3Writer
 						this.imageIndex++;
 						String imageId = decimalFormat.format(this.imageIndex);
 						insertCoverInfo.setId(imageId);
+						//形式は外部の表紙と同じ決まりで、名前と中身と OPF をそろえる。前は Kindle で名前だけ .jpg、BMP は .bmp のままだった（internal #77）
 						String ext = insertCoverInfo.getExt();
-						if (isKindle) ext = "jpg";
-						insertCoverInfo.setOutFileName(imageId+"."+ext);
+						if (!ImageInfo.isPageFormat(ext)) {
+							insertCoverInfo.setReencode(true);
+							ext = "png";
+						}
+						if (isKindle && !ext.startsWith("jp")) {
+							insertCoverInfo.setReencode(true);
+							ext = "jpeg";
+						}
+						insertCoverInfo.setExt(ext);
+						insertCoverInfo.setOutFileName(imageId+"."+("jpeg".equals(ext) ? "jpg" : ext));
 					}
 				}
 			}
@@ -1225,21 +1241,6 @@ public class Epub3Writer
 		//表紙編集時のイメージ出力
 		if (coverImageInfo != null) {
 			try {
-				//kindleの場合は常にjpegに変換
-				//元のバイト列が出力の形式のままか（加工に失敗したとき、写して戻せるか。internal #64）
-				boolean rawIsOutFormat = true;
-				if (isKindle) {
-					String imgExt = coverImageInfo.getExt();
-					if (!imgExt.startsWith("jp")) {
-						if (bookInfo.coverImage == null) {
-							ByteArrayInputStream bais = new ByteArrayInputStream(coverImageBytes);
-							bookInfo.coverImage = ImageUtils.readImage(imgExt, bais);
-							bais.close();
-						}
-						coverImageInfo.setExt("jpeg");
-						rawIsOutFormat = false;
-					}
-				}
 				final ImageInfo cover = coverImageInfo;
 				if (bookInfo.coverImage != null) {
 					//プレビューで編集されている場合。編集した絵は元のバイト列と違うので、写して戻さない
@@ -1248,7 +1249,17 @@ public class Epub3Writer
 					bookInfo.coverImage = null; //同じ画像が使われている場合は以後はファイルから読み込ませる
 				} else {
 					final byte[] raw = coverImageBytes;
-					this.putImageEntry(cover, rawIsOutFormat ? raw : null, false, out -> this.writeCoverImage(new ByteArrayInputStream(raw), out, cover));
+					//形式を直す表紙（BMP・Kindle の JPEG）は元のバイト列を写して戻せない。読めなければ白い画像になる
+					this.putImageEntry(cover, cover.isReencode() ? null : raw, false, out -> {
+						if (!cover.isReencode()) {
+							this.writeCoverImage(new ByteArrayInputStream(raw), out, cover);
+							return;
+						}
+						BufferedImage decoded = readOrUnreadable(raw, bookInfo.coverFileName);
+						//Kindle の JPEG への変換は前と同じく縮めない。BMP はほかの表紙と同じく表紙の大きさへ縮める
+						ImageUtils.writeImage(null, normalizeForPage(decoded), out, cover, this.jpegQuality, this.gammaOp,
+								0, isKindle ? 0 : this.coverW, isKindle ? 0 : this.coverH, this.dispW, this.dispH, 0, 0, 0, 0, 0, 0);
+					});
 				}
 				imageInfos.remove(0);//カバー画像は出力済みなので削除
 				if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
@@ -1449,23 +1460,34 @@ public class Epub3Writer
 	 * 読めない・書けないときは、{@link #putImageEntry} の決まりで、外すか白い画像を入れる */
 	void writeImageBytes(String srcImageFileName, ImageInfo imageInfo, byte[] bytes) throws IOException
 	{
-		BufferedImage srcImage = null;
-		if (imageInfo.isReencode()) {
-			//項目を開く前に読む
-			try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {} ({})", srcImageFileName, e.toString()); } //壊れた画像は想定内なので、トレースは出さない
-			if (srcImage != null) {
-				srcImage = normalizeForPage(srcImage);
-				LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
-			}
-		}
-		final BufferedImage decoded = srcImage;
 		//PNG に直す画像（BMP）の元のバイト列は ext の形式ではないので、写して戻さない
 		//画像だけの本は、画像をページと OPF より先に書くので外せる。本文の本は挿絵のページと OPF を書き終えている
 		this.putImageEntry(imageInfo, imageInfo.isReencode() ? null : bytes, this.bookInfo != null && this.bookInfo.imageOnly, out -> {
-			if (decoded != null) this.writeImage(decoded, out, imageInfo);
-			else if (imageInfo.isReencode()) throw new IOException("画像が読み込めません");
-			else this.writeImage(new ByteArrayInputStream(bytes), out, imageInfo);
+			if (!imageInfo.isReencode()) {
+				this.writeImage(new ByteArrayInputStream(bytes), out, imageInfo);
+				return;
+			}
+			BufferedImage decoded = normalizeForPage(readOrUnreadable(bytes, srcImageFileName));
+			LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
+			this.writeImage(decoded, out, imageInfo);
 		});
+	}
+	
+	/** 画像が読めない（壊れている）こと。想定内なので、ログはトレース無しの 1 行にする */
+	static class UnreadableImageException extends IOException
+	{
+		private static final long serialVersionUID = 1L;
+		UnreadableImageException(String name, Throwable cause) { super("画像が読み込めません: "+name, cause); }
+	}
+	
+	/** 画像を読む。読めなければ UnreadableImageException */
+	static BufferedImage readOrUnreadable(byte[] bytes, String name) throws UnreadableImageException
+	{
+		BufferedImage image = null;
+		Exception cause = null;
+		try { image = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { cause = e; }
+		if (image == null) throw new UnreadableImageException(name, cause);
+		return image;
 	}
 	
 	/** 読めない画像の代わりに入れる、同じ縦横比の白い画像。大きすぎる寸法（壊れたヘッダ）は縮める */
@@ -1556,6 +1578,10 @@ public class Epub3Writer
 		try {
 			encode.writeTo(out);
 			if (out.size() == 0) failure = new IOException("画像が空になりました");
+		} catch (UnreadableImageException e) {
+			failure = e;
+			//壊れた画像は想定内なので、トレースは出さない
+			logger.warn("{} ({})", e.getMessage(), String.valueOf(e.getCause()));
 		} catch (IOException e) {
 			failure = e;
 			//壊れた画像は想定内なので、トレースは出さない
