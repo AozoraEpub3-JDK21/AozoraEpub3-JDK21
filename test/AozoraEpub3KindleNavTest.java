@@ -21,6 +21,7 @@ import org.junit.rules.TemporaryFolder;
  * Kindle 向けの本の nav にも epub:type="toc" を付け、ほかの出力と同じく章の下に節を入れ子にする（internal #64 項目 4）。
  * 前は kindlegen に toc.ncx を使わせるため Kindle だけ外していて、epubcheck が RSC-005 を出し、目次も平らだった。
  * Kindle Previewer 4 は入れ子の nav を目次パネルの階層にする（2026-11-08 win で確認）。
+ * kindlegen で .mobi にする本（拡張子 .mobi）だけは前のまま。
  */
 public class AozoraEpub3KindleNavTest {
 	@Rule
@@ -53,7 +54,7 @@ public class AozoraEpub3KindleNavTest {
 			Velocity.reset();
 			if (orgClassPath == null) System.clearProperty("java.class.path"); else System.setProperty("java.class.path", orgClassPath);
 		}
-		File[] epubs = dst.listFiles((d, n) -> n.endsWith(".epub"));
+		File[] epubs = dst.listFiles((d, n) -> n.endsWith(".epub") || n.endsWith(".mobi"));
 		assertEquals(1, epubs.length);
 		try (ZipFile zf = new ZipFile(epubs[0])) {
 			return new String(zf.getInputStream(zf.getEntry("OPS/xhtml/nav.xhtml")).readAllBytes(), StandardCharsets.UTF_8);
@@ -76,6 +77,16 @@ public class AozoraEpub3KindleNavTest {
 	@Test
 	public void kindleNavIsATocAndNested() throws Exception {
 		assertNestedToc(nav("-device", "kindle"));
+	}
+
+	/** kindlegen で .mobi にする本（拡張子 .mobi の Kindle 向け）は前のまま。toc の印の無い平らな nav を kindlegen に渡し、toc.ncx を使わせる */
+	@Test
+	public void navForKindlegenStaysAsBefore() throws Exception {
+		String nav = nav("-device", "kindle", "-ext", ".mobi");
+		assertTrue("toc の印が付いた:\n" + nav, !nav.contains("epub:type=\"toc\""));
+		assertTrue(nav, nav.contains("<nav id=\"toc\">"));
+		String tocNav = nav.substring(nav.indexOf("<nav id=\"toc\">"));
+		assertEquals("入れ子になった:\n" + tocNav, 1, tocNav.substring(0, tocNav.indexOf("</nav>")).split("<ol>", -1).length - 1);
 	}
 
 	/** Kindle でない本も同じ形（Kindle だけ違う形にしない） */

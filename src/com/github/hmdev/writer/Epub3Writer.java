@@ -597,6 +597,13 @@ public class Epub3Writer
 	 * 今回の出力に EPUB 2 向けの要素を入れるか。
 	 * Kobo 向け（.kepub.epub）は端末が無く測れていないので、.mobi は目次が NCX 頼りなので、設定によらず入れる。
 	 */
+	/** kindlegen で .mobi にする本か（GUI で拡張子 .mobi を選び kindlegen があるとき）。
+	 * kindlegen 向けの書き分け（toc の印の無い平らな nav）はこの本だけに残す。Kindle 向けの EPUB（CLI の -device kindle）は EPUB の規則どおりに書く（internal #64 項目 4） */
+	boolean forKindlegen()
+	{
+		return this.isKindle && this.outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
+	}
+	
 	static boolean usesLegacyOutput(boolean legacyOutput, boolean kindle, String outputExt)
 	{
 		String ext = outputExt.trim().toLowerCase(Locale.ROOT);
@@ -764,6 +771,7 @@ public class Epub3Writer
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
+		if (this.forKindlegen()) velocityContext.put("kindlegen", true);
 		boolean legacyElements = usesLegacyOutput(this.legacyOutput, this.isKindle, this.outputExt);
 		velocityContext.put("legacyOutput", legacyElements);
 		
@@ -1126,8 +1134,9 @@ public class Epub3Writer
 		//velocityに設定 1～
 		velocityContext.put("ncx_depth", ncxDepth);
 		
-		//NAV の目次の階層。Kindle も同じ（Kindle Previewer 4 は nav の入れ子を目次パネルの階層にする。前は Kindle だけ平らだった。internal #64 項目 4）
-		if (this.navNest) nestNavChapters(chapterInfos);
+		//NAV の目次の階層。Kindle 向けの EPUB も同じ（Kindle Previewer 4 は nav の入れ子を目次パネルの階層にする。前は Kindle だけ平らだった。internal #64 項目 4）
+		//kindlegen で .mobi にする本は前のまま（平らな nav と toc.ncx を kindlegen に読ませる）
+		if (this.navNest && !this.forKindlegen()) nestNavChapters(chapterInfos);
 		
 		//出力前に縦中横とエスケープ処理
 		if (!bookInfo.imageOnly) {
