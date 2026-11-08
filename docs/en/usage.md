@@ -682,7 +682,7 @@ NavNest=1
 NcxNest=1
 ```
 
-Set them to `0` for a flat table of contents (the contents page of `.mobi` output stays flat whatever `NavNest` says). Which headings become entries at all is
+Set them to `0` for a flat table of contents. The contents page of `.mobi` and `.mobi+.epub` output (for kindlegen) stays flat whatever `NavNest` says; a Kindle EPUB made with `-device kindle` on the command line follows `NavNest` like any other EPUB. Which headings become entries at all is
 controlled by the `Chapter*` keys (`ChapterH1` … `ChapterH3`, `ChapterName`, and so on).
 
 ---

@@ -92,12 +92,12 @@ Java をお持ちでない場合は、[Adoptium](https://adoptium.net/) から J
 
 **Windows（ZIP）:**
 ```
-AozoraEpub3-1.8.1-jdk21.zip
+AozoraEpub3-1.8.2-jdk21.zip
 ```
 
 **Linux/macOS（TAR.GZ）:**
 ```
-AozoraEpub3-1.8.1-jdk21.tar.gz
+AozoraEpub3-1.8.2-jdk21.tar.gz
 ```
 
 ### インストール手順
@@ -148,6 +148,9 @@ cd AozoraEpub3-JDK21
 ---
 
 ## 最近の変更
+
+### v1.8.2-jdk21 (2026-11-08)
+- **Markdown の入力・画像・Kindle 向けの直し**: `.md` のファイルを Markdown として読めるようにしました。BMP の画像を PNG にして入れるようにしました。壊れた画像で EPUB の検査に通らない本ができていた問題と、色数の少ない画像や透過のある画像を縮小・回転すると色が変わっていた問題を直しました。コマンドラインの `-device kindle` の画像だけの本と目次、`-hor` の目次、章の中扉も直しました。
 
 ### v1.8.1-jdk21 (2026-11-03)
 - **表題ページ**: スマホで文字を大きくすると題名と著者が重なる問題を修正しました。また、配布物に FlatLaf のライセンス文が含まれていなかった問題を修正しました。

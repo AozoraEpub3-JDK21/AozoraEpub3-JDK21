@@ -255,7 +255,7 @@ NavNest=1
 NcxNest=1
 ```
 
-`0` にすると目次はフラットになります（`.mobi` の目次ページは `NavNest` によらずフラットです）。どの見出しを目次に載せるかは `Chapter*` キー
+`0` にすると目次はフラットになります（`.mobi`・`.mobi+.epub`〔kindlegen を使う変換〕の目次ページは `NavNest` によらずフラットです。コマンドラインの `-device kindle` で作る Kindle 向けの EPUB は、ほかの EPUB と同じく `NavNest` に従います）。どの見出しを目次に載せるかは `Chapter*` キー
 （`ChapterH1`〜`ChapterH3`、`ChapterName` など）で決まります。
 
 #### 設定ファイル（AozoraEpub3.ini）の探し方
