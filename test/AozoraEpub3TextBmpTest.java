@@ -159,7 +159,7 @@ public class AozoraEpub3TextBmpTest {
 		assertEquals(List.of("images/0001.png", "images/0002.png"), assertImagesAreReadable(convert(txt.getPath())));
 	}
 
-	/** 表紙に BMP のファイルを指定できる（前は「表紙画像フォーマットエラー」で表紙なし）。読めない BMP は透明な表紙 */
+	/** 表紙に BMP のファイルを指定できる（前は「表紙画像フォーマットエラー」で表紙なし）。読めない BMP は白い表紙 */
 	@Test
 	public void bmpCoverFileBecomesPng() throws Exception {
 		File cover = tempFolder.newFile("cover.bmp");
@@ -167,6 +167,9 @@ public class AozoraEpub3TextBmpTest {
 		assertEquals(List.of("images/0000.png"), assertImagesAreReadable(convert("-c", cover.getPath(), plainText().getPath())));
 		Files.write(cover.toPath(), truncatedBmp());
 		assertEquals(List.of("images/0000.png"), assertImagesAreReadable(convert("-c", cover.getPath(), plainText().getPath())));
+		//表紙の代わりは白（透明だと本棚で空のカードになる）
+		assertEquals("代わりの表紙が白でない", 0xFFFFFFFF, imageIn("OPS/images/0000.png").getRGB(150, 200));
+		assertTrue(log.toString(), log.toString().contains("画像が読み込めないので代わりに白い画像を入れます : " + cover.getPath()));
 	}
 
 	/** Kindle 向けの JPEG でない表紙は、OPF にも image/jpeg で載る（前は image/png のまま＝OPF-029）。読めなければ白い JPEG（JPEG は透明にできない） */
@@ -178,6 +181,7 @@ public class AozoraEpub3TextBmpTest {
 		File bad = tempFolder.newFile("bad.bmp");
 		Files.write(bad.toPath(), truncatedBmp());
 		assertEquals(List.of("images/0000.jpg"), assertImagesAreReadable(convert("-device", "kindle", "-c", bad.getPath(), plainText().getPath())));
+		assertFalse("JPEG なのに透明と出た:\n" + log, log.toString().contains("透明な画像を入れます : " + bad.getPath()));
 		assertFalse(log.toString(), log.toString().contains("表紙画像取得エラー"));
 	}
 }

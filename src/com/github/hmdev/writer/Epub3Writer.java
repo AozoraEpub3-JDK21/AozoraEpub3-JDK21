@@ -1479,14 +1479,22 @@ public class Epub3Writer
 		return image;
 	}
 	
-	/** 読めない画像の代わりに入れる、同じ縦横比の透明な画像。大きすぎる寸法（壊れたヘッダ）は縮める。
-	 * 白にすると、夜の配色（Play ブックスなど）で黒い紙面に白い四角が出る。JPEG は透過を持てないので、書くときに白地へ重なる */
-	static BufferedImage placeholderImage(int width, int height)
+	/** 読めない画像の代わりに入れる、同じ縦横比の画像。大きすぎる寸法（壊れたヘッダ）は縮める。
+	 * 挿絵は透明（白は夜の配色で黒い紙面に白い四角が出る）。表紙は白（透明だと本棚で題名も無い空のカードになる。Thorium）。
+	 * JPEG は透過を持てないので、どちらも白になる（書くときに白地へ重なる） */
+	static BufferedImage placeholderImage(int width, int height, boolean opaque)
 	{
 		double scale = Math.min(1, Math.sqrt(4000000.0/Math.max(1, (long)width*height)));
 		int w = Math.max(1, (int)Math.round(Math.max(1, width)*scale));
 		int h = Math.max(1, (int)Math.round(Math.max(1, height)*scale));
-		return new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB); //全画素が透明
+		if (!opaque) return new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB); //全画素が透明
+		BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = image.createGraphics();
+		try {
+			g.setColor(java.awt.Color.WHITE);
+			g.fillRect(0, 0, w, h);
+		} finally { g.dispose(); }
+		return image;
 	}
 	
 	/** 形式を直す画像（BMP・Kindle の表紙）を、縮小・回転の道が扱える形にそろえる。
@@ -1587,10 +1595,12 @@ public class Epub3Writer
 			}
 			imageInfo.rotateAngle = 0;
 			if (raw == null) {
-				LogAppender.error(why+"代わりに透明な画像を入れます : "+srcName);
+				//ログは実際に入れる物を言う（JPEG は透明にできない）
+				boolean opaque = imageInfo.getIsCover() || imageInfo.getExt().startsWith("jp");
+				LogAppender.error(why+(opaque ? "代わりに白い画像を入れます : " : "代わりに透明な画像を入れます : ")+srcName);
 				//代わりの画像の書き出しが投げると、OPF とページが指す画像が無いまま残る。png・gif は透明のまま、jpeg は白地に重ねて書ける
 				out.reset();
-				BufferedImage blank = placeholderImage(imageInfo.getWidth(), imageInfo.getHeight());
+				BufferedImage blank = placeholderImage(imageInfo.getWidth(), imageInfo.getHeight(), opaque);
 				ImageUtils.writeImage(null, blank, out, imageInfo, this.jpegQuality, null, 0, 0, 0, this.dispW, this.dispH, 0, 0, 0, 0, 0, 0);
 				raw = out.toByteArray();
 			} else {
