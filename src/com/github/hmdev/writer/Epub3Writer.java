@@ -1244,11 +1244,11 @@ public class Epub3Writer
 				if (bookInfo.coverImage != null) {
 					//プレビューで編集されている場合。編集した絵は元のバイト列と違うので、写して戻さない
 					final BufferedImage edited = bookInfo.coverImage;
-					this.putImageEntry(cover, null, out -> this.writeCoverImage(edited, out, cover));
+					this.putImageEntry(cover, null, false, out -> this.writeCoverImage(edited, out, cover));
 					bookInfo.coverImage = null; //同じ画像が使われている場合は以後はファイルから読み込ませる
 				} else {
 					final byte[] raw = coverImageBytes;
-					this.putImageEntry(cover, rawIsOutFormat ? raw : null, out -> this.writeCoverImage(new ByteArrayInputStream(raw), out, cover));
+					this.putImageEntry(cover, rawIsOutFormat ? raw : null, false, out -> this.writeCoverImage(new ByteArrayInputStream(raw), out, cover));
 				}
 				imageInfos.remove(0);//カバー画像は出力済みなので削除
 				if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
@@ -1294,7 +1294,7 @@ public class Epub3Writer
 							try (InputStream fis = Files.newInputStream(imageFile.toPath())) {
 								raw = fis.readAllBytes();
 							}
-							this.putImageEntry(imageInfo, imageInfo.isReencode() ? null : raw, out -> this.writeImage(new ByteArrayInputStream(raw), out, imageInfo));
+							this.writeImageBytes(srcImageFileName, imageInfo, raw);
 							outImageFileNames.remove(srcImageFileName);
 						}
 					}
@@ -1438,38 +1438,49 @@ public class Epub3Writer
 				}
 				byte[] bytes = baos.toByteArray();
 				baos.close();
-				BufferedImage srcImage = null;
-				if (imageInfo.isReencode()) {
-					//元の形式（BMP）のまま写さず、読み直して ext（png）で書く（internal #77）
-					//項目を開く前に読む。読めなければこの画像は書かず、id を外してページと OPF から除く（前と同じく 1 ページだけ抜ける）
-					try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {} ({})", srcImageFileName, e.toString()); } //壊れた画像は想定内なので、トレースは出さない
-					if (srcImage == null) {
-						LogAppender.error("画像が読み込めないので外します : "+srcImageFileName);
-						imageInfo.setId(null);
-						imageInfo.setIsCover(false);
-						this.imageInfos.remove(imageInfo);
-						if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
-						return;
-					}
-					srcImage = normalizeForPage(srcImage);
-					LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
-				}
-				final BufferedImage decoded = srcImage;
-				//PNG に直す画像（BMP）の元のバイト列は ext の形式ではないので、写して戻さない
-				boolean written = this.putImageEntry(imageInfo, imageInfo.isReencode() ? null : bytes, out -> {
-					if (decoded != null) this.writeImage(decoded, out, imageInfo);
-					else this.writeImage(new ByteArrayInputStream(bytes), out, imageInfo);
-				});
-				if (!written) {
-					//画像だけの本の BMP。画像はページと OPF より先に書くので、ここで外せば食い違わない（上の読めないときと同じ）
-					imageInfo.setId(null);
-					imageInfo.setIsCover(false);
-					this.imageInfos.remove(imageInfo);
-				}
+				this.writeImageBytes(srcImageFileName, imageInfo, bytes);
 			}
 			if (this.canceled) return;
 			if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
 		}
+	}
+	
+	/** 画像のバイト列を本に書く。PNG に直す画像（BMP）は元の形式のまま写さず、読み直して PNG で書く（internal #77）。
+	 * 読めない・書けないときは、{@link #putImageEntry} の決まりで、外すか白い画像を入れる */
+	void writeImageBytes(String srcImageFileName, ImageInfo imageInfo, byte[] bytes) throws IOException
+	{
+		BufferedImage srcImage = null;
+		if (imageInfo.isReencode()) {
+			//項目を開く前に読む
+			try { srcImage = ImageUtils.readImage(null, new ByteArrayInputStream(bytes)); } catch (Exception e) { logger.warn("画像の読み込みに失敗: {} ({})", srcImageFileName, e.toString()); } //壊れた画像は想定内なので、トレースは出さない
+			if (srcImage != null) {
+				srcImage = normalizeForPage(srcImage);
+				LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
+			}
+		}
+		final BufferedImage decoded = srcImage;
+		//PNG に直す画像（BMP）の元のバイト列は ext の形式ではないので、写して戻さない
+		//画像だけの本は、画像をページと OPF より先に書くので外せる。本文の本は挿絵のページと OPF を書き終えている
+		this.putImageEntry(imageInfo, imageInfo.isReencode() ? null : bytes, this.bookInfo != null && this.bookInfo.imageOnly, out -> {
+			if (decoded != null) this.writeImage(decoded, out, imageInfo);
+			else if (imageInfo.isReencode()) throw new IOException("画像が読み込めません");
+			else this.writeImage(new ByteArrayInputStream(bytes), out, imageInfo);
+		});
+	}
+	
+	/** 読めない画像の代わりに入れる、同じ縦横比の白い画像。大きすぎる寸法（壊れたヘッダ）は縮める */
+	static BufferedImage placeholderImage(int width, int height)
+	{
+		double scale = Math.min(1, Math.sqrt(4000000.0/Math.max(1, (long)width*height)));
+		int w = Math.max(1, (int)Math.round(Math.max(1, width)*scale));
+		int h = Math.max(1, (int)Math.round(Math.max(1, height)*scale));
+		BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
+		java.awt.Graphics2D g = image.createGraphics();
+		try {
+			g.setColor(java.awt.Color.WHITE);
+			g.fillRect(0, 0, w, h);
+		} finally { g.dispose(); }
+		return image;
 	}
 	
 	/** PNG に直す画像（画像だけの本の BMP）を、縮小・回転の道が扱える形にそろえる。
@@ -1536,8 +1547,9 @@ public class Epub3Writer
 	 * 項目を開いてから加工すると、失敗したとき空か途中までの画像が OPF に載ったまま残った（MED-004・PKG-021。internal #64）。
 	 * 加工が投げたか、何も書かなかったら、raw（元のバイト列。出力の形式のまま写せる物だけ渡す）を写す＝加工しない設定と同じ物になる。
 	 * 本文の本では挿絵のページを先に書いているので、回転のつもりで組んだページに回していない画像が入る（壊れた画像なので、見た目は諦める）。
-	 * raw が無ければ何も書かずに false を返す（外すかどうかは呼ぶ側が決める）。 */
-	boolean putImageEntry(ImageInfo imageInfo, byte[] raw, ImageEncode encode) throws IOException
+	 * raw が無いとき、droppable なら書かずに外す（id を外して imageInfos から除き、false を返す。ページと OPF より先に書く画像だけ）。
+	 * 外せない（ページや OPF が既に指している）なら、同じ縦横比の白い画像を入れる（項目の無い画像や空の画像を OPF に残さない）。 */
+	boolean putImageEntry(ImageInfo imageInfo, byte[] raw, boolean droppable, ImageEncode encode) throws IOException
 	{
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		Exception failure = null;
@@ -1554,14 +1566,25 @@ public class Epub3Writer
 			logger.error("画像の加工に失敗: {}", imageInfo.getOutFileName(), e);
 		}
 		if (failure != null) {
-			if (raw == null) {
-				LogAppender.error("画像を加工できないので外します : "+imageInfo.getOutFileName());
+			if (raw == null && droppable) {
+				LogAppender.error("画像が読み込めないので外します : "+imageInfo.getOutFileName());
+				imageInfo.setId(null);
+				imageInfo.setIsCover(false);
+				this.imageInfos.remove(imageInfo);
 				return false;
 			}
-			LogAppender.println("[WARN] 画像を加工できないので元のまま入れます : "+imageInfo.getOutFileName());
 			imageInfo.rotateAngle = 0;
-			imageInfo.setOutWidth(imageInfo.getWidth());
-			imageInfo.setOutHeight(imageInfo.getHeight());
+			if (raw == null) {
+				LogAppender.error("画像が読み込めないので白い画像を入れます : "+imageInfo.getOutFileName());
+				out.reset();
+				BufferedImage blank = placeholderImage(imageInfo.getWidth(), imageInfo.getHeight());
+				ImageUtils.writeImage(null, blank, out, imageInfo, this.jpegQuality, null, 0, 0, 0, this.dispW, this.dispH, 0, 0, 0, 0, 0, 0);
+				raw = out.toByteArray();
+			} else {
+				LogAppender.println("[WARN] 画像を加工できないので元のまま入れます : "+imageInfo.getOutFileName());
+				imageInfo.setOutWidth(imageInfo.getWidth());
+				imageInfo.setOutHeight(imageInfo.getHeight());
+			}
 		}
 		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
 		if (failure != null) zos.write(raw);
@@ -1767,6 +1790,11 @@ public class Epub3Writer
 					//imageInfo.setIsCover(true);
 					isCover = true;
 				}
+			}
+			//EPUB に書けない形式（BMP）の挿絵は PNG に直して書く。前は .bmp のまま入り、RSC-032 になっていた（internal #77）
+			if (!ImageInfo.isPageFormat(imageInfo.getExt())) {
+				imageInfo.setReencode(true);
+				imageInfo.setExt("png");
 			}
 			String outImageFileName = imageId+"."+imageInfo.getExt().replaceFirst("jpeg", "jpg");
 			imageInfo.setId(imageId);
