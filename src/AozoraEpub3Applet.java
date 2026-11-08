@@ -3194,7 +3194,7 @@ public class AozoraEpub3Applet extends JPanel
 			JFileChooser fileChooser = new JFileChooser(currentPath);
 			fileChooser.setDialogTitle("表紙画像を選択");
 			fileChooser.setApproveButtonText("選択");
-			fileChooser.setFileFilter(new FileNameExtensionFilter("表紙画像(jpg,png,gif)", new String[]{"jpg","png","gif"}));
+			fileChooser.setFileFilter(new FileNameExtensionFilter("表紙画像(jpg,png,gif,bmp)", new String[]{"jpg","jpeg","png","gif","bmp"}));
 			int state = fileChooser.showOpenDialog(parent);
 			switch (state) {
 			case JFileChooser.APPROVE_OPTION:
