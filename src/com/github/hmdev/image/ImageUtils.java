@@ -215,43 +215,12 @@ public class ImageUtils
 				} finally { bais.close(); }
 				} else {
 					//編集済の画像なら同じ画像形式で書き出し 余白があれば切り取る
-					if (imageInfo.rotateAngle != 0) {
-						BufferedImage outImage = newCanvas(srcImage, h, w, false);
-						Graphics2D g = outImage.createGraphics();
-						try {
-							//透過は保つ（透明な所を白で埋めない）
-							if (!outImage.getColorModel().hasAlpha()) {
-								g.setColor(Color.WHITE);
-								g.fillRect(0, 0, h, w);
-							}
-							g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-							g.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
-							int x = 0; int y = 0;
-							AffineTransform at;
-							if (imageInfo.rotateAngle == 90) {
-								at = AffineTransform.getQuadrantRotateInstance(1, 0, 0);
-								at.translate(0, -imgH);
-								if (margin != null) {
-									x = -margin[3];
-									y = -margin[0];
-								}
-							} else {
-								at = AffineTransform.getQuadrantRotateInstance(-1, 0, 0);
-								at.translate(-imgW, 0);
-								if (margin != null) {
-									x = -margin[1];
-									y = -margin[2];
-								}
-							}
-							AffineTransformOp ato = new AffineTransformOp(at, AffineTransformOp.TYPE_BICUBIC);
-							g.drawImage(srcImage, ato, x, y);
-						} finally {
-							g.dispose();
-						}
-						srcImage = outImage;//入れ替え
-					} else if (margin != null) srcImage = srcImage.getSubimage(margin[0], margin[1], srcImage.getWidth()-margin[2]-margin[0], srcImage.getHeight()-margin[3]-margin[1]);
+					//余白を切り取ってから回す。回転は画素をそのまま移す（描き直すと色の表へ寄せ直して画素が変わる。internal #77）
+					if (margin != null) srcImage = srcImage.getSubimage(margin[0], margin[1], srcImage.getWidth()-margin[2]-margin[0], srcImage.getHeight()-margin[3]-margin[1]);
+					if (imageInfo.rotateAngle != 0) srcImage = rotateQuadrant(srcImage, imageInfo.rotateAngle);
 					if (gammaOp != null) {
-						BufferedImage filterdImage = new BufferedImage(srcImage.getWidth(), srcImage.getHeight(), srcImage.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+						//ここへ来るのは RGB の画像だけ（コントラスト調整は RGB 以外を縮小の道へ回す）
+						BufferedImage filterdImage = new BufferedImage(srcImage.getWidth(), srcImage.getHeight(), BufferedImage.TYPE_INT_RGB);
 						srcImage = gammaOp.filter(srcImage, filterdImage);
 						srcImage = filterdImage;
 					}
@@ -318,32 +287,13 @@ public class ImageUtils
 			//ImageIO.write(outImage, imageInfo.getExt(), zos);
 			//コントラスト調整
 			if (gammaOp != null) {
-				int imageType = srcImage.getType();
 				BufferedImage filterdImage = new BufferedImage(outImage.getWidth(), outImage.getHeight(), alpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
 				outImage = gammaOp.filter(outImage, filterdImage);
 				outImage = filterdImage;
-				filterdImage = null;
-				//インデックス化（色の表を保てる物だけ。色のある 4 ビット以下の表と透過は RGB・ARGB のまま）
-				switch (alpha ? -1 : imageType) {
-				case BufferedImage.TYPE_BYTE_BINARY:
-					if (!isGreyPalette(srcImage.getColorModel())) break;
-					colorModel = getGray16ColorModel();
-					raster = colorModel.createCompatibleWritableRaster(scaledW, scaledH);
-					filterdImage = new BufferedImage(colorModel, raster, true, null);
-					break;
-				case BufferedImage.TYPE_BYTE_INDEXED:
-					colorModel = srcImage.getColorModel();
-					raster = colorModel.createCompatibleWritableRaster(scaledW, scaledH);
-					filterdImage = new BufferedImage(colorModel, raster, true, null);
-					break;
-				case BufferedImage.TYPE_BYTE_GRAY:
-					filterdImage = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_BYTE_GRAY);
-					break;
-				case BufferedImage.TYPE_USHORT_GRAY:
-					filterdImage = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_USHORT_GRAY);
-					break;
-				}
-				if (filterdImage != null) {
+				//元の形へ戻す（色の表・灰色）。選び方は調整なしの縮小と同じ newCanvas。RGB・ARGB ならそのまま
+				filterdImage = newCanvas(srcImage, scaledW, scaledH, true);
+				int t = filterdImage.getType();
+				if (t != BufferedImage.TYPE_INT_RGB && t != BufferedImage.TYPE_INT_ARGB) {
 					g = filterdImage.createGraphics();
 					try {
 						g.drawImage(outImage, 0, 0, null);
@@ -367,7 +317,8 @@ public class ImageUtils
 	/** 縮小・回転で描き込む先の画像を作る。元の色の表と透過を保つ（internal #77）。
 	 * 前は、色のある 4 ビット以下の表を縮めると灰色 16 段の表に替えて暗い灰色に、回転では元の型の既定の表（1 ビットの白黒）で真っ黒に、
 	 * 透過のある画像を縮めると透明な所を黒にしていた。
-	 * @param scaling 縮める（中間の色ができる）。回転だけなら元の表のままで画素は変わらない */
+	 * 回転だけのときは使わない（{@link #rotateQuadrant} が画素をそのまま移す）。
+	 * @param scaling 縮める（中間の色ができる）。false なら元の表のまま */
 	static BufferedImage newCanvas(BufferedImage src, int w, int h, boolean scaling)
 	{
 		ColorModel cm = src.getColorModel();
@@ -391,6 +342,26 @@ public class ImageUtils
 		default:
 			return new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
 		}
+	}
+	
+	/** 90 度単位で回す。描き直さず画素をそのまま移すので、色の表・透過・灰色の段がどれも元のまま残る（internal #77）。
+	 * @param angle 90 は右回り、それ以外（-90）は左回り */
+	static BufferedImage rotateQuadrant(BufferedImage src, int angle)
+	{
+		int w = src.getWidth(), h = src.getHeight();
+		ColorModel cm = src.getColorModel();
+		WritableRaster dst = cm.createCompatibleWritableRaster(h, w);
+		java.awt.image.Raster in = src.getRaster();
+		int minX = in.getMinX(), minY = in.getMinY();
+		Object pixel = null;
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				pixel = in.getDataElements(minX+x, minY+y, pixel);
+				if (angle == 90) dst.setDataElements(h-1-y, x, pixel);
+				else dst.setDataElements(y, w-1-x, pixel);
+			}
+		}
+		return new BufferedImage(cm, dst, cm.isAlphaPremultiplied(), null);
 	}
 	
 	/** 色の表が灰色だけか */

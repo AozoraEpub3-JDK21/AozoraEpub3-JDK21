@@ -87,6 +87,61 @@ public class ImageUtilsCanvasTest {
 		}
 	}
 
+	/** 近い色が並ぶ表（写真のような絵）でも、回すだけなら画素は 1 つも変わらない。描き直して表へ寄せ直すと 97% 変わった（レビューで実測） */
+	@Test
+	public void rotationKeepsEveryPixelOfAPaletteImage() throws Exception {
+		for (int bits : new int[]{4, 8}) {
+			int size = 1 << bits;
+			byte[] r = new byte[size], g = new byte[size], b = new byte[size];
+			for (int i = 0; i < size; i++) { r[i] = (byte)(100 + i); g[i] = (byte)(100 + i / 2); b[i] = (byte)(140 - i / 3); }
+			IndexColorModel cm = new IndexColorModel(bits, size, r, g, b);
+			BufferedImage src = new BufferedImage(64, 32, bits == 8 ? BufferedImage.TYPE_BYTE_INDEXED : BufferedImage.TYPE_BYTE_BINARY, cm);
+			java.util.Random random = new java.util.Random(77);
+			for (int y = 0; y < 32; y++) for (int x = 0; x < 64; x++) src.getRaster().setSample(x, y, 0, random.nextInt(size));
+			for (int angle : new int[]{90, -90}) {
+				BufferedImage written = write(src, 0, angle);
+				assertEquals(32, written.getWidth());
+				for (int y = 0; y < 32; y++) for (int x = 0; x < 64; x++) {
+					int rx = angle == 90 ? 31 - y : y, ry = angle == 90 ? x : 63 - x;
+					assertEquals(bits + " ビット " + angle + " 度 (" + x + "," + y + ")", Integer.toHexString(src.getRGB(x, y)), Integer.toHexString(written.getRGB(rx, ry)));
+				}
+			}
+		}
+	}
+
+	/** 透過のある色の表（tRNS）を回しても、表のまま・透明のまま */
+	@Test
+	public void rotationKeepsATransparentPalette() throws Exception {
+		byte[] r = {(byte)220, 30, 0}, g = {30, (byte)180, 0}, b = {30, 60, 0}, a = {(byte)255, (byte)255, 0};
+		IndexColorModel cm = new IndexColorModel(8, 3, r, g, b, a);
+		BufferedImage src = new BufferedImage(60, 30, BufferedImage.TYPE_BYTE_INDEXED, cm);
+		for (int y = 0; y < 30; y++) for (int x = 0; x < 60; x++) src.getRaster().setSample(x, y, 0, x * 3 / 60);
+		BufferedImage written = write(src, 0, 90);
+		assertTrue("色の表でなくなった: " + written.getColorModel(), written.getColorModel() instanceof IndexColorModel);
+		assertEquals("透明な所", 0, written.getRGB(15, 55) >>> 24);
+		assertEquals(Integer.toHexString(0xFFDC1E1E), Integer.toHexString(written.getRGB(15, 5)));
+	}
+
+	/** コントラスト調整をしながら縮めても、色の表の色と透過は保つ（調整の後で表へ戻す道） */
+	@Test
+	public void contrastKeepsColoursAndTransparency() throws Exception {
+		byte[] identity = new byte[256];
+		for (int i = 0; i < 256; i++) identity[i] = (byte)i;
+		java.awt.image.LookupOp gamma = new java.awt.image.LookupOp(new java.awt.image.ByteLookupTable(0, identity), null);
+		BufferedImage pal = stripes(4, new int[]{RED, GREEN, BLUE, 0xFFFFFF}, 1200, 1600);
+		ImageInfo info = new ImageInfo("png", 1200, 1600, 0);
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ImageUtils.writeImage(null, pal, out, info, 0.8f, gamma, 0, 0, 800, 600, 800, 0, 0, 0, 0, 0, 0);
+		assertStripes(ImageIO.read(new ByteArrayInputStream(out.toByteArray())), false);
+		BufferedImage argb = new BufferedImage(1200, 1600, BufferedImage.TYPE_INT_ARGB);
+		for (int y = 0; y < 1600; y++) for (int x = 400; x < 800; x++) argb.setRGB(x, y, 0xFF000000 | BLUE);
+		out.reset();
+		ImageUtils.writeImage(null, argb, out, new ImageInfo("png", 1200, 1600, 0), 0.8f, gamma, 0, 0, 800, 600, 800, 0, 0, 0, 0, 0, 0);
+		BufferedImage written = ImageIO.read(new ByteArrayInputStream(out.toByteArray()));
+		assertEquals("透明な所の不透明度", 0, written.getRGB(90, 400) >>> 24);
+		assertEquals(Integer.toHexString(BLUE), Integer.toHexString(written.getRGB(300, 400) & 0xFFFFFF));
+	}
+
 	/** 透過のある画像を縮めても、透明な所は透明のまま。前は黒になった */
 	@Test
 	public void transparentAreasStayTransparentWhenResized() throws Exception {
