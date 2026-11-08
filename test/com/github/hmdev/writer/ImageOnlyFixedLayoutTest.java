@@ -559,6 +559,36 @@ public class ImageOnlyFixedLayoutTest {
 		assertEquals("本文の並び", bodies.get(0), bodies.get(1));
 	}
 
+	/** Kindle の画像だけの本は、本文の 1 ページ目から 2 ページずつ見開きに組む。右から読む本は 1 ページ目が右、左から読む本は左。
+	 * 表紙のページには付けない。前は全ページ right だった（Velocity 2 に無い $velocityCount を見ていた。internal #81） */
+	@Test
+	public void kindleSpreadsPairFromTheFirstBodyPage() throws Exception {
+		File zip = zipWithUnreadable(5);
+		for (boolean vertical : new boolean[]{true, false}) {
+			for (boolean coverPage : new boolean[]{true, false}) {
+				Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+				setParams(writer, false);
+				writer.setIsKindle(true);
+				File epub = writeBook(zip, writer, bookInfo -> {
+					bookInfo.vertical = vertical;
+					bookInfo.insertCoverPage = coverPage;
+					bookInfo.coverImageIndex = coverPage ? 0 : -1;
+				}, "kindlespread" + vertical + coverPage);
+				try (ZipFile zf = new ZipFile(epub)) {
+					String opf = read(zf, "OPS/package.opf");
+					List<String> sides = new ArrayList<>();
+					Matcher ref = Pattern.compile("<itemref idref=\"([^\"]+)\" linear=\"yes\"(?: properties=\"page-spread-(left|right)\")?").matcher(opf);
+					while (ref.find()) sides.add(ref.group(1).equals("cover-page") ? "cover:" + ref.group(2) : ref.group(2));
+					String first = vertical ? "right" : "left", second = vertical ? "left" : "right";
+					List<String> expected = new ArrayList<>();
+					if (coverPage) expected.add("cover:null");
+					for (int i = 0; i < (coverPage ? 4 : 5); i++) expected.add(i % 2 == 0 ? first : second);
+					assertEquals((vertical ? "縦" : "横") + (coverPage ? "・表紙あり" : "") + "\n" + opf, expected, sides);
+				}
+			}
+		}
+	}
+
 	/** 同じ名前で拡張子だけ違う p0.bmp と p0.png は、それぞれ別の画像として書く */
 	@Test
 	public void bmpAndPngWithTheSameStemStaySeparate() throws Exception {

@@ -188,10 +188,12 @@
 
 #foreach(${sectionInfo} in ${sections})
 #if (${kindle} && ${bookInfo.ImageOnly})
-#if ($velocityCount % 2 == 0)
-	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-left"/>
-#else
+## 本文の 1 ページ目から 2 ページずつ見開きに組む（右から読む本は 1 ページ目が右、左から読む本は左）。
+## 前は Velocity 2 に無い $velocityCount を見ていて、全ページが right になっていた（internal #81）
+#if (($foreach.count % 2 == 1) == ${bookInfo.Vertical})
 	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-right"/>
+#else
+	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-left"/>
 #end
 #else
 	<itemref idref="sec${sectionInfo.SectionId}" linear="yes"/>
