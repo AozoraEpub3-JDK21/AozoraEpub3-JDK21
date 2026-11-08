@@ -353,11 +353,20 @@ public class NestedNavTest {
 		assertTrue(nav, nav.contains("第一章</a></li>"));
 	}
 
-	/** .mobi は追わないので、Kindle モードの出力は変えない */
+	/** kindlegen で .mobi にする本（Kindle 向けで拡張子 .mobi）は、前のまま平らな nav。kindlegen は toc.ncx を読む */
 	@Test
-	public void kindleOutputStaysFlat() throws Exception {
+	public void kindlegenOutputStaysFlat() throws Exception {
+		outputExt = ".mobi";
 		String nav = nav(writeBook(true, true));
 		assertEquals(nav, 1, count(nav, "<ol>"));
 		assertFalse(nav, nav.contains("</ol></li>"));
+	}
+
+	/** Kindle 向けの EPUB は、ほかの本と同じく入れ子にする。Kindle Previewer 4 は nav の入れ子を目次の階層にする（internal #64 項目 4） */
+	@Test
+	public void kindleEpubIsNested() throws Exception {
+		String nav = nav(writeBook(true, true));
+		assertTrue(nav, count(nav, "<ol>") > 1);
+		assertTrue(nav, nav.contains("</ol></li>"));
 	}
 }
