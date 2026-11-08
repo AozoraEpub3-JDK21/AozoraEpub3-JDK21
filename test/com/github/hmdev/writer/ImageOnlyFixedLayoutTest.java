@@ -449,55 +449,114 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
-	/** 先頭の画像を表紙にする設定で先頭の BMP が読めなければ、読めた最初の画像（p1）が表紙になる。前は表紙が無かった（internal #77）。
-	 * 表紙のページを作るなら p1 は本文から外れ（先頭が読めたときと同じ形）、作らないなら p1 は本文にも残る */
-	@Test
-	public void firstReadableImageBecomesTheCoverWhenTheFirstIsUnreadable() throws Exception {
+	private static final int[] PAGE_COLOURS = {0xC82828, 0x28A03C, 0x2850C8, 0xC8A028, 0x8C28C8};
+
+	/** bad の番号は途中で切れた BMP、ほかは色で見分けられる PNG（i 番は PAGE_COLOURS[i]） */
+	private File zipWithUnreadable(int count, int... bad) throws Exception {
 		java.io.ByteArrayOutputStream bmp = new java.io.ByteArrayOutputStream();
 		ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "bmp", bmp);
 		byte[] truncated = java.util.Arrays.copyOf(bmp.toByteArray(), 2000);
-		int[] colours = {0, 0xC82828, 0x28A03C};
+		java.util.Set<Integer> bads = new java.util.HashSet<>();
+		for (int b : bad) bads.add(b);
 		File zip = File.createTempFile("badcover", ".zip", tempFolder.getRoot());
 		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
-			for (int i = 0; i < 3; i++) {
-				zos.putNextEntry(new ZipEntry("p" + i + (i == 0 ? ".bmp" : ".png")));
-				if (i == 0) zos.write(truncated);
+			for (int i = 0; i < count; i++) {
+				zos.putNextEntry(new ZipEntry("p" + i + (bads.contains(i) ? ".bmp" : ".png")));
+				if (bads.contains(i)) zos.write(truncated);
 				else {
 					BufferedImage image = new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB);
-					for (int y = 0; y < 800; y++) for (int x = 0; x < 600; x++) image.setRGB(x, y, colours[i]);
+					for (int y = 0; y < 800; y++) for (int x = 0; x < 600; x++) image.setRGB(x, y, PAGE_COLOURS[i]);
 					ImageIO.write(image, "png", zos);
 				}
 				zos.closeEntry();
 			}
 		}
-		for (boolean coverPage : new boolean[]{true, false}) {
+		return zip;
+	}
+
+	/** 本の cover-image の画像の色。cover-image がちょうど 1 つあることも見る */
+	private static int coverColour(ZipFile zf) throws Exception {
+		String opf = read(zf, "OPS/package.opf");
+		Matcher cover = Pattern.compile("href=\"(images/[^\"]+)\" media-type=\"[^\"]+\" properties=\"cover-image\"").matcher(opf);
+		assertTrue("表紙が無い: " + opf, cover.find());
+		String href = cover.group(1);
+		assertFalse("表紙が 2 つ: " + opf, cover.find());
+		return ImageIO.read(new ByteArrayInputStream(zf.getInputStream(zf.getEntry("OPS/" + href)).readAllBytes())).getRGB(300, 400) & 0xFFFFFF;
+	}
+
+	private static List<Integer> pageColours(ZipFile zf) throws Exception {
+		List<Integer> pages = new ArrayList<>();
+		for (String page : spinePages(zf)) pages.add(imageOf(zf, read(zf, page)).getRGB(300, 400) & 0xFFFFFF);
+		return pages;
+	}
+
+	/** 表紙に選んだ先頭の画像が読めなければ、次に書けた画像に表紙の印（cover-image）を付ける。前は表紙が無かった（internal #77）。
+	 * 本文のページは動かさず、表紙のページは作らない（本文から表紙のページへ移すと、後ろのページの見開きの組が 1 つずれる）。
+	 * 先頭が 2 枚続けて読めなくても同じ */
+	@Test
+	public void nextWrittenImageBecomesTheCoverWhenTheChosenOneIsUnreadable() throws Exception {
+		for (int[] bad : new int[][]{{0}, {0, 1}}) {
+			File zip = zipWithUnreadable(4, bad);
+			int first = bad.length;
+			for (boolean coverPage : new boolean[]{true, false}) {
+				Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+				setParams(writer, false);
+				File epub = writeBook(zip, writer, bookInfo -> {
+					bookInfo.insertCoverPage = coverPage;
+					bookInfo.coverImageIndex = 0;
+				}, "badcover" + bad.length + coverPage);
+				try (ZipFile zf = new ZipFile(epub)) {
+					String opf = read(zf, "OPS/package.opf");
+					assertReferencesResolve(zf);
+					assertEquals("表紙の画像", Integer.toHexString(PAGE_COLOURS[first]), Integer.toHexString(coverColour(zf)));
+					assertFalse("表紙のページを作った: " + opf, opf.contains("cover-page"));
+					List<Integer> expected = new ArrayList<>();
+					for (int i = first; i < 4; i++) expected.add(PAGE_COLOURS[i]);
+					assertEquals("本文のページは読めた画像すべて", expected, pageColours(zf));
+				}
+			}
+		}
+	}
+
+	/** 先頭でない画像（GUI で選んだ 2 番）が読めなくても、その次の画像を表紙にする。後ろに無ければ前から探す */
+	@Test
+	public void coverChosenInTheMiddleFallsBackToTheNextWrittenImage() throws Exception {
+		for (int[] c : new int[][]{{2, 3}, {3, 0}}) {
+			File zip = zipWithUnreadable(4, c[0]);
 			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
 			setParams(writer, false);
 			File epub = writeBook(zip, writer, bookInfo -> {
-				bookInfo.insertCoverPage = coverPage;
-				bookInfo.coverImageIndex = 0;
-			}, "badcover" + coverPage);
+				bookInfo.insertCoverPage = true;
+				bookInfo.coverImageIndex = c[0];
+			}, "midcover" + c[0]);
 			try (ZipFile zf = new ZipFile(epub)) {
-				String opf = read(zf, "OPS/package.opf");
 				assertReferencesResolve(zf);
-				Matcher cover = Pattern.compile("<item id=\"[^\"]+\" href=\"images/([^\"]+)\" media-type=\"[^\"]+\" properties=\"cover-image\"").matcher(opf);
-				assertTrue("表紙が無い: " + opf, cover.find());
-				assertFalse("表紙が 2 つ: " + opf, cover.find());
-				List<Integer> pages = new ArrayList<>();
-				for (String page : spinePages(zf)) pages.add(imageOf(zf, read(zf, page)).getRGB(300, 400) & 0xFFFFFF);
-				if (coverPage) {
-					assertTrue(opf, opf.contains("<itemref idref=\"cover-page\""));
-					assertEquals("表紙のページ（p1）・p2", List.of(colours[1], colours[2]), pages);
-				} else {
-					assertFalse(opf, opf.contains("cover-page"));
-					assertEquals("p1・p2", List.of(colours[1], colours[2]), pages);
-				}
-				Matcher coverHref = Pattern.compile("href=\"(images/[^\"]+)\" media-type=\"[^\"]+\" properties=\"cover-image\"").matcher(opf);
-				assertTrue(coverHref.find());
-				BufferedImage coverImage = ImageIO.read(new ByteArrayInputStream(zf.getInputStream(zf.getEntry("OPS/" + coverHref.group(1))).readAllBytes()));
-				assertEquals("表紙の画像が p1 でない", colours[1], coverImage.getRGB(300, 400) & 0xFFFFFF);
+				assertEquals("表紙の画像", Integer.toHexString(PAGE_COLOURS[c[1]]), Integer.toHexString(coverColour(zf)));
 			}
 		}
+	}
+
+	/** 先頭の表紙が読めなくても、本文のページは表紙が読めたときと同じ並び（p1 から）。表紙のページへ p1 を移すと 1 つずれ、
+	 * 見開きの組（Kindle は本文の順で page-spread を振る）が崩れる */
+	@Test
+	public void bodyPagesMatchTheBookWithAReadableCover() throws Exception {
+		List<List<Integer>> bodies = new ArrayList<>();
+		for (boolean bad : new boolean[]{false, true}) {
+			File zip = bad ? zipWithUnreadable(5, 0) : zipWithUnreadable(5);
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, false);
+			File epub = writeBook(zip, writer, bookInfo -> {
+				bookInfo.insertCoverPage = true;
+				bookInfo.coverImageIndex = 0;
+			}, "samebody" + bad);
+			try (ZipFile zf = new ZipFile(epub)) {
+				List<Integer> pages = pageColours(zf);
+				if (read(zf, "OPS/package.opf").contains("idref=\"cover-page\"")) pages.remove(0);
+				bodies.add(pages);
+			}
+		}
+		assertEquals(List.of(PAGE_COLOURS[1], PAGE_COLOURS[2], PAGE_COLOURS[3], PAGE_COLOURS[4]), bodies.get(0));
+		assertEquals("本文の並び", bodies.get(0), bodies.get(1));
 	}
 
 	/** 同じ名前で拡張子だけ違う p0.bmp と p0.png は、それぞれ別の画像として書く */

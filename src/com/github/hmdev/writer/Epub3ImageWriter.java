@@ -81,6 +81,13 @@ public class Epub3ImageWriter extends Epub3Writer
 		return imageInfo != null && imageInfo.getId() != null;
 	}
 
+	/** 書く段を経て本に入った画像か（読めずに外した画像は id を外してある） */
+	private boolean isOnPage(String srcFilePath) throws IOException
+	{
+		ImageInfo written = this.imageInfoReader.getImageInfo(srcFilePath.trim());
+		return written != null && written.getId() != null;
+	}
+
 	@Override
 	void writeSections(AozoraEpub3Converter converter, BufferedReader src, BufferedWriter bw, File srcFile, String srcExt, ZipArchiveOutputStream zos) throws IOException, RarException
 	{
@@ -150,17 +157,17 @@ public class Epub3ImageWriter extends Epub3Writer
 			throw new IOException("画像がありませんでした");
 		}
 		
-		//先頭の画像を表紙にする設定で、先頭が読めずに外れたら、読めた最初の画像を表紙にする。前は表紙が無くなった（internal #77）
-		//表紙のページを作るなら、その画像は本文のページから外す（先頭の画像が読めたときと同じ形）
-		if (bookInfo.coverImageIndex == 0 && bookInfo.coverImage == null && this.imageInfos.stream().noneMatch(ImageInfo::getIsCover)) {
-			ArrayList<String> names = this.imageInfoReader.getImageFileNames();
-			for (int i = 0; i < names.size(); i++) {
-				ImageInfo written = this.imageInfoReader.getImageInfo(names.get(i).trim());
-				if (written == null || written.getId() == null) continue;
-				written.setIsCover(true);
-				bookInfo.coverImageIndex = i;
-				if (bookInfo.insertCoverPage) vecFileName.set(i, null);
-				LogAppender.println("[INFO] 先頭の画像が読めないので、"+names.get(i).trim()+" を表紙にします");
+		//表紙に選んだ画像が読めずに外れたら、その後ろで最初に書けた画像（無ければ前で最初の画像）に表紙の印だけ付ける。前は表紙が無くなった（internal #77）
+		//本文のページは動かさない。表紙のページへ移すと後ろのページが 1 つずつずれ、Kindle の見開きの組（page-spread）が崩れる。
+		//表紙のページは作らない（write が、外れた画像を指す表紙を見て insertCoverPage を下ろす）＝本棚の表紙になる
+		int coverIndex = bookInfo.coverImageIndex;
+		ArrayList<String> names = this.imageInfoReader.getImageFileNames();
+		if (coverIndex >= 0 && coverIndex < names.size() && bookInfo.coverImage == null && !this.isOnPage(names.get(coverIndex))) {
+			for (int k = 0; k < names.size(); k++) {
+				int i = (coverIndex + k) % names.size();
+				if (!this.isOnPage(names.get(i))) continue;
+				this.imageInfoReader.getImageInfo(names.get(i).trim()).setIsCover(true);
+				LogAppender.println("[INFO] 表紙の画像を書けなかったので、"+names.get(i).trim()+" を本棚の表紙にします");
 				break;
 			}
 		}
@@ -175,10 +182,7 @@ public class Epub3ImageWriter extends Epub3Writer
 			if (this.canceled) return;
 			String fileName = vecFileName.get(pageNum++);
 			//書く段で読めずに外した画像（id を外してある）はページにしない
-			if (fileName != null) {
-				ImageInfo written = this.imageInfoReader.getImageInfo(srcFilePath.trim());
-				if (written == null || written.getId() == null) fileName = null;
-			}
+			if (fileName != null && !this.isOnPage(srcFilePath)) fileName = null;
 			if (fileName != null) {
 				if (isSvgImage) {
 					this.printSvgImageSection(srcFilePath);
