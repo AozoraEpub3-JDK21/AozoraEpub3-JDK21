@@ -24,17 +24,17 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 ## ダウンロード
 
 <div style="text-align: center; margin: 2em 0;">
-  <p><strong>最新版:</strong> v1.8.1-jdk21 (2026年11月3日) |
-  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.1-jdk21">リリースノート</a></p>
+  <p><strong>最新版:</strong> v1.8.2-jdk21 (2026年11月8日) |
+  <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.2-jdk21">リリースノート</a></p>
 
   <div style="display: inline-block; text-align: center;">
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.1-jdk21/AozoraEpub3-1.8.1-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.2-jdk21/AozoraEpub3-1.8.2-jdk21.zip" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       📦 Windows版 (ZIP)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.1-jdk21/AozoraEpub3-1.8.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.2-jdk21/AozoraEpub3-1.8.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🐧 Linux版 (TAR.GZ)
     </a>
-    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.1-jdk21/AozoraEpub3-1.8.1-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
+    <a href="https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/download/v1.8.2-jdk21/AozoraEpub3-1.8.2-jdk21.tar.gz" class="btn" style="display: inline-block; margin: 10px; padding: 12px 24px;">
       🍎 macOS版 (TAR.GZ)
     </a>
   </div>
@@ -43,6 +43,16 @@ description: AozoraEpub3-JDK21は青空文庫テキストをEPUB 3.3に変換す
 </div>
 
 ---
+
+## v1.8.2-jdk21 の主な変更
+
+- **Markdown の入力**: 拡張子が `.md` のファイルを Markdown として読み、EPUB にできるようになりました（[使い方](usage.html)）
+- **章の中扉**: 作品名や章題が長くても、中扉が左右中央に出るようにしました
+- **画像**: BMP の挿絵・表紙・ページを PNG にして入れるようにしました。壊れた画像で EPUB の検査でエラーになる本ができていた問題と、色数の少ない画像・透過のある画像の縮小と回転で色が崩れていた問題を直しました
+- **Kindle 向け（コマンドラインの `-device kindle`）**: 画像だけの本の見開きの左右の指定と、EPUB の検査で目次がエラーになる問題を直しました
+- **コマンドラインの `-hor`**: 目次も横書きにするようにしました
+
+変更の一覧は [リリースノート](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/releases/tag/v1.8.2-jdk21) を参照してください。
 
 ## v1.8.1-jdk21 の主な変更
 
