@@ -132,7 +132,7 @@ public class AozoraEpub3TextBmpTest {
 		List<String> images = assertImagesAreReadable(convert(zip.getPath()));
 		assertEquals(List.of("images/0001.png", "images/0002.png"), images);
 		assertTrue(log.toString(), log.toString().contains("画像形式変換: a.bmp → 0001.png"));
-		assertTrue(log.toString(), log.toString().contains("画像が読み込めないので白い画像を入れます : 0002.png"));
+		assertTrue(log.toString(), log.toString().contains("画像が読み込めないので白い画像を入れます : bad.bmp"));
 	}
 
 	/** フォルダのテキストの BMP の挿絵も同じ（ファイルから読む道） */

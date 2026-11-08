@@ -42,10 +42,28 @@ public class ImageInfo
 	/** 回転角度 右 90 左 -90 */
 	public int rotateAngle = 0;
 	
-	/** 元の形式のままでは EPUB に書けないので、読み直して PNG で書く（画像だけの本の BMP。internal #77） */
+	/** 元の形式のまま写さず、読み直して ext の形式で書く（BMP→PNG、Kindle の表紙→JPEG。internal #77）。
+	 * 元のバイト列は ext の形式でないので、加工に失敗しても写して戻せない */
 	boolean reencode = false;
 	public boolean isReencode() { return this.reencode; }
 	public void setReencode(boolean reencode) { this.reencode = reencode; }
+	
+	/** 本に書く形式を決めて ext と reencode に入れ、出力の名前の拡張子を返す。名前・media-type・中身をそろえるため、名前を付けるところは全部これを通す。
+	 * EPUB に書けない形式（BMP）は PNG に、toJpeg（Kindle の表紙）なら JPEG に直す（internal #77・#64） */
+	public String settleOutFormat(boolean toJpeg)
+	{
+		String ext = this.ext;
+		if (!isPageFormat(ext)) {
+			this.reencode = true;
+			ext = "png";
+		}
+		if (toJpeg && !ext.startsWith("jp")) {
+			this.reencode = true;
+			ext = "jpeg";
+		}
+		this.ext = ext;
+		return "jpeg".equals(ext) ? "jpg" : ext;
+	}
 	
 	/** 画像の情報を生成
 	 * @param ext png jpg gif の文字列 */
@@ -132,7 +150,7 @@ public class ImageInfo
 	}
 	/** EPUB に書ける画像の形式（拡張子・ImageIO の形式名とも小文字） */
 	private static final java.util.Set<String> PAGE_FORMATS = java.util.Set.of("png", "jpeg", "jpg", "gif");
-	/** EPUB にそのまま入れられる画像の形式か（png・jpeg・gif）。画像だけの本の BMP は PNG に直して入れる */
+	/** EPUB にそのまま入れられる画像の形式か（png・jpeg・gif）。ほかの形式（BMP）は PNG に直して入れる（{@link #settleOutFormat}） */
 	public static boolean isPageFormat(String ext)
 	{
 		return ext != null && PAGE_FORMATS.contains(ext);
