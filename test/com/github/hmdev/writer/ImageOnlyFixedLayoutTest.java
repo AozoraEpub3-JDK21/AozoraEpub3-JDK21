@@ -449,6 +449,57 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
+	/** 先頭の画像を表紙にする設定で先頭の BMP が読めなければ、読めた最初の画像（p1）が表紙になる。前は表紙が無かった（internal #77）。
+	 * 表紙のページを作るなら p1 は本文から外れ（先頭が読めたときと同じ形）、作らないなら p1 は本文にも残る */
+	@Test
+	public void firstReadableImageBecomesTheCoverWhenTheFirstIsUnreadable() throws Exception {
+		java.io.ByteArrayOutputStream bmp = new java.io.ByteArrayOutputStream();
+		ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "bmp", bmp);
+		byte[] truncated = java.util.Arrays.copyOf(bmp.toByteArray(), 2000);
+		int[] colours = {0, 0xC82828, 0x28A03C};
+		File zip = File.createTempFile("badcover", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			for (int i = 0; i < 3; i++) {
+				zos.putNextEntry(new ZipEntry("p" + i + (i == 0 ? ".bmp" : ".png")));
+				if (i == 0) zos.write(truncated);
+				else {
+					BufferedImage image = new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB);
+					for (int y = 0; y < 800; y++) for (int x = 0; x < 600; x++) image.setRGB(x, y, colours[i]);
+					ImageIO.write(image, "png", zos);
+				}
+				zos.closeEntry();
+			}
+		}
+		for (boolean coverPage : new boolean[]{true, false}) {
+			Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+			setParams(writer, false);
+			File epub = writeBook(zip, writer, bookInfo -> {
+				bookInfo.insertCoverPage = coverPage;
+				bookInfo.coverImageIndex = 0;
+			}, "badcover" + coverPage);
+			try (ZipFile zf = new ZipFile(epub)) {
+				String opf = read(zf, "OPS/package.opf");
+				assertReferencesResolve(zf);
+				Matcher cover = Pattern.compile("<item id=\"[^\"]+\" href=\"images/([^\"]+)\" media-type=\"[^\"]+\" properties=\"cover-image\"").matcher(opf);
+				assertTrue("表紙が無い: " + opf, cover.find());
+				assertFalse("表紙が 2 つ: " + opf, cover.find());
+				List<Integer> pages = new ArrayList<>();
+				for (String page : spinePages(zf)) pages.add(imageOf(zf, read(zf, page)).getRGB(300, 400) & 0xFFFFFF);
+				if (coverPage) {
+					assertTrue(opf, opf.contains("<itemref idref=\"cover-page\""));
+					assertEquals("表紙のページ（p1）・p2", List.of(colours[1], colours[2]), pages);
+				} else {
+					assertFalse(opf, opf.contains("cover-page"));
+					assertEquals("p1・p2", List.of(colours[1], colours[2]), pages);
+				}
+				Matcher coverHref = Pattern.compile("href=\"(images/[^\"]+)\" media-type=\"[^\"]+\" properties=\"cover-image\"").matcher(opf);
+				assertTrue(coverHref.find());
+				BufferedImage coverImage = ImageIO.read(new ByteArrayInputStream(zf.getInputStream(zf.getEntry("OPS/" + coverHref.group(1))).readAllBytes()));
+				assertEquals("表紙の画像が p1 でない", colours[1], coverImage.getRGB(300, 400) & 0xFFFFFF);
+			}
+		}
+	}
+
 	/** 同じ名前で拡張子だけ違う p0.bmp と p0.png は、それぞれ別の画像として書く */
 	@Test
 	public void bmpAndPngWithTheSameStemStaySeparate() throws Exception {

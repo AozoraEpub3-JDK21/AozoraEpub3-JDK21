@@ -150,6 +150,21 @@ public class Epub3ImageWriter extends Epub3Writer
 			throw new IOException("画像がありませんでした");
 		}
 		
+		//先頭の画像を表紙にする設定で、先頭が読めずに外れたら、読めた最初の画像を表紙にする。前は表紙が無くなった（internal #77）
+		//表紙のページを作るなら、その画像は本文のページから外す（先頭の画像が読めたときと同じ形）
+		if (bookInfo.coverImageIndex == 0 && bookInfo.coverImage == null && this.imageInfos.stream().noneMatch(ImageInfo::getIsCover)) {
+			ArrayList<String> names = this.imageInfoReader.getImageFileNames();
+			for (int i = 0; i < names.size(); i++) {
+				ImageInfo written = this.imageInfoReader.getImageInfo(names.get(i).trim());
+				if (written == null || written.getId() == null) continue;
+				written.setIsCover(true);
+				bookInfo.coverImageIndex = i;
+				if (bookInfo.insertCoverPage) vecFileName.set(i, null);
+				LogAppender.println("[INFO] 先頭の画像が読めないので、"+names.get(i).trim()+" を表紙にします");
+				break;
+			}
+		}
+		
 		//画像xhtmlを出力
 		zos.setLevel(9);
 		//ページの大きさは本全体で 1 つ。imageInfos はページにできる画像（先頭へ移す表紙を含む）で、別ファイルの表紙はまだ入っていない
