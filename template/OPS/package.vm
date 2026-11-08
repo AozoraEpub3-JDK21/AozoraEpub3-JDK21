@@ -71,7 +71,7 @@
 #if (${kindle})
 	<meta name="zero-gutter" content="true"/>
 	<meta name="zero-margin" content="true"/>
-	<meta name="primary-writing-mode" content="horizontal-rl"/>
+## primary-writing-mode は下で縦横に合わせて 1 回だけ出す（前はここにも horizontal-rl を決め打ちし、横書きの本で rl と lr が食い違った。internal #81）
 	<meta name="RegionMagnification" content="false"/>
 	<meta name="orientation-lock" content="none"/>
 	<!--<meta name="original-resolution" content="844x1200"/>-->

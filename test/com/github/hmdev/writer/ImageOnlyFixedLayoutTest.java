@@ -584,6 +584,11 @@ public class ImageOnlyFixedLayoutTest {
 					if (coverPage) expected.add("cover:null");
 					for (int i = 0; i < (coverPage ? 4 : 5); i++) expected.add(i % 2 == 0 ? first : second);
 					assertEquals((vertical ? "縦" : "横") + (coverPage ? "・表紙あり" : "") + "\n" + opf, expected, sides);
+					//primary-writing-mode は 1 つだけで、本の向きに合う（前は Kindle 用に horizontal-rl をもう 1 つ決め打ちしていた）
+					Matcher mode = Pattern.compile("<meta name=\"primary-writing-mode\" content=\"([^\"]+)\"/>").matcher(opf);
+					List<String> modes = new ArrayList<>();
+					while (mode.find()) modes.add(mode.group(1));
+					assertEquals(opf, List.of(vertical ? "horizontal-rl" : "horizontal-lr"), modes);
 				}
 			}
 		}
