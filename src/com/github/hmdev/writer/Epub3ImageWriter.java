@@ -48,8 +48,9 @@ public class Epub3ImageWriter extends Epub3Writer
 	};
 	String[] getTemplateFiles()
 	{
-		if (this.isKindle) return TEMPLATE_FILE_NAMES_KINDLE_IMAGE;
+		//SVG のページは svg_image.css を指す（svg_image.vm・cover.vm）。Kindle でも SVG ならそれを入れる。前は kindle_image.css だけ入り、ページが本に無い CSS を指した（internal #81）
 		if (this.isSvgImage) return TEMPLATE_FILE_NAMES_SVG_IMAGE;
+		if (this.isKindle) return TEMPLATE_FILE_NAMES_KINDLE_IMAGE;
 		if (this.bookInfo != null && this.bookInfo.vertical) return TEMPLATE_FILE_NAMES_VERTICAL_IMAGE;
 		return TEMPLATE_FILE_NAMES_HORIZONTAL_IMAGE;
 	}
@@ -184,10 +185,12 @@ public class Epub3ImageWriter extends Epub3Writer
 			//書く段で読めずに外した画像（id を外してある）はページにしない
 			if (fileName != null && !this.isOnPage(srcFilePath)) fileName = null;
 			if (fileName != null) {
+				//見開きの組は元の画像の並びで決める。本文から抜けたページ（表紙のページへ移した画像・読めずに外した画像）で後ろがずれない
+				boolean oddImage = (pageNum-1) % 2 == 1;
 				if (isSvgImage) {
-					this.printSvgImageSection(srcFilePath);
+					this.printSvgImageSection(srcFilePath, oddImage);
 				} else {
-					this.startImageSection(srcFilePath);
+					this.startImageSection(srcFilePath, oddImage);
 					bw.write(String.format(converter.getChukiValue("画像")[0], fileName));
 					bw.write(converter.getChukiValue("画像終わり")[0]);
 					bw.flush();
@@ -201,12 +204,13 @@ public class Epub3ImageWriter extends Epub3Writer
 	
 	/** セクション開始. 
 	 * @throws IOException */
-	private void startImageSection(String srcImageFilePath) throws IOException
+	private void startImageSection(String srcImageFilePath, boolean oddImage) throws IOException
 	{
 		this.sectionIndex++;
 		String sectionId = decimalFormat.format(this.sectionIndex);
 		//package.opf用にファイル名
 		SectionInfo sectionInfo = new SectionInfo(sectionId);
+		sectionInfo.oddImage = oddImage;
 		
 		//画像専用指定
 		sectionInfo.setImagePage(true);
@@ -227,12 +231,13 @@ public class Epub3ImageWriter extends Epub3Writer
 	}
 	
 	/** SVGでセクション出力 */
-	private void printSvgImageSection(String srcImageFilePath) throws IOException
+	private void printSvgImageSection(String srcImageFilePath, boolean oddImage) throws IOException
 	{
 		this.sectionIndex++;
 		String sectionId = decimalFormat.format(this.sectionIndex);
 		//package.opf用にファイル名
 		SectionInfo sectionInfo = new SectionInfo(sectionId);
+		sectionInfo.oddImage = oddImage;
 		ImageInfo imageInfo = this.imageInfoReader.getImageInfo(srcImageFilePath);
 		
 		//画像専用指定

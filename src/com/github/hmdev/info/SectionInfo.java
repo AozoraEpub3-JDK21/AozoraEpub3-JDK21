@@ -57,6 +57,13 @@ public class SectionInfo
 		this.sectionId = sectionId;
 	}
 
+	/** 画像だけの本で、元の画像の並びの奇数番目（0 から数えて）か。Kindle の見開きの組を元の並びで決める（internal #81） */
+	public boolean oddImage = false;
+	public boolean isOddImage()
+	{
+		return oddImage;
+	}
+	
 	public boolean isImagePage()
 	{
 		return imagePage;

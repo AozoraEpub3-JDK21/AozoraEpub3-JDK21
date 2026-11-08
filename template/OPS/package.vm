@@ -103,10 +103,11 @@
   </metadata>
 
   <manifest>
-#if (${kindle} && ${bookInfo.ImageOnly})
-	<item id="k_image" href="css/kindle_image.css" media-type="text/css"/>
-#elseif (${svgImage} && ${bookInfo.ImageOnly})
+## SVG のページは svg_image.css を指すので、Kindle でも SVG ならそれを載せる（Epub3ImageWriter.getTemplateFiles と同じ順）
+#if (${svgImage} && ${bookInfo.ImageOnly})
 	<item id="svg_image" href="css/svg_image.css" media-type="text/css"/>
+#elseif (${kindle} && ${bookInfo.ImageOnly})
+	<item id="k_image" href="css/kindle_image.css" media-type="text/css"/>
 #elseif (${bookInfo.Vertical})
 #if (${bookInfo.ImageOnly})
 	<item id="v_image" href="css/vertical_image.css" media-type="text/css"/>
@@ -188,9 +189,10 @@
 
 #foreach(${sectionInfo} in ${sections})
 #if (${kindle} && ${bookInfo.ImageOnly})
-## 本文の 1 ページ目から 2 ページずつ見開きに組む（右から読む本は 1 ページ目が右、左から読む本は左）。
+## 元の画像の並びで 2 枚ずつ見開きに組む（1・2 枚目、3・4 枚目。0 から数えて奇数番目が、右から読む本は右・左から読む本は左）。
+## 本文から抜けたページ（表紙のページ・読めない画像）があっても後ろの組はずれない。
 ## 前は Velocity 2 に無い $velocityCount を見ていて、全ページが right になっていた（internal #81）
-#if (($foreach.count % 2 == 1) == ${bookInfo.Vertical})
+#if (${sectionInfo.OddImage} == ${bookInfo.Vertical})
 	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-right"/>
 #else
 	<itemref idref="sec${sectionInfo.SectionId}" linear="yes" properties="page-spread-left"/>
