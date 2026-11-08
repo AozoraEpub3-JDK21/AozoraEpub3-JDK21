@@ -422,6 +422,8 @@ public class ImageUtils
 				imageWriter.write(srcImage);
 			}
 		} else if ("jpeg".equals(ext) || "jpg".equals(ext)) {
+			//JPEG は透過を持てず、透過のある画像は書けずに投げる（Kindle 向けに JPEG へ直す透過 PNG の表紙。internal #64）。白地に重ねる
+			if (srcImage.getColorModel().hasAlpha()) srcImage = flattenOnWhite(srcImage);
 			ImageWriter imageWriter = getJpegImageWriter();
 			try (ImageOutputStream ios = ImageIO.createImageOutputStream(zos)) {
 				imageWriter.setOutput(ios);
@@ -440,9 +442,23 @@ public class ImageUtils
 				}
 			}
 		} else {
-			ImageIO.write(srcImage, ext, zos);
+			//書ける writer が無いと false で何も書かない。空の画像を残さない
+			if (!ImageIO.write(srcImage, ext, zos)) throw new IOException("画像を書ける形式がありません: "+ext);
 		}
 		zos.flush();
+	}
+	
+	/** 透過のある画像を、白地の TYPE_INT_RGB に重ねる */
+	static BufferedImage flattenOnWhite(BufferedImage image)
+	{
+		BufferedImage out = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+		Graphics2D g = out.createGraphics();
+		try {
+			g.setColor(Color.WHITE);
+			g.fillRect(0, 0, image.getWidth(), image.getHeight());
+			g.drawImage(image, 0, 0, null);
+		} finally { g.dispose(); }
+		return out;
 	}
 	
 	static private ImageWriter getPngImageWriter()
