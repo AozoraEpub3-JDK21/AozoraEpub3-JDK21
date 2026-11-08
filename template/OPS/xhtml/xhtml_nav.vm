@@ -64,11 +64,9 @@ nav#landmarks { display:none; }
 		</ol>
 	</nav>
 ## epub3 toc nav ================================
-#if (${kindle})
-	<nav id="toc">
-#else
+## Kindle でも epub:type="toc" を付ける。前は kindlegen に toc.ncx を使わせるため外していて、epubcheck が RSC-005 を出した。
+## Kindle Previewer 4 はこの nav を読み、入れ子にすれば目次パネルも階層になる（internal #64 項目 4）
 	<nav epub:type="toc" id="toc">
-#end
 		<h1>目　次</h1>
 		<ol>
 #if (${bookInfo.InsertCoverPage} && ${bookInfo.InsertCoverPageToc})

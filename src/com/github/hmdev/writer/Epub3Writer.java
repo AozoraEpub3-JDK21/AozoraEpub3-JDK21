@@ -1126,8 +1126,8 @@ public class Epub3Writer
 		//velocityに設定 1～
 		velocityContext.put("ncx_depth", ncxDepth);
 		
-		//NAV の目次の階層。.mobi は追わないので Kindle モードの出力は変えない
-		if (this.navNest && !this.isKindle) nestNavChapters(chapterInfos);
+		//NAV の目次の階層。Kindle も同じ（Kindle Previewer 4 は nav の入れ子を目次パネルの階層にする。前は Kindle だけ平らだった。internal #64 項目 4）
+		if (this.navNest) nestNavChapters(chapterInfos);
 		
 		//出力前に縦中横とエスケープ処理
 		if (!bookInfo.imageOnly) {
