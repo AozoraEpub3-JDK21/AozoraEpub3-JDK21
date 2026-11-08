@@ -593,6 +593,21 @@ public class Epub3Writer
 		this.outputExt = outputExt == null ? ".epub" : outputExt;
 	}
 	
+	/** 拡張子が .mobi か（.mobi と、GUI の .mobi+.epub）。kindlegen に渡す本の印 */
+	static boolean isMobiExt(String outputExt)
+	{
+		return outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
+	}
+	
+	/** kindlegen で .mobi にする本か（拡張子が .mobi）。GUI の .mobi・.mobi+.epub（kindlegen があるときだけ選べる）と、
+	 * CLI の -ext .mobi（CLI は kindlegen を走らせないので、後で利用者が kindlegen にかける本）。.mobi+.epub で残す EPUB も kindlegen に渡した物と同じ。
+	 * kindlegen 向けの書き分け（toc の印の無い平らな nav、目次の項目名をそのまま）はこの本だけに残す。
+	 * Kindle 向けの EPUB（CLI の -device kindle）は EPUB の規則どおりに書く（internal #64 項目 4） */
+	boolean forKindlegen()
+	{
+		return isMobiExt(this.outputExt);
+	}
+	
 	/**
 	 * 今回の出力に EPUB 2 向けの要素を入れるか。
 	 * Kobo 向け（.kepub.epub）は端末が無く測れていないので、.mobi は目次が NCX 頼りなので、設定によらず入れる。
@@ -600,7 +615,7 @@ public class Epub3Writer
 	static boolean usesLegacyOutput(boolean legacyOutput, boolean kindle, String outputExt)
 	{
 		String ext = outputExt.trim().toLowerCase(Locale.ROOT);
-		return legacyOutput || kindle || ext.endsWith(".kepub.epub") || ext.startsWith(".mobi");
+		return legacyOutput || kindle || ext.endsWith(".kepub.epub") || isMobiExt(outputExt);
 	}
 	
 	/** OPF の manifest が toc.ncx を載せているか（差し替えた package.vm でも実体とずれないように、これで決める） */
@@ -764,6 +779,7 @@ public class Epub3Writer
 		
 		//端末種別
 		if (this.isKindle) velocityContext.put("kindle", true);
+		if (this.forKindlegen()) velocityContext.put("kindlegen", true);
 		boolean legacyElements = usesLegacyOutput(this.legacyOutput, this.isKindle, this.outputExt);
 		velocityContext.put("legacyOutput", legacyElements);
 		
@@ -1126,8 +1142,9 @@ public class Epub3Writer
 		//velocityに設定 1～
 		velocityContext.put("ncx_depth", ncxDepth);
 		
-		//NAV の目次の階層。.mobi は追わないので Kindle モードの出力は変えない
-		if (this.navNest && !this.isKindle) nestNavChapters(chapterInfos);
+		//NAV の目次の階層。Kindle 向けの EPUB も同じ（Kindle Previewer 4 は nav の入れ子を目次パネルの階層にする。前は Kindle だけ平らだった。internal #64 項目 4）
+		//kindlegen で .mobi にする本は前のまま（平らな nav と toc.ncx を kindlegen に読ませる）
+		if (this.navNest && !this.forKindlegen()) nestNavChapters(chapterInfos);
 		
 		//出力前に縦中横とエスケープ処理
 		if (!bookInfo.imageOnly) {
@@ -1135,8 +1152,8 @@ public class Epub3Writer
 			int spaceHyphenation = converter.getSpaceHyphenation();
 			converter.setSpaceHyphenation(0);
 			StringBuilder buf = new StringBuilder();
-			//.mobi の目次ページは変えない（Kindle の変換は Books の目次パネルと関係がない）
-			boolean keepNavLabels = this.isKindle || this.outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
+			//kindlegen に渡す本（.mobi）の目次ページは変えない（kindlegen の変換は Books の目次パネルと関係がない）。Kindle 向けの EPUB は他の EPUB と同じ
+			boolean keepNavLabels = this.forKindlegen();
 			for (ChapterInfo chapterInfo : chapterInfos) {
 				buf.setLength(0);
 				String converted = CharUtils.escapeHtml(chapterInfo.getChapterName());

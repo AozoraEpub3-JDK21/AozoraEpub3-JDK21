@@ -332,10 +332,19 @@ public class NestedNavTest {
 		}
 	}
 
+	/** kindlegen に渡す本（Kindle 向けで .mobi）の目次ページは、項目名をそのまま */
 	@Test
-	public void kindleKeepsAmpersandInItsContentsPage() throws Exception {
+	public void kindlegenKeepsAmpersandInItsContentsPage() throws Exception {
+		outputExt = ".mobi";
 		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
 		assertTrue(nav(writeBook(true, true, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲&amp;乙</a>"));
+	}
+
+	/** Kindle 向けの EPUB は他の EPUB と同じく全角にする（internal #64 項目 4） */
+	@Test
+	public void kindleEpubUsesFullWidthAmpersandLikeOtherEpubs() throws Exception {
+		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
+		assertTrue(nav(writeBook(true, true, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲＆乙</a>"));
 	}
 
 	/** -device kindle を付けない .mobi の出力も変えない */
@@ -353,11 +362,20 @@ public class NestedNavTest {
 		assertTrue(nav, nav.contains("第一章</a></li>"));
 	}
 
-	/** .mobi は追わないので、Kindle モードの出力は変えない */
+	/** kindlegen で .mobi にする本（Kindle 向けで拡張子 .mobi）は、前のまま平らな nav。kindlegen は toc.ncx を読む */
 	@Test
-	public void kindleOutputStaysFlat() throws Exception {
+	public void kindlegenOutputStaysFlat() throws Exception {
+		outputExt = ".mobi";
 		String nav = nav(writeBook(true, true));
 		assertEquals(nav, 1, count(nav, "<ol>"));
 		assertFalse(nav, nav.contains("</ol></li>"));
+	}
+
+	/** Kindle 向けの EPUB は、ほかの本と同じく入れ子にする。Kindle Previewer 4 は nav の入れ子を目次の階層にする（internal #64 項目 4） */
+	@Test
+	public void kindleEpubIsNested() throws Exception {
+		String nav = nav(writeBook(true, true));
+		assertTrue(nav, count(nav, "<ol>") > 1);
+		assertTrue(nav, nav.contains("</ol></li>"));
 	}
 }
