@@ -3,7 +3,7 @@
 `docs/narou-rs-setup-details.md#rendering`（英語版は `docs/en/narou-rs-setup-details.md#rendering`）に載せている
 比較画像 `docs/assets/narou-rs/engine-compare/*.png` の作り方。narou.rs や AozoraEpub3 の更新で撮り直すときに使う。
 
-2026-09-27 の撮影環境: Windows 11 / narou.rs v0.4.4（GPL 版）/ AozoraEpub3-JDK21 v1.6.1 / Thorium Reader 3.5.1 / Python 3.13 + Pillow。
+2026-11-08 の撮影環境: Windows 11 / narou.rs v0.6.3（GPL 版）/ AozoraEpub3-JDK21 v1.8.2 / Thorium Reader 3.5.1 / Python 3.13 + Pillow（前回は 2026-09-27、narou.rs v0.4.4・AozoraEpub3-JDK21 v1.6.1）。
 
 ## 1. 本文を用意する
 

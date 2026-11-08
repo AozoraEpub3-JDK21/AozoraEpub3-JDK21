@@ -36,7 +36,7 @@ description: narou.rs 導入ガイドの補足資料。GPL 版と通常版の違
 
 > ⚠️ **注記**
 > - 本記事は [narou.rs](https://github.com/Rumia-Channel/narou.rs) の公式マニュアルではありません。不明な点は **[narou.rs の README](https://github.com/Rumia-Channel/narou.rs) や [Issues](https://github.com/Rumia-Channel/narou.rs/issues)** の最新情報を優先してください。
-> - 検証環境: Windows 11（日本語）、narou.rs v0.3.4（手順・画面）/ v0.4.4（2 種類の配布版の動作確認・出力比較）、AozoraEpub3 v1.4.0-jdk21（手順・画面）/ v1.6.1-jdk21（出力比較）、Thorium Reader 3.5.1（見た目の比較）
+> - 検証環境: Windows 11（日本語）、narou.rs v0.3.4（手順・画面）/ v0.4.4（2 種類の配布版の動作確認・出力比較）/ v0.6.3（見た目の比較）、AozoraEpub3 v1.4.0-jdk21（手順・画面）/ v1.6.1-jdk21（出力比較）/ v1.8.2-jdk21（見た目の比較）、Thorium Reader 3.5.1（見た目の比較）
 
 ---
 
@@ -97,7 +97,7 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 同じ本文を 2 つのエンジンで変換し、同じ EPUB リーダーで同じページを表示して並べました。
 
 - 本文: 青空文庫の[太宰治「走れメロス」](https://www.aozora.gr.jp/cards/000035/card1567.html)（パブリックドメイン）を、小説家になろうの作品と同じ形（2 章・3 話）に組み立てたもの。narou.rs の通常の変換経路を通しています
-- 変換: narou.rs v0.4.4 GPL 版。左は組み込みエンジン、右は AozoraEpub3-JDK21 v1.6.1 を登録した状態（どちらも narou.rs の既定設定）
+- 変換: narou.rs v0.6.3 GPL 版。左は組み込みエンジン、右は AozoraEpub3-JDK21 v1.8.2 を登録した状態（どちらも narou.rs の既定設定）
 - 表示: [Thorium Reader](https://thorium.edrlab.org/) 3.5.1（Windows 11）、同じウィンドウサイズ（700×900）・既定の表示設定。画像は本文エリアを切り出して幅 480px に縮小したものです。左右の青い矢印は Thorium のページ送りボタンです
 - 作り方: [tools/narou-rs-compare](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/tree/master/tools/narou-rs-compare) の手順とスクリプトで撮り直せます
 
@@ -116,12 +116,12 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 <tr>
 <td><strong>目次</strong></td>
 <td><img src="assets/narou-rs/engine-compare/toc-lite.png" alt="組み込みエンジンの目次。章の下に話が字下げされた階層表示" width="480"/></td>
-<td><img src="assets/narou-rs/engine-compare/toc-java.png" alt="AozoraEpub3-JDK21 の目次。章と話が同じ階層の箇条書きで並ぶ" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/toc-java.png" alt="AozoraEpub3-JDK21 の目次。章の下に話が字下げされ、行頭に黒丸が付く階層表示" width="480"/></td>
 </tr>
 <tr>
 <td><strong>章の中扉</strong></td>
-<td><img src="assets/narou-rs/engine-compare/chapter-lite.png" alt="組み込みエンジンの章の中扉。ページ上部の中央寄りに、柱の書名と章題が表示される" width="480"/></td>
-<td><img src="assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 の章の中扉。ページ右上の端に、柱の書名と章題が表示される" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/chapter-lite.png" alt="組み込みエンジンの章の中扉。ページ左上に小さく柱の書名、ページ上部の中央に細い枠で囲んだ章題が表示される" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 の章の中扉。柱は無く、ページ上部の中央に章題だけが表示される" width="480"/></td>
 </tr>
 <tr>
 <td><strong>話の本文</strong><br/>見出しとルビ</td>
@@ -136,8 +136,8 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 | ページ | 組み込みエンジン | AozoraEpub3-JDK21 |
 |---|---|---|
 | 扉 | 書名を明朝体で左寄せ、罫線の下に著者名 | 書名と著者名をゴシック体で中央揃え |
-| 目次 | 章の下に話を字下げした階層表示 | 撮影時は章と話を同じ階層の箇条書きで表示。v1.7.6 より後の版は「目次ページ階層化」がオンなら章の下に字下げ |
-| 章の中扉 | 柱と章題をページ上部の中央寄りに表示 | 柱と章題をページ右上の端に表示（章題の大きさはほぼ同じ）。v1.7.0 からは、柱（作品名）は章題の横の小さな縦の 1 行になり、作品名が短ければ中扉はページの左右中央に出る。v1.8.2 からは中扉に柱を出さず、作品名の長さによらず章題がページの左右中央に出る |
+| 目次 | 章の下に話を字下げした階層表示 | 行頭に黒丸が付き、行の間が広い。章の下に話を字下げする階層表示は同じ |
+| 章の中扉 | 柱（書名）をページ左上に小さく、章題を細い枠で囲んでページ上部の中央に表示 | 柱は出さず、章題だけをページ上部の中央に表示（枠なし） |
 | 話の本文 | 見出しが太字 | 見出しは通常の太さ。本文の組み方・ルビは同じ |
 
 ---

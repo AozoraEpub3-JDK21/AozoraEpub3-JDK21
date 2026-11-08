@@ -33,7 +33,7 @@ This page is a companion to the **[narou.rs Setup Guide](narou-rs-setup.html)**.
 
 > ⚠️ **Notice**
 > - This article is **not** an official [narou.rs](https://github.com/Rumia-Channel/narou.rs) manual. For anything unclear, prefer the latest information in the **[narou.rs README](https://github.com/Rumia-Channel/narou.rs) and [Issues](https://github.com/Rumia-Channel/narou.rs/issues)**.
-> - Tested environment: Windows 11 (Japanese), narou.rs v0.3.4 (steps and screenshots) / v0.4.4 (behavior of the two editions, output comparison), AozoraEpub3 v1.4.0-jdk21 (steps and screenshots) / v1.6.1-jdk21 (output comparison), Thorium Reader 3.5.1 (rendering comparison)
+> - Tested environment: Windows 11 (Japanese), narou.rs v0.3.4 (steps and screenshots) / v0.4.4 (behavior of the two editions, output comparison) / v0.6.3 (rendering comparison), AozoraEpub3 v1.4.0-jdk21 (steps and screenshots) / v1.6.1-jdk21 (output comparison) / v1.8.2-jdk21 (rendering comparison), Thorium Reader 3.5.1 (rendering comparison)
 
 ---
 
@@ -94,7 +94,7 @@ The readable content is the same, but because the markup and CSS differ, the app
 We converted the same text with both engines and displayed the same pages side by side in the same EPUB reader.
 
 - Text: Osamu Dazai's ["Run, Melos!" (Hashire Merosu) from Aozora Bunko](https://www.aozora.gr.jp/cards/000035/card1567.html) (public domain), arranged in the same shape as a Syosetu novel (2 chapters, 3 episodes) and run through narou.rs's normal conversion path
-- Conversion: narou.rs v0.4.4 GPL edition. Left: built-in engine; right: with AozoraEpub3-JDK21 v1.6.1 registered (both with narou.rs default settings)
+- Conversion: narou.rs v0.6.3 GPL edition. Left: built-in engine; right: with AozoraEpub3-JDK21 v1.8.2 registered (both with narou.rs default settings)
 - Display: [Thorium Reader](https://thorium.edrlab.org/) 3.5.1 (Windows 11), same window size (700×900), default display settings. The images are the page area cropped and scaled down to 480px wide. The blue arrows on the left and right are Thorium's page-turn buttons
 - How they were made: the procedure and scripts in [tools/narou-rs-compare](https://github.com/AozoraEpub3-JDK21/AozoraEpub3-JDK21/tree/master/tools/narou-rs-compare) (in Japanese) reproduce them
 
@@ -113,12 +113,12 @@ Rendering depends on the EPUB reader, so your reader may display things differen
 <tr>
 <td><strong>Table of contents</strong></td>
 <td><img src="../assets/narou-rs/engine-compare/toc-lite.png" alt="Built-in engine table of contents: episodes indented under their chapter" width="480"/></td>
-<td><img src="../assets/narou-rs/engine-compare/toc-java.png" alt="AozoraEpub3-JDK21 table of contents: chapters and episodes as a flat bulleted list" width="480"/></td>
+<td><img src="../assets/narou-rs/engine-compare/toc-java.png" alt="AozoraEpub3-JDK21 table of contents: episodes indented under their chapter, each line with a bullet" width="480"/></td>
 </tr>
 <tr>
 <td><strong>Chapter title page</strong></td>
-<td><img src="../assets/narou-rs/engine-compare/chapter-lite.png" alt="Built-in engine chapter title page: the running head and the chapter title near the top center" width="480"/></td>
-<td><img src="../assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 chapter title page: the running head and the chapter title at the top-right edge" width="480"/></td>
+<td><img src="../assets/narou-rs/engine-compare/chapter-lite.png" alt="Built-in engine chapter title page: a small running head (title) at the top left, and the chapter title in a thin box near the top center" width="480"/></td>
+<td><img src="../assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 chapter title page: no running head, only the chapter title near the top center" width="480"/></td>
 </tr>
 <tr>
 <td><strong>Episode text</strong><br/>Heading and ruby</td>
@@ -133,8 +133,8 @@ The differences seen in this setup:
 | Page | Built-in engine | AozoraEpub3-JDK21 |
 |---|---|---|
 | Title page | Title in a serif (Mincho) font, left-aligned, author below a rule | Title and author in a sans-serif (Gothic) font, centered |
-| Table of contents | Episodes indented under chapters | One flat bulleted list when captured. After v1.7.6, episodes are indented under chapters when the nested contents page setting is on |
-| Chapter title page | Running head and chapter title near the top center of the page | Running head and chapter title at the top-right edge (chapter title about the same size). From v1.7.0, the running head (work title) is a small vertical line beside the chapter title, and the page is centered when the work title is short. From v1.8.2, chapter title pages leave the running head out, so the chapter title is centered whatever the length of the work title |
+| Table of contents | Episodes indented under chapters | A bullet on each line and wider line spacing. Episodes are indented under chapters, as on the left |
+| Chapter title page | Small running head (title) at the top left, chapter title in a thin box near the top center | No running head; only the chapter title near the top center, without a box |
 | Episode text | Bold heading | Regular-weight heading. Body typesetting and ruby are the same |
 
 ---
