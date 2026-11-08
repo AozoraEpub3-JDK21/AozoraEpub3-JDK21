@@ -593,21 +593,29 @@ public class Epub3Writer
 		this.outputExt = outputExt == null ? ".epub" : outputExt;
 	}
 	
+	/** 拡張子が .mobi か（.mobi と、GUI の .mobi+.epub）。kindlegen に渡す本の印 */
+	static boolean isMobiExt(String outputExt)
+	{
+		return outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
+	}
+	
+	/** kindlegen で .mobi にする本か（拡張子が .mobi）。GUI の .mobi・.mobi+.epub（kindlegen があるときだけ選べる）と、
+	 * CLI の -ext .mobi（CLI は kindlegen を走らせないので、後で利用者が kindlegen にかける本）。.mobi+.epub で残す EPUB も kindlegen に渡した物と同じ。
+	 * kindlegen 向けの書き分け（toc の印の無い平らな nav、目次の項目名をそのまま）はこの本だけに残す。
+	 * Kindle 向けの EPUB（CLI の -device kindle）は EPUB の規則どおりに書く（internal #64 項目 4） */
+	boolean forKindlegen()
+	{
+		return isMobiExt(this.outputExt);
+	}
+	
 	/**
 	 * 今回の出力に EPUB 2 向けの要素を入れるか。
 	 * Kobo 向け（.kepub.epub）は端末が無く測れていないので、.mobi は目次が NCX 頼りなので、設定によらず入れる。
 	 */
-	/** kindlegen で .mobi にする本か（GUI で拡張子 .mobi を選び kindlegen があるとき）。
-	 * kindlegen 向けの書き分け（toc の印の無い平らな nav）はこの本だけに残す。Kindle 向けの EPUB（CLI の -device kindle）は EPUB の規則どおりに書く（internal #64 項目 4） */
-	boolean forKindlegen()
-	{
-		return this.isKindle && this.outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
-	}
-	
 	static boolean usesLegacyOutput(boolean legacyOutput, boolean kindle, String outputExt)
 	{
 		String ext = outputExt.trim().toLowerCase(Locale.ROOT);
-		return legacyOutput || kindle || ext.endsWith(".kepub.epub") || ext.startsWith(".mobi");
+		return legacyOutput || kindle || ext.endsWith(".kepub.epub") || isMobiExt(outputExt);
 	}
 	
 	/** OPF の manifest が toc.ncx を載せているか（差し替えた package.vm でも実体とずれないように、これで決める） */
@@ -1144,8 +1152,8 @@ public class Epub3Writer
 			int spaceHyphenation = converter.getSpaceHyphenation();
 			converter.setSpaceHyphenation(0);
 			StringBuilder buf = new StringBuilder();
-			//.mobi の目次ページは変えない（Kindle の変換は Books の目次パネルと関係がない）
-			boolean keepNavLabels = this.isKindle || this.outputExt.trim().toLowerCase(Locale.ROOT).startsWith(".mobi");
+			//kindlegen に渡す本（.mobi）の目次ページは変えない（kindlegen の変換は Books の目次パネルと関係がない）。Kindle 向けの EPUB は他の EPUB と同じ
+			boolean keepNavLabels = this.forKindlegen();
 			for (ChapterInfo chapterInfo : chapterInfos) {
 				buf.setLength(0);
 				String converted = CharUtils.escapeHtml(chapterInfo.getChapterName());

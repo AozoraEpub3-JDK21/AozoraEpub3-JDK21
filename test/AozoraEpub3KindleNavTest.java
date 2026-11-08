@@ -27,6 +27,9 @@ public class AozoraEpub3KindleNavTest {
 	@Rule
 	public TemporaryFolder tempFolder = new TemporaryFolder();
 
+	/** 最後に足す章の名前（null なら足さない） */
+	private String extraChapter = null;
+
 	private String nav(String... extra) throws Exception {
 		StringBuilder text = new StringBuilder("目次の階層の試験\n試験著者\n\n");
 		for (int c = 1; c <= 2; c++) {
@@ -34,6 +37,7 @@ public class AozoraEpub3KindleNavTest {
 			for (int s = 1; s <= 2; s++) text.append("［＃中見出し］").append(c).append("-").append(s).append("節［＃中見出し終わり］\n本文です。\n\n");
 			text.append("［＃改ページ］\n");
 		}
+		if (extraChapter != null) text.append("［＃大見出し］").append(extraChapter).append("［＃大見出し終わり］\n本文です。\n");
 		File txt = new File(tempFolder.newFolder(), "navtest.txt");
 		Files.write(txt.toPath(), text.toString().getBytes(StandardCharsets.UTF_8));
 		File dst = tempFolder.newFolder();
@@ -87,6 +91,24 @@ public class AozoraEpub3KindleNavTest {
 		assertTrue(nav, nav.contains("<nav id=\"toc\">"));
 		String tocNav = nav.substring(nav.indexOf("<nav id=\"toc\">"));
 		assertEquals("入れ子になった:\n" + tocNav, 1, tocNav.substring(0, tocNav.indexOf("</nav>")).split("<ol>", -1).length - 1);
+	}
+
+	/** -device kindle を付けない -ext .mobi も kindlegen に渡す本として、前のまま平ら（docs の「.mobi の目次ページは NavNest によらずフラット」） */
+	@Test
+	public void mobiWithoutKindleDeviceStaysFlat() throws Exception {
+		String nav = nav("-ext", ".mobi");
+		assertTrue(nav, nav.contains("<nav id=\"toc\">"));
+		String tocNav = nav.substring(nav.indexOf("<nav id=\"toc\">"));
+		assertEquals("入れ子になった:\n" + tocNav, 1, tocNav.substring(0, tocNav.indexOf("</nav>")).split("<ol>", -1).length - 1);
+	}
+
+	/** Kindle 向けの EPUB の目次の項目名も、他の EPUB と同じく &・< を全角にする（Apple Books の目次パネルが XML のエラーになるため）。.mobi はそのまま */
+	@Test
+	public void kindleEpubNavLabelsAreLikeOtherEpubs() throws Exception {
+		extraChapter = "A&B";
+		assertTrue(nav("-device", "kindle"), nav("-device", "kindle").contains(">A＆B</a>"));
+		String mobi = nav("-device", "kindle", "-ext", ".mobi");
+		assertTrue(mobi, mobi.contains(">A&amp;B</a>"));
 	}
 
 	/** Kindle でない本も同じ形（Kindle だけ違う形にしない） */

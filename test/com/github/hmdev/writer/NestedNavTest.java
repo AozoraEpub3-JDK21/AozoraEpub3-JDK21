@@ -332,10 +332,19 @@ public class NestedNavTest {
 		}
 	}
 
+	/** kindlegen に渡す本（Kindle 向けで .mobi）の目次ページは、項目名をそのまま */
 	@Test
-	public void kindleKeepsAmpersandInItsContentsPage() throws Exception {
+	public void kindlegenKeepsAmpersandInItsContentsPage() throws Exception {
+		outputExt = ".mobi";
 		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
 		assertTrue(nav(writeBook(true, true, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲&amp;乙</a>"));
+	}
+
+	/** Kindle 向けの EPUB は他の EPUB と同じく全角にする（internal #64 項目 4） */
+	@Test
+	public void kindleEpubUsesFullWidthAmpersandLikeOtherEpubs() throws Exception {
+		String text = "表題\n著者\n\n［＃中見出し］甲&乙［＃中見出し終わり］\n本文。\n";
+		assertTrue(nav(writeBook(true, true, BookInfo.TitleType.TITLE_AUTHOR, text)).contains(">甲＆乙</a>"));
 	}
 
 	/** -device kindle を付けない .mobi の出力も変えない */
