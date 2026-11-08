@@ -216,11 +216,14 @@ public class ImageUtils
 				} else {
 					//編集済の画像なら同じ画像形式で書き出し 余白があれば切り取る
 					if (imageInfo.rotateAngle != 0) {
-						BufferedImage outImage = new BufferedImage(h, w, srcImage.getType());
+						BufferedImage outImage = newCanvas(srcImage, h, w, false);
 						Graphics2D g = outImage.createGraphics();
 						try {
-							g.setColor(Color.WHITE);
-							g.fillRect(0, 0, h, w);
+							//透過は保つ（透明な所を白で埋めない）
+							if (!outImage.getColorModel().hasAlpha()) {
+								g.setColor(Color.WHITE);
+								g.fillRect(0, 0, h, w);
+							}
 							g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 							g.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
 							int x = 0; int y = 0;
@@ -248,7 +251,7 @@ public class ImageUtils
 						srcImage = outImage;//入れ替え
 					} else if (margin != null) srcImage = srcImage.getSubimage(margin[0], margin[1], srcImage.getWidth()-margin[2]-margin[0], srcImage.getHeight()-margin[3]-margin[1]);
 					if (gammaOp != null) {
-						BufferedImage filterdImage = new BufferedImage(srcImage.getWidth(), srcImage.getHeight(), BufferedImage.TYPE_INT_RGB);
+						BufferedImage filterdImage = new BufferedImage(srcImage.getWidth(), srcImage.getHeight(), srcImage.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
 						srcImage = gammaOp.filter(srcImage, filterdImage);
 						srcImage = filterdImage;
 					}
@@ -269,45 +272,14 @@ public class ImageUtils
 			}
 			//画像がなければ読み込み
 			if (srcImage == null) srcImage = readImage(ext, is);
-			int imageType = srcImage.getType();
-			BufferedImage outImage;
 			ColorModel colorModel;
 			WritableRaster raster;
-			switch (gammaOp==null?imageType:BufferedImage.TYPE_INT_RGB) {
-			case BufferedImage.TYPE_BYTE_BINARY:
-				colorModel = srcImage.getColorModel();
-				colorModel = getGray16ColorModel();
-				raster = colorModel.createCompatibleWritableRaster(scaledW, scaledH);
-				outImage = new BufferedImage(colorModel, raster, true, null);
-				break;
-			case BufferedImage.TYPE_BYTE_INDEXED:
-				colorModel = srcImage.getColorModel();
-				raster = colorModel.createCompatibleWritableRaster(scaledW, scaledH);
-				outImage = new BufferedImage(colorModel, raster, true, null);
-				break;
-			/*case BufferedImage.TYPE_BYTE_GRAY:
-				//PngEncoderのGRAYが薄くなるのでindexにする
-				colorModel = srcImage.getColorModel();
-				if (colorModel.getPixelSize() <= 4) colorModel = getGray16ColorModel();
-				else colorModel = getGray256ColorModel();
-				raster = colorModel.createCompatibleWritableRaster(scaledW, scaledH);
-				outImage = new BufferedImage(colorModel, raster, true, null);
-				break;*/
-			case BufferedImage.TYPE_BYTE_GRAY:
-				outImage = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_BYTE_GRAY);
-				break;
-			case BufferedImage.TYPE_USHORT_GRAY:
-				outImage = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_USHORT_GRAY);
-				break;
-			default:
-				outImage = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_INT_RGB);
-			}
+			boolean alpha = srcImage.getColorModel().hasAlpha();
+			//コントラスト調整のときは RGB に描いてから調整する（透過は ARGB で保つ）
+			BufferedImage outImage = gammaOp == null ? newCanvas(srcImage, scaledW, scaledH, true)
+					: new BufferedImage(scaledW, scaledH, alpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
 			Graphics2D g = outImage.createGraphics();
 			try {
-				if (imageType == BufferedImage.TYPE_BYTE_BINARY && imageType == BufferedImage.TYPE_BYTE_INDEXED && imageType == BufferedImage.TYPE_INT_ARGB) {
-					g.setColor(Color.WHITE);
-					g.fillRect(0, 0, scaledW, scaledH);
-				}
 				g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 				g.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
 				//1 画素に広げた辺は、絵もその幅まで広げて描く（元の倍率のままだと 1 画素に届かず、塗られない。internal #64）
@@ -346,14 +318,15 @@ public class ImageUtils
 			//ImageIO.write(outImage, imageInfo.getExt(), zos);
 			//コントラスト調整
 			if (gammaOp != null) {
-				BufferedImage filterdImage = new BufferedImage(outImage.getWidth(), outImage.getHeight(), BufferedImage.TYPE_INT_RGB);
+				int imageType = srcImage.getType();
+				BufferedImage filterdImage = new BufferedImage(outImage.getWidth(), outImage.getHeight(), alpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
 				outImage = gammaOp.filter(outImage, filterdImage);
 				outImage = filterdImage;
 				filterdImage = null;
-				//インデックス化
-				switch (imageType) {
+				//インデックス化（色の表を保てる物だけ。色のある 4 ビット以下の表と透過は RGB・ARGB のまま）
+				switch (alpha ? -1 : imageType) {
 				case BufferedImage.TYPE_BYTE_BINARY:
-					colorModel = srcImage.getColorModel();
+					if (!isGreyPalette(srcImage.getColorModel())) break;
 					colorModel = getGray16ColorModel();
 					raster = colorModel.createCompatibleWritableRaster(scaledW, scaledH);
 					filterdImage = new BufferedImage(colorModel, raster, true, null);
@@ -391,6 +364,47 @@ public class ImageUtils
 			zos.flush();
 		}
 	}
+	/** 縮小・回転で描き込む先の画像を作る。元の色の表と透過を保つ（internal #77）。
+	 * 前は、色のある 4 ビット以下の表を縮めると灰色 16 段の表に替えて暗い灰色に、回転では元の型の既定の表（1 ビットの白黒）で真っ黒に、
+	 * 透過のある画像を縮めると透明な所を黒にしていた。
+	 * @param scaling 縮める（中間の色ができる）。回転だけなら元の表のままで画素は変わらない */
+	static BufferedImage newCanvas(BufferedImage src, int w, int h, boolean scaling)
+	{
+		ColorModel cm = src.getColorModel();
+		if (cm.hasAlpha()) return new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+		if (cm instanceof IndexColorModel) {
+			//回転だけ、または 8 ビットの表（前と同じ）は元の表のまま。近い色に寄せる
+			if (!scaling || src.getType() == BufferedImage.TYPE_BYTE_INDEXED) {
+				return new BufferedImage(cm, cm.createCompatibleWritableRaster(w, h), cm.isAlphaPremultiplied(), null);
+			}
+			//4 ビット以下の灰色の表（白黒の読み取りなど）は、縮めた中間の灰色を灰色 16 段で（前と同じ）
+			if (isGreyPalette(cm)) {
+				ColorModel gray16 = getGray16ColorModel();
+				return new BufferedImage(gray16, gray16.createCompatibleWritableRaster(w, h), true, null);
+			}
+			return new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+		}
+		switch (src.getType()) {
+		case BufferedImage.TYPE_BYTE_GRAY:
+		case BufferedImage.TYPE_USHORT_GRAY:
+			return new BufferedImage(w, h, src.getType());
+		default:
+			return new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+		}
+	}
+	
+	/** 色の表が灰色だけか */
+	static boolean isGreyPalette(ColorModel cm)
+	{
+		if (!(cm instanceof IndexColorModel)) return false;
+		IndexColorModel icm = (IndexColorModel)cm;
+		for (int i = 0; i < icm.getMapSize(); i++) {
+			int r = icm.getRed(i);
+			if (r != icm.getGreen(i) || r != icm.getBlue(i)) return false;
+		}
+		return true;
+	}
+	
 	/** 画像を出力 マージン指定があればカット
 	 * @param margin カットするピクセル数(left, top, right, bottom) */
 	static private void _writeImage(OutputStream zos, BufferedImage srcImage, String ext, float jpegQuality) throws IOException
