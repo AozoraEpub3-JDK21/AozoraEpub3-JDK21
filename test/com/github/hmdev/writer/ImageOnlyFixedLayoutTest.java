@@ -592,6 +592,48 @@ public class ImageOnlyFixedLayoutTest {
 		}
 	}
 
+	/** 縮めるときに読めない（途中で切れた）PNG は、元のバイト列のまま入れる＝縮めない設定と同じ物（internal #64）。
+	 * 前は zip の項目を開いてから縮めていたので、失敗すると空の画像が OPF に載ったまま残った（MED-004・PKG-021） */
+	@Test
+	public void imageThatFailsToResizeIsWrittenAsItWas() throws Exception {
+		BufferedImage noise = new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB);
+		java.util.Random random = new java.util.Random(64);
+		for (int y = 0; y < 800; y++) for (int x = 0; x < 600; x++) noise.setRGB(x, y, random.nextInt(0x1000000));
+		java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+		ImageIO.write(noise, "png", png);
+		//IHDR は残して IDAT の途中で切る。大きさは読めるが、絵は読めない
+		byte[] truncated = java.util.Arrays.copyOf(png.toByteArray(), png.size() / 2);
+		File zip = File.createTempFile("cut", ".zip", tempFolder.getRoot());
+		try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
+			for (String name : new String[]{"p0.png", "p1.png", "p2.png"}) {
+				zos.putNextEntry(new ZipEntry(name));
+				if (name.equals("p1.png")) zos.write(truncated);
+				else ImageIO.write(new BufferedImage(600, 800, BufferedImage.TYPE_INT_RGB), "png", zos);
+				zos.closeEntry();
+			}
+		}
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, false, 300, 400, 0, SectionInfo.IMAGE_SIZE_TYPE_ASPECT);
+		try (ZipFile zf = new ZipFile(writeBook(zip, writer, false, false, "cut"))) {
+			assertReferencesResolve(zf);
+			assertEquals("3 ページとも残る", 3, spinePages(zf).size());
+			java.util.Map<String, byte[]> images = new java.util.TreeMap<>();
+			for (ZipEntry e : java.util.Collections.list(zf.entries())) {
+				if (e.getName().startsWith("OPS/images/")) images.put(e.getName(), zf.getInputStream(e).readAllBytes());
+			}
+			assertEquals(images.keySet().toString(), 3, images.size());
+			int asItWas = 0;
+			for (java.util.Map.Entry<String, byte[]> e : images.entrySet()) {
+				if (java.util.Arrays.equals(truncated, e.getValue())) { asItWas++; continue; }
+				//ほかの 2 枚は縮めてある
+				BufferedImage image = ImageIO.read(new ByteArrayInputStream(e.getValue()));
+				assertTrue(e.getKey() + " が読めない", image != null);
+				assertEquals(e.getKey(), 400, image.getHeight());
+			}
+			assertEquals("切れた PNG は元のまま 1 枚", 1, asItWas);
+		}
+	}
+
 	/** 画像の表示サイズの設定は、画像だけの本の配置を変えない */
 	@Test
 	public void imageSizeSettingDoesNotChangeThePlacement() throws Exception {

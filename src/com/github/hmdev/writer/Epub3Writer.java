@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.nio.file.Files;
@@ -1225,6 +1226,8 @@ public class Epub3Writer
 		if (coverImageInfo != null) {
 			try {
 				//kindleの場合は常にjpegに変換
+				//元のバイト列が出力の形式のままか（加工に失敗したとき、写して戻せるか。internal #64）
+				boolean rawIsOutFormat = true;
 				if (isKindle) {
 					String imgExt = coverImageInfo.getExt();
 					if (!imgExt.startsWith("jp")) {
@@ -1234,20 +1237,18 @@ public class Epub3Writer
 							bais.close();
 						}
 						coverImageInfo.setExt("jpeg");
+						rawIsOutFormat = false;
 					}
 				}
+				final ImageInfo cover = coverImageInfo;
 				if (bookInfo.coverImage != null) {
-					//プレビューで編集されている場合
-					zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+coverImageInfo.getOutFileName()));
-					this.writeCoverImage(bookInfo.coverImage, zos, coverImageInfo);
-					zos.closeArchiveEntry();
+					//プレビューで編集されている場合。編集した絵は元のバイト列と違うので、写して戻さない
+					final BufferedImage edited = bookInfo.coverImage;
+					this.putImageEntry(cover, null, out -> this.writeCoverImage(edited, out, cover));
 					bookInfo.coverImage = null; //同じ画像が使われている場合は以後はファイルから読み込ませる
 				} else {
-					ByteArrayInputStream bais = new ByteArrayInputStream(coverImageBytes);
-					zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+coverImageInfo.getOutFileName()));
-					this.writeCoverImage(bais, zos, coverImageInfo);
-					zos.closeArchiveEntry();
-					bais.close();
+					final byte[] raw = coverImageBytes;
+					this.putImageEntry(cover, rawIsOutFormat ? raw : null, out -> this.writeCoverImage(new ByteArrayInputStream(raw), out, cover));
 				}
 				imageInfos.remove(0);//カバー画像は出力済みなので削除
 				if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
@@ -1289,11 +1290,11 @@ public class Epub3Writer
 							continue;
 						}
 						if (imageFile.exists()) {
+							byte[] raw;
 							try (InputStream fis = Files.newInputStream(imageFile.toPath())) {
-								zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
-								this.writeImage(new BufferedInputStream(fis, 8192), zos, imageInfo);
-								zos.closeArchiveEntry();
+								raw = fis.readAllBytes();
 							}
+							this.putImageEntry(imageInfo, imageInfo.isReencode() ? null : raw, out -> this.writeImage(new ByteArrayInputStream(raw), out, imageInfo));
 							outImageFileNames.remove(srcImageFileName);
 						}
 					}
@@ -1453,15 +1454,18 @@ public class Epub3Writer
 					srcImage = normalizeForPage(srcImage);
 					LogAppender.println("画像形式変換: "+srcImageFileName+" → "+imageInfo.getOutFileName());
 				}
-				zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
-				if (srcImage != null) {
-					this.writeImage(srcImage, zos, imageInfo);
-				} else {
-					ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-					this.writeImage(bais, zos, imageInfo);
-					bais.close();
+				final BufferedImage decoded = srcImage;
+				//PNG に直す画像（BMP）の元のバイト列は ext の形式ではないので、写して戻さない
+				boolean written = this.putImageEntry(imageInfo, imageInfo.isReencode() ? null : bytes, out -> {
+					if (decoded != null) this.writeImage(decoded, out, imageInfo);
+					else this.writeImage(new ByteArrayInputStream(bytes), out, imageInfo);
+				});
+				if (!written) {
+					//画像だけの本の BMP。画像はページと OPF より先に書くので、ここで外せば食い違わない（上の読めないときと同じ）
+					imageInfo.setId(null);
+					imageInfo.setIsCover(false);
+					this.imageInfos.remove(imageInfo);
 				}
-				zos.closeArchiveEntry();
 			}
 			if (this.canceled) return;
 			if (this.jProgressBar != null) this.jProgressBar.setValue(this.jProgressBar.getValue()+10);
@@ -1524,8 +1528,50 @@ public class Epub3Writer
 		return text.codePointCount(0, text.length());
 	}
 
+	/** 画像を out へ書く処理（加工が失敗すると投げる） */
+	@FunctionalInterface
+	interface ImageEncode { void writeTo(OutputStream out) throws IOException; }
+	
+	/** 画像の項目を書く。加工（縮小・回転・余白除去・コントラスト）はバッファに書き、できたときだけ項目を開く。
+	 * 項目を開いてから加工すると、失敗したとき空か途中までの画像が OPF に載ったまま残った（MED-004・PKG-021。internal #64）。
+	 * 加工が投げたか、何も書かなかったら、raw（元のバイト列。出力の形式のまま写せる物だけ渡す）を写す＝加工しない設定と同じ物になる。
+	 * 本文の本では挿絵のページを先に書いているので、回転のつもりで組んだページに回していない画像が入る（壊れた画像なので、見た目は諦める）。
+	 * raw が無ければ何も書かずに false を返す（外すかどうかは呼ぶ側が決める）。 */
+	boolean putImageEntry(ImageInfo imageInfo, byte[] raw, ImageEncode encode) throws IOException
+	{
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		Exception failure = null;
+		try {
+			encode.writeTo(out);
+			if (out.size() == 0) failure = new IOException("画像が空になりました");
+		} catch (IOException e) {
+			failure = e;
+			//壊れた画像は想定内なので、トレースは出さない
+			logger.warn("画像の加工に失敗: {} ({})", imageInfo.getOutFileName(), e.toString());
+		} catch (RuntimeException e) {
+			failure = e;
+			//加工の側の不具合かもしれないので、トレースを残す
+			logger.error("画像の加工に失敗: {}", imageInfo.getOutFileName(), e);
+		}
+		if (failure != null) {
+			if (raw == null) {
+				LogAppender.error("画像を加工できないので外します : "+imageInfo.getOutFileName());
+				return false;
+			}
+			LogAppender.println("[WARN] 画像を加工できないので元のまま入れます : "+imageInfo.getOutFileName());
+			imageInfo.rotateAngle = 0;
+			imageInfo.setOutWidth(imageInfo.getWidth());
+			imageInfo.setOutHeight(imageInfo.getHeight());
+		}
+		zos.putArchiveEntry(new ZipArchiveEntry(OPS_PATH+IMAGES_PATH+imageInfo.getOutFileName()));
+		if (failure != null) zos.write(raw);
+		else out.writeTo(zos);
+		zos.closeArchiveEntry();
+		return true;
+	}
+	
 	/** 表紙画像を出力 編集済の画像なのでリサイズしない */
-	void writeCoverImage(BufferedImage srcImage, ZipArchiveOutputStream zos, ImageInfo imageInfo) throws IOException
+	void writeCoverImage(BufferedImage srcImage, OutputStream zos, ImageInfo imageInfo) throws IOException
 	{
 		imageInfo.rotateAngle = 0; //回転させない
 		ImageUtils.writeImage(null, srcImage, zos,imageInfo, this.jpegQuality, this.gammaOp,
@@ -1533,7 +1579,7 @@ public class Epub3Writer
 				0, 0, 0, 0, 0, 0);
 	}
 	/** 表紙画像を出力 */
-	void writeCoverImage(InputStream is, ZipArchiveOutputStream zos, ImageInfo imageInfo) throws IOException
+	void writeCoverImage(InputStream is, OutputStream zos, ImageInfo imageInfo) throws IOException
 	{
 		imageInfo.rotateAngle = 0; //回転させない
 		ImageUtils.writeImage(is, null, zos,imageInfo, this.jpegQuality, this.gammaOp,
@@ -1541,14 +1587,14 @@ public class Epub3Writer
 				0, 0, 0, 0, 0, 0);
 	}
 	/** 画像を出力 */
-	void writeImage(InputStream is,ZipArchiveOutputStream zos, ImageInfo imageInfo) throws IOException
+	void writeImage(InputStream is, OutputStream zos, ImageInfo imageInfo) throws IOException
 	{
 		ImageUtils.writeImage(is, null, zos, imageInfo, this.jpegQuality, this.gammaOp,
 				this.maxImagePixels, this.maxImageW, this.maxImageH, this.dispW, this.dispH,
 				this.autoMarginLimitH, this.autoMarginLimitV, this.autoMarginWhiteLevel, this.autoMarginPadding, this.autoMarginNombre, this.autoMarginNombreSize);
 	}
 	/** 画像を出力 */
-	void writeImage(BufferedImage srcImage, ZipArchiveOutputStream zos, ImageInfo imageInfo) throws IOException
+	void writeImage(BufferedImage srcImage, OutputStream zos, ImageInfo imageInfo) throws IOException
 	{
 		ImageUtils.writeImage(null, srcImage, zos, imageInfo, this.jpegQuality, this.gammaOp,
 				this.maxImagePixels, this.maxImageW, this.maxImageH, this.dispW, this.dispH,
