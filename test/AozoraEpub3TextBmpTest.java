@@ -27,7 +27,7 @@ import org.junit.rules.TemporaryFolder;
 /**
  * 本文の本の BMP（挿絵・表紙）と、形式を直す表紙（internal #77・#64）。
  * EPUB に BMP は入れられない（RSC-032）。本文の本は挿絵のページと OPF を画像より先に書くので、
- * 読めない画像を外せない。白い画像を入れ、OPF に載った画像は必ず読める物にする。
+ * 読めない画像を外せない。代わりの透明な画像（JPEG は白）を入れ、OPF に載った画像は必ず読める物にする。
  */
 public class AozoraEpub3TextBmpTest {
 	@Rule
@@ -75,6 +75,7 @@ public class AozoraEpub3TextBmpTest {
 		log.append(baos.toString(StandardCharsets.UTF_8));
 		File[] epubs = dst.listFiles((d, n) -> n.endsWith(".epub"));
 		assertEquals(1, epubs.length);
+		lastEpub = epubs[0];
 		return epubs[0];
 	}
 
@@ -104,6 +105,14 @@ public class AozoraEpub3TextBmpTest {
 		return hrefs;
 	}
 
+	/** 最後に変換した本の画像を読む */
+	private File lastEpub;
+	private BufferedImage imageIn(String name) throws Exception {
+		try (ZipFile zf = new ZipFile(lastEpub)) {
+			return ImageIO.read(zf.getInputStream(zf.getEntry(name)));
+		}
+	}
+
 	private File textZip(String text, Object... entries) throws Exception {
 		File zip = tempFolder.newFile("book" + System.nanoTime() + ".zip");
 		try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zip.toPath()))) {
@@ -125,14 +134,18 @@ public class AozoraEpub3TextBmpTest {
 		return txt;
 	}
 
-	/** zip の本文の BMP の挿絵は PNG で入る。読めない BMP は白い画像になる（外すとページと OPF が無い画像を指す） */
+	/** zip の本文の BMP の挿絵は PNG で入る。読めない BMP は透明な画像になる（外すとページと OPF が無い画像を指す。白は夜の配色で目立つ） */
 	@Test
 	public void bmpIllustrationsInAZipBecomePng() throws Exception {
 		File zip = textZip("本文一\n［＃挿絵（a.bmp）入る］\n本文二\n［＃挿絵（bad.bmp）入る］\n", "a.bmp", bmp(300, 400), "bad.bmp", truncatedBmp());
 		List<String> images = assertImagesAreReadable(convert(zip.getPath()));
 		assertEquals(List.of("images/0001.png", "images/0002.png"), images);
 		assertTrue(log.toString(), log.toString().contains("画像形式変換: a.bmp → 0001.png"));
-		assertTrue(log.toString(), log.toString().contains("画像が読み込めないので白い画像を入れます : bad.bmp"));
+		assertTrue(log.toString(), log.toString().contains("画像が読み込めないので代わりに透明な画像を入れます : bad.bmp"));
+		BufferedImage blue = imageIn("OPS/images/0001.png"), placeholder = imageIn("OPS/images/0002.png");
+		assertEquals("BMP の絵が残っていない", 0xFF1E78C8, blue.getRGB(150, 200));
+		assertEquals("代わりの画像の大きさ", 300, placeholder.getWidth());
+		assertEquals("代わりの画像が透明でない", 0, placeholder.getRGB(150, 200) >>> 24);
 	}
 
 	/** フォルダのテキストの BMP の挿絵も同じ（ファイルから読む道） */
@@ -146,7 +159,7 @@ public class AozoraEpub3TextBmpTest {
 		assertEquals(List.of("images/0001.png", "images/0002.png"), assertImagesAreReadable(convert(txt.getPath())));
 	}
 
-	/** 表紙に BMP のファイルを指定できる（前は「表紙画像フォーマットエラー」で表紙なし）。読めない BMP は白い表紙 */
+	/** 表紙に BMP のファイルを指定できる（前は「表紙画像フォーマットエラー」で表紙なし）。読めない BMP は透明な表紙 */
 	@Test
 	public void bmpCoverFileBecomesPng() throws Exception {
 		File cover = tempFolder.newFile("cover.bmp");
@@ -156,7 +169,7 @@ public class AozoraEpub3TextBmpTest {
 		assertEquals(List.of("images/0000.png"), assertImagesAreReadable(convert("-c", cover.getPath(), plainText().getPath())));
 	}
 
-	/** Kindle 向けの JPEG でない表紙は、OPF にも image/jpeg で載る（前は image/png のまま＝OPF-029）。読めなければ白い JPEG */
+	/** Kindle 向けの JPEG でない表紙は、OPF にも image/jpeg で載る（前は image/png のまま＝OPF-029）。読めなければ白い JPEG（JPEG は透明にできない） */
 	@Test
 	public void kindleCoverIsListedAsTheJpegItIs() throws Exception {
 		File cover = tempFolder.newFile("cover.png");

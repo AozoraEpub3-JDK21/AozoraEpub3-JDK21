@@ -1234,7 +1234,7 @@ public class Epub3Writer
 					bookInfo.coverImage = null; //同じ画像が使われている場合は以後はファイルから読み込ませる
 				} else {
 					final byte[] raw = coverImageBytes;
-					//形式を直す表紙（BMP・Kindle の JPEG）は元のバイト列を写して戻せない。読めなければ白い画像になる
+					//形式を直す表紙（BMP・Kindle の JPEG）は元のバイト列を写して戻せない。読めなければ代わりの画像（JPEG は白）になる
 					final String coverName = bookInfo.coverFileName;
 					this.putImageEntry(cover, coverName, cover.isReencode() ? null : raw, false, out -> {
 						if (!cover.isReencode()) {
@@ -1444,7 +1444,7 @@ public class Epub3Writer
 	}
 	
 	/** 画像のバイト列を本に書く。PNG に直す画像（BMP）は元の形式のまま写さず、読み直して PNG で書く（internal #77）。
-	 * 読めない・書けないときは、{@link #putImageEntry} の決まりで、外すか白い画像を入れる */
+	 * 読めない・書けないときは、{@link #putImageEntry} の決まりで、外すか代わりの透明な画像を入れる */
 	void writeImageBytes(String srcImageFileName, ImageInfo imageInfo, byte[] bytes) throws IOException
 	{
 		//PNG に直す画像（BMP）の元のバイト列は ext の形式ではないので、写して戻さない
@@ -1479,19 +1479,14 @@ public class Epub3Writer
 		return image;
 	}
 	
-	/** 読めない画像の代わりに入れる、同じ縦横比の白い画像。大きすぎる寸法（壊れたヘッダ）は縮める */
+	/** 読めない画像の代わりに入れる、同じ縦横比の透明な画像。大きすぎる寸法（壊れたヘッダ）は縮める。
+	 * 白にすると、夜の配色（Play ブックスなど）で黒い紙面に白い四角が出る。JPEG は透過を持てないので、書くときに白地へ重なる */
 	static BufferedImage placeholderImage(int width, int height)
 	{
 		double scale = Math.min(1, Math.sqrt(4000000.0/Math.max(1, (long)width*height)));
 		int w = Math.max(1, (int)Math.round(Math.max(1, width)*scale));
 		int h = Math.max(1, (int)Math.round(Math.max(1, height)*scale));
-		BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-		java.awt.Graphics2D g = image.createGraphics();
-		try {
-			g.setColor(java.awt.Color.WHITE);
-			g.fillRect(0, 0, w, h);
-		} finally { g.dispose(); }
-		return image;
+		return new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB); //全画素が透明
 	}
 	
 	/** 形式を直す画像（BMP・Kindle の表紙）を、縮小・回転の道が扱える形にそろえる。
@@ -1559,7 +1554,7 @@ public class Epub3Writer
 	 * 加工が投げたか、何も書かなかったら、raw（元のバイト列。出力の形式のまま写せる物だけ渡す）を写す＝加工しない設定と同じ物になる。
 	 * 本文の本では挿絵のページを先に書いているので、回転のつもりで組んだページに回していない画像が入る（壊れた画像なので、見た目は諦める）。
 	 * raw が無いとき、droppable なら書かずに外す（id を外して imageInfos から除き、false を返す。ページと OPF より先に書く画像だけ）。
-	 * 外せない（ページや OPF が既に指している）なら、同じ縦横比の白い画像を入れる（項目の無い画像や空の画像を OPF に残さない）。 */
+	 * 外せない（ページや OPF が既に指している）なら、同じ縦横比の透明な画像を入れる（項目の無い画像や空の画像を OPF に残さない）。 */
 	boolean putImageEntry(ImageInfo imageInfo, String srcName, byte[] raw, boolean droppable, ImageEncode encode) throws IOException
 	{
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -1592,8 +1587,8 @@ public class Epub3Writer
 			}
 			imageInfo.rotateAngle = 0;
 			if (raw == null) {
-				LogAppender.error(why+"白い画像を入れます : "+srcName);
-				//白い画像の書き出しが投げると、OPF とページが指す画像が無いまま残る。RGB の白は png・jpeg・gif のどれでも書ける
+				LogAppender.error(why+"代わりに透明な画像を入れます : "+srcName);
+				//代わりの画像の書き出しが投げると、OPF とページが指す画像が無いまま残る。png・gif は透明のまま、jpeg は白地に重ねて書ける
 				out.reset();
 				BufferedImage blank = placeholderImage(imageInfo.getWidth(), imageInfo.getHeight());
 				ImageUtils.writeImage(null, blank, out, imageInfo, this.jpegQuality, null, 0, 0, 0, this.dispW, this.dispH, 0, 0, 0, 0, 0, 0);
