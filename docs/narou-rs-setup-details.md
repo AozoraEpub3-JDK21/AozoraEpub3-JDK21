@@ -116,11 +116,11 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 <tr>
 <td><strong>目次</strong></td>
 <td><img src="assets/narou-rs/engine-compare/toc-lite.png" alt="組み込みエンジンの目次。章の下に話が字下げされた階層表示" width="480"/></td>
-<td><img src="assets/narou-rs/engine-compare/toc-java.png" alt="AozoraEpub3-JDK21 の目次。章の下に話が字下げされた、行頭に黒丸の付く階層表示" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/toc-java.png" alt="AozoraEpub3-JDK21 の目次。章の下に話が字下げされ、行頭に黒丸が付く階層表示" width="480"/></td>
 </tr>
 <tr>
 <td><strong>章の中扉</strong></td>
-<td><img src="assets/narou-rs/engine-compare/chapter-lite.png" alt="組み込みエンジンの章の中扉。ページ左上に小さく柱の書名、ページ上部の中央に枠で囲んだ章題" width="480"/></td>
+<td><img src="assets/narou-rs/engine-compare/chapter-lite.png" alt="組み込みエンジンの章の中扉。ページ左上に小さく柱の書名、ページ上部の中央に細い枠で囲んだ章題が表示される" width="480"/></td>
 <td><img src="assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 の章の中扉。柱は無く、ページ上部の中央に章題だけが表示される" width="480"/></td>
 </tr>
 <tr>
@@ -136,8 +136,8 @@ AozoraEpub3（hmdev 氏の原作と、そこから派生した改造版 AozoraEp
 | ページ | 組み込みエンジン | AozoraEpub3-JDK21 |
 |---|---|---|
 | 扉 | 書名を明朝体で左寄せ、罫線の下に著者名 | 書名と著者名をゴシック体で中央揃え |
-| 目次 | 章の下に話を字下げした階層表示 | 同じく章の下に話を字下げした階層表示。行頭に黒丸が付き、行の間が広い |
-| 章の中扉 | 柱（作品名）をページ左上に小さく、章題を細い枠で囲んでページ上部の中央に表示 | 柱は出さず、章題だけをページ上部の中央に表示（枠なし） |
+| 目次 | 章の下に話を字下げした階層表示 | 行頭に黒丸が付き、行の間が広い。章の下に話を字下げする階層表示は同じ |
+| 章の中扉 | 柱（書名）をページ左上に小さく、章題を細い枠で囲んでページ上部の中央に表示 | 柱は出さず、章題だけをページ上部の中央に表示（枠なし） |
 | 話の本文 | 見出しが太字 | 見出しは通常の太さ。本文の組み方・ルビは同じ |
 
 ---

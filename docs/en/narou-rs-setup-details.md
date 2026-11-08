@@ -117,7 +117,7 @@ Rendering depends on the EPUB reader, so your reader may display things differen
 </tr>
 <tr>
 <td><strong>Chapter title page</strong></td>
-<td><img src="../assets/narou-rs/engine-compare/chapter-lite.png" alt="Built-in engine chapter title page: a small running head at the top left, and the chapter title in a thin box near the top center" width="480"/></td>
+<td><img src="../assets/narou-rs/engine-compare/chapter-lite.png" alt="Built-in engine chapter title page: a small running head (title) at the top left, and the chapter title in a thin box near the top center" width="480"/></td>
 <td><img src="../assets/narou-rs/engine-compare/chapter-java.png" alt="AozoraEpub3-JDK21 chapter title page: no running head, only the chapter title near the top center" width="480"/></td>
 </tr>
 <tr>
@@ -133,8 +133,8 @@ The differences seen in this setup:
 | Page | Built-in engine | AozoraEpub3-JDK21 |
 |---|---|---|
 | Title page | Title in a serif (Mincho) font, left-aligned, author below a rule | Title and author in a sans-serif (Gothic) font, centered |
-| Table of contents | Episodes indented under chapters | Also episodes indented under chapters, with a bullet on each line and wider line spacing |
-| Chapter title page | Running head (work title) small at the top left, chapter title in a thin box near the top center | No running head; only the chapter title near the top center, without a box |
+| Table of contents | Episodes indented under chapters | A bullet on each line and wider line spacing. Episodes are indented under chapters, as on the left |
+| Chapter title page | Small running head (title) at the top left, chapter title in a thin box near the top center | No running head; only the chapter title near the top center, without a box |
 | Episode text | Bold heading | Regular-weight heading. Body typesetting and ruby are the same |
 
 ---
