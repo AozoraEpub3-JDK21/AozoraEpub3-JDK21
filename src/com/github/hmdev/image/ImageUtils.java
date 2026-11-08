@@ -15,6 +15,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,17 +27,12 @@ import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 
-import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.github.hmdev.info.ImageInfo;
 import com.github.hmdev.util.LogAppender;
 import com.github.hmdev.util.NetUtils;
 
 public class ImageUtils
 {
-	private static final Logger logger = LoggerFactory.getLogger(ImageUtils.class);
 
 	/** 4bitグレースケール時のRGB階調カラーモデル Singleton */
 	static ColorModel GRAY16_COLOR_MODEL;
@@ -117,7 +113,7 @@ public class ImageUtils
 	/** 大きすぎる画像は縮小して出力
 	 * @param is 画像の入力ストリーム srcImageがあれば利用しないのでnull
 	 * @param srcImage 読み込み済の場合は画像をこちらに設定 nullならisから読み込む
-	 * @param zos 出力先Zipストリーム
+	 * @param zos 出力先。加工に失敗すると投げ、そのとき途中まで書いていることがある。zip の項目へ直に書かず、バッファに書いてから写すこと（internal #64）
 	 * @param imageInfo 画像情報
 	 * @param jpegQuality jpeg画質 (低画質 0.0-1.0 高画質)
 	 * @param maxImagePixels 縮小する画素数
@@ -129,11 +125,10 @@ public class ImageUtils
 	 * @param autoMarginLimitV 余白除去 最大%
 	 * @param autoMarginWhiteLevel 白画素として判別する白さ 100が白
 	 * @param autoMarginPadding 余白除去後に追加するマージン */
-	static public void writeImage(InputStream is, BufferedImage srcImage, ZipArchiveOutputStream zos, ImageInfo imageInfo,
+	static public void writeImage(InputStream is, BufferedImage srcImage, OutputStream zos, ImageInfo imageInfo,
 			float jpegQuality, LookupOp gammaOp, int maxImagePixels, int maxImageW, int maxImageH, int dispW, int dispH,
 			int autoMarginLimitH, int autoMarginLimitV, int autoMarginWhiteLevel, float autoMarginPadding, int autoMarginNombre, float nombreSize) throws IOException
 	{
-		try {
 		String ext = imageInfo.getExt();
 		
 		int imgW = imageInfo.getWidth();
@@ -395,14 +390,10 @@ public class ImageUtils
 			}
 			zos.flush();
 		}
-		} catch (Exception e) {
-			LogAppender.println("画像読み込みエラー: "+imageInfo.getOutFileName());
-			logger.error("画像出力エラー: {}", imageInfo.getOutFileName(), e);
-		}
 	}
 	/** 画像を出力 マージン指定があればカット
 	 * @param margin カットするピクセル数(left, top, right, bottom) */
-	static private void _writeImage(ZipArchiveOutputStream zos, BufferedImage srcImage, String ext, float jpegQuality) throws IOException
+	static private void _writeImage(OutputStream zos, BufferedImage srcImage, String ext, float jpegQuality) throws IOException
 	{
 		if ("png".equals(ext)) {
 			/*//PNGEncoder kindlegenでエラーになるのと色が反映されない
@@ -440,8 +431,9 @@ public class ImageUtils
 						iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
 						iwp.setCompressionQuality(jpegQuality);
 						imageWriter.write(null, new IIOImage(srcImage, null, null), iwp);
-					} catch (Exception e) {
-						logger.warn("JPEG 圧縮書き込みに失敗", e);
+					} catch (IOException | RuntimeException e) {
+						//途中まで書いた JPEG を残さない。呼ぶ側が元の画像に戻す（internal #64）
+						throw new IOException("JPEG 圧縮書き込みに失敗", e);
 					}
 				} else {
 					imageWriter.write(srcImage);
