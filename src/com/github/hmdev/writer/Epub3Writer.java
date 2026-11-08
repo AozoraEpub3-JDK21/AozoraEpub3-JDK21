@@ -1360,8 +1360,7 @@ public class Epub3Writer
 		completed = true;
 
 		} catch (Exception e) {
-			//入力のせいの失敗は、呼んだ側（convertFile）がメッセージを出す。ここでトレースを重ねない
-			if (!(e instanceof NotConvertibleException)) logger.error("EPUB 出力中にエラーが発生", e);
+			//ログは投げた先（convertFile）が 1 回だけ出す。ここでも出すと同じトレースが 2 回出た（internal #77）
 			writeError = e;
 		} finally {
 			//入力ストリームを閉じる（キャンセル・途中例外で未クローズのまま残ると
@@ -1461,7 +1460,6 @@ public class Epub3Writer
 		});
 	}
 	
-	/** 画像が読めない（壊れている）こと。想定内なので、ログはトレース無しの 1 行にする */
 	/** 入力のせいで本にできない（読める画像が 1 枚も無いなど）。想定内なので、受けた側はトレースを出さずにメッセージだけ出す（internal #77） */
 	public static class NotConvertibleException extends IOException
 	{
@@ -1469,6 +1467,7 @@ public class Epub3Writer
 		public NotConvertibleException(String message) { super(message); }
 	}
 	
+	/** 画像が読めない（壊れている）こと。想定内なので、ログはトレース無しの 1 行にする */
 	static class UnreadableImageException extends IOException
 	{
 		private static final long serialVersionUID = 1L;

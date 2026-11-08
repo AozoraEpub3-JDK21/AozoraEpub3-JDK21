@@ -56,6 +56,8 @@ public class AozoraEpub3NoImagesLogTest {
 		} finally {
 			System.setOut(orgOut);
 			System.setErr(orgErr);
+			//テンプレートの場所を偽のクラスパスで決めた Velocity を、後の試験へ持ち越さない
+			Velocity.reset();
 			if (orgClassPath == null) System.clearProperty("java.class.path"); else System.setProperty("java.class.path", orgClassPath);
 		}
 		String log = out.toString(StandardCharsets.UTF_8) + "\n----- stderr -----\n" + err.toString(StandardCharsets.UTF_8);

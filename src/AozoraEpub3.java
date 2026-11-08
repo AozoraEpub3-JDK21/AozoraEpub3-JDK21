@@ -1096,11 +1096,6 @@ public class AozoraEpub3
 				}
 			}
 
-			// アーカイブキャッシュをクリア（メモリ解放）
-			if (!ArchiveTextExtractor.isPlainText(ext)) {
-				ArchiveTextExtractor.clearCache(srcFile);
-			}
-
 			return !canceled;
 		} catch (Exception e) {
 			//入力のせいで本にできないのは想定内。トレースは出さない（internal #77）
@@ -1109,6 +1104,11 @@ public class AozoraEpub3
 			LogAppender.println("エラーが発生しました : "+e.getMessage());
 			//LogAppender.printStaclTrace(e);
 			return false;
+		} finally {
+			//アーカイブキャッシュをクリア（メモリ解放）。失敗したときも捨てる（前は成功したときだけで、失敗した書庫が続くと溜まった）
+			if (!ArchiveTextExtractor.isPlainText(ext)) {
+				ArchiveTextExtractor.clearCache(srcFile);
+			}
 		}
 	}
 	

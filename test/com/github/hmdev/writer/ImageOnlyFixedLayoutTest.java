@@ -670,7 +670,8 @@ public class ImageOnlyFixedLayoutTest {
 	}
 
 	/** ページにできる画像が 1 枚も無い本は書かない。本文の無い壊れた EPUB になる（internal #64）。
-	 * CLI・GUI は先に「画像がありませんでした」で止めるので、ここは他の入口のための守り */
+	 * 画像の項目が無い書庫は CLI・GUI が先に「画像がありませんでした」で止める。項目はあってもどれも読めない書庫（壊れた BMP だけなど）は、
+	 * CLI・GUI からもここに来る（AozoraEpub3NoImagesLogTest） */
 	@Test
 	public void bookWithNoWritableImageIsNotWritten() throws Exception {
 		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
