@@ -559,6 +559,76 @@ public class ImageOnlyFixedLayoutTest {
 		assertEquals("本文の並び", bodies.get(0), bodies.get(1));
 	}
 
+	/** Kindle の画像だけの本の page-spread を spine の順に読む。表紙のページは "cover:<属性>" */
+	private static List<String> spreadSides(String opf) {
+		List<String> sides = new ArrayList<>();
+		Matcher ref = Pattern.compile("<itemref idref=\"([^\"]+)\" linear=\"yes\"(?: properties=\"page-spread-(left|right)\")?").matcher(opf);
+		while (ref.find()) sides.add(ref.group(1).equals("cover-page") ? "cover:" + ref.group(2) : ref.group(2));
+		return sides;
+	}
+
+	private File writeKindleBook(File zip, boolean vertical, boolean coverPage, boolean svg, String name) throws Exception {
+		Epub3ImageWriter writer = new Epub3ImageWriter(templatePath);
+		setParams(writer, svg);
+		writer.setIsKindle(true);
+		return writeBook(zip, writer, bookInfo -> {
+			bookInfo.vertical = vertical;
+			bookInfo.insertCoverPage = coverPage;
+			bookInfo.coverImageIndex = coverPage ? 0 : -1;
+		}, name);
+	}
+
+	/** Kindle の画像だけの本は、元の画像の並びで 2 枚ずつ見開きに組む（1・2 枚目、3・4 枚目。0 から数えて奇数番目が、右から読む本は右、左から読む本は左）。
+	 * 表紙のページを作っても作らなくても組は同じ。表紙のページには付けない。前は全ページ right だった（Velocity 2 に無い $velocityCount を見ていた。internal #81） */
+	@Test
+	public void kindleSpreadsPairBySourceImageOrder() throws Exception {
+		File zip = zipWithUnreadable(5);
+		for (boolean vertical : new boolean[]{true, false}) {
+			String odd = vertical ? "right" : "left", even = vertical ? "left" : "right";
+			for (boolean coverPage : new boolean[]{true, false}) {
+				try (ZipFile zf = new ZipFile(writeKindleBook(zip, vertical, coverPage, false, "kindlespread" + vertical + coverPage))) {
+					String opf = read(zf, "OPS/package.opf");
+					List<String> expected = new ArrayList<>();
+					expected.add(coverPage ? "cover:null" : even);
+					for (int i = 1; i < 5; i++) expected.add(i % 2 == 1 ? odd : even);
+					assertEquals((vertical ? "縦" : "横") + (coverPage ? "・表紙あり" : "") + "\n" + opf, expected, spreadSides(opf));
+					//primary-writing-mode は 1 つだけで、本の向きに合う（前は Kindle 用に horizontal-rl をもう 1 つ決め打ちしていた）
+					Matcher mode = Pattern.compile("<meta name=\"primary-writing-mode\" content=\"([^\"]+)\"/>").matcher(opf);
+					List<String> modes = new ArrayList<>();
+					while (mode.find()) modes.add(mode.group(1));
+					assertEquals(opf, List.of(vertical ? "horizontal-rl" : "horizontal-lr"), modes);
+				}
+			}
+		}
+	}
+
+	/** 途中の画像が読めずに抜けても、後ろの組はずれない（p3 は右、p4 は左のまま） */
+	@Test
+	public void kindleSpreadsKeepTheirSidesWhenAPageIsDropped() throws Exception {
+		try (ZipFile zf = new ZipFile(writeKindleBook(zipWithUnreadable(5, 2), true, true, false, "kindledrop"))) {
+			String opf = read(zf, "OPS/package.opf");
+			assertEquals(opf, List.of("cover:null", "right", "right", "left"), spreadSides(opf));
+			assertEquals("p1・p3・p4", List.of(PAGE_COLOURS[1], PAGE_COLOURS[3], PAGE_COLOURS[4]), pageColours(zf).subList(1, 4));
+		}
+	}
+
+	/** SVG のページの Kindle の本は、ページが指す CSS（svg_image.css）を本に入れて manifest に載せる。前は kindle_image.css だけ入り、本に無い CSS を指した */
+	@Test
+	public void kindleSvgBookHasTheStylesheetItsPagesUse() throws Exception {
+		try (ZipFile zf = new ZipFile(writeKindleBook(zipWithUnreadable(3), true, true, true, "kindlesvg"))) {
+			String opf = read(zf, "OPS/package.opf");
+			for (ZipEntry e : java.util.Collections.list(zf.entries())) {
+				if (!e.getName().endsWith(".xhtml")) continue;
+				Matcher css = Pattern.compile("href=\"\\.\\./(css/[^\"]+)\"").matcher(read(zf, e.getName()));
+				while (css.find()) {
+					assertTrue(e.getName() + " の " + css.group(1) + " が本に無い", zf.getEntry("OPS/" + css.group(1)) != null);
+					assertTrue(e.getName() + " の " + css.group(1) + " が manifest に無い", opf.contains("href=\"" + css.group(1) + "\""));
+				}
+			}
+			assertEquals(opf, List.of("cover:null", "right", "left"), spreadSides(opf));
+		}
+	}
+
 	/** 同じ名前で拡張子だけ違う p0.bmp と p0.png は、それぞれ別の画像として書く */
 	@Test
 	public void bmpAndPngWithTheSameStemStaySeparate() throws Exception {

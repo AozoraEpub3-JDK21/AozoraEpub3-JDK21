@@ -247,14 +247,14 @@ public class AozoraEpub3
 				targetDevice = commandLine.getOptionValue("device");
 				if (targetDevice.equalsIgnoreCase("kindle")) {
 					epub3Writer.setIsKindle(true);
+					//画像だけの本も Kindle 向けに書く（GUI と同じ）。前は画像の本の writer に届かず、見開きの組も Kindle 用の CSS も出なかった（internal #81）
+					epub3ImageWriter.setIsKindle(true);
 				}
 			}
 
 			//EPUB 2 向けの要素は出力の拡張子で決まる
 			epub3Writer.setOutputExt(outExt);
 			epub3ImageWriter.setOutputExt(outExt);
-			//-device kindle は拡張子によらず残す（画像の本の writer には isKindle が届かない）
-			if ("kindle".equalsIgnoreCase(targetDevice)) epub3ImageWriter.setLegacyOutput(true);
 
 			//変換クラス生成とパラメータ設定
 			AozoraEpub3Converter  aozoraConverter = new AozoraEpub3Converter(epub3Writer, jarPath);
